@@ -5,6 +5,7 @@ dist/
 *.js.map
 *.d.ts
 !webpack.config.js
+!scripts/*.js
 .browser_modules/
 yarn-error.log
 .theia

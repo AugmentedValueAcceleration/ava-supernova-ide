@@ -4,16 +4,19 @@
   "version": "0.1.0",
   "description": "Ava | Supernova IDE — Agent-first development environment",
   "license": "Apache-2.0",
+  "packageManager": "yarn@1.22.22",
   "engines": {
     "node": ">=20",
     "yarn": ">=1.7.0 <2"
   },
   "scripts": {
-    "build": "yarn build:extensions && yarn build:electron",
+    "postinstall": "node scripts/fix-native-builds.js",
+    "build": "yarn build:extensions && yarn build:browser",
     "build:extensions": "lerna run build --scope ava-*",
     "build:electron": "yarn --cwd electron-app bundle",
     "build:browser": "yarn --cwd browser-app bundle",
-    "start": "yarn --cwd electron-app start",
+    "start": "yarn --cwd browser-app start",
+    "start:electron": "yarn --cwd electron-app start",
     "start:browser": "yarn --cwd browser-app start",
     "watch": "lerna run --parallel watch",
     "clean": "lerna run clean && lerna clean -y",
