@@ -14,3 +14,4 @@ src-gen/
 gen-webpack*.js
 plugins/
 .DS_Store
+*.tsbuildinfo
