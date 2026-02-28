@@ -11,7 +11,8 @@
         "applicationName": "Ava | Supernova IDE",
         "preferences": {
           "toolbar.showToolbar": true,
-          "window.menuBarVisibility": "visible"
+          "window.menuBarVisibility": "visible",
+          "workbench.startupEditor": "none"
         }
       }
     },

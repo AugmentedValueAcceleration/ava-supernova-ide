@@ -22,15 +22,14 @@ export class AvaAgentContribution
       widgetId: AvaAgentWidget.ID,
       widgetName: AvaAgentWidget.LABEL,
       defaultWidgetOptions: {
-        area: 'right',
-        rank: 100,
+        area: 'main',
       },
       toggleCommandId: AvaAgentCommand.id,
     });
   }
 
   async initializeLayout(app: FrontendApplication): Promise<void> {
-    await this.openView({ activate: false, reveal: true });
+    await this.openView({ activate: true, reveal: true });
   }
 
   registerCommands(commands: CommandRegistry): void {

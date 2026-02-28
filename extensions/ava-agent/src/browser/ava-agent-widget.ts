@@ -14,6 +14,9 @@ export class AvaAgentWidget extends BaseWidget {
     this.title.closable = true;
     this.title.iconClass = 'ava-agent-icon';
     this.addClass('ava-agent-widget');
+
+    // Ensure the widget fills its container properly
+    this.node.style.overflow = 'hidden';
   }
 
   @postConstruct()
@@ -29,8 +32,13 @@ export class AvaAgentWidget extends BaseWidget {
       <div style="
         display: flex;
         flex-direction: column;
-        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         padding: 16px;
+        box-sizing: border-box;
         font-family: var(--theia-ui-font-family);
         color: var(--theia-foreground);
       ">
@@ -41,6 +49,7 @@ export class AvaAgentWidget extends BaseWidget {
           margin-bottom: 16px;
           padding-bottom: 12px;
           border-bottom: 1px solid var(--theia-panel-border);
+          flex-shrink: 0;
         ">
           <span style="font-size: 18px; font-weight: 700;">Ava</span>
           <span style="
@@ -60,11 +69,14 @@ export class AvaAgentWidget extends BaseWidget {
           font-size: 13px;
           text-align: center;
           line-height: 1.6;
+          min-height: 0;
+          overflow: auto;
         ">
           Agent panel ready.<br/>
           @ava/core integration coming next.
         </div>
         <div style="
+          flex-shrink: 0;
           padding: 8px 12px;
           border: 1px solid var(--theia-input-border);
           border-radius: 6px;
