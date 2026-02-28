@@ -1,0 +1,15 @@
+node_modules/
+lib/
+dist/
+*.js
+*.js.map
+*.d.ts
+!webpack.config.js
+.browser_modules/
+yarn-error.log
+.theia
+.strack
+src-gen/
+gen-webpack*.js
+plugins/
+.DS_Store

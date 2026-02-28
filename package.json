@@ -1,0 +1,30 @@
+{
+  "private": true,
+  "name": "ava-supernova-ide",
+  "version": "0.1.0",
+  "description": "Ava | Supernova IDE — Agent-first development environment",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20",
+    "yarn": ">=1.7.0 <2"
+  },
+  "scripts": {
+    "build": "yarn build:extensions && yarn build:electron",
+    "build:extensions": "lerna run build --scope ava-*",
+    "build:electron": "yarn --cwd electron-app bundle",
+    "build:browser": "yarn --cwd browser-app bundle",
+    "start": "yarn --cwd electron-app start",
+    "start:browser": "yarn --cwd browser-app start",
+    "watch": "lerna run --parallel watch",
+    "clean": "lerna run clean && lerna clean -y",
+    "prepare": "lerna run prepare"
+  },
+  "workspaces": [
+    "electron-app",
+    "browser-app",
+    "extensions/*"
+  ],
+  "devDependencies": {
+    "lerna": "^7.4.2"
+  }
+}

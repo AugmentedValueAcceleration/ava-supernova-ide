@@ -1,0 +1,27 @@
+{
+  "name": "ava-branding-extension",
+  "version": "0.1.0",
+  "description": "Ava | Supernova IDE branding — custom theme, splash screen, and menus",
+  "license": "Apache-2.0",
+  "keywords": ["theia-extension"],
+  "files": ["lib", "src"],
+  "main": "lib/browser/ava-branding-frontend-module.js",
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/ava-branding-frontend-module"
+    }
+  ],
+  "dependencies": {
+    "@theia/core": "1.68.2"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.0",
+    "rimraf": "^5.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b -w",
+    "clean": "rimraf lib tsconfig.tsbuildinfo",
+    "prepare": "yarn build"
+  }
+}
