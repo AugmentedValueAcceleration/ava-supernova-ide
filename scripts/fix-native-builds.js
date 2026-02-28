@@ -4,9 +4,14 @@
  * Fix native module builds on Windows.
  *
  * 1. Patches winpty.gyp to use .\\ prefix for batch files (Windows path issue)
- * 2. After node-gyp configure, patches ClangCL -> v143 in .vcxproj files
+ *    Uses double-backslash in the .gyp file so Python's gyp parser doesn't
+ *    interpret \U in \UpdateGenVersion.bat as a unicode escape sequence.
+ * 2. After node-gyp configure, patches ClangCL -> v143 in ALL .vcxproj files
  *    (node-gyp on Node 24+ defaults to ClangCL which isn't always installed)
- * 3. Runs postinstall for @vscode/ripgrep to download the binary
+ * 3. Patches C++20 requirement for Node 24+ headers into .vcxproj files
+ * 4. Runs postinstall for @vscode/ripgrep to download the binary
+ * 5. Builds all native modules: node-pty, drivelist, keytar, windows-ca-certs,
+ *    native-keymap, @theia/ffmpeg
  */
 
 const { execSync } = require('child_process');
@@ -20,23 +25,33 @@ function patchWinptyGyp() {
   if (!fs.existsSync(gypPath)) return;
 
   let content = fs.readFileSync(gypPath, 'utf8');
-  if (content.includes('.\\\\GetCommitHash.bat')) return; // already patched
 
+  // Check if already has double-backslash (correct patch)
+  if (content.includes('.\\\\GetCommitHash.bat')) return;
+
+  // Replace bare or single-backslash variants with double-backslash.
+  // The .gyp file is parsed by Python's eval(), and \U triggers unicode escape.
+  // Double-backslash (\\) is read by Python as literal single backslash.
+  const doubleBS = '\\\\';
   content = content.replace(
-    'cd shared && GetCommitHash.bat',
-    'cd shared && .\\\\GetCommitHash.bat'
+    /cd shared && (?:\.\\*)?GetCommitHash\.bat/g,
+    'cd shared && .' + doubleBS + 'GetCommitHash.bat'
   );
   content = content.replace(
-    'cd shared && UpdateGenVersion.bat',
-    'cd shared && .\\\\UpdateGenVersion.bat'
+    /cd shared && (?:\.\\*)?UpdateGenVersion\.bat/g,
+    'cd shared && .' + doubleBS + 'UpdateGenVersion.bat'
   );
   fs.writeFileSync(gypPath, content);
   console.log('[fix-native] Patched winpty.gyp batch file paths');
 }
 
-function patchClangCL(modulePath) {
-  const buildDir = path.join(modulePath, 'build');
-  if (!fs.existsSync(buildDir)) return false;
+/**
+ * Recursively patch all .vcxproj files under a directory:
+ * - ClangCL -> v143 (MSVC toolset)
+ * - Add C++20 language standard if missing (required by Node 24+ headers)
+ */
+function patchVcxprojFiles(rootDir) {
+  if (!fs.existsSync(rootDir)) return false;
 
   let patched = false;
   function walkDir(dir) {
@@ -46,18 +61,34 @@ function patchClangCL(modulePath) {
         walkDir(fullPath);
       } else if (entry.name.endsWith('.vcxproj')) {
         let content = fs.readFileSync(fullPath, 'utf8');
+        let changed = false;
+
+        // Patch ClangCL to v143
         if (content.includes('<PlatformToolset>ClangCL</PlatformToolset>')) {
           content = content.replace(
             /<PlatformToolset>ClangCL<\/PlatformToolset>/g,
             '<PlatformToolset>v143</PlatformToolset>'
           );
+          changed = true;
+        }
+
+        // Add C++20 standard if not present (Node 24 v8 headers require it)
+        if (!content.includes('stdcpp20') && content.includes('<AdditionalOptions>')) {
+          content = content.replace(
+            /<AdditionalOptions>/g,
+            '<LanguageStandard>stdcpp20</LanguageStandard><AdditionalOptions>'
+          );
+          changed = true;
+        }
+
+        if (changed) {
           fs.writeFileSync(fullPath, content);
           patched = true;
         }
       }
     }
   }
-  walkDir(buildDir);
+  walkDir(rootDir);
   return patched;
 }
 
@@ -66,9 +97,10 @@ function buildNativeModule(modulePath, name) {
     console.log(`[fix-native] Building ${name}...`);
     // Configure
     execSync('npx node-gyp configure', { cwd: modulePath, stdio: 'pipe' });
-    // Patch ClangCL
-    if (patchClangCL(modulePath)) {
-      console.log(`[fix-native] Patched ClangCL -> v143 for ${name}`);
+    // Patch vcxproj files (ClangCL + C++20) — search entire module dir
+    // to catch node-addon-api subfolders too
+    if (patchVcxprojFiles(modulePath)) {
+      console.log(`[fix-native] Patched .vcxproj files for ${name}`);
     }
     // Build
     execSync('npx node-gyp build', { cwd: modulePath, stdio: 'pipe' });
@@ -103,7 +135,9 @@ if (process.platform === 'win32') {
     ['node-pty', path.join(nodeModules, 'node-pty')],
     ['drivelist', path.join(nodeModules, 'drivelist')],
     ['keytar', path.join(nodeModules, 'keytar')],
+    ['native-keymap', path.join(nodeModules, 'native-keymap')],
     ['@vscode/windows-ca-certs', path.join(nodeModules, '@vscode', 'windows-ca-certs')],
+    ['@theia/ffmpeg', path.join(nodeModules, '@theia', 'ffmpeg')],
   ];
 
   for (const [name, modPath] of nativeModules) {
