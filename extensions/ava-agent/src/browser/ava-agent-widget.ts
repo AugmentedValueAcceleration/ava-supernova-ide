@@ -12,7 +12,6 @@ export class AvaAgentWidget extends BaseWidget {
     this.title.label = AvaAgentWidget.LABEL;
     this.title.caption = 'Ava | Supernova Agent';
     this.title.closable = true;
-    this.title.iconClass = 'ava-agent-icon';
     this.addClass('ava-agent-widget');
 
     // Ensure the widget fills its container properly
