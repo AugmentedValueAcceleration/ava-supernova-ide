@@ -41,6 +41,27 @@ export interface AvaUsageInfo {
 
 export type AvaMode = 'code' | 'plan' | 'chat' | 'security';
 
+// ── Tool call metadata (forwarded from @ava/core agent events) ──────────────
+
+export interface AvaToolCallMetadata {
+  path?: string;           // file_write, file_edit
+  lineCount?: number;      // file_write
+  occurrences?: number;    // file_edit
+  exitCode?: number;       // bash
+  killed?: boolean;        // bash
+  command?: string;        // bash (from parsed arguments)
+}
+
+// ── Inline completion types ─────────────────────────────────────────────────
+
+export interface AvaInlineCompletionRequest {
+  prefix: string;          // text before cursor
+  suffix: string;          // text after cursor
+  language: string;        // languageId
+  filePath: string;
+  maxTokens?: number;
+}
+
 // ── Dashboard types ──────────────────────────────────────────────────────────
 
 export interface AvaDashboardSettings {
@@ -48,6 +69,7 @@ export interface AvaDashboardSettings {
   permissionMode: 'strict' | 'balanced' | 'autonomous';
   temperature: number;
   maxTokens: number;
+  completionsProvider: string;  // provider name for inline completions ('deepseek', 'qwen', 'none')
 }
 
 export interface AvaProviderKeyStatus {
@@ -78,6 +100,96 @@ export interface AvaDashboardState {
   account: AvaAccountInfo | null;
   models: AvaModelInfo[];
   activeModel: string | null;
+}
+
+// ── Smart context types (Phase 3) ───────────────────────────────────────────
+
+export interface AvaFileContext {
+  activeFile?: {
+    path: string;
+    language: string;
+    content: string;
+    selection?: string;
+  };
+  openTabs?: Array<{
+    path: string;
+    language: string;
+  }>;
+  pinnedFiles?: Array<{
+    path: string;
+    language: string;
+    content: string;
+  }>;
+}
+
+// ── Project detection types (Phase 3) ───────────────────────────────────────
+
+export type AvaProjectType = 'node' | 'python' | 'go' | 'rust' | 'java' | 'csharp' | 'unknown';
+
+export interface AvaProjectInfo {
+  projectType: AvaProjectType;
+  rootPath: string;
+  suggestedExtensions: Array<{ id: string; name: string; reason: string }>;
+  suggestedFormatter: string | null;
+  tabSize: number;
+  lineEndings: 'lf' | 'crlf' | 'auto';
+}
+
+// ── Usage tracking types (Phase 4) ──────────────────────────────────────────
+
+export interface AvaUsageEntry {
+  timestamp: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+}
+
+export interface AvaUsageSummary {
+  today: { tokens: number; cost: number };
+  month: { tokens: number; cost: number };
+  byProvider: Record<string, { tokens: number; cost: number }>;
+}
+
+// ── Provider health types (Phase 4) ─────────────────────────────────────────
+
+export interface AvaProviderHealth {
+  provider: string;
+  healthy: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+// ── Workspace template types (Phase 4) ──────────────────────────────────────
+
+export interface AvaProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  files: Array<{ path: string; content: string }>;
+  openFile?: string;
+}
+
+// ── Session history types (Phase 5) ──────────────────────────────────────────
+
+export interface AvaHistoryEntry {
+  id: string;
+  title: string;
+  updatedAt: string;
+  createdAt: string;
+  pinned?: boolean;
+  projectPath?: string;
+  messageCount: number;
+}
+
+export interface AvaReplayMessage {
+  index: number;
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  content: string;
+  toolCalls?: Array<{ name: string; arguments: string; result?: string }>;
+  thinking?: string;
 }
 
 // ── Frontend → Backend (request/response) ────────────────────────────────────
@@ -127,6 +239,85 @@ export interface IAvaAgentService {
 
   /** Disconnect platform account (removes key from config). */
   disconnectPlatformAccount(): Promise<void>;
+
+  // ── Editor + Completion integration ─────────────────────────────────────
+
+  /** Read a file's content (used by editor integration to snapshot before tool writes). */
+  readFile(filePath: string): Promise<string | null>;
+
+  /** Request an inline completion (FIM). Returns the completion text or null. */
+  getInlineCompletion(request: AvaInlineCompletionRequest): Promise<string | null>;
+
+  // ── Smart context (Phase 3) ───────────────────────────────────────────────
+
+  /** Send a message with file context from the editor. */
+  sendMessageWithContext(text: string, mode: AvaMode, context: AvaFileContext): Promise<void>;
+
+  // ── Project detection (Phase 3) ───────────────────────────────────────────
+
+  /** Detect project type and return configuration suggestions. */
+  detectProject(): Promise<AvaProjectInfo | null>;
+
+  // ── Git integration (Phase 3) ─────────────────────────────────────────────
+
+  /** Get diff of staged changes (git diff --cached). */
+  getGitStagedDiff(): Promise<string | null>;
+
+  /** Get diff of all working changes (git diff). */
+  getGitWorkingDiff(): Promise<string | null>;
+
+  /** Get current branch name. */
+  getGitBranch(): Promise<string | null>;
+
+  /** Get recent commit log. */
+  getGitLog(count?: number): Promise<string | null>;
+
+  // ── Usage tracking (Phase 4) ──────────────────────────────────────────────
+
+  /** Get usage summary (today, this month, by provider). */
+  getUsageSummary(): Promise<AvaUsageSummary>;
+
+  // ── Provider health (Phase 4) ──────────────────────────────────────────────
+
+  /** Check health of all configured providers. */
+  checkProviderHealth(): Promise<AvaProviderHealth[]>;
+
+  // ── Workspace templates (Phase 4) ──────────────────────────────────────────
+
+  /** Get available project templates. */
+  getTemplates(): Promise<AvaProjectTemplate[]>;
+
+  /** Create a new project from a template. */
+  createFromTemplate(templateId: string, targetDir: string, projectName: string): Promise<void>;
+
+  // ── Session history (Phase 5) ──────────────────────────────────────────────
+
+  /** List conversations, optionally filtered by current project. */
+  getHistory(filterByProject?: boolean): Promise<AvaHistoryEntry[]>;
+
+  /** Search conversations by text query. */
+  searchHistory(query: string): Promise<AvaHistoryEntry[]>;
+
+  /** Load a past conversation into the current chat. */
+  loadConversation(id: string): Promise<void>;
+
+  /** Delete a conversation from history. */
+  deleteConversation(id: string): Promise<boolean>;
+
+  /** Rename a conversation. */
+  renameConversation(id: string, newTitle: string): Promise<boolean>;
+
+  /** Pin or unpin a conversation. */
+  pinConversation(id: string, pinned: boolean): Promise<boolean>;
+
+  /** Export a conversation as JSON or Markdown string. */
+  exportConversation(id: string, format: 'json' | 'markdown'): Promise<string | null>;
+
+  /** Import a conversation from a JSON export string. Returns new conversation ID. */
+  importConversation(jsonData: string): Promise<string | null>;
+
+  /** Get messages for session replay (read-only, does not affect active session). */
+  getReplayMessages(id: string): Promise<AvaReplayMessage[]>;
 }
 
 // ── Backend → Frontend (fire-and-forget notifications) ───────────────────────
@@ -141,7 +332,8 @@ export interface IAvaAgentClient {
   notifyStreamDelta(content: string): void;
   notifyStreamEnd(): void;
   notifyToolCallStart(toolCall: AvaToolCallInfo): void;
-  notifyToolCallEnd(toolCallId: string, result: string, success: boolean): void;
+  notifyToolCallPartial(toolCallId: string, data: string): void;
+  notifyToolCallEnd(toolCallId: string, result: string, success: boolean, metadata?: AvaToolCallMetadata): void;
   notifyToolConfirmationRequest(
     confirmationId: string,
     toolName: string,
@@ -168,4 +360,20 @@ export interface IAvaAgentClient {
 
   /** Platform account connection status changed. */
   notifyPlatformAccountChanged(connected: boolean, account: AvaAccountInfo | null): void;
+
+  // ── Phase 4 notifications ─────────────────────────────────────────────────
+
+  /** Provider health check results. */
+  notifyProviderHealth(health: AvaProviderHealth[]): void;
+
+  /** Provider fallback occurred during a run. */
+  notifyProviderFallback(fromProvider: string, toProvider: string): void;
+
+  // ── Phase 5 notifications ─────────────────────────────────────────────────
+
+  /** Conversation loaded from history — frontend should replace current messages. */
+  notifyConversationLoaded(id: string, title: string, messages: AvaReplayMessage[]): void;
+
+  /** History list changed (after delete, import, rename, pin). */
+  notifyHistoryChanged(): void;
 }

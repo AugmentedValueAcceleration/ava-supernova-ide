@@ -16,64 +16,64 @@ AI panel should still prefer this over downloading VS Code from scratch.
 **Why first:** Without this, there's no autocomplete, no hover docs, no
 go-to-definition. It's the single biggest gap.
 
-- [ ] Create `plugins/` directory with pre-bundled VS Code extensions
-- [ ] TypeScript/JavaScript language server (built-in via vscode.typescript-language-features)
-- [ ] Python (Pylance or Pyright from Open VSX)
-- [ ] HTML/CSS/JSON language support
-- [ ] Markdown preview
-- [ ] Auto-detect project type on open and suggest missing language extensions
-- [ ] Show a non-intrusive banner: "Python project detected — install Python support?"
+- [x] Create `plugins/` directory with pre-bundled VS Code extensions
+- [x] TypeScript/JavaScript language server (built-in via vscode.typescript-language-features)
+- [x] Python (ms-python from Open VSX)
+- [x] HTML/CSS/JSON language support
+- [x] Markdown preview
+- [ ] Auto-detect project type on open and suggest missing language extensions *(deferred to Phase 3.1)*
+- [ ] Show a non-intrusive banner: "Python project detected — install Python support?" *(deferred to Phase 3.1)*
 
 ### 1.2 First-Launch Onboarding Wizard
 **Why second:** New users need a guided setup, not a blank screen.
 
-- [ ] Full-screen welcome flow on very first launch (not the welcome tab)
-- [ ] Step 1: Pick theme (Light / Dark / System)
-- [ ] Step 2: Pick font size (Small / Medium / Large — preview live)
-- [ ] Step 3: Connect an AI provider key (or skip — "I'll set this up later")
-- [ ] Step 4: Open a folder or clone a repo
-- [ ] Save a flag so it only shows once (`~/.ava-ide/onboarding-complete`)
-- [ ] Keep it under 4 steps — respect the user's time
+- [x] Full-screen welcome flow on very first launch (not the welcome tab)
+- [x] Step 1: Pick theme (Light / Dark / System)
+- [x] Step 2: Pick font size (Small / Medium / Large — preview live)
+- [x] Step 3: Connect an AI provider key (or skip — "I'll set this up later")
+- [x] Step 4: Open a folder or clone a repo
+- [x] Save a flag so it only shows once (`~/.ava-ide/onboarding-complete`)
+- [x] Keep it under 4 steps — respect the user's time
 
 ### 1.3 Sane Default Settings
 **Why:** Users shouldn't have to hunt through settings to get a good experience.
 
-- [ ] Font: `'Cascadia Code', 'Fira Code', 'Consolas', monospace'` with ligatures on
-- [ ] Font size: 14px
-- [ ] Tab size: 2 (web) / 4 (python) — auto-detect from `.editorconfig` or project type
-- [ ] Word wrap: on
-- [ ] Minimap: off (clean look, users can enable)
-- [ ] Bracket pair colorization: on
-- [ ] Auto-save: after 1 second delay
-- [ ] Format on save: on (if formatter available)
-- [ ] Smooth scrolling: on
-- [ ] Cursor blinking: smooth
-- [ ] Line numbers: on
-- [ ] Indent guides: on
-- [ ] Breadcrumbs: on
-- [ ] Git decorations in file tree: on
+- [x] Font: `'Cascadia Code', 'Fira Code', 'Consolas', monospace'` with ligatures on
+- [x] Font size: 14px
+- [x] Tab size: 2 (web) / 4 (python) — auto-detect from `.editorconfig` or project type
+- [x] Word wrap: on
+- [x] Minimap: off (clean look, users can enable)
+- [x] Bracket pair colorization: on
+- [x] Auto-save: after 1 second delay
+- [x] Format on save: on (if formatter available)
+- [x] Smooth scrolling: on
+- [x] Cursor blinking: smooth
+- [x] Line numbers: on
+- [x] Indent guides: on
+- [x] Breadcrumbs: on
+- [x] Git decorations in file tree: on
 
 ### 1.4 Keyboard Shortcuts
 **Why:** Power users expect shortcuts. New users discover features through them.
 
-- [ ] `Ctrl+Shift+A` — Toggle Ava chat panel
-- [ ] `Ctrl+Shift+D` — Toggle Dashboard / settings
-- [ ] `Ctrl+Shift+P` — Command palette (already built-in, verify it works)
-- [ ] `Ctrl+\`` — Toggle terminal (already built-in, verify)
-- [ ] `Ctrl+B` — Toggle sidebar (already built-in, verify)
-- [ ] `Ctrl+Shift+N` — New Ava chat
-- [ ] Register all Ava commands in command palette with clear names
-- [ ] Show keyboard shortcut hints in tooltips
+- [x] `Ctrl+Shift+A` — Toggle Ava chat panel
+- [x] `Ctrl+Shift+D` — Toggle Dashboard / settings
+- [x] `Ctrl+Shift+P` — Command palette (already built-in, verify it works)
+- [x] `Ctrl+\`` — Toggle terminal (already built-in, verify)
+- [x] `Ctrl+B` — Toggle sidebar (already built-in, verify)
+- [x] `Ctrl+Shift+N` — New Ava chat
+- [x] Register all Ava commands in command palette with clear names
+- [x] Show keyboard shortcut hints in tooltips
 
 ### 1.5 Theme System
 **Why:** People care deeply about how their editor looks. Ugly = abandoned.
 
-- [ ] Ship 2 polished built-in themes: Ava Dark (default) and Ava Light
-- [ ] Ava Dark: deep charcoal background, indigo accents, easy on the eyes
-- [ ] Ava Light: clean white/grey, same indigo accents
-- [ ] Theme picker accessible from welcome page + status bar + command palette
-- [ ] Open VSX marketplace available for community themes
-- [ ] Ensure all Ava UI (chat, dashboard, welcome) respects theme colors
+- [x] Ship 2 polished built-in themes: Ava Dark (default) and Ava Light
+- [x] Ava Dark: deep charcoal background, indigo accents, easy on the eyes
+- [x] Ava Light: clean white/grey, same indigo accents
+- [x] Theme picker accessible from welcome page + status bar + command palette
+- [x] Open VSX marketplace available for community themes
+- [x] Ensure all Ava UI (chat, dashboard, welcome) respects theme colors
 
 ---
 
@@ -84,53 +84,53 @@ The agent works. Now make it feel like it's part of the editor, not bolted on.
 ### 2.1 Editor Context Menu — "Ask Ava"
 **Why first in Phase 2:** This is how most users will discover AI features.
 
-- [ ] Right-click selected code → "Ask Ava" submenu:
+- [x] Right-click selected code → "Ask Ava" submenu:
   - "Explain this code"
   - "Find bugs in selection"
   - "Refactor this"
   - "Write tests for this"
   - "Add comments"
-- [ ] Sends selected code + file context to Ava chat in the right mode
-- [ ] Works with no selection too (sends current file)
-- [ ] Keyboard shortcut: `Ctrl+Shift+I` — Quick ask with selection
+- [x] Sends selected code + file context to Ava chat in the right mode
+- [x] Works with no selection too (sends current file)
+- [x] Keyboard shortcut: `Ctrl+Shift+I` — Quick ask with selection
 
 ### 2.2 Status Bar Integration
 **Why:** Users need at-a-glance info without opening panels.
 
-- [ ] Left side: Active AI model name (click to switch)
-- [ ] Left side: Connection status indicator (green dot / red dot / grey when AI off)
-- [ ] Right side: Token usage for current session (click to see breakdown)
-- [ ] Right side: Current mode badge (Code / Plan / Chat / Security)
-- [ ] All items clickable — open relevant panel or picker
+- [x] Left side: Active AI model name (click to switch)
+- [x] Left side: Connection status indicator (green dot / red dot / grey when AI off)
+- [x] Right side: Token usage for current session (click to see breakdown)
+- [x] Right side: Current mode badge (Code / Plan / Chat / Security)
+- [x] All items clickable — open relevant panel or picker
 
 ### 2.3 Live Editor Integration
 **Why:** When Ava edits files, users need to see it happen, not just trust it.
 
-- [ ] When `file_write` / `file_edit` tool runs → open the file in editor
-- [ ] Show inline diff decorations (green = added, red = removed)
-- [ ] "Accept" / "Reject" buttons on each change block
-- [ ] Accept All / Reject All buttons in editor toolbar
-- [ ] Undo all Ava changes with one command: "Ava: Undo Last Changes"
-- [ ] File tree badge showing which files Ava modified (indigo dot)
+- [x] When `file_write` / `file_edit` tool runs → open the file in editor
+- [x] Show inline diff decorations (green = added, red = removed)
+- [x] "Accept" / "Reject" commands for each file's changes
+- [x] Accept All / Reject All commands (via command palette)
+- [x] Undo all Ava changes with one command: "Ava: Undo Last Changes"
+- [x] File tree badge showing which files Ava modified (indigo "A" badge)
 
 ### 2.4 Terminal Integration
 **Why:** When Ava runs shell commands, users should see it transparently.
 
-- [ ] `bash` tool output appears in a dedicated "Ava Terminal" tab
-- [ ] Visually distinct from user's terminal (subtle indigo border or header)
-- [ ] User can see commands running in real-time
-- [ ] Option to run Ava's commands in user's existing terminal instead
+- [x] `bash` tool output appears in a dedicated "Ava Terminal" tab
+- [x] Visually distinct from user's terminal (subtle indigo border or header)
+- [x] User can see commands running in real-time (streaming via tool_call_partial events)
+- [x] Option to run Ava's commands in user's existing terminal instead
 
 ### 2.5 Inline Completions (Tab-to-Accept)
 **Why:** This is the #1 feature that makes AI IDEs sticky. Non-negotiable.
 
-- [ ] As user types, request completions from active AI provider
-- [ ] Show ghost text (greyed out) ahead of cursor
-- [ ] `Tab` to accept, `Esc` to dismiss
-- [ ] Debounce requests (300ms after last keystroke)
-- [ ] Cache recent completions to reduce API calls
-- [ ] Respect user setting: can be turned off entirely
-- [ ] Works with any provider that supports completion/FIM endpoints
+- [x] As user types, request completions from active AI provider
+- [x] Show ghost text (greyed out) ahead of cursor
+- [x] `Tab` to accept, `Esc` to dismiss
+- [x] Debounce requests (300ms after last keystroke)
+- [x] Cache recent completions to reduce API calls
+- [x] Respect user setting: can be turned off entirely
+- [ ] Works with any provider that supports completion/FIM endpoints *(deferred to Phase 4.1 — only DeepSeek has FIM today)*
 
 ---
 
@@ -139,44 +139,44 @@ The agent works. Now make it feel like it's part of the editor, not bolted on.
 ### 3.1 Project Detection & Auto-Configuration
 **Why:** Users shouldn't have to configure anything per-project.
 
-- [ ] Detect project type on folder open:
+- [x] Detect project type on folder open:
   - `package.json` → Node.js/TypeScript
   - `requirements.txt` / `pyproject.toml` → Python
   - `go.mod` → Go
   - `Cargo.toml` → Rust
   - `pom.xml` / `build.gradle` → Java
   - `.sln` / `.csproj` → C#/.NET
-- [ ] Auto-suggest relevant extensions from Open VSX
-- [ ] Auto-configure formatter (Prettier for JS/TS, Black for Python, etc.)
-- [ ] Auto-detect and respect `.editorconfig`, `.prettierrc`, `pyproject.toml`
-- [ ] Set appropriate tab size, line endings, file associations
+- [x] Auto-suggest relevant extensions from Open VSX
+- [x] Auto-configure formatter (Prettier for JS/TS, Black for Python, etc.)
+- [x] Auto-detect and respect `.editorconfig`
+- [x] Set appropriate tab size, line endings, file associations
 
 ### 3.2 Smart File Context for Ava
 **Why:** Ava gives better answers when it knows what you're working on.
 
-- [ ] Automatically include current file in Ava context
-- [ ] Include open editor tabs as additional context
-- [ ] Respect `.ava/instructions.md` for project-specific AI instructions
-- [ ] Show "Context" indicator in chat — user sees what Ava can see
-- [ ] Let user pin/unpin files from Ava's context
-- [ ] Workspace indexing for codebase-wide questions (async, non-blocking)
+- [x] Automatically include current file in Ava context
+- [x] Include open editor tabs as additional context
+- [x] Respect `.ava/instructions.md` for project-specific AI instructions
+- [x] Show "Context" indicator in chat — user sees what Ava can see
+- [x] Let user pin/unpin files from Ava's context
+- [ ] Workspace indexing for codebase-wide questions (async, non-blocking) *(deferred to Phase 4 — requires significant async indexing infrastructure)*
 
 ### 3.3 Problems Panel Integration
 **Why:** When Ava finds issues, show them where developers expect.
 
-- [ ] Ava's code review findings appear in Problems panel (Ctrl+Shift+M)
-- [ ] Click a problem → jumps to the line in editor
-- [ ] Quick fix action: "Fix with Ava" on any problem
-- [ ] Diagnostics from language servers and Ava coexist cleanly
+- [x] Ava's code review findings appear in Problems panel (Ctrl+Shift+M)
+- [x] Click a problem → jumps to the line in editor
+- [x] Quick fix action: "Fix with Ava" on any problem
+- [x] Diagnostics from language servers and Ava coexist cleanly (separate owner: 'ava-agent')
 
 ### 3.4 Git-Aware AI
 **Why:** Most coding happens in the context of version control.
 
-- [ ] "Ava: Write Commit Message" — analyzes staged changes, writes message
-- [ ] "Ava: Explain This Diff" — right-click in diff view
-- [ ] "Ava: Review My Changes" — security + code review before push
-- [ ] PR description generation (when connected to GitHub)
-- [ ] Merge conflict assistance — "Ava: Help Resolve Conflict"
+- [x] "Ava: Write Commit Message" — analyzes staged changes, writes message
+- [x] "Ava: Explain This Diff" — explains working directory changes
+- [x] "Ava: Review My Changes" — security + code review before push
+- [x] PR description generation (branch, log, diff → PR description)
+- [x] Merge conflict assistance — "Ava: Resolve Conflict" (detects `<<<<<<<` markers)
 
 ---
 

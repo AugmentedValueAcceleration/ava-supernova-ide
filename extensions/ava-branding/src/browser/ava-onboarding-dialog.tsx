@@ -4,6 +4,8 @@ import { ReactDialog } from '@theia/core/lib/browser/dialogs/react-dialog';
 import { DialogProps } from '@theia/core/lib/browser/dialogs';
 import { ThemeService } from '@theia/core/lib/browser/theming';
 import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
+import { CommandService } from '@theia/core/lib/common/command';
+import { WorkspaceCommands } from '@theia/workspace/lib/browser/workspace-commands';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -134,6 +136,7 @@ interface StepProps {
   onSkip: () => void;
   themeService: ThemeService;
   preferenceService: PreferenceService;
+  commandService: CommandService;
 }
 
 function StepWelcome({ onNext }: StepProps): React.ReactElement {
@@ -244,14 +247,64 @@ function StepFontSize({ onNext, onSkip, preferenceService }: StepProps): React.R
   );
 }
 
+function StepConnectProvider({ onNext, onSkip, commandService }: StepProps): React.ReactElement {
+  const handleOpenDashboard = () => {
+    commandService.executeCommand('ava.dashboard.toggle');
+    onNext();
+  };
+
+  return (
+    <div style={s.outer}>
+      <div style={s.heading}>Connect your AI provider</div>
+      <div style={s.desc}>
+        Ava works with DeepSeek, Kimi, and more.
+        <br />
+        Add an API key in the Dashboard to get started.
+      </div>
+      <button
+        style={s.primaryBtn}
+        onClick={handleOpenDashboard}
+        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#5558E6'; }}
+        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #6366F1)'; }}
+      >
+        Open Dashboard
+      </button>
+      <button style={s.ghostBtn} onClick={onSkip}>Skip — I'll do this later</button>
+    </div>
+  );
+}
+
+function StepOpenFolder({ onNext, onSkip, commandService }: StepProps): React.ReactElement {
+  const handleOpenFolder = () => {
+    commandService.executeCommand(WorkspaceCommands.OPEN_FOLDER.id);
+    onNext();
+  };
+
+  return (
+    <div style={s.outer}>
+      <div style={s.heading}>Open a project</div>
+      <div style={s.desc}>
+        Open a folder to start coding, or explore the IDE first.
+      </div>
+      <button
+        style={s.primaryBtn}
+        onClick={handleOpenFolder}
+        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#5558E6'; }}
+        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #6366F1)'; }}
+      >
+        Open Folder
+      </button>
+      <button style={s.ghostBtn} onClick={onSkip}>I'll explore first</button>
+    </div>
+  );
+}
+
 function StepReady({ onNext }: StepProps): React.ReactElement {
   return (
     <div style={s.outer}>
       <div style={{ fontSize: 36, marginBottom: 12 }}>&#10003;</div>
       <div style={s.heading}>You're all set!</div>
       <div style={s.desc}>
-        Open a folder to start coding, or explore the IDE first.
-        <br />
         Press <strong>Ctrl+Shift+A</strong> anytime to open the Ava AI panel.
       </div>
       <button
@@ -269,11 +322,12 @@ function StepReady({ onNext }: StepProps): React.ReactElement {
 
 // ── Wizard Container ──────────────────────────────────────────────────────────
 
-const STEPS = [StepWelcome, StepTheme, StepFontSize, StepReady];
+const STEPS = [StepWelcome, StepTheme, StepFontSize, StepConnectProvider, StepOpenFolder, StepReady];
 
 function WizardContainer(props: {
   themeService: ThemeService;
   preferenceService: PreferenceService;
+  commandService: CommandService;
   onComplete: () => void;
 }): React.ReactElement {
   const [step, setStep] = React.useState(0);
@@ -309,6 +363,7 @@ function WizardContainer(props: {
         onSkip={skip}
         themeService={props.themeService}
         preferenceService={props.preferenceService}
+        commandService={props.commandService}
       />
     </div>
   );
@@ -321,6 +376,7 @@ export class AvaOnboardingDialog extends ReactDialog<void> {
 
   @inject(ThemeService) protected readonly themeService: ThemeService;
   @inject(PreferenceService) protected readonly preferenceService: PreferenceService;
+  @inject(CommandService) protected readonly commandService: CommandService;
 
   constructor(@inject(DialogProps) props: DialogProps) {
     super(props);
@@ -342,6 +398,7 @@ export class AvaOnboardingDialog extends ReactDialog<void> {
       <WizardContainer
         themeService={this.themeService}
         preferenceService={this.preferenceService}
+        commandService={this.commandService}
         onComplete={() => this.accept()}
       />
     );

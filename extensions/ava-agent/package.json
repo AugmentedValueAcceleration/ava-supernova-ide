@@ -17,6 +17,8 @@
     "@theia/core": "1.68.2",
     "@theia/editor": "1.68.2",
     "@theia/filesystem": "1.68.2",
+    "@theia/markers": "1.68.2",
+    "@theia/monaco": "1.68.2",
     "@theia/terminal": "1.68.2",
     "@theia/workspace": "1.68.2"
   },

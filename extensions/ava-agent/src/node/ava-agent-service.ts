@@ -6,6 +6,7 @@
 import { injectable } from '@theia/core/shared/inversify';
 import * as crypto from 'node:crypto';
 import * as https from 'node:https';
+import { execFile } from 'node:child_process';
 import {
   IAvaAgentService,
   IAvaAgentClient,
@@ -15,7 +16,19 @@ import {
   AvaDashboardState,
   AvaDashboardSettings,
   AvaProviderKeyStatus,
+  AvaToolCallMetadata,
+  AvaInlineCompletionRequest,
+  AvaFileContext,
+  AvaProjectInfo,
+  AvaUsageSummary,
+  AvaProviderHealth,
+  AvaProjectTemplate,
+  AvaHistoryEntry,
+  AvaReplayMessage,
 } from '../common/ava-agent-protocol';
+import { detectProject } from './ava-project-detector';
+import { UsageTracker } from './ava-usage-tracker';
+import { BUILTIN_TEMPLATES } from './ava-templates';
 
 const PLATFORM_API = 'https://ava-supernova.com/api';
 
@@ -44,6 +57,8 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   private configManager: InstanceType<CoreModule['ConfigManager']> | undefined;
   private historyManager: InstanceType<CoreModule['HistoryManager']> | undefined;
   private activeModelDef: any | undefined; // ModelDefinition
+  private usageTracker = new UsageTracker();
+  private healthCheckInterval: ReturnType<typeof setInterval> | undefined;
 
   // Run state
   private isRunning = false;
@@ -79,18 +94,36 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       }
     }
 
+    // Register platform provider if key exists
+    const platformKey = (config as any).platformKey;
+    if (platformKey) {
+      try {
+        const platformProvider = new core.PlatformProvider({ apiKey: platformKey });
+        this.providerRegistry.registerCustom('platform', platformProvider);
+      } catch (err) {
+        console.error('[ava-agent] Platform provider failed to register:', err);
+      }
+    }
+
     // Resolve active model
     const activeModelId = config.activeModel || '';
     const resolved = this.providerRegistry.resolveModel(activeModelId);
 
     if (resolved) {
-      this.setupAgent(core, resolved.provider, resolved.model);
+      await this.setupAgent(core, resolved.provider, resolved.model);
     }
 
     // Initialize history
     const projectRoot = core.detectProjectRoot(process.cwd()) ?? undefined;
     this.historyManager = new core.HistoryManager(projectRoot);
     this.historyManager.init();
+
+    // Start provider health checks (non-blocking, every 5 minutes)
+    this.checkProviderHealth().catch(() => {});
+    if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
+    this.healthCheckInterval = setInterval(() => {
+      this.checkProviderHealth().catch(() => {});
+    }, 5 * 60 * 1000);
 
     const models = this.providerRegistry.listAllModels().map((m: any) => ({
       id: `${m.provider}:${m.id}`,
@@ -148,9 +181,20 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
             arguments: event.toolCall.function.arguments,
           });
           break;
-        case 'tool_call_end':
-          this.client?.notifyToolCallEnd(event.toolCall.id, event.result, event.success);
+        case 'tool_call_partial':
+          this.client?.notifyToolCallPartial(event.toolCallId, event.data);
           break;
+        case 'tool_call_end': {
+          let parsedArgs: Record<string, unknown> = {};
+          try { parsedArgs = JSON.parse(event.toolCall.function.arguments); } catch { /* ignore */ }
+
+          const metadata: AvaToolCallMetadata = {
+            ...event.metadata,
+            ...(event.toolCall.function.name === 'bash' ? { command: parsedArgs.command as string } : {}),
+          };
+          this.client?.notifyToolCallEnd(event.toolCall.id, event.result, event.success, metadata);
+          break;
+        }
         case 'usage':
           this.client?.notifyUsage({
             prompt_tokens: event.usage.prompt_tokens,
@@ -158,6 +202,14 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
             total_tokens: event.usage.total_tokens,
             cost: event.cost,
           });
+          // Persist usage to disk (fire-and-forget)
+          this.usageTracker.record({
+            provider: this.activeModelDef?.provider ?? 'unknown',
+            model: this.activeModelDef?.id ?? 'unknown',
+            inputTokens: event.usage.prompt_tokens,
+            outputTokens: event.usage.completion_tokens,
+            cost: event.cost ?? 0,
+          }).catch(() => {});
           break;
         case 'error': {
           const msg = event.error?.humanMessage || event.error?.message || String(event.error);
@@ -198,8 +250,18 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
         if (streamStarted) {
           this.client?.notifyStreamEnd();
         }
-        const msg = error?.humanMessage || error?.message || String(error);
-        this.client?.notifyError(msg);
+
+        // Attempt fallback to another provider
+        const fallbackResult = await this.tryFallback(
+          this.conversation!.getMessages(),
+          onEvent,
+          this.runAbortController!.signal,
+        );
+
+        if (!fallbackResult) {
+          const msg = error?.humanMessage || error?.message || String(error);
+          this.client?.notifyError(msg);
+        }
       }
     } finally {
       this.isRunning = false;
@@ -230,7 +292,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
 
     const core = await getCore();
-    this.setupAgent(core, resolved.provider, resolved.model);
+    await this.setupAgent(core, resolved.provider, resolved.model);
 
     // Persist choice
     if (this.configManager) {
@@ -284,7 +346,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
 
     this.conversation = new core.Conversation();
-    this.conversation.setSystemPrompt(this.buildSystemPrompt());
+    this.conversation.setSystemPrompt(await this.buildSystemPrompt());
     this.sessionAllowedTools.clear();
     this.sessionAllowAll = false;
 
@@ -312,6 +374,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       permissionMode: 'balanced',
       temperature: config.preferences?.temperature ?? 0.7,
       maxTokens: config.preferences?.maxTokens ?? 8192,
+      completionsProvider: (config.preferences as any)?.completionsProvider ?? 'deepseek',
     };
 
     const models = this.providerRegistry
@@ -323,9 +386,9 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
         }))
       : [];
 
-    // Fetch account info if platform key is stored
-    let account: AvaAccountInfo | null = null;
+    // Check platform key and fetch account info (non-blocking on failure)
     const platformKey = (config as any).platformKey;
+    let account: AvaAccountInfo | null = null;
     if (platformKey) {
       try {
         const res = await this.platformApiFetch('/account-info', platformKey);
@@ -337,16 +400,15 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
             usage: res.data.usage ?? null,
           };
         }
-        // If key is invalid, account stays null — user sees connect page
       } catch {
-        // Network error — silently ignore, account stays null
+        // Network error — account info unavailable but key is still valid
       }
     }
 
     return {
       providerKeys,
       settings,
-      platformKeyConnected: Boolean(account),
+      platformKeyConnected: Boolean(platformKey),
       account,
       models,
       activeModel: this.activeModelDef
@@ -403,11 +465,12 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       await this.configManager.load();
     }
     const config = await this.configManager.load();
-    config.preferences = {
+    (config as any).preferences = {
       ...config.preferences,
       temperature: settings.temperature,
       maxTokens: settings.maxTokens,
       language: settings.language,
+      completionsProvider: settings.completionsProvider,
     };
     await this.configManager.save();
 
@@ -438,6 +501,9 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     (config as any).platformKey = key;
     await this.configManager.save();
 
+    // Reload providers so the platform provider is registered and agent is set up
+    await this.reloadProviders();
+
     const account: AvaAccountInfo = {
       email: res.data.email,
       name: res.data.name ?? null,
@@ -458,7 +524,481 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     const config = await this.configManager.load();
     delete (config as any).platformKey;
     await this.configManager.save();
+
+    // Reload providers so the platform provider is removed
+    await this.reloadProviders();
+
     this.client?.notifyPlatformAccountChanged(false, null);
+  }
+
+  // ── Editor + Completion integration ────────────────────────────────────────
+
+  async readFile(filePath: string): Promise<string | null> {
+    try {
+      const { readFile: rf } = await import('node:fs/promises');
+      return await rf(filePath, 'utf-8');
+    } catch {
+      return null;
+    }
+  }
+
+  async getInlineCompletion(request: AvaInlineCompletionRequest): Promise<string | null> {
+    if (!this.configManager) return null;
+
+    try {
+      const config = await this.configManager.load();
+      const selectedProvider = (config.preferences as any)?.completionsProvider ?? 'deepseek';
+      if (selectedProvider === 'none') return null;
+
+      // Resolve provider config — FIM endpoint varies by provider
+      const providerConfig = config.providers[selectedProvider];
+      const apiKey = providerConfig?.apiKey;
+      if (!apiKey) return null;
+
+      let baseUrl: string;
+      let endpoint: string;
+      let model: string;
+
+      switch (selectedProvider) {
+        case 'deepseek':
+          baseUrl = providerConfig.baseUrl || 'https://api.deepseek.com';
+          endpoint = '/beta/completions';
+          model = 'deepseek-chat';
+          break;
+        case 'qwen':
+          baseUrl = providerConfig.baseUrl || 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
+          endpoint = '/completions';
+          model = 'qwen-coder-plus';
+          break;
+        default:
+          // Unsupported provider for FIM — fall back to deepseek
+          const dsConfig = config.providers.deepseek;
+          if (!dsConfig?.apiKey) return null;
+          baseUrl = dsConfig.baseUrl || 'https://api.deepseek.com';
+          endpoint = '/beta/completions';
+          model = 'deepseek-chat';
+          break;
+      }
+
+      const body = JSON.stringify({
+        model,
+        prompt: request.prefix,
+        suffix: request.suffix,
+        max_tokens: request.maxTokens ?? 128,
+        temperature: 0,
+        stop: ['\n\n', '\r\n\r\n'],
+      });
+
+      return await this.httpPost(`${baseUrl}${endpoint}`, apiKey, body);
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Smart context (Phase 3) ──────────────────────────────────────────────────
+
+  async sendMessageWithContext(text: string, mode: AvaMode, context: AvaFileContext): Promise<void> {
+    // Build enriched message with file context prepended
+    const parts: string[] = [];
+
+    if (context.activeFile) {
+      const f = context.activeFile;
+      parts.push(`[Active File: ${f.path} (${f.language})]`);
+      if (f.selection) {
+        parts.push(`Selected code:\n\`\`\`${f.language}\n${f.selection}\n\`\`\``);
+      }
+      // Include file content (truncate if huge)
+      const content = f.content.length > 10_000
+        ? f.content.slice(0, 10_000) + '\n... (truncated)'
+        : f.content;
+      parts.push(`File content:\n\`\`\`${f.language}\n${content}\n\`\`\``);
+    }
+
+    if (context.openTabs && context.openTabs.length > 0) {
+      const tabList = context.openTabs.map(t => t.path).join(', ');
+      parts.push(`[Open tabs: ${tabList}]`);
+    }
+
+    if (context.pinnedFiles) {
+      for (const pf of context.pinnedFiles) {
+        const content = pf.content.length > 5_000
+          ? pf.content.slice(0, 5_000) + '\n... (truncated)'
+          : pf.content;
+        parts.push(`[Pinned: ${pf.path} (${pf.language})]\n\`\`\`${pf.language}\n${content}\n\`\`\``);
+      }
+    }
+
+    const enrichedText = parts.length > 0
+      ? parts.join('\n\n') + '\n\n' + text
+      : text;
+
+    // Delegate to the existing sendMessage logic
+    return this.sendMessage(enrichedText, mode);
+  }
+
+  // ── Project detection (Phase 3) ──────────────────────────────────────────────
+
+  async detectProject(): Promise<AvaProjectInfo | null> {
+    return detectProject(process.cwd());
+  }
+
+  // ── Usage tracking (Phase 4) ──────────────────────────────────────────────────
+
+  async getUsageSummary(): Promise<AvaUsageSummary> {
+    return this.usageTracker.getSummary();
+  }
+
+  // ── Provider health (Phase 4) ────────────────────────────────────────────────
+
+  async checkProviderHealth(): Promise<AvaProviderHealth[]> {
+    if (!this.providerRegistry) return [];
+
+    const results: AvaProviderHealth[] = [];
+    const providerNames = ['deepseek', 'kimi', 'qwen'] as const;
+
+    for (const name of providerNames) {
+      const provider = this.providerRegistry.get(name);
+      if (!provider) continue;
+
+      const start = Date.now();
+      try {
+        // Minimal completion to validate connectivity + key validity
+        const models = provider.listModels();
+        if (models.length === 0) continue;
+        await provider.createCompletion({
+          model: models[0].id,
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 1,
+        } as any);
+
+        results.push({
+          provider: name,
+          healthy: true,
+          latencyMs: Date.now() - start,
+        });
+      } catch (err: any) {
+        results.push({
+          provider: name,
+          healthy: false,
+          latencyMs: Date.now() - start,
+          error: (err?.message || String(err)).slice(0, 100),
+        });
+      }
+    }
+
+    this.client?.notifyProviderHealth(results);
+    return results;
+  }
+
+  // ── Workspace templates (Phase 4) ────────────────────────────────────────────
+
+  async getTemplates(): Promise<AvaProjectTemplate[]> {
+    return BUILTIN_TEMPLATES;
+  }
+
+  async createFromTemplate(templateId: string, targetDir: string, projectName: string): Promise<void> {
+    const template = BUILTIN_TEMPLATES.find(t => t.id === templateId);
+    if (!template) {
+      this.client?.notifyError(`Template not found: ${templateId}`);
+      return;
+    }
+
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    const path = await import('node:path');
+
+    const projectDir = path.join(targetDir, projectName);
+    await mkdir(projectDir, { recursive: true });
+
+    for (const file of template.files) {
+      const filePath = path.join(projectDir, file.path);
+      const dir = path.dirname(filePath);
+      await mkdir(dir, { recursive: true });
+
+      // Replace {{PROJECT_NAME}} placeholder in file content
+      const content = file.content.replace(/\{\{PROJECT_NAME\}\}/g, projectName);
+      await writeFile(filePath, content, 'utf-8');
+    }
+  }
+
+  // ── Session history (Phase 5) ──────────────────────────────────────────────────
+
+  async getHistory(filterByProject?: boolean): Promise<AvaHistoryEntry[]> {
+    if (!this.historyManager) return [];
+    const entries = await this.historyManager.listConversations(filterByProject ?? true);
+    const results: AvaHistoryEntry[] = [];
+    for (const entry of entries) {
+      const record = await this.historyManager.resumeConversation(entry.id);
+      results.push({
+        id: entry.id,
+        title: entry.title,
+        updatedAt: entry.updatedAt,
+        createdAt: record?.createdAt ?? entry.updatedAt,
+        pinned: entry.pinned,
+        projectPath: entry.projectPath,
+        messageCount: record ? record.messages.filter((m: any) => m.role !== 'system').length : 0,
+      });
+    }
+    return results;
+  }
+
+  async searchHistory(query: string): Promise<AvaHistoryEntry[]> {
+    if (!this.historyManager) return [];
+    const entries = await this.historyManager.searchConversations(query);
+    const results: AvaHistoryEntry[] = [];
+    for (const entry of entries) {
+      const record = await this.historyManager.resumeConversation(entry.id);
+      results.push({
+        id: entry.id,
+        title: entry.title,
+        updatedAt: entry.updatedAt,
+        createdAt: record?.createdAt ?? entry.updatedAt,
+        pinned: entry.pinned,
+        projectPath: entry.projectPath,
+        messageCount: record ? record.messages.filter((m: any) => m.role !== 'system').length : 0,
+      });
+    }
+    return results;
+  }
+
+  async loadConversation(id: string): Promise<void> {
+    if (!this.historyManager) return;
+
+    // Save current conversation before switching
+    if (this.conversation) {
+      await this.historyManager.saveConversation(this.conversation);
+    }
+
+    const record = await this.historyManager.resumeConversation(id);
+    if (!record) {
+      this.client?.notifyError('Conversation not found.', 'history');
+      return;
+    }
+
+    const core = await getCore();
+    this.conversation = new core.Conversation(record.id);
+    this.conversation.setMessages(record.messages);
+    this.sessionAllowedTools.clear();
+    this.sessionAllowAll = false;
+
+    const replayMessages = this.buildReplayMessages(record.messages);
+    this.client?.notifyConversationLoaded(record.id, record.title, replayMessages);
+  }
+
+  async deleteConversation(id: string): Promise<boolean> {
+    if (!this.historyManager) return false;
+    const result = await this.historyManager.deleteConversation(id);
+    if (result) this.client?.notifyHistoryChanged();
+    return result;
+  }
+
+  async renameConversation(id: string, newTitle: string): Promise<boolean> {
+    if (!this.historyManager) return false;
+    const result = await this.historyManager.renameConversation(id, newTitle);
+    if (result) this.client?.notifyHistoryChanged();
+    return result;
+  }
+
+  async pinConversation(id: string, pinned: boolean): Promise<boolean> {
+    if (!this.historyManager) return false;
+    const result = await this.historyManager.pinConversation(id, pinned);
+    if (result) this.client?.notifyHistoryChanged();
+    return result;
+  }
+
+  async exportConversation(id: string, format: 'json' | 'markdown'): Promise<string | null> {
+    if (!this.historyManager) return null;
+    return this.historyManager.exportConversation(id, format);
+  }
+
+  async importConversation(jsonData: string): Promise<string | null> {
+    if (!this.historyManager) return null;
+
+    try {
+      const record = JSON.parse(jsonData);
+
+      // Validate basic structure
+      if (!record.messages || !Array.isArray(record.messages)) {
+        this.client?.notifyError('Invalid session file: missing messages array.');
+        return null;
+      }
+
+      // Generate fresh UUID to prevent collisions
+      const newId = crypto.randomUUID();
+      const core = await getCore();
+      const conversation = new core.Conversation(newId);
+      conversation.setMessages(record.messages);
+
+      // Save with original metadata but new ID
+      await this.historyManager.saveConversation(conversation);
+
+      // Update the saved record's title if one was provided
+      if (record.title) {
+        await this.historyManager.renameConversation(newId, record.title);
+      }
+
+      this.client?.notifyHistoryChanged();
+      return newId;
+    } catch {
+      this.client?.notifyError('Failed to import session: invalid JSON.');
+      return null;
+    }
+  }
+
+  async getReplayMessages(id: string): Promise<AvaReplayMessage[]> {
+    if (!this.historyManager) return [];
+    const record = await this.historyManager.resumeConversation(id);
+    if (!record) return [];
+    return this.buildReplayMessages(record.messages);
+  }
+
+  private buildReplayMessages(messages: any[]): AvaReplayMessage[] {
+    const result: AvaReplayMessage[] = [];
+    // Build a map of tool_call_id → result content for pairing
+    const toolResults = new Map<string, string>();
+    for (const msg of messages) {
+      if (msg.role === 'tool' && msg.tool_call_id) {
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        toolResults.set(msg.tool_call_id, content.slice(0, 2000));
+      }
+    }
+
+    let index = 0;
+    for (const msg of messages) {
+      if (msg.role === 'system') continue;
+      if (msg.role === 'tool') continue; // tool results are attached to assistant messages
+
+      const content = typeof msg.content === 'string'
+        ? msg.content
+        : Array.isArray(msg.content)
+          ? msg.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
+          : msg.content ?? '';
+
+      const replay: AvaReplayMessage = {
+        index,
+        role: msg.role,
+        content,
+      };
+
+      // Attach thinking content for assistant messages
+      if (msg.role === 'assistant' && msg.reasoning_content) {
+        replay.thinking = msg.reasoning_content;
+      }
+
+      // Attach tool calls with their results
+      if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+        replay.toolCalls = msg.tool_calls.map((tc: any) => ({
+          name: tc.function?.name ?? tc.name ?? 'unknown',
+          arguments: typeof tc.function?.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function?.arguments ?? {}),
+          result: toolResults.get(tc.id),
+        }));
+      }
+
+      result.push(replay);
+      index++;
+    }
+
+    return result;
+  }
+
+  // ── Git integration (Phase 3) ────────────────────────────────────────────────
+
+  async getGitStagedDiff(): Promise<string | null> {
+    return this.execGit(['diff', '--cached']);
+  }
+
+  async getGitWorkingDiff(): Promise<string | null> {
+    return this.execGit(['diff']);
+  }
+
+  async getGitBranch(): Promise<string | null> {
+    return this.execGit(['rev-parse', '--abbrev-ref', 'HEAD']);
+  }
+
+  async getGitLog(count?: number): Promise<string | null> {
+    return this.execGit(['log', '--oneline', `-${count ?? 20}`]);
+  }
+
+  private execGit(args: string[]): Promise<string | null> {
+    return new Promise((resolve) => {
+      execFile('git', args, { cwd: process.cwd(), timeout: 30_000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
+        if (error) {
+          resolve(null);
+          return;
+        }
+        let output = stdout || '';
+        if (stderr) output += (output ? '\n' : '') + stderr;
+        resolve(output.trim() || null);
+      });
+    });
+  }
+
+  private httpPost(urlStr: string, apiKey: string, body: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const url = new URL(urlStr);
+      const req = https.request(
+        {
+          hostname: url.hostname,
+          port: 443,
+          path: url.pathname + url.search,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Length': Buffer.byteLength(body),
+          },
+        },
+        (res) => {
+          let raw = '';
+          res.on('data', (chunk: string) => (raw += chunk));
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(raw);
+              resolve(data.choices?.[0]?.text ?? null);
+            } catch {
+              resolve(null);
+            }
+          });
+        },
+      );
+      req.on('error', () => resolve(null));
+      req.write(body);
+      req.end();
+    });
+  }
+
+  private httpPostRaw(urlStr: string, apiKey: string, body: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const url = new URL(urlStr);
+      const req = https.request(
+        {
+          hostname: url.hostname,
+          port: 443,
+          path: url.pathname + url.search,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Length': Buffer.byteLength(body),
+          },
+          timeout: 15_000,
+        },
+        (res) => {
+          let raw = '';
+          res.on('data', (chunk: string) => (raw += chunk));
+          res.on('end', () => {
+            if ((res.statusCode ?? 0) >= 400) {
+              reject(new Error(`HTTP ${res.statusCode}: ${raw.slice(0, 200)}`));
+            } else {
+              resolve(raw);
+            }
+          });
+        },
+      );
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+      req.write(body);
+      req.end();
+    });
   }
 
   // ── Internal helpers ────────────────────────────────────────────────────────
@@ -494,6 +1034,48 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     });
   }
 
+  private async tryFallback(messages: any[], onEvent: (event: any) => void, signal: AbortSignal): Promise<boolean> {
+    if (!this.providerRegistry || !this.activeModelDef) return false;
+
+    const currentProvider = this.activeModelDef.provider;
+    const providerNames = ['deepseek', 'kimi', 'qwen'] as const;
+
+    for (const name of providerNames) {
+      if (name === currentProvider) continue;
+      const provider = this.providerRegistry.get(name);
+      if (!provider) continue;
+
+      const models = provider.listModels();
+      if (models.length === 0) continue;
+
+      try {
+        const core = await getCore();
+        const fallbackAgent = new core.Agent({
+          provider,
+          model: models[0],
+          toolRegistry: this.toolRegistry!,
+          cwd: process.cwd(),
+        });
+
+        this.client?.notifyProviderFallback(currentProvider, name);
+
+        const updatedMessages = await fallbackAgent.run(messages, onEvent, signal);
+        this.conversation?.setMessages(updatedMessages);
+
+        if (this.historyManager && this.conversation) {
+          await this.historyManager.saveConversation(this.conversation);
+        }
+
+        return true;
+      } catch {
+        // This fallback also failed — try next
+        continue;
+      }
+    }
+
+    return false;
+  }
+
   private async reloadProviders(): Promise<void> {
     const core = await getCore();
     const config = await this.configManager!.load();
@@ -509,6 +1091,17 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
         } catch (err) {
           console.error(`[ava-agent] Provider ${name} failed to register:`, err);
         }
+      }
+    }
+
+    // Register platform provider if key exists
+    const platformKey = (config as any).platformKey;
+    if (platformKey) {
+      try {
+        const platformProvider = new core.PlatformProvider({ apiKey: platformKey });
+        this.providerRegistry.registerCustom('platform', platformProvider);
+      } catch (err) {
+        console.error('[ava-agent] Platform provider failed to register:', err);
       }
     }
 
@@ -530,7 +1123,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
 
     if (resolved) {
-      this.setupAgent(core, resolved.provider, resolved.model);
+      await this.setupAgent(core, resolved.provider, resolved.model);
     } else {
       this.agent = undefined;
       this.activeModelDef = undefined;
@@ -559,7 +1152,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     this.client?.notifyModelsRefreshed(models, activeModel, !activeModel);
   }
 
-  private setupAgent(core: CoreModule, provider: any, model: any): void {
+  private async setupAgent(core: CoreModule, provider: any, model: any): Promise<void> {
     this.toolRegistry = new core.ToolRegistry();
     this.toolRegistry.registerBuiltins();
     this.toolRegistry.setPermissionMode('balanced');
@@ -572,7 +1165,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
 
     if (!this.conversation) {
       this.conversation = new core.Conversation();
-      this.conversation.setSystemPrompt(this.buildSystemPrompt());
+      this.conversation.setSystemPrompt(await this.buildSystemPrompt());
     }
 
     this.agent = new core.Agent({
@@ -583,15 +1176,23 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     });
   }
 
-  private buildSystemPrompt(): string {
-    // This will be called after getCore() has been called at least once
+  private async buildSystemPrompt(): Promise<string> {
     if (!_core) return '';
+
+    // Load project instructions from .ava/instructions.md
+    const projectRoot = _core.detectProjectRoot(process.cwd());
+    let projectInstructions: string | undefined;
+    if (projectRoot) {
+      projectInstructions = (await _core.loadProjectInstructions(projectRoot)) ?? undefined;
+    }
+
     return _core.buildSystemPrompt({
       cwd: process.cwd(),
       platform: process.platform,
       shell: 'bash',
       permissionMode: 'balanced',
       supportsVision: this.activeModelDef?.supportsVision,
+      projectInstructions,
     });
   }
 

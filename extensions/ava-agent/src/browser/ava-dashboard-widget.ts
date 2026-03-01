@@ -60,6 +60,7 @@ export class AvaDashboardWidget extends ReactWidget {
       onDisconnectAccount: () => {
         this.service.disconnectPlatformAccount();
       },
+      onGetUsageSummary: () => this.service.getUsageSummary(),
     });
   }
 }

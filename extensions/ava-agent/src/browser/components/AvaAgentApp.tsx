@@ -1,6 +1,8 @@
 import * as React from '@theia/core/shared/react';
 import type { ChatState, UIMessage, ToolCallDisplay } from '../ava-agent-client';
 import type { AvaMode, AvaModelInfo } from '../../common/ava-agent-protocol';
+import { AvaHistoryBrowser } from './AvaHistoryBrowser';
+import { AvaSessionReplay } from './AvaSessionReplay';
 
 // ── Suggestion chips + mode hints ────────────────────────────────────────────
 
@@ -20,8 +22,17 @@ const MODE_HINTS = [
 
 // ── Props ───────────────────────────────────────────────────────────────────
 
+export interface ContextSummary {
+  activeFile: string | null;
+  activeLanguage: string | null;
+  openTabCount: number;
+  pinnedCount: number;
+  pinnedPaths: string[];
+}
+
 export interface AvaAgentAppProps {
   state: ChatState;
+  contextSummary?: ContextSummary;
   onSend: (text: string, mode: AvaMode) => void;
   onCancel: () => void;
   onNewChat: () => void;
@@ -31,6 +42,21 @@ export interface AvaAgentAppProps {
     approved: boolean,
     options?: { alwaysAllow?: boolean; allowAll?: boolean; userResponse?: string },
   ) => void;
+  // Open dashboard for setup
+  onOpenDashboard?: () => void;
+  // Phase 5 — Session management
+  onShowHistory?: () => void;
+  onSearchHistory?: (query: string) => void;
+  onResumeConversation?: (id: string) => void;
+  onDeleteConversation?: (id: string) => void;
+  onRenameConversation?: (id: string, newTitle: string) => void;
+  onPinConversation?: (id: string, pinned: boolean) => void;
+  onExportConversation?: (id: string, format: 'json' | 'markdown') => void;
+  onImportSession?: () => void;
+  onStartReplay?: (id: string) => void;
+  onReplayStep?: (direction: 'forward' | 'backward') => void;
+  onReplayJump?: (index: number) => void;
+  onBackToChat?: () => void;
 }
 
 // ── Styles (Theia CSS variables) ────────────────────────────────────────────
@@ -209,6 +235,26 @@ const styles = {
     fontSize: '10px',
     opacity: 0.25,
   },
+  contextBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '3px 12px',
+    fontSize: '11px',
+    opacity: 0.5,
+    borderTop: '1px solid var(--theia-panel-border)',
+    flexShrink: 0 as const,
+  },
+  contextFile: {
+    fontWeight: 500 as const,
+    maxWidth: '160px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  contextPinned: {
+    color: 'var(--ava-accent, #6366F1)',
+  },
 };
 
 // ── Message components ──────────────────────────────────────────────────────
@@ -243,6 +289,11 @@ function AssistantMessage({ msg, onConfirmTool }: { msg: UIMessage; onConfirmToo
       )}
       {msg.isStreaming && !msg.content && msg.toolCalls.length === 0 && (
         <div style={{ opacity: 0.5 }}>Thinking...</div>
+      )}
+      {!msg.isStreaming && msg.cost != null && msg.cost > 0 && (
+        <div style={{ fontSize: '10px', opacity: 0.35, marginTop: '4px' }}>
+          ${msg.cost.toFixed(4)}
+        </div>
       )}
     </div>
   );
@@ -466,7 +517,10 @@ function ModelSelector({ models, activeModel, onSwitch }: {
 // ── Main app ────────────────────────────────────────────────────────────────
 
 export function AvaAgentApp(props: AvaAgentAppProps) {
-  const { state, onSend, onCancel, onNewChat, onSwitchModel, onConfirmTool } = props;
+  const { state, onSend, onCancel, onNewChat, onSwitchModel, onConfirmTool,
+    onOpenDashboard, onShowHistory, onSearchHistory, onResumeConversation, onDeleteConversation,
+    onRenameConversation, onPinConversation, onExportConversation, onImportSession,
+    onStartReplay, onReplayStep, onReplayJump, onBackToChat } = props;
   const [input, setInput] = React.useState('');
   const [mode, setMode] = React.useState<AvaMode>('code');
   const messagesRef = React.useRef<HTMLDivElement>(null);
@@ -493,7 +547,7 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
     }
   }, [handleSend]);
 
-  // Setup prompt
+  // Setup prompt — no API keys or account configured
   if (state.needsSetup) {
     return (
       <div style={styles.container}>
@@ -502,9 +556,32 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
           <span style={styles.headerSub}>Supernova</span>
         </div>
         <div style={styles.emptyState}>
-          <div>
-            <div style={{ fontSize: '14px', marginBottom: '8px', opacity: 0.8 }}>No model configured</div>
-            <div>Run <code style={{ background: 'var(--theia-input-background)', padding: '2px 6px', borderRadius: '3px' }}>ava --setup</code> in a terminal to add an API key.</div>
+          <div style={{ opacity: 1 }}>
+            <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', opacity: 0.9 }}>
+              Welcome to Ava
+            </div>
+            <div style={{ fontSize: '13px', opacity: 0.6, marginBottom: '20px', lineHeight: 1.6 }}>
+              Connect a model provider to start coding with AI.
+            </div>
+            <button
+              style={{
+                ...styles.button,
+                padding: '8px 20px',
+                fontSize: '13px',
+              }}
+              onClick={() => onOpenDashboard?.()}
+            >
+              Open Dashboard
+            </button>
+            <div style={{ fontSize: '11px', opacity: 0.4, marginTop: '12px' }}>
+              Or press <kbd style={{
+                background: 'var(--theia-input-background)',
+                padding: '1px 5px',
+                borderRadius: '3px',
+                border: '1px solid var(--theia-input-border)',
+                fontSize: '10px',
+              }}>Ctrl+Shift+D</kbd>
+            </div>
           </div>
         </div>
       </div>
@@ -519,52 +596,110 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
         <span style={styles.headerSub}>Supernova</span>
         <div style={styles.headerActions}>
           <ModelSelector models={state.models} activeModel={state.activeModel} onSwitch={onSwitchModel} />
+          {onShowHistory && (
+            <button
+              style={styles.buttonSecondary}
+              onClick={state.view === 'history' ? onBackToChat : onShowHistory}
+              title="Session history (Ctrl+Shift+H)"
+            >
+              {state.view === 'history' ? 'Back' : 'History'}
+            </button>
+          )}
           <button style={styles.buttonSecondary} onClick={onNewChat} title="New chat">
             New
           </button>
         </div>
       </div>
 
-      {/* Messages */}
-      <div ref={messagesRef} style={styles.messages}>
-        {state.messages.length === 0 ? (
-          <WelcomeView state={state} onSend={onSend} />
-        ) : (
-          state.messages.map(msg => {
-            switch (msg.role) {
-              case 'user':
-                return <UserMessage key={msg.id} msg={msg} />;
-              case 'assistant':
-                return <AssistantMessage key={msg.id} msg={msg} onConfirmTool={onConfirmTool} />;
-              case 'error':
-                return <ErrorMessage key={msg.id} msg={msg} />;
-              case 'system':
-                return <SystemMessage key={msg.id} msg={msg} />;
-              default:
-                return null;
-            }
-          })
-        )}
-        {state.isThinking && (
-          <div style={{ opacity: 0.5, fontSize: '12px' }}>Thinking...</div>
-        )}
-      </div>
+      {/* History view */}
+      {state.view === 'history' && onSearchHistory && onResumeConversation && onDeleteConversation && onRenameConversation && onPinConversation && onExportConversation && onStartReplay && onImportSession && onBackToChat && (
+        <AvaHistoryBrowser
+          entries={state.history.entries}
+          searchQuery={state.history.searchQuery}
+          isLoading={state.history.isLoading}
+          onSearch={onSearchHistory}
+          onResume={onResumeConversation}
+          onDelete={onDeleteConversation}
+          onRename={onRenameConversation}
+          onPin={onPinConversation}
+          onExport={onExportConversation}
+          onReplay={onStartReplay}
+          onImport={onImportSession}
+          onBack={onBackToChat}
+        />
+      )}
 
-      {/* Mode bar */}
-      <div style={styles.modeBar}>
-        {(['code', 'plan', 'chat', 'security'] as AvaMode[]).map(m => (
-          <button key={m} style={styles.modeButton(mode === m)} onClick={() => setMode(m)}>
-            {m.charAt(0).toUpperCase() + m.slice(1)}
-          </button>
-        ))}
-        {state.lastUsage && state.lastUsage.cost != null && (
-          <span style={{ marginLeft: 'auto', fontSize: '10px', opacity: 0.4, alignSelf: 'center' }}>
-            ${state.lastUsage.cost.toFixed(4)}
-          </span>
-        )}
-      </div>
+      {/* Replay view */}
+      {state.view === 'replay' && state.replay && onReplayStep && onReplayJump && onBackToChat && (
+        <AvaSessionReplay
+          replay={state.replay}
+          onStepForward={() => onReplayStep('forward')}
+          onStepBackward={() => onReplayStep('backward')}
+          onJumpTo={onReplayJump}
+          onBack={onBackToChat}
+        />
+      )}
 
-      {/* Input area */}
+      {/* Chat view */}
+      {state.view === 'chat' && (
+        <>
+          {/* Messages */}
+          <div ref={messagesRef} style={styles.messages}>
+            {state.messages.length === 0 ? (
+              <WelcomeView state={state} onSend={onSend} />
+            ) : (
+              state.messages.map(msg => {
+                switch (msg.role) {
+                  case 'user':
+                    return <UserMessage key={msg.id} msg={msg} />;
+                  case 'assistant':
+                    return <AssistantMessage key={msg.id} msg={msg} onConfirmTool={onConfirmTool} />;
+                  case 'error':
+                    return <ErrorMessage key={msg.id} msg={msg} />;
+                  case 'system':
+                    return <SystemMessage key={msg.id} msg={msg} />;
+                  default:
+                    return null;
+                }
+              })
+            )}
+            {state.isThinking && (
+              <div style={{ opacity: 0.5, fontSize: '12px' }}>Thinking...</div>
+            )}
+          </div>
+
+          {/* Context indicator */}
+          {props.contextSummary && (
+            <div style={styles.contextBar}>
+              <span style={styles.contextFile}>
+                {props.contextSummary.activeFile || 'No file open'}
+              </span>
+              {props.contextSummary.openTabCount > 0 && (
+                <span>{props.contextSummary.openTabCount} tabs</span>
+              )}
+              {props.contextSummary.pinnedCount > 0 && (
+                <span style={styles.contextPinned}>
+                  {props.contextSummary.pinnedCount} pinned
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Mode bar */}
+          <div style={styles.modeBar}>
+            {(['code', 'plan', 'chat', 'security'] as AvaMode[]).map(m => (
+              <button key={m} style={styles.modeButton(mode === m)} onClick={() => setMode(m)}>
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+            {state.sessionUsage.totalCost > 0 && (
+              <span style={{ marginLeft: 'auto', fontSize: '10px', opacity: 0.4, alignSelf: 'center' }} title={`${state.sessionUsage.requestCount} requests, ${state.sessionUsage.totalTokens.toLocaleString()} tokens`}>
+                Session: ${state.sessionUsage.totalCost.toFixed(4)}
+              </span>
+            )}
+          </div>
+
+          {/* Input area */}
       <div style={styles.inputArea}>
         <textarea
           style={styles.textarea}
@@ -585,6 +720,8 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
           </button>
         )}
       </div>
+        </>
+      )}
 
       {/* Pulse animation for running tool indicators */}
       <style>{`

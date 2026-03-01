@@ -1,6 +1,6 @@
 import * as React from '@theia/core/shared/react';
 import type { DashboardState } from '../ava-agent-client';
-import type { AvaDashboardSettings, AvaAccountInfo } from '../../common/ava-agent-protocol';
+import type { AvaDashboardSettings, AvaAccountInfo, AvaUsageSummary } from '../../common/ava-agent-protocol';
 
 // ── Props ───────────────────────────────────────────────────────────────────
 
@@ -11,6 +11,7 @@ export interface AvaDashboardAppProps {
   onSavePreferences: (settings: AvaDashboardSettings) => void;
   onConnectAccount: (key: string) => void;
   onDisconnectAccount: () => void;
+  onGetUsageSummary?: () => Promise<AvaUsageSummary>;
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -340,9 +341,10 @@ function ConnectAccount({ onConnect, onSkip, error: externalError }: {
 
 // ── Provider Key Card ───────────────────────────────────────────────────────
 
-function ProviderCard({ provider, connected, onSave, onRemove }: {
+function ProviderCard({ provider, connected, health, onSave, onRemove }: {
   provider: typeof PROVIDERS[number];
   connected: boolean;
+  health?: { healthy: boolean; latencyMs: number; error?: string };
   onSave: (apiKey: string) => void;
   onRemove: () => void;
 }) {
@@ -370,8 +372,13 @@ function ProviderCard({ provider, connected, onSave, onRemove }: {
 
       {connected ? (
         <div style={s.connectedBadge}>
-          <span style={s.dot('#22c55e')} />
-          <span style={{ fontSize: '12px', color: '#22c55e' }}>Connected</span>
+          <span style={s.dot(health ? (health.healthy ? '#22c55e' : '#ef4444') : '#22c55e')} />
+          <span style={{ fontSize: '12px', color: health ? (health.healthy ? '#22c55e' : '#ef4444') : '#22c55e' }}>
+            {health ? (health.healthy ? `Connected (${health.latencyMs}ms)` : `Error`) : 'Connected'}
+          </span>
+          {health && !health.healthy && health.error && (
+            <span style={{ fontSize: '10px', opacity: 0.5 }}>{health.error.slice(0, 50)}</span>
+          )}
         </div>
       ) : (
         <div>
@@ -537,12 +544,60 @@ function AccountOverview({ account, onDisconnect }: { account: AvaAccountInfo; o
 
 // ── Settings page ───────────────────────────────────────────────────────────
 
-function SettingsPage({ state, onSaveProviderKey, onRemoveProviderKey, onSavePreferences, onDisconnectAccount }: {
+function UsageSection({ onGetUsageSummary }: { onGetUsageSummary?: () => Promise<AvaUsageSummary> }) {
+  const [summary, setSummary] = React.useState<AvaUsageSummary | null>(null);
+
+  React.useEffect(() => {
+    if (onGetUsageSummary) {
+      onGetUsageSummary().then(setSummary).catch(() => {});
+    }
+  }, [onGetUsageSummary]);
+
+  if (!summary) return null;
+
+  const formatCost = (cost: number) => cost > 0 ? `$${cost.toFixed(4)}` : '$0.00';
+  const fmtTokens = (tokens: number) => {
+    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+    if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(0)}K`;
+    return String(tokens);
+  };
+
+  const providers = Object.entries(summary.byProvider);
+
+  return (
+    <div style={s.section}>
+      <div style={s.sectionTitle}>Usage</div>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
+        <div style={{ flex: 1, padding: '8px', borderRadius: 6, background: 'var(--theia-input-background)' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700 }}>{fmtTokens(summary.today.tokens)}</div>
+          <div style={{ fontSize: '10px', opacity: 0.5 }}>Today ({formatCost(summary.today.cost)})</div>
+        </div>
+        <div style={{ flex: 1, padding: '8px', borderRadius: 6, background: 'var(--theia-input-background)' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700 }}>{fmtTokens(summary.month.tokens)}</div>
+          <div style={{ fontSize: '10px', opacity: 0.5 }}>This Month ({formatCost(summary.month.cost)})</div>
+        </div>
+      </div>
+      {providers.length > 0 && (
+        <div style={{ fontSize: '11px', opacity: 0.6 }}>
+          {providers.map(([name, data]) => (
+            <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+              <span>{name}</span>
+              <span>{fmtTokens(data.tokens)} · {formatCost(data.cost)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsPage({ state, onSaveProviderKey, onRemoveProviderKey, onSavePreferences, onDisconnectAccount, onGetUsageSummary }: {
   state: DashboardState;
   onSaveProviderKey: AvaDashboardAppProps['onSaveProviderKey'];
   onRemoveProviderKey: AvaDashboardAppProps['onRemoveProviderKey'];
   onSavePreferences: AvaDashboardAppProps['onSavePreferences'];
   onDisconnectAccount: AvaDashboardAppProps['onDisconnectAccount'];
+  onGetUsageSummary: AvaDashboardAppProps['onGetUsageSummary'];
 }) {
   const [localSettings, setLocalSettings] = React.useState<AvaDashboardSettings>(state.settings);
   const [saved, setSaved] = React.useState(false);
@@ -570,6 +625,9 @@ function SettingsPage({ state, onSaveProviderKey, onRemoveProviderKey, onSavePre
         <div style={s.error}>{state.error}</div>
       )}
 
+      {/* Usage summary (Phase 4) */}
+      <UsageSection onGetUsageSummary={onGetUsageSummary} />
+
       {/* Account overview */}
       {state.platformKeyConnected && state.account && (
         <AccountOverview account={state.account} onDisconnect={onDisconnectAccount} />
@@ -586,15 +644,19 @@ function SettingsPage({ state, onSaveProviderKey, onRemoveProviderKey, onSavePre
         </div>
       )}
 
-      {PROVIDERS.map(provider => (
-        <ProviderCard
-          key={provider.id}
-          provider={provider}
-          connected={state.providerKeys[provider.id]}
-          onSave={(apiKey) => onSaveProviderKey(provider.id, apiKey)}
-          onRemove={() => onRemoveProviderKey(provider.id)}
-        />
-      ))}
+      {PROVIDERS.map(provider => {
+        const health = state.providerHealth.find(h => h.provider === provider.id);
+        return (
+          <ProviderCard
+            key={provider.id}
+            provider={provider}
+            connected={state.providerKeys[provider.id]}
+            health={health}
+            onSave={(apiKey) => onSaveProviderKey(provider.id, apiKey)}
+            onRemove={() => onRemoveProviderKey(provider.id)}
+          />
+        );
+      })}
 
       {/* Divider */}
       <div style={{ borderTop: '1px solid var(--theia-panel-border)', margin: '4px 0' }} />
@@ -684,6 +746,21 @@ function SettingsPage({ state, onSaveProviderKey, onRemoveProviderKey, onSavePre
         </select>
       </div>
 
+      {/* Completions Provider */}
+      <div style={s.section}>
+        <div style={s.sectionTitle}>Inline Completions</div>
+        <div style={s.sectionDesc}>Which provider to use for inline code completions (FIM).</div>
+        <select
+          value={localSettings.completionsProvider}
+          onChange={e => updateSetting('completionsProvider', e.target.value)}
+          style={s.select}
+        >
+          <option value="deepseek">DeepSeek</option>
+          <option value="qwen">Qwen (Coder Plus)</option>
+          <option value="none">Disabled</option>
+        </select>
+      </div>
+
       {/* Save button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '4px' }}>
         <button
@@ -747,6 +824,7 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
           onRemoveProviderKey={onRemoveProviderKey}
           onSavePreferences={onSavePreferences}
           onDisconnectAccount={onDisconnectAccount}
+          onGetUsageSummary={props.onGetUsageSummary}
         />
       )}
     </div>
