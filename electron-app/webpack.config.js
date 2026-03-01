@@ -15,6 +15,12 @@ configs[0].module.rules.push({
     loader: require.resolve('@theia/application-manager/lib/expose-loader')
 }); */
 
+// @vscode/windows-ca-certs may not be built — mark as optional external
+nodeConfig.config.externals = {
+    ...nodeConfig.config.externals,
+    '@vscode/windows-ca-certs': 'commonjs @vscode/windows-ca-certs',
+};
+
 module.exports = [
     ...configs,
     nodeConfig.config

@@ -1,17 +1,20 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
+import { ConnectionContainerModule } from '@theia/core/lib/node/messaging/connection-container-module';
+import { AvaAgentServiceImpl } from './ava-agent-service';
+import { AVA_AGENT_SERVICE_PATH, IAvaAgentClient } from '../common/ava-agent-protocol';
 
-// Backend module for @ava/core integration
-// This runs in the Node.js backend process where @ava/core will be imported directly.
-//
-// Planned responsibilities:
-// - Import and initialise @ava/core Agent
-// - Expose agent RPC service to the frontend
-// - Handle tool execution (file_read, file_write, bash, etc.)
-// - Manage provider configuration and API keys
-// - Handle conversation history and memory persistence
+const avaAgentConnectionModule = ConnectionContainerModule.create(({ bind, bindBackendService }) => {
+  bind(AvaAgentServiceImpl).toSelf().inSingletonScope();
+  bindBackendService<AvaAgentServiceImpl, IAvaAgentClient>(
+    AVA_AGENT_SERVICE_PATH,
+    AvaAgentServiceImpl,
+    (service, client) => {
+      service.setClient(client as unknown as IAvaAgentClient);
+      return service;
+    },
+  );
+});
 
 export default new ContainerModule((bind) => {
-  // TODO: Bind AvaAgentService (RPC bridge between frontend panel and @ava/core)
-  // bind(AvaAgentService).toSelf().inSingletonScope();
-  // bind(ConnectionHandler).toDynamicValue(...)
+  bind(ConnectionContainerModule).toConstantValue(avaAgentConnectionModule);
 });

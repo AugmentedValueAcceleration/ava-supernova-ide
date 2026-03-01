@@ -8,8 +8,38 @@
     "frontend": {
       "config": {
         "applicationName": "Ava | Supernova IDE",
+        "defaultTheme": { "light": "ava-light", "dark": "ava-dark" },
+        "defaultIconTheme": "theia-file-icons",
         "preferences": {
-          "toolbar.showToolbar": true
+          "toolbar.showToolbar": true,
+          "workbench.startupEditor": "welcomePage",
+          "workbench.colorTheme": "ava-dark",
+          "editor.fontFamily": "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+          "editor.fontLigatures": true,
+          "editor.fontSize": 14,
+          "editor.tabSize": 2,
+          "editor.detectIndentation": true,
+          "editor.wordWrap": "on",
+          "editor.minimap.enabled": false,
+          "editor.bracketPairColorization.enabled": true,
+          "editor.formatOnSave": true,
+          "editor.smoothScrolling": true,
+          "editor.cursorBlinking": "smooth",
+          "editor.cursorSmoothCaretAnimation": "on",
+          "editor.lineNumbers": "on",
+          "editor.guides.indentation": true,
+          "editor.guides.bracketPairs": true,
+          "editor.renderWhitespace": "selection",
+          "editor.suggestSelection": "first",
+          "editor.autoClosingBrackets": "always",
+          "editor.autoClosingQuotes": "always",
+          "editor.linkedEditing": true,
+          "breadcrumbs.enabled": true,
+          "files.autoSave": "afterDelay",
+          "files.autoSaveDelay": 1000,
+          "terminal.integrated.fontSize": 13,
+          "terminal.integrated.cursorBlinking": true,
+          "scm.defaultViewMode": "tree"
         }
       }
     },
@@ -20,6 +50,23 @@
         "startupTimeout": -1
       }
     }
+  },
+  "theiaPluginsDir": "../../plugins",
+  "theiaPlugins": {
+    "vscode.typescript-language-features": "https://open-vsx.org/api/vscode/typescript-language-features/1.95.3/file/vscode.typescript-language-features-1.95.3.vsix",
+    "vscode.javascript": "https://open-vsx.org/api/vscode/javascript/1.95.3/file/vscode.javascript-1.95.3.vsix",
+    "vscode.json-language-features": "https://open-vsx.org/api/vscode/json-language-features/1.95.3/file/vscode.json-language-features-1.95.3.vsix",
+    "vscode.json": "https://open-vsx.org/api/vscode/json/1.95.3/file/vscode.json-1.95.3.vsix",
+    "vscode.html-language-features": "https://open-vsx.org/api/vscode/html-language-features/1.95.3/file/vscode.html-language-features-1.95.3.vsix",
+    "vscode.html": "https://open-vsx.org/api/vscode/html/1.95.3/file/vscode.html-1.95.3.vsix",
+    "vscode.css-language-features": "https://open-vsx.org/api/vscode/css-language-features/1.95.3/file/vscode.css-language-features-1.95.3.vsix",
+    "vscode.css": "https://open-vsx.org/api/vscode/css/1.95.3/file/vscode.css-1.95.3.vsix",
+    "vscode.markdown-language-features": "https://open-vsx.org/api/vscode/markdown-language-features/1.95.3/file/vscode.markdown-language-features-1.95.3.vsix",
+    "vscode.emmet": "https://open-vsx.org/api/vscode/emmet/1.95.3/file/vscode.emmet-1.95.3.vsix",
+    "vscode.npm": "https://open-vsx.org/api/vscode/npm/1.95.3/file/vscode.npm-1.95.3.vsix",
+    "vscode.git": "https://open-vsx.org/api/vscode/git/1.95.3/file/vscode.git-1.95.3.vsix",
+    "vscode.git-base": "https://open-vsx.org/api/vscode/git-base/1.95.3/file/vscode.git-base-1.95.3.vsix",
+    "vscode.theme-defaults": "https://open-vsx.org/api/vscode/theme-defaults/1.95.3/file/vscode.theme-defaults-1.95.3.vsix"
   },
   "dependencies": {
     "@theia/bulk-edit": "1.68.2",

@@ -6,6 +6,7 @@ dist/
 *.d.ts
 !webpack.config.js
 !scripts/*.js
+!electron-app/launch-ide.js
 .browser_modules/
 yarn-error.log
 .theia

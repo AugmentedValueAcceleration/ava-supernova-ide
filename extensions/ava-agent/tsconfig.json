@@ -15,6 +15,7 @@
     "sourceMap": true,
     "strict": false,
     "target": "ES2021",
+    "jsx": "react",
     "lib": ["ES2021", "DOM"]
   },
   "include": ["src"]

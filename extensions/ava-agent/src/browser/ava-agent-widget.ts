@@ -1,10 +1,22 @@
-import { injectable, postConstruct } from '@theia/core/shared/inversify';
-import { BaseWidget, Message } from '@theia/core/lib/browser';
+import * as React from '@theia/core/shared/react';
+import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
+import { ReactWidget } from '@theia/core/lib/browser';
+import { Message } from '@lumino/messaging';
+import { AvaAgentClient } from './ava-agent-client';
+import { AvaAgentApp } from './components/AvaAgentApp';
+import {
+  IAvaAgentService,
+  AvaAgentService,
+  AvaMode,
+} from '../common/ava-agent-protocol';
 
 @injectable()
-export class AvaAgentWidget extends BaseWidget {
+export class AvaAgentWidget extends ReactWidget {
   static readonly ID = 'ava-agent-panel';
   static readonly LABEL = 'Ava';
+
+  @inject(AvaAgentService) protected readonly service: IAvaAgentService;
+  @inject(AvaAgentClient) protected readonly client: AvaAgentClient;
 
   constructor() {
     super();
@@ -12,81 +24,64 @@ export class AvaAgentWidget extends BaseWidget {
     this.title.label = AvaAgentWidget.LABEL;
     this.title.caption = 'Ava | Supernova Agent';
     this.title.closable = true;
+    this.title.iconClass = 'no-icon';
     this.addClass('ava-agent-widget');
-
-    // Ensure the widget fills its container properly
     this.node.style.overflow = 'hidden';
   }
 
   @postConstruct()
   protected init(): void {
+    // Re-render whenever client state changes
+    this.toDispose.push(this.client.onStateChanged(() => this.update()));
+
+    // Initialize the backend service
+    this.service.initialize().then(initState => {
+      this.client.notifyInit(initState);
+    }).catch(err => {
+      console.error('[ava-agent] Failed to initialize:', err);
+      this.client.notifyError(
+        'Failed to connect to Ava backend. Check the developer console for details.',
+        'init_error',
+      );
+    });
+
     this.update();
   }
 
-  protected onUpdateRequest(msg: Message): void {
-    super.onUpdateRequest(msg);
-    // TODO: Replace with React-based agent chat UI
-    // This will import @ava/core and wire the AgentEventHandler
-    this.node.innerHTML = `
-      <div style="
-        display: flex;
-        flex-direction: column;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        padding: 16px;
-        box-sizing: border-box;
-        font-family: var(--theia-ui-font-family);
-        color: var(--theia-foreground);
-      ">
-        <div style="
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 16px;
-          padding-bottom: 12px;
-          border-bottom: 1px solid var(--theia-panel-border);
-          flex-shrink: 0;
-        ">
-          <span style="font-size: 18px; font-weight: 700;">Ava</span>
-          <span style="
-            font-size: 10px;
-            font-weight: 600;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            opacity: 0.6;
-          ">Supernova</span>
-        </div>
-        <div style="
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          opacity: 0.5;
-          font-size: 13px;
-          text-align: center;
-          line-height: 1.6;
-          min-height: 0;
-          overflow: auto;
-        ">
-          Agent panel ready.<br/>
-          @ava/core integration coming next.
-        </div>
-        <div style="
-          flex-shrink: 0;
-          padding: 8px 12px;
-          border: 1px solid var(--theia-input-border);
-          border-radius: 6px;
-          background: var(--theia-input-background);
-          color: var(--theia-input-foreground);
-          font-size: 13px;
-          opacity: 0.5;
-        ">
-          Ask Ava something...
-        </div>
-      </div>
-    `;
+  protected render(): React.ReactNode {
+    return React.createElement(AvaAgentApp, {
+      state: this.client.getState(),
+      onSend: (text: string, mode: AvaMode) => {
+        this.service.sendMessage(text, mode);
+      },
+      onCancel: () => {
+        this.service.cancelRun();
+      },
+      onNewChat: () => {
+        this.service.newChat();
+      },
+      onSwitchModel: (modelId: string) => {
+        this.service.switchModel(modelId);
+      },
+      onConfirmTool: (confirmationId, approved, options) => {
+        this.service.confirmTool(
+          confirmationId,
+          approved,
+          options?.alwaysAllow,
+          options?.allowAll,
+          undefined,
+          options?.userResponse,
+        );
+      },
+    });
+  }
+
+  protected onActivateRequest(msg: Message): void {
+    super.onActivateRequest(msg);
+    // Focus the textarea when the panel is activated
+    const textarea = this.node.querySelector('textarea');
+    if (textarea) {
+      textarea.focus();
+    }
   }
 }
