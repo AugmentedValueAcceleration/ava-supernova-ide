@@ -70,7 +70,8 @@ export class AvaTerminalContribution implements FrontendApplicationContribution 
     } catch { return; }
 
     const terminal = await this.getOrCreateTerminal();
-    this.terminalService.open(terminal);
+    // Don't auto-reveal — tool output shows in the agent panel's tool card.
+    // The terminal is available if the user manually opens it.
 
     // Write command with indigo color
     terminal.write(`\x1b[38;2;99;102;241m$\x1b[0m ${command}\r\n`);

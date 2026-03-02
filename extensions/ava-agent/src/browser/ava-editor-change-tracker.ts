@@ -129,14 +129,22 @@ export class AvaEditorChangeTracker implements FrontendApplicationContribution, 
     const originalContent = await this.snapshots.get(info.id) ?? null;
     this.snapshots.delete(info.id);
 
-    // Open the file in editor
+    // If the file is already open in an editor, apply decorations — don't force-open it
     const uri = URI.fromFilePath(filePath);
-    let editorWidget: EditorWidget;
-    try {
-      editorWidget = await this.editorManager.open(uri, { mode: 'reveal' });
-    } catch {
-      return; // File may not exist or editor failed to open
+    const existingEditor = this.editorManager.all.find(
+      w => w.editor.uri.toString() === uri.toString(),
+    );
+    if (!existingEditor) {
+      // File not open — store the diff info for when the user opens it later
+      this.pendingChanges.set(filePath, {
+        originalContent,
+        decorationIds: [],
+        uri,
+        toolCallId: info.id,
+      });
+      return;
     }
+    const editorWidget = existingEditor;
 
     // Wait a tick for the editor content to update from disk
     await new Promise(resolve => setTimeout(resolve, 200));
