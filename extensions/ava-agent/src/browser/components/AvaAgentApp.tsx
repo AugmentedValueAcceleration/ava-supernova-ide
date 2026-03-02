@@ -3,6 +3,7 @@ import type { ChatState, UIMessage, ToolCallDisplay } from '../ava-agent-client'
 import type { AvaMode, AvaModelInfo } from '../../common/ava-agent-protocol';
 import { AvaHistoryBrowser } from './AvaHistoryBrowser';
 import { AvaSessionReplay } from './AvaSessionReplay';
+import { MarkdownContent } from './MarkdownContent';
 
 // ── Suggestion chips + mode hints ────────────────────────────────────────────
 
@@ -276,9 +277,7 @@ function AssistantMessage({ msg, onConfirmTool }: { msg: UIMessage; onConfirmToo
         </div>
       )}
       {msg.content && (
-        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5 }}>
-          {msg.content}
-        </div>
+        <MarkdownContent content={msg.content} />
       )}
       {msg.toolCalls.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
