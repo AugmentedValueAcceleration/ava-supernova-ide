@@ -33,10 +33,11 @@ const AVA_DARK_CSS = `
   --theia-textLink-activeForeground: #9b9ef5;
   --theia-notificationLink-foreground: #7c7ff2;
 
-  /* Borders */
+  /* Borders — midnight black throughout */
   --theia-panel-border: #141520;
   --theia-sideBar-border: #141520;
   --theia-activityBar-border: #141520;
+  --theia-activityBar-activeBorder: #6366F1;
   --theia-tab-border: #141520;
   --theia-editorGroup-border: #141520;
   --theia-titleBar-border: #141520;
@@ -45,6 +46,11 @@ const AVA_DARK_CSS = `
   --theia-window-activeBorder: #13141b;
   --theia-window-inactiveBorder: #13141b;
   --theia-contrastBorder: transparent;
+  --theia-sideBarSectionHeader-border: #141520;
+  --theia-menu-border: #141520;
+  --theia-menu-separatorBackground: #1f2030;
+  --theia-sash-hoverBorder: rgba(99, 102, 241, 0.5);
+  --theia-notebook-cellBorderColor: #141520;
 
   /* Input */
   --theia-input-background: #1f2030;

@@ -498,25 +498,98 @@ function ModelSelector({ models, activeModel, onSwitch }: {
   activeModel: string | null;
   onSwitch: (id: string) => void;
 }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
   if (models.length === 0) return null;
+
+  const activeModelName = models.find(m => m.id === activeModel)?.name ?? 'Select model';
+
   return (
-    <select
-      value={activeModel || ''}
-      onChange={e => onSwitch(e.target.value)}
-      style={{
-        padding: '3px 6px',
-        border: '1px solid var(--theia-input-border)',
-        borderRadius: '4px',
-        background: 'var(--theia-input-background)',
-        color: 'var(--theia-input-foreground)',
-        fontSize: '11px',
-        outline: 'none',
-      }}
-    >
-      {models.map(m => (
-        <option key={m.id} value={m.id}>{m.name}</option>
-      ))}
-    </select>
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '3px 8px',
+          border: '1px solid var(--theia-input-border)',
+          borderRadius: '4px',
+          background: 'var(--theia-input-background)',
+          color: 'var(--theia-input-foreground)',
+          fontSize: '11px',
+          cursor: 'pointer',
+          outline: 'none',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', flexShrink: 0 }} />
+        {activeModelName}
+        <span style={{ fontSize: '8px', opacity: 0.5, marginLeft: '2px' }}>&#9662;</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          right: 0,
+          minWidth: '180px',
+          background: 'var(--theia-input-background)',
+          border: '1px solid var(--theia-input-border)',
+          borderRadius: '6px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+          zIndex: 1000,
+          overflow: 'hidden',
+        }}>
+          <div style={{ padding: '6px 10px', fontSize: '10px', opacity: 0.4, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+            Models
+          </div>
+          {models.map(m => (
+            <button
+              key={m.id}
+              onClick={() => { onSwitch(m.id); setOpen(false); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '6px 10px',
+                border: 'none',
+                background: m.id === activeModel ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                color: 'var(--theia-input-foreground)',
+                fontSize: '12px',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+              onMouseEnter={e => {
+                if (m.id !== activeModel) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = m.id === activeModel ? 'rgba(99, 102, 241, 0.15)' : 'transparent';
+              }}
+            >
+              <span style={{
+                width: '5px', height: '5px', borderRadius: '50%', flexShrink: 0,
+                background: m.id === activeModel ? '#6366F1' : 'rgba(255,255,255,0.15)',
+              }} />
+              <span style={{ fontWeight: m.id === activeModel ? 600 : 400 }}>{m.name}</span>
+              <span style={{ fontSize: '10px', opacity: 0.35, marginLeft: 'auto' }}>{m.provider}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
