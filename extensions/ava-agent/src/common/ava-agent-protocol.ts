@@ -196,7 +196,7 @@ export interface AvaReplayMessage {
 
 export interface IAvaAgentService {
   /** Initialize the agent backend — returns available models and setup state. */
-  initialize(): Promise<AvaInitState>;
+  initialize(workspaceRoot?: string): Promise<AvaInitState>;
 
   /** Send a user message. Streaming events arrive via IAvaAgentClient notifications. */
   sendMessage(text: string, mode: AvaMode): Promise<void>;

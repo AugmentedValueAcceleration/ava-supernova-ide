@@ -6,6 +6,7 @@ import { Message } from '@lumino/messaging';
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileDialogService } from '@theia/filesystem/lib/browser/file-dialog/file-dialog-service';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
+import { WorkspaceService } from '@theia/workspace/lib/browser';
 import { AvaAgentClient } from './ava-agent-client';
 import { AvaContextManager } from './ava-context-manager';
 import { AvaAgentApp } from './components/AvaAgentApp';
@@ -27,6 +28,7 @@ export class AvaAgentWidget extends ReactWidget {
   @inject(EditorManager) protected readonly editorManager: EditorManager;
   @inject(FileDialogService) protected readonly fileDialogService: FileDialogService;
   @inject(FileService) protected readonly fileService: FileService;
+  @inject(WorkspaceService) protected readonly workspaceService: WorkspaceService;
 
   constructor() {
     super();
@@ -45,8 +47,10 @@ export class AvaAgentWidget extends ReactWidget {
     this.toDispose.push(this.client.onStateChanged(() => this.update()));
     this.toDispose.push(this.contextManager.onContextChanged(() => this.update()));
 
-    // Initialize the backend service
-    this.service.initialize().then(initState => {
+    // Resolve workspace root from Theia, then initialize the backend
+    this.resolveWorkspaceRoot().then(workspaceRoot => {
+      return this.service.initialize(workspaceRoot);
+    }).then(initState => {
       this.client.notifyInit(initState);
     }).catch(err => {
       console.error('[ava-agent] Failed to initialize:', err);
@@ -57,6 +61,24 @@ export class AvaAgentWidget extends ReactWidget {
     });
 
     this.update();
+  }
+
+  /** Get the user's workspace root path, waiting for workspace service if needed. */
+  private async resolveWorkspaceRoot(): Promise<string | undefined> {
+    // Try sync first (fast path)
+    let roots = this.workspaceService.tryGetRoots();
+    if (roots.length === 0) {
+      // Workspace may not be loaded yet — wait for the async roots
+      roots = await this.workspaceService.roots;
+    }
+    if (roots.length === 0) return undefined;
+    // Theia URI path: '/c:/Users/...' on Windows → convert to native path
+    const uriPath = roots[0].resource.path.toString();
+    // Strip leading '/' on Windows drive paths (e.g. '/c:/' → 'c:/')
+    if (/^\/[a-zA-Z]:/.test(uriPath)) {
+      return uriPath.slice(1);
+    }
+    return uriPath;
   }
 
   protected render(): React.ReactNode {

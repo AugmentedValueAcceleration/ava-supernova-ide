@@ -59,6 +59,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   private activeModelDef: any | undefined; // ModelDefinition
   private usageTracker = new UsageTracker();
   private healthCheckInterval: ReturnType<typeof setInterval> | undefined;
+  private workspaceRoot: string | undefined;
 
   // Run state
   private isRunning = false;
@@ -71,9 +72,19 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     this.client = client;
   }
 
+  /** Returns user's workspace root (from IDE) or falls back to process cwd. */
+  private getCwd(): string {
+    return this.workspaceRoot ?? process.cwd();
+  }
+
   // ── IAvaAgentService implementation ─────────────────────────────────────────
 
-  async initialize(): Promise<AvaInitState> {
+  async initialize(workspaceRoot?: string): Promise<AvaInitState> {
+    if (workspaceRoot) {
+      this.workspaceRoot = workspaceRoot;
+      console.log('[ava-agent] Workspace root:', this.workspaceRoot);
+    }
+
     const core = await getCore();
 
     // Enable debug logging for diagnostics
@@ -128,7 +139,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
 
     // Initialize history
-    const projectRoot = core.detectProjectRoot(process.cwd()) ?? undefined;
+    const projectRoot = core.detectProjectRoot(this.getCwd()) ?? undefined;
     this.historyManager = new core.HistoryManager(projectRoot);
     this.historyManager.init();
 
@@ -653,7 +664,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   // ── Project detection (Phase 3) ──────────────────────────────────────────────
 
   async detectProject(): Promise<AvaProjectInfo | null> {
-    return detectProject(process.cwd());
+    return detectProject(this.getCwd());
   }
 
   // ── Usage tracking (Phase 4) ──────────────────────────────────────────────────
@@ -934,7 +945,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
 
   private execGit(args: string[]): Promise<string | null> {
     return new Promise((resolve) => {
-      execFile('git', args, { cwd: process.cwd(), timeout: 30_000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
+      execFile('git', args, { cwd: this.getCwd(), timeout: 30_000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
         if (error) {
           resolve(null);
           return;
@@ -1068,7 +1079,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
           provider,
           model: models[0],
           toolRegistry: this.toolRegistry!,
-          cwd: process.cwd(),
+          cwd: this.getCwd(),
         });
 
         this.client?.notifyProviderFallback(currentProvider, name);
@@ -1185,7 +1196,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       provider,
       model,
       toolRegistry: this.toolRegistry,
-      cwd: process.cwd(),
+      cwd: this.getCwd(),
     });
   }
 
@@ -1193,14 +1204,14 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     if (!_core) return '';
 
     // Load project instructions from .ava/instructions.md
-    const projectRoot = _core.detectProjectRoot(process.cwd());
+    const projectRoot = _core.detectProjectRoot(this.getCwd());
     let projectInstructions: string | undefined;
     if (projectRoot) {
       projectInstructions = (await _core.loadProjectInstructions(projectRoot)) ?? undefined;
     }
 
     return _core.buildSystemPrompt({
-      cwd: process.cwd(),
+      cwd: this.getCwd(),
       platform: process.platform,
       shell: 'bash',
       permissionMode: 'balanced',
