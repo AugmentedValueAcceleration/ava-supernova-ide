@@ -118,7 +118,7 @@ const s = {
     border: '1px solid var(--theia-panel-border)',
     borderRadius: '8px',
     padding: '12px',
-    background: 'rgba(99, 102, 241, 0.02)',
+    background: 'rgba(168, 85, 247, 0.02)',
   },
   sectionTitle: {
     fontSize: '12px',
@@ -164,7 +164,7 @@ const s = {
     padding: '6px 14px',
     border: '1px solid var(--theia-button-border, transparent)',
     borderRadius: '5px',
-    background: 'var(--ava-accent, #6366F1)',
+    background: 'var(--ava-accent, #A855F7)',
     color: '#fff',
     fontSize: '12px',
     fontWeight: 600 as const,
@@ -203,7 +203,7 @@ const s = {
   }),
   link: {
     fontSize: '10px',
-    color: 'var(--ava-accent, #6366F1)',
+    color: 'var(--ava-accent, #A855F7)',
     background: 'none',
     border: 'none',
     cursor: 'pointer',
@@ -268,7 +268,7 @@ function ConnectAccount({ onConnect, onSkip, error: externalError }: {
       {/* Logo */}
       <div style={{ textAlign: 'center', padding: '8px 0' }}>
         <div>
-          <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--ava-accent, #6366F1)' }}>Ava</span>
+          <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--ava-accent, #A855F7)' }}>Ava</span>
           <span style={s.headerSub}>Supernova</span>
         </div>
         <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '4px' }}>
@@ -283,7 +283,7 @@ function ConnectAccount({ onConnect, onSkip, error: externalError }: {
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px', fontSize: '12px' }}>
             <span style={{
               width: '18px', height: '18px', borderRadius: '50%',
-              background: 'rgba(99, 102, 241, 0.15)', color: 'var(--ava-accent, #6366F1)',
+              background: 'rgba(168, 85, 247, 0.15)', color: 'var(--ava-accent, #A855F7)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '10px', fontWeight: 700, flexShrink: 0,
             }}>
@@ -423,7 +423,7 @@ function formatNumber(n: number): string {
 
 const TIER_COLORS: Record<string, string> = {
   free: '#6b7280',
-  pro: '#6366F1',
+  pro: '#A855F7',
   ultra: '#8B5CF6',
   admin: '#f59e0b',
 };
@@ -447,7 +447,7 @@ function TierBadge({ tier }: { tier: string }) {
 
 function UsageBar({ used, limit, accent }: { used: number; limit: number; accent?: boolean }) {
   const pct = Math.min((used / limit) * 100, 100);
-  const color = pct > 90 ? '#ef4444' : pct > 75 ? '#f59e0b' : accent ? '#8B5CF6' : '#6366F1';
+  const color = pct > 90 ? '#ef4444' : pct > 75 ? '#f59e0b' : accent ? '#8B5CF6' : '#A855F7';
   return (
     <div style={{ height: 6, borderRadius: 3, background: 'var(--theia-input-background)', overflow: 'hidden' }}>
       <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: color, transition: 'width 0.3s' }} />
@@ -499,7 +499,7 @@ function AccountOverview({ account, onDisconnect }: { account: AvaAccountInfo; o
         </div>
         {account.tier === 'admin' ? (
           <div style={{ height: 6, borderRadius: 3, background: 'var(--theia-input-background)', overflow: 'hidden' }}>
-            <div style={{ width: '100%', height: '100%', borderRadius: 3, background: 'linear-gradient(to right, #6366F1, #8B5CF6)' }} />
+            <div style={{ width: '100%', height: '100%', borderRadius: 3, background: 'linear-gradient(to right, #A855F7, #8B5CF6)' }} />
           </div>
         ) : (
           <UsageBar used={usage.free_tokens_used} limit={usage.free_tokens_limit} />
@@ -693,15 +693,15 @@ function SettingsPage({ state, onSaveProviderKey, onRemoveProviderKey, onSavePre
                 borderRadius: '5px',
                 cursor: 'pointer',
                 fontSize: '12px',
-                background: localSettings.permissionMode === mode.value ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                border: localSettings.permissionMode === mode.value ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid transparent',
+                background: localSettings.permissionMode === mode.value ? 'rgba(168, 85, 247, 0.1)' : 'transparent',
+                border: localSettings.permissionMode === mode.value ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid transparent',
               }}
             >
               <input
                 type="radio"
                 checked={localSettings.permissionMode === mode.value}
                 onChange={() => updateSetting('permissionMode', mode.value as AvaDashboardSettings['permissionMode'])}
-                style={{ accentColor: 'var(--ava-accent, #6366F1)' }}
+                style={{ accentColor: 'var(--ava-accent, #A855F7)' }}
               />
               <span>
                 <span style={{ fontWeight: 600 }}>{mode.label}</span>
@@ -725,7 +725,7 @@ function SettingsPage({ state, onSaveProviderKey, onRemoveProviderKey, onSavePre
             step={0.1}
             value={localSettings.temperature}
             onChange={e => updateSetting('temperature', parseFloat(e.target.value))}
-            style={{ flex: 1, accentColor: 'var(--ava-accent, #6366F1)' }}
+            style={{ flex: 1, accentColor: 'var(--ava-accent, #A855F7)' }}
           />
           <span style={{ fontSize: '10px', opacity: 0.4 }}>Creative</span>
         </div>

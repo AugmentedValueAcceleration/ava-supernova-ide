@@ -102,6 +102,14 @@ export interface AvaDashboardState {
   activeModel: string | null;
 }
 
+// ── Attachment types ─────────────────────────────────────────────────────────
+
+export interface AvaAttachment {
+  type: 'image';
+  data: string;   // data URL: "data:image/png;base64,..."
+  name: string;   // filename or "pasted-<timestamp>.png"
+}
+
 // ── Smart context types (Phase 3) ───────────────────────────────────────────
 
 export interface AvaFileContext {
@@ -251,7 +259,7 @@ export interface IAvaAgentService {
   // ── Smart context (Phase 3) ───────────────────────────────────────────────
 
   /** Send a message with file context from the editor. */
-  sendMessageWithContext(text: string, mode: AvaMode, context: AvaFileContext): Promise<void>;
+  sendMessageWithContext(text: string, mode: AvaMode, context: AvaFileContext, attachments?: AvaAttachment[]): Promise<void>;
 
   // ── Project detection (Phase 3) ───────────────────────────────────────────
 
@@ -326,7 +334,7 @@ export interface IAvaAgentService {
 
 export interface IAvaAgentClient {
   notifyInit(state: AvaInitState): void;
-  notifyUserMessageAck(text: string): void;
+  notifyUserMessageAck(text: string, images?: string[]): void;
   notifyStreamStart(): void;
   notifyThinkingDelta(content: string): void;
   notifyStreamDelta(content: string): void;

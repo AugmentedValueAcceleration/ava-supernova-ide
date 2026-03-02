@@ -69,7 +69,7 @@ const s = {
   },
   slider: {
     flex: 1,
-    accentColor: 'var(--ava-accent, #6366F1)',
+    accentColor: 'var(--ava-accent, #A855F7)',
   },
   messageNode: {
     display: 'flex',
@@ -105,14 +105,14 @@ const s = {
     opacity: 0.4,
     fontStyle: 'italic' as const,
     marginBottom: '4px',
-    borderLeft: '2px solid var(--ava-accent, #6366F1)',
+    borderLeft: '2px solid var(--ava-accent, #A855F7)',
     paddingLeft: '8px',
   },
   toolCall: {
     fontSize: '11px',
     padding: '4px 8px',
     borderRadius: '4px',
-    background: 'rgba(99, 102, 241, 0.06)',
+    background: 'rgba(168, 85, 247, 0.06)',
     marginTop: '4px',
   },
   toolName: {
@@ -128,7 +128,7 @@ const s = {
     marginTop: '2px',
   },
   currentHighlight: {
-    borderLeft: '2px solid var(--ava-accent, #6366F1)',
+    borderLeft: '2px solid var(--ava-accent, #A855F7)',
     paddingLeft: '8px',
     marginLeft: '-10px',
   },
@@ -137,7 +137,7 @@ const s = {
 // ── Role colors ──────────────────────────────────────────────────────────────
 
 const ROLE_COLORS: Record<string, string> = {
-  user: 'var(--ava-accent, #6366F1)',
+  user: 'var(--ava-accent, #A855F7)',
   assistant: '#22C55E',
   tool: '#6B7280',
   system: '#6B7280',

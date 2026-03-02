@@ -18,6 +18,7 @@ import {
   AvaProviderKeyStatus,
   AvaToolCallMetadata,
   AvaInlineCompletionRequest,
+  AvaAttachment,
   AvaFileContext,
   AvaProjectInfo,
   AvaUsageSummary,
@@ -143,6 +144,11 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     this.historyManager = new core.HistoryManager(projectRoot);
     this.historyManager.init();
 
+    // Auto-restore last conversation for this project (non-blocking)
+    this.autoRestoreLastConversation(core).catch(err => {
+      console.warn('[ava-agent] Failed to auto-restore conversation:', err);
+    });
+
     // Start provider health checks (non-blocking, every 5 minutes)
     this.checkProviderHealth().catch(() => {});
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
@@ -164,6 +170,27 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     };
   }
 
+  private async autoRestoreLastConversation(core: any): Promise<void> {
+    if (!this.historyManager) return;
+
+    // Get the most recent conversation for this project
+    const entries = await this.historyManager.listConversations(true);
+    if (entries.length === 0) return;
+
+    const lastEntry = entries[0]; // Already sorted by updatedAt descending
+    const record = await this.historyManager.resumeConversation(lastEntry.id);
+    if (!record || record.messages.length <= 1) return;
+
+    // Restore the conversation
+    this.conversation = new core.Conversation(record.id);
+    this.conversation.setMessages(record.messages);
+
+    // Notify frontend to display the loaded messages
+    const replayMessages = this.buildReplayMessages(record.messages);
+    this.client?.notifyConversationLoaded(record.id, record.title, replayMessages);
+    console.log(`[ava-agent] Auto-restored conversation: "${record.title}" (${record.messages.length} messages)`);
+  }
+
   async sendMessage(text: string, mode: AvaMode): Promise<void> {
     if (!this.agent || !this.conversation) {
       this.client?.notifyError('No model configured.', 'setup', 'Run the CLI setup wizard (ava --setup) to add an API key.');
@@ -182,6 +209,47 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     this.conversation.addUserMessage(userText);
     this.client?.notifyUserMessageAck(text);
 
+    return this.runAgentLoop();
+  }
+
+  private async sendMessageWithImages(text: string, mode: AvaMode, attachments: AvaAttachment[]): Promise<void> {
+    if (!this.agent || !this.conversation) {
+      this.client?.notifyError('No model configured.', 'setup', 'Run the CLI setup wizard (ava --setup) to add an API key.');
+      return;
+    }
+
+    if (this.isRunning) {
+      this.client?.notifyError('Ava is still working on the previous message.', 'busy');
+      return;
+    }
+
+    this.isRunning = true;
+    this.runAbortController = new AbortController();
+
+    const userText = this.applyModePrefix(text, mode);
+
+    // Build ContentPart[] — text first, then images
+    const contentParts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
+      { type: 'text', text: userText },
+    ];
+
+    for (const att of attachments) {
+      contentParts.push({
+        type: 'image_url',
+        image_url: { url: att.data },
+      });
+    }
+
+    this.conversation.addUserMessage(contentParts);
+
+    const imageUrls = attachments.map(a => a.data);
+    this.client?.notifyUserMessageAck(text, imageUrls);
+
+    return this.runAgentLoop();
+  }
+
+  /** Shared agent run loop — executes after the user message has been added to the conversation. */
+  private async runAgentLoop(): Promise<void> {
     let streamStarted = false;
 
     const onEvent = (event: any): void => {
@@ -255,15 +323,15 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     };
 
     try {
-      const updatedMessages = await this.agent.run(
-        this.conversation.getMessages(),
+      const updatedMessages = await this.agent!.run(
+        this.conversation!.getMessages(),
         onEvent,
-        this.runAbortController.signal,
+        this.runAbortController!.signal,
       );
-      this.conversation.setMessages(updatedMessages);
+      this.conversation!.setMessages(updatedMessages);
 
       if (this.historyManager) {
-        await this.historyManager.saveConversation(this.conversation);
+        await this.historyManager.saveConversation(this.conversation!);
       }
     } catch (error: any) {
       const isAbort = error instanceof DOMException && error.name === 'AbortError';
@@ -622,7 +690,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
 
   // ── Smart context (Phase 3) ──────────────────────────────────────────────────
 
-  async sendMessageWithContext(text: string, mode: AvaMode, context: AvaFileContext): Promise<void> {
+  async sendMessageWithContext(text: string, mode: AvaMode, context: AvaFileContext, attachments?: AvaAttachment[]): Promise<void> {
     // Build enriched message with file context prepended
     const parts: string[] = [];
 
@@ -656,6 +724,11 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     const enrichedText = parts.length > 0
       ? parts.join('\n\n') + '\n\n' + text
       : text;
+
+    // If we have image attachments, send as ContentPart[]
+    if (attachments && attachments.length > 0) {
+      return this.sendMessageWithImages(enrichedText, mode, attachments);
+    }
 
     // Delegate to the existing sendMessage logic
     return this.sendMessage(enrichedText, mode);

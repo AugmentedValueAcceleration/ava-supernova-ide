@@ -24,7 +24,7 @@ const s = {
   logo: {
     fontSize: 32,
     fontWeight: 700,
-    background: 'linear-gradient(135deg, var(--ava-gradient-start, #6366F1), var(--ava-gradient-end, #8B5CF6))',
+    background: 'linear-gradient(135deg, var(--ava-gradient-start, #A855F7), var(--ava-gradient-end, #6D28D9))',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     marginBottom: 8,
@@ -72,8 +72,8 @@ const s = {
     minHeight: 60,
   },
   cardSelected: {
-    borderColor: 'var(--ava-accent, #6366F1)',
-    background: 'rgba(99, 102, 241, 0.1)',
+    borderColor: 'var(--ava-accent, #A855F7)',
+    background: 'rgba(168, 85, 247, 0.1)',
   },
   cardLabel: {
     fontSize: 14,
@@ -86,7 +86,7 @@ const s = {
   },
   primaryBtn: {
     padding: '10px 32px',
-    background: 'var(--ava-accent, #6366F1)',
+    background: 'var(--ava-accent, #A855F7)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -120,7 +120,7 @@ const s = {
     transition: 'background 0.2s',
   },
   dotActive: {
-    background: 'var(--ava-accent, #6366F1)',
+    background: 'var(--ava-accent, #A855F7)',
   },
   footer: {
     fontSize: 12,
@@ -147,8 +147,8 @@ function StepWelcome({ onNext }: StepProps): React.ReactElement {
       <button
         style={s.primaryBtn}
         onClick={onNext}
-        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#5558E6'; }}
-        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #6366F1)'; }}
+        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#9333EA'; }}
+        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #A855F7)'; }}
       >
         Get Started
       </button>
@@ -192,8 +192,8 @@ function StepTheme({ onNext, onSkip, themeService }: StepProps): React.ReactElem
       <button
         style={s.primaryBtn}
         onClick={onNext}
-        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#5558E6'; }}
-        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #6366F1)'; }}
+        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#9333EA'; }}
+        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #A855F7)'; }}
       >
         Continue
       </button>
@@ -237,8 +237,8 @@ function StepFontSize({ onNext, onSkip, preferenceService }: StepProps): React.R
       <button
         style={s.primaryBtn}
         onClick={onNext}
-        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#5558E6'; }}
-        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #6366F1)'; }}
+        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#9333EA'; }}
+        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #A855F7)'; }}
       >
         Continue
       </button>
@@ -264,8 +264,8 @@ function StepConnectProvider({ onNext, onSkip, commandService }: StepProps): Rea
       <button
         style={s.primaryBtn}
         onClick={handleOpenDashboard}
-        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#5558E6'; }}
-        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #6366F1)'; }}
+        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#9333EA'; }}
+        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #A855F7)'; }}
       >
         Open Dashboard
       </button>
@@ -289,8 +289,8 @@ function StepOpenFolder({ onNext, onSkip, commandService }: StepProps): React.Re
       <button
         style={s.primaryBtn}
         onClick={handleOpenFolder}
-        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#5558E6'; }}
-        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #6366F1)'; }}
+        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#9333EA'; }}
+        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #A855F7)'; }}
       >
         Open Folder
       </button>
@@ -310,8 +310,8 @@ function StepReady({ onNext }: StepProps): React.ReactElement {
       <button
         style={s.primaryBtn}
         onClick={onNext}
-        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#5558E6'; }}
-        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #6366F1)'; }}
+        onMouseEnter={e => { (e.target as HTMLElement).style.background = '#9333EA'; }}
+        onMouseLeave={e => { (e.target as HTMLElement).style.background = 'var(--ava-accent, #A855F7)'; }}
       >
         Start Coding
       </button>

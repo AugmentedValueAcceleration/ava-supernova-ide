@@ -15,6 +15,7 @@ const ws = {
     padding: '48px 24px 24px',
     fontFamily: 'var(--theia-ui-font-family)',
     color: 'var(--theia-foreground)',
+    background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(168, 85, 247, 0.08) 0%, transparent 70%), var(--theia-editor-background, #0d0d14)',
   },
   inner: {
     width: '100%',
@@ -22,26 +23,27 @@ const ws = {
   },
   brandRow: {
     textAlign: 'center' as const,
-    marginBottom: '32px',
+    marginBottom: '36px',
   },
   brandName: {
-    fontSize: '28px',
+    fontSize: '32px',
     fontWeight: 700 as const,
-    background: 'linear-gradient(135deg, var(--ava-gradient-start, #6366F1), var(--ava-gradient-end, #8B5CF6))',
+    background: 'linear-gradient(135deg, #C084FC 0%, #A855F7 40%, #7C3AED 100%)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
   },
   brandSuffix: {
-    fontSize: '28px',
+    fontSize: '32px',
     fontWeight: 300 as const,
-    background: 'linear-gradient(135deg, var(--ava-gradient-start, #6366F1), var(--ava-gradient-end, #8B5CF6))',
+    background: 'linear-gradient(135deg, #A855F7 0%, #6D28D9 100%)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
   },
   tagline: {
     fontSize: '13px',
-    opacity: 0.45,
-    marginTop: '6px',
+    opacity: 0.4,
+    marginTop: '8px',
+    letterSpacing: '0.3px',
   },
   actionsRow: {
     display: 'flex',
@@ -51,7 +53,7 @@ const ws = {
   actionCard: {
     flex: 1,
     padding: '14px 16px',
-    border: '1px solid var(--theia-panel-border)',
+    border: '1px solid rgba(168, 85, 247, 0.15)',
     borderRadius: '8px',
     cursor: 'pointer',
     display: 'flex',
@@ -59,11 +61,12 @@ const ws = {
     gap: '10px',
     fontSize: '13px',
     fontWeight: 500 as const,
-    background: 'transparent',
+    background: 'rgba(168, 85, 247, 0.04)',
   },
   actionIcon: {
     fontSize: '18px',
-    opacity: 0.6,
+    color: '#A855F7',
+    opacity: 0.7,
   },
   sectionLabel: {
     fontSize: '11px',
@@ -71,7 +74,8 @@ const ws = {
     letterSpacing: '1.5px',
     textTransform: 'uppercase' as const,
     opacity: 0.35,
-    marginBottom: '8px',
+    marginBottom: '10px',
+    color: '#A855F7',
   },
   section: {
     marginBottom: '24px',
@@ -82,8 +86,9 @@ const ws = {
   },
   recentPath: {
     fontSize: '11px',
-    opacity: 0.35,
-    marginTop: '1px',
+    opacity: 0.3,
+    marginTop: '2px',
+    fontFamily: 'monospace',
   },
   noRecent: {
     fontSize: '12px',
@@ -98,18 +103,19 @@ const ws = {
   setupCard: {
     flex: '1 1 45%',
     padding: '10px 14px',
-    border: '1px solid var(--theia-panel-border)',
+    border: '1px solid rgba(168, 85, 247, 0.12)',
     borderRadius: '6px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     fontSize: '12px',
-    background: 'transparent',
+    background: 'rgba(168, 85, 247, 0.03)',
   },
   setupIcon: {
     fontSize: '14px',
-    opacity: 0.5,
+    color: '#A855F7',
+    opacity: 0.6,
   },
   linksRow: {
     display: 'flex',
@@ -124,7 +130,7 @@ const ws = {
   version: {
     textAlign: 'center' as const,
     fontSize: '11px',
-    opacity: 0.25,
+    opacity: 0.2,
     marginBottom: '12px',
   },
   prefsWrap: {
@@ -275,6 +281,8 @@ export class AvaWelcomeWidget extends GettingStartedWidget {
       const limit = Math.min(paths.length, this.recentLimit);
       for (let i = 0; i < limit; i++) {
         const uri = new URI(items[i]);
+        // Clean the display path — decode URI encoding and normalize separators
+        const displayPath = this.cleanDisplayPath(paths[i]);
         children.push(
           React.createElement('div', {
             key: i,
@@ -285,10 +293,14 @@ export class AvaWelcomeWidget extends GettingStartedWidget {
             onKeyDown: (e: React.KeyboardEvent) => this.openEnter(e, uri),
           },
             React.createElement('div', { style: ws.recentName },
+              React.createElement('i', {
+                className: 'codicon codicon-folder',
+                style: { marginRight: '6px', fontSize: '12px', color: '#A855F7', opacity: 0.6 },
+              }),
               this.labelProvider.getName(uri),
             ),
             React.createElement('div', { style: ws.recentPath },
-              paths[i],
+              displayPath,
             ),
           ),
         );
@@ -304,7 +316,7 @@ export class AvaWelcomeWidget extends GettingStartedWidget {
             onKeyDown: (e: React.KeyboardEvent) => this.doOpenRecentWorkspaceEnter(e),
           },
             React.createElement('div', {
-              style: { ...ws.recentName, color: 'var(--ava-accent, #6366F1)' },
+              style: { ...ws.recentName, color: 'var(--ava-accent, #A855F7)' },
             }, 'More...'),
           ),
         );
@@ -312,6 +324,24 @@ export class AvaWelcomeWidget extends GettingStartedWidget {
     }
 
     return React.createElement('div', { style: ws.section }, ...children);
+  }
+
+  /** Clean URI-encoded paths for human-readable display */
+  private cleanDisplayPath(rawPath: string): string {
+    let p = rawPath;
+    // Strip file:// prefix if present
+    if (p.startsWith('file:///')) {
+      p = p.slice(8); // Remove 'file:///'
+    } else if (p.startsWith('file://')) {
+      p = p.slice(7);
+    }
+    // Decode URI encoding (%20 → space, %3A → :, etc.)
+    try { p = decodeURIComponent(p); } catch { /* keep as-is */ }
+    // Normalize forward slashes to backslashes on Windows
+    if (navigator.userAgent.includes('Windows') || p.match(/^[A-Za-z]:\//)) {
+      p = p.replace(/\//g, '\\');
+    }
+    return p;
   }
 
   // ── Quick setup ─────────────────────────────────────────────────────────

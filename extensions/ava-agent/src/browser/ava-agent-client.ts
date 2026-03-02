@@ -34,6 +34,7 @@ export interface UIMessage {
   id: string;
   role: 'user' | 'assistant' | 'error' | 'system';
   content: string;
+  images?: string[];
   thinking?: string;
   toolCalls: ToolCallDisplay[];
   isStreaming: boolean;
@@ -222,11 +223,12 @@ export class AvaAgentClient implements IAvaAgentClient {
     });
   }
 
-  notifyUserMessageAck(text: string): void {
+  notifyUserMessageAck(text: string, images?: string[]): void {
     const msg: UIMessage = {
       id: nextId(),
       role: 'user',
       content: text,
+      images,
       toolCalls: [],
       isStreaming: false,
     };

@@ -1,6 +1,6 @@
 import * as React from '@theia/core/shared/react';
 import type { ChatState, UIMessage, ToolCallDisplay } from '../ava-agent-client';
-import type { AvaMode, AvaModelInfo } from '../../common/ava-agent-protocol';
+import type { AvaAttachment, AvaMode, AvaModelInfo } from '../../common/ava-agent-protocol';
 import { AvaHistoryBrowser } from './AvaHistoryBrowser';
 import { AvaSessionReplay } from './AvaSessionReplay';
 import { MarkdownContent } from './MarkdownContent';
@@ -34,7 +34,7 @@ export interface ContextSummary {
 export interface AvaAgentAppProps {
   state: ChatState;
   contextSummary?: ContextSummary;
-  onSend: (text: string, mode: AvaMode) => void;
+  onSend: (text: string, mode: AvaMode, attachments?: AvaAttachment[]) => void;
   onCancel: () => void;
   onNewChat: () => void;
   onSwitchModel: (modelId: string) => void;
@@ -70,14 +70,16 @@ const styles = {
     fontFamily: 'var(--theia-ui-font-family)',
     color: 'var(--theia-foreground)',
     fontSize: '13px',
+    background: '#0a0a0f',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     padding: '8px 12px',
-    borderBottom: '1px solid var(--theia-panel-border)',
+    borderBottom: '1px solid rgba(168, 85, 247, 0.1)',
     flexShrink: 0 as const,
+    background: '#08080c',
   },
   headerTitle: {
     fontSize: '15px',
@@ -117,17 +119,18 @@ const styles = {
   inputArea: {
     flexShrink: 0 as const,
     padding: '8px 12px',
-    borderTop: '1px solid var(--theia-panel-border)',
+    borderTop: '1px solid rgba(168, 85, 247, 0.1)',
     display: 'flex',
     gap: '6px',
     alignItems: 'flex-end',
+    background: '#08080c',
   },
   textarea: {
     flex: 1,
     padding: '8px 10px',
-    border: '1px solid var(--theia-input-border)',
+    border: '1px solid rgba(168, 85, 247, 0.15)',
     borderRadius: '6px',
-    background: 'var(--theia-input-background)',
+    background: '#0d0d14',
     color: 'var(--theia-input-foreground)',
     fontFamily: 'var(--theia-ui-font-family)',
     fontSize: '13px',
@@ -140,7 +143,7 @@ const styles = {
     padding: '6px 12px',
     border: '1px solid var(--theia-button-border, transparent)',
     borderRadius: '4px',
-    background: 'var(--ava-accent, #6366F1)',
+    background: 'var(--ava-accent, #A855F7)',
     color: '#fff',
     fontSize: '12px',
     fontWeight: 600 as const,
@@ -160,14 +163,15 @@ const styles = {
     display: 'flex',
     gap: '2px',
     padding: '4px 12px',
-    borderTop: '1px solid var(--theia-panel-border)',
+    borderTop: '1px solid rgba(168, 85, 247, 0.08)',
     flexShrink: 0 as const,
+    background: '#08080c',
   },
   modeButton: (active: boolean) => ({
     padding: '3px 8px',
     border: 'none',
     borderRadius: '3px',
-    background: active ? 'var(--ava-accent, #6366F1)' : 'transparent',
+    background: active ? 'var(--ava-accent, #A855F7)' : 'transparent',
     color: active ? '#fff' : 'var(--theia-foreground)',
     fontSize: '11px',
     cursor: 'pointer',
@@ -227,7 +231,7 @@ const styles = {
     fontFamily: 'monospace',
     fontWeight: 700 as const,
     fontSize: '12px',
-    color: 'var(--ava-accent, #6366F1)',
+    color: 'var(--ava-accent, #A855F7)',
     opacity: 0.8,
     width: '20px',
     textAlign: 'right' as const,
@@ -243,7 +247,7 @@ const styles = {
     padding: '3px 12px',
     fontSize: '11px',
     opacity: 0.5,
-    borderTop: '1px solid var(--theia-panel-border)',
+    borderTop: '1px solid rgba(168, 85, 247, 0.08)',
     flexShrink: 0 as const,
   },
   contextFile: {
@@ -254,7 +258,7 @@ const styles = {
     whiteSpace: 'nowrap' as const,
   },
   contextPinned: {
-    color: 'var(--ava-accent, #6366F1)',
+    color: 'var(--ava-accent, #A855F7)',
   },
 };
 
@@ -264,6 +268,22 @@ function UserMessage({ msg }: { msg: UIMessage }) {
   return (
     <div style={{ padding: '8px 12px', borderRadius: '8px', background: 'var(--theia-input-background)', alignSelf: 'flex-end', maxWidth: '85%' }}>
       <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</div>
+      {msg.images && msg.images.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+          {msg.images.map((src, i) => (
+            <img
+              key={i}
+              src={src}
+              alt={`Attachment ${i + 1}`}
+              style={{
+                maxWidth: '200px', maxHeight: '150px',
+                borderRadius: '6px', objectFit: 'contain',
+                border: '1px solid var(--theia-input-border)',
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -272,7 +292,7 @@ function AssistantMessage({ msg, onConfirmTool }: { msg: UIMessage; onConfirmToo
   return (
     <div style={{ maxWidth: '95%' }}>
       {msg.thinking && (
-        <div style={{ fontSize: '11px', opacity: 0.5, fontStyle: 'italic', marginBottom: '4px', borderLeft: '2px solid var(--ava-accent, #6366F1)', paddingLeft: '8px' }}>
+        <div style={{ fontSize: '11px', opacity: 0.5, fontStyle: 'italic', marginBottom: '4px', borderLeft: '2px solid var(--ava-accent, #A855F7)', paddingLeft: '8px' }}>
           {msg.thinking.length > 200 ? msg.thinking.slice(0, 200) + '...' : msg.thinking}
         </div>
       )}
@@ -291,7 +311,7 @@ function AssistantMessage({ msg, onConfirmTool }: { msg: UIMessage; onConfirmToo
       )}
       {msg.isStreaming && msg.content && msg.toolCalls.length === 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', opacity: 0.4, fontSize: '11px' }}>
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366F1', display: 'inline-block', animation: 'ava-pulse 1.5s infinite' }} />
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#A855F7', display: 'inline-block', animation: 'ava-pulse 1.5s infinite' }} />
           Working...
         </div>
       )}
@@ -312,7 +332,7 @@ function ToolCallCard({ tc, onConfirmTool }: { tc: ToolCallDisplay; onConfirmToo
     running: '#f59e0b',
     success: '#22c55e',
     failed: '#ef4444',
-    pending_confirmation: '#6366F1',
+    pending_confirmation: '#A855F7',
   };
 
   return (
@@ -321,7 +341,7 @@ function ToolCallCard({ tc, onConfirmTool }: { tc: ToolCallDisplay; onConfirmToo
       borderRadius: '6px',
       padding: '8px 10px',
       fontSize: '12px',
-      background: 'rgba(99, 102, 241, 0.04)',
+      background: 'rgba(168, 85, 247, 0.04)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
         <span style={{
@@ -440,7 +460,7 @@ function SystemMessage({ msg }: { msg: UIMessage }) {
 
 function WelcomeView({ state, onSend }: {
   state: ChatState;
-  onSend: (text: string, mode: AvaMode) => void;
+  onSend: (text: string, mode: AvaMode, attachments?: AvaAttachment[]) => void;
 }) {
   const activeModelName = state.models.find(m => m.id === state.activeModel)?.name;
 
@@ -460,7 +480,7 @@ function WelcomeView({ state, onSend }: {
             onMouseEnter={e => {
               const el = e.currentTarget;
               el.style.opacity = '0.9';
-              el.style.borderColor = 'var(--ava-accent, #6366F1)';
+              el.style.borderColor = 'var(--ava-accent, #A855F7)';
             }}
             onMouseLeave={e => {
               const el = e.currentTarget;
@@ -565,22 +585,22 @@ function ModelSelector({ models, activeModel, onSwitch }: {
                 width: '100%',
                 padding: '6px 10px',
                 border: 'none',
-                background: m.id === activeModel ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                background: m.id === activeModel ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
                 color: 'var(--theia-input-foreground)',
                 fontSize: '12px',
                 cursor: 'pointer',
                 textAlign: 'left',
               }}
               onMouseEnter={e => {
-                if (m.id !== activeModel) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                if (m.id !== activeModel) e.currentTarget.style.background = 'rgba(168, 85, 247, 0.08)';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = m.id === activeModel ? 'rgba(99, 102, 241, 0.15)' : 'transparent';
+                e.currentTarget.style.background = m.id === activeModel ? 'rgba(168, 85, 247, 0.15)' : 'transparent';
               }}
             >
               <span style={{
                 width: '5px', height: '5px', borderRadius: '50%', flexShrink: 0,
-                background: m.id === activeModel ? '#6366F1' : 'rgba(255,255,255,0.15)',
+                background: m.id === activeModel ? '#A855F7' : 'rgba(255,255,255,0.15)',
               }} />
               <span style={{ fontWeight: m.id === activeModel ? 600 : 400 }}>{m.name}</span>
               <span style={{ fontSize: '10px', opacity: 0.35, marginLeft: 'auto' }}>{m.provider}</span>
@@ -601,7 +621,13 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
     onStartReplay, onReplayStep, onReplayJump, onBackToChat } = props;
   const [input, setInput] = React.useState('');
   const [mode, setMode] = React.useState<AvaMode>('code');
+  const [attachments, setAttachments] = React.useState<AvaAttachment[]>([]);
+  const [isDragOver, setIsDragOver] = React.useState(false);
   const messagesRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10 MB
+  const MAX_ATTACHMENTS = 5;
 
   // Auto-scroll to bottom on new messages
   React.useEffect(() => {
@@ -611,12 +637,30 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
     }
   }, [state.messages, state.isStreaming]);
 
+  const addImageFile = React.useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > MAX_IMAGE_SIZE) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = reader.result as string;
+      const name = file.name || `pasted-${Date.now()}.png`;
+      setAttachments(prev => {
+        if (prev.length >= MAX_ATTACHMENTS) return prev;
+        return [...prev, { type: 'image', data, name }];
+      });
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
   const handleSend = React.useCallback(() => {
     const text = input.trim();
-    if (!text || state.isStreaming) return;
+    if (!text && attachments.length === 0) return;
+    if (state.isStreaming) return;
     setInput('');
-    onSend(text, mode);
-  }, [input, mode, state.isStreaming, onSend]);
+    setAttachments([]);
+    onSend(text || '(image)', mode, attachments.length > 0 ? attachments : undefined);
+  }, [input, mode, state.isStreaming, onSend, attachments]);
 
   const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -624,6 +668,46 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
       handleSend();
     }
   }, [handleSend]);
+
+  const handlePaste = React.useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) addImageFile(file);
+        return;
+      }
+    }
+  }, [addImageFile]);
+
+  const handleDragOver = React.useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = React.useCallback(() => {
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = React.useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = e.dataTransfer?.files;
+    if (files) {
+      Array.from(files).forEach(addImageFile);
+    }
+  }, [addImageFile]);
+
+  const handleFileChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach(addImageFile);
+    }
+    e.target.value = '';
+  }, [addImageFile]);
 
   // Loading — backend hasn't responded yet
   if (!state.initialized) {
@@ -793,25 +877,81 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
           </div>
 
           {/* Input area */}
-      <div style={styles.inputArea}>
-        <textarea
-          style={styles.textarea}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask Ava something..."
-          rows={1}
-          disabled={state.isStreaming}
-        />
-        {state.isStreaming ? (
-          <button style={{ ...styles.button, background: '#ef4444' }} onClick={onCancel}>
-            Stop
-          </button>
-        ) : (
-          <button style={styles.button} onClick={handleSend} disabled={!input.trim()}>
-            Send
-          </button>
+      <div style={{ ...styles.inputArea, flexDirection: 'column', gap: '4px' }}>
+        {/* Thumbnail strip */}
+        {attachments.length > 0 && (
+          <div style={{ display: 'flex', gap: '6px', padding: '2px 0', flexWrap: 'wrap' }}>
+            {attachments.map((att, i) => (
+              <div key={i} style={{ position: 'relative', width: '48px', height: '48px' }}>
+                <img
+                  src={att.data}
+                  alt={att.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
+                />
+                <button
+                  onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                  style={{
+                    position: 'absolute', top: '-4px', right: '-4px',
+                    width: '16px', height: '16px', borderRadius: '50%',
+                    background: '#ef4444',
+                    color: '#fff', border: 'none', cursor: 'pointer',
+                    fontSize: '10px', lineHeight: '16px', padding: 0,
+                  }}
+                >x</button>
+              </div>
+            ))}
+          </div>
         )}
+        {/* Text input + buttons row */}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', width: '100%' }}>
+          <textarea
+            style={{ ...styles.textarea, ...(isDragOver ? { borderColor: 'var(--theia-focusBorder, #A855F7)' } : {}) }}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            placeholder={isDragOver ? 'Drop image here...' : 'Ask Ava something... (Ctrl+V to paste image)'}
+            rows={1}
+            disabled={state.isStreaming}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+          <button
+            style={{
+              padding: '6px 8px',
+              border: '1px solid var(--theia-input-border)',
+              borderRadius: '4px',
+              background: 'transparent',
+              color: 'var(--theia-foreground)',
+              fontSize: '14px',
+              cursor: 'pointer',
+              opacity: state.isStreaming || attachments.length >= MAX_ATTACHMENTS ? 0.3 : 0.6,
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={state.isStreaming || attachments.length >= MAX_ATTACHMENTS}
+            title="Attach image"
+          >
+            &#128206;
+          </button>
+          {state.isStreaming ? (
+            <button style={{ ...styles.button, background: '#ef4444' }} onClick={onCancel}>
+              Stop
+            </button>
+          ) : (
+            <button style={styles.button} onClick={handleSend} disabled={!input.trim() && attachments.length === 0}>
+              Send
+            </button>
+          )}
+        </div>
       </div>
         </>
       )}

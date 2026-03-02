@@ -87,7 +87,7 @@ export class AvaStatusBarContribution implements FrontendApplicationContribution
 
     if (isStreaming) {
       text = '$(codicon-loading~spin)';
-      color = 'var(--ava-accent, #6366F1)';
+      color = 'var(--ava-accent, #A855F7)';
       tooltip = 'Ava is working... (Ctrl+Shift+A to view)';
     } else if (connected) {
       text = '$(codicon-circle-filled)';

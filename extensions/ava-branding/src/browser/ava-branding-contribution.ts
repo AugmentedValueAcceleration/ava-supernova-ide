@@ -55,13 +55,149 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
     const style = document.createElement('style');
     style.textContent = `
       :root {
-        --ava-accent: #6366F1;
-        --ava-accent-hover: #5558E6;
-        --ava-gradient-start: #6366F1;
-        --ava-gradient-end: #8B5CF6;
+        --ava-accent: #A855F7;
+        --ava-accent-hover: #9333EA;
+        --ava-gradient-start: #A855F7;
+        --ava-gradient-end: #6D28D9;
+        --ava-electric: #BF40FF;
       }
 
-      /* Custom scrollbar to match Ava theme */
+      /* ══════════════════════════════════════════════════════
+         Electric Purple Gradients — title bar, sidebars, activity bar
+         ══════════════════════════════════════════════════════ */
+
+      /* Title bar — horizontal gradient with purple glow center */
+      #theia-top-panel {
+        background: linear-gradient(90deg,
+          #080810 0%,
+          #150a2e 35%,
+          #1f0e40 50%,
+          #150a2e 65%,
+          #080810 100%
+        ) !important;
+      }
+
+      /* Editor tab bar — dark with faint purple tint */
+      .lm-TabBar.theia-app-centers {
+        background: #0a0a12 !important;
+      }
+      .lm-TabBar.theia-app-centers::after {
+        background-color: rgba(168, 85, 247, 0.12) !important;
+      }
+
+      /* ── Editor tabs — active / inactive / hover ──────────── */
+
+      /* Inactive tab — deep dark, dimmed text */
+      #theia-main-content-panel .lm-TabBar .lm-TabBar-tab {
+        background: #08080e !important;
+        color: #5c5c80 !important;
+        border-right: 1px solid rgba(168, 85, 247, 0.06) !important;
+        border-top: 2px solid transparent !important;
+        border-bottom: none !important;
+        transition: background 0.15s, color 0.15s;
+      }
+
+      /* Active tab — slightly lifted, purple top accent, brighter text */
+      #theia-main-content-panel .lm-TabBar .lm-TabBar-tab.lm-mod-current {
+        background: #0d0d14 !important;
+        color: #e0e0f0 !important;
+        border-top: 2px solid #A855F7 !important;
+      }
+
+      /* Hover tab (non-active) — subtle purple lift */
+      #theia-main-content-panel .lm-TabBar .lm-TabBar-tab:not(.lm-mod-current):hover {
+        background: rgba(168, 85, 247, 0.06) !important;
+        color: #9898b8 !important;
+      }
+
+      /* Unfocused tab bar — slightly dimmer active tab */
+      #theia-main-content-panel .lm-TabBar:not(.theia-tabBar-active) .lm-TabBar-tab.lm-mod-current {
+        border-top-color: rgba(168, 85, 247, 0.5) !important;
+        color: #b0b0cc !important;
+      }
+
+      /* Activity bars (left + right icon strips) — vertical purple glow */
+      .theia-app-sidebar-container {
+        background: linear-gradient(180deg,
+          #080810 0%,
+          #140a28 40%,
+          #1a0d35 70%,
+          #0e0818 100%
+        ) !important;
+      }
+
+      /* The icon tab bars themselves — transparent so container gradient shows */
+      .lm-TabBar.theia-app-sides,
+      .lm-TabBar.theia-app-left,
+      .lm-TabBar.theia-app-right {
+        background: transparent !important;
+      }
+
+      /* Sidebar menus (top/bottom icons) — transparent */
+      .theia-sidebar-menu {
+        background: transparent !important;
+      }
+
+      /* Sidebar menu item icons (Manage button etc.) — transparent so gradient shows */
+      .theia-sidebar-menu i {
+        background-color: transparent !important;
+      }
+
+      /* Left content panel — gradient */
+      #theia-left-content-panel {
+        background: linear-gradient(180deg,
+          #0a0a12 0%,
+          #100a20 50%,
+          #0a0a12 100%
+        ) !important;
+      }
+
+      /* Right content panel — gradient */
+      #theia-right-content-panel {
+        background: linear-gradient(180deg,
+          #0a0a12 0%,
+          #100a20 50%,
+          #0a0a12 100%
+        ) !important;
+      }
+
+      /* Side panels (inner dock panels) — transparent so parent gradient shows */
+      #theia-left-side-panel,
+      #theia-right-side-panel,
+      .theia-side-panel {
+        background: transparent !important;
+      }
+
+      /* Status bar — horizontal gradient matching title bar */
+      #theia-statusBar {
+        background: linear-gradient(90deg,
+          #080810 0%,
+          #120a22 50%,
+          #080810 100%
+        ) !important;
+      }
+
+      /* Section headers in sidebars — translucent purple */
+      .theia-sidepanel-title,
+      .theia-sidepanel-toolbar {
+        background: rgba(168, 85, 247, 0.06) !important;
+      }
+
+      /* Active activity bar icon — electric purple glow (left) */
+      .lm-TabBar.theia-app-left .lm-TabBar-tab.lm-mod-current {
+        border-left-color: #A855F7 !important;
+        box-shadow: inset 3px 0 8px -3px rgba(168, 85, 247, 0.4);
+      }
+
+      /* Active activity bar icon — electric purple glow (right) */
+      .lm-TabBar.theia-app-right .lm-TabBar-tab.lm-mod-current {
+        border-right-color: #A855F7 !important;
+        box-shadow: inset -3px 0 8px -3px rgba(168, 85, 247, 0.4);
+      }
+
+      /* ══════════════════════════════════════════════════════
+         Custom scrollbar
+         ══════════════════════════════════════════════════════ */
       .ava-agent-widget ::-webkit-scrollbar,
       .ava-dashboard-widget ::-webkit-scrollbar {
         width: 6px;
@@ -72,12 +208,12 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
       }
       .ava-agent-widget ::-webkit-scrollbar-thumb,
       .ava-dashboard-widget ::-webkit-scrollbar-thumb {
-        background: rgba(99, 102, 241, 0.3);
+        background: rgba(168, 85, 247, 0.3);
         border-radius: 3px;
       }
       .ava-agent-widget ::-webkit-scrollbar-thumb:hover,
       .ava-dashboard-widget ::-webkit-scrollbar-thumb:hover {
-        background: rgba(99, 102, 241, 0.5);
+        background: rgba(168, 85, 247, 0.5);
       }
 
       /* ── Welcome page ──────────────────────────────────── */
@@ -85,14 +221,14 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         transition: border-color 0.2s, background 0.2s;
       }
       .ava-welcome-action-card:hover {
-        border-color: var(--ava-accent, #6366F1) !important;
-        background: rgba(99, 102, 241, 0.06) !important;
+        border-color: var(--ava-accent, #A855F7) !important;
+        background: rgba(168, 85, 247, 0.06) !important;
       }
       .ava-welcome-setup-card {
         transition: background 0.2s;
       }
       .ava-welcome-setup-card:hover {
-        background: rgba(99, 102, 241, 0.06) !important;
+        background: rgba(168, 85, 247, 0.06) !important;
       }
       .ava-welcome-recent-item {
         transition: background 0.15s;
@@ -101,10 +237,10 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         cursor: pointer;
       }
       .ava-welcome-recent-item:hover {
-        background: rgba(99, 102, 241, 0.04);
+        background: rgba(168, 85, 247, 0.04);
       }
       .ava-welcome-link {
-        color: var(--ava-accent, #6366F1) !important;
+        color: var(--ava-accent, #A855F7) !important;
         cursor: pointer;
         text-decoration: none;
       }

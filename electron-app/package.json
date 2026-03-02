@@ -13,7 +13,7 @@
         "defaultIconTheme": "theia-file-icons",
         "electron": {
           "windowOptions": {
-            "backgroundColor": "#13141b"
+            "backgroundColor": "#080810"
           }
         },
         "preferences": {
@@ -29,7 +29,7 @@
           "editor.wordWrap": "on",
           "editor.minimap.enabled": false,
           "editor.bracketPairColorization.enabled": true,
-          "editor.formatOnSave": true,
+          "editor.formatOnSave": false,
           "editor.smoothScrolling": true,
           "editor.cursorBlinking": "smooth",
           "editor.cursorSmoothCaretAnimation": "on",

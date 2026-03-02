@@ -378,10 +378,10 @@ export class AvaEditorChangeTracker implements FrontendApplicationContribution, 
         margin-left: 5px;
       }
       .ava-diff-modified-line {
-        background: rgba(99, 102, 241, 0.06);
+        background: rgba(168, 85, 247, 0.06);
       }
       .ava-diff-modified-gutter {
-        border-left: 3px solid var(--ava-accent, #6366F1);
+        border-left: 3px solid var(--ava-accent, #A855F7);
         margin-left: 5px;
       }
     `;

@@ -3,79 +3,79 @@ import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { ThemeService } from '@theia/core/lib/browser/theming';
 import { Theme } from '@theia/core/lib/common/theme';
 
-// ── Ava Dark ──────────────────────────────────────────────────────────────────
+// ── Ava Dark — Black & Electric Purple ───────────────────────────────────────
 const AVA_DARK_CSS = `
 :root {
-  /* Base palette */
-  --theia-editor-background: #1a1b26;
-  --theia-editor-foreground: #c0caf5;
-  --theia-sideBar-background: #16171f;
-  --theia-activityBar-background: #13141b;
-  --theia-panel-background: #1a1b26;
-  --theia-titleBar-activeBackground: #13141b;
-  --theia-titleBar-inactiveBackground: #13141b;
-  --theia-statusBar-background: #13141b;
-  --theia-statusBar-foreground: #9098b8;
-  --theia-tab-activeBackground: #1a1b26;
-  --theia-tab-inactiveBackground: #16171f;
-  --theia-tab-activeForeground: #c0caf5;
-  --theia-tab-inactiveForeground: #6b7394;
-  --theia-list-activeSelectionBackground: rgba(99, 102, 241, 0.25);
-  --theia-list-hoverBackground: rgba(99, 102, 241, 0.1);
+  /* Base palette — deep blacks with purple undertone */
+  --theia-editor-background: #0d0d14;
+  --theia-editor-foreground: #c8c8e0;
+  --theia-sideBar-background: #0a0a10;
+  --theia-activityBar-background: #080810;
+  --theia-panel-background: #0d0d14;
+  --theia-titleBar-activeBackground: #080810;
+  --theia-titleBar-inactiveBackground: #080810;
+  --theia-statusBar-background: #080810;
+  --theia-statusBar-foreground: #9898b8;
+  --theia-tab-activeBackground: #0d0d14;
+  --theia-tab-inactiveBackground: #0a0a10;
+  --theia-tab-activeForeground: #e0e0f0;
+  --theia-tab-inactiveForeground: #5c5c80;
+  --theia-list-activeSelectionBackground: rgba(168, 85, 247, 0.25);
+  --theia-list-hoverBackground: rgba(168, 85, 247, 0.1);
 
-  /* Ava accent */
-  --theia-focusBorder: #6366F1;
-  --theia-button-background: #6366F1;
+  /* Ava accent — electric purple */
+  --theia-focusBorder: #A855F7;
+  --theia-button-background: #A855F7;
   --theia-button-foreground: #ffffff;
-  --theia-button-hoverBackground: #5558E6;
-  --theia-progressBar-background: #6366F1;
-  --theia-textLink-foreground: #7c7ff2;
-  --theia-textLink-activeForeground: #9b9ef5;
-  --theia-notificationLink-foreground: #7c7ff2;
+  --theia-button-hoverBackground: #9333EA;
+  --theia-progressBar-background: #A855F7;
+  --theia-textLink-foreground: #B87DF8;
+  --theia-textLink-activeForeground: #D8A8FF;
+  --theia-notificationLink-foreground: #B87DF8;
 
-  /* Borders — midnight black throughout */
-  --theia-panel-border: #141520;
-  --theia-sideBar-border: #141520;
-  --theia-activityBar-border: #141520;
-  --theia-activityBar-activeBorder: #6366F1;
-  --theia-tab-border: #141520;
-  --theia-editorGroup-border: #141520;
-  --theia-titleBar-border: #141520;
-  --theia-statusBar-border: #141520;
-  --theia-widget-border: #141520;
-  --theia-window-activeBorder: #13141b;
-  --theia-window-inactiveBorder: #13141b;
+  /* Borders — deep black with faint purple */
+  --theia-panel-border: #12101e;
+  --theia-sideBar-border: #12101e;
+  --theia-activityBar-border: #12101e;
+  --theia-activityBar-activeBorder: #A855F7;
+  --theia-tab-border: #12101e;
+  --theia-editorGroup-border: #12101e;
+  --theia-titleBar-border: #12101e;
+  --theia-statusBar-border: #12101e;
+  --theia-widget-border: #12101e;
+  --theia-window-activeBorder: #080810;
+  --theia-window-inactiveBorder: #080810;
   --theia-contrastBorder: transparent;
-  --theia-sideBarSectionHeader-border: #141520;
-  --theia-menu-border: #141520;
-  --theia-menu-separatorBackground: #1f2030;
-  --theia-sash-hoverBorder: rgba(99, 102, 241, 0.5);
-  --theia-notebook-cellBorderColor: #141520;
+  --theia-sideBarSectionHeader-border: #12101e;
+  --theia-menu-border: #12101e;
+  --theia-menu-separatorBackground: #1a1528;
+  --theia-sash-hoverBorder: rgba(168, 85, 247, 0.5);
+  --theia-notebook-cellBorderColor: #12101e;
 
   /* Input */
-  --theia-input-background: #1f2030;
-  --theia-input-foreground: #c0caf5;
-  --theia-input-border: #141520;
-  --theia-dropdown-background: #1f2030;
-  --theia-dropdown-foreground: #c0caf5;
-  --theia-dropdown-border: #141520;
+  --theia-input-background: #141020;
+  --theia-input-foreground: #c8c8e0;
+  --theia-input-border: #1a1530;
+  --theia-dropdown-background: #141020;
+  --theia-dropdown-foreground: #c8c8e0;
+  --theia-dropdown-border: #1a1530;
 
   /* Selection & highlights */
-  --theia-editor-selectionBackground: rgba(99, 102, 241, 0.3);
-  --theia-editor-lineHighlightBackground: rgba(99, 102, 241, 0.08);
-  --theia-editor-findMatchHighlightBackground: rgba(99, 102, 241, 0.25);
+  --theia-editor-selectionBackground: rgba(168, 85, 247, 0.3);
+  --theia-editor-lineHighlightBackground: rgba(168, 85, 247, 0.08);
+  --theia-editor-findMatchHighlightBackground: rgba(168, 85, 247, 0.25);
 
   /* Scrollbar */
-  --theia-scrollbarSlider-background: rgba(99, 102, 241, 0.15);
-  --theia-scrollbarSlider-hoverBackground: rgba(99, 102, 241, 0.3);
-  --theia-scrollbarSlider-activeBackground: rgba(99, 102, 241, 0.4);
+  --theia-scrollbarSlider-background: rgba(168, 85, 247, 0.15);
+  --theia-scrollbarSlider-hoverBackground: rgba(168, 85, 247, 0.3);
+  --theia-scrollbarSlider-activeBackground: rgba(168, 85, 247, 0.4);
 
   /* Terminal */
-  --theia-terminal-background: #1a1b26;
-  --theia-terminal-foreground: #c0caf5;
+  --theia-terminal-background: #0d0d14;
+  --theia-terminal-foreground: #c8c8e0;
 
   /* Badges */
-  --theia-badge-background: #6366F1;
+  --theia-badge-background: #A855F7;
   --theia-badge-foreground: #ffffff;
 }
 `;
@@ -97,18 +97,18 @@ const AVA_LIGHT_CSS = `
   --theia-tab-inactiveBackground: #f5f5f7;
   --theia-tab-activeForeground: #1e1e2e;
   --theia-tab-inactiveForeground: #8888a0;
-  --theia-list-activeSelectionBackground: rgba(99, 102, 241, 0.15);
-  --theia-list-hoverBackground: rgba(99, 102, 241, 0.06);
+  --theia-list-activeSelectionBackground: rgba(147, 51, 234, 0.15);
+  --theia-list-hoverBackground: rgba(147, 51, 234, 0.06);
 
-  /* Ava accent */
-  --theia-focusBorder: #6366F1;
-  --theia-button-background: #6366F1;
+  /* Ava accent — electric purple */
+  --theia-focusBorder: #9333EA;
+  --theia-button-background: #9333EA;
   --theia-button-foreground: #ffffff;
-  --theia-button-hoverBackground: #5558E6;
-  --theia-progressBar-background: #6366F1;
-  --theia-textLink-foreground: #5558E6;
-  --theia-textLink-activeForeground: #4449D0;
-  --theia-notificationLink-foreground: #5558E6;
+  --theia-button-hoverBackground: #7C3AED;
+  --theia-progressBar-background: #9333EA;
+  --theia-textLink-foreground: #7C3AED;
+  --theia-textLink-activeForeground: #6D28D9;
+  --theia-notificationLink-foreground: #7C3AED;
 
   /* Borders */
   --theia-panel-border: #e0e0e4;
@@ -129,21 +129,21 @@ const AVA_LIGHT_CSS = `
   --theia-dropdown-border: #d4d4d8;
 
   /* Selection & highlights */
-  --theia-editor-selectionBackground: rgba(99, 102, 241, 0.2);
-  --theia-editor-lineHighlightBackground: rgba(99, 102, 241, 0.06);
-  --theia-editor-findMatchHighlightBackground: rgba(99, 102, 241, 0.15);
+  --theia-editor-selectionBackground: rgba(147, 51, 234, 0.2);
+  --theia-editor-lineHighlightBackground: rgba(147, 51, 234, 0.06);
+  --theia-editor-findMatchHighlightBackground: rgba(147, 51, 234, 0.15);
 
   /* Scrollbar */
-  --theia-scrollbarSlider-background: rgba(99, 102, 241, 0.12);
-  --theia-scrollbarSlider-hoverBackground: rgba(99, 102, 241, 0.25);
-  --theia-scrollbarSlider-activeBackground: rgba(99, 102, 241, 0.35);
+  --theia-scrollbarSlider-background: rgba(147, 51, 234, 0.12);
+  --theia-scrollbarSlider-hoverBackground: rgba(147, 51, 234, 0.25);
+  --theia-scrollbarSlider-activeBackground: rgba(147, 51, 234, 0.35);
 
   /* Terminal */
   --theia-terminal-background: #ffffff;
   --theia-terminal-foreground: #1e1e2e;
 
   /* Badges */
-  --theia-badge-background: #6366F1;
+  --theia-badge-background: #9333EA;
   --theia-badge-foreground: #ffffff;
 }
 `;
@@ -162,7 +162,7 @@ export class AvaThemeContribution implements FrontendApplicationContribution {
       id: 'ava-dark',
       type: 'dark',
       label: 'Ava Dark',
-      description: 'Deep charcoal with indigo accents',
+      description: 'Black & electric purple',
       editorTheme: 'dark-theia',
       activate: () => {
         this.removeAllThemeStyles();
@@ -179,7 +179,7 @@ export class AvaThemeContribution implements FrontendApplicationContribution {
       id: 'ava-light',
       type: 'light',
       label: 'Ava Light',
-      description: 'Clean white with indigo accents',
+      description: 'Clean white with purple accents',
       editorTheme: 'light-theia',
       activate: () => {
         this.removeAllThemeStyles();

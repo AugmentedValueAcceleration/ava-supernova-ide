@@ -27,7 +27,7 @@ function parseInline(text: string): React.ReactNode[] {
       const code = match[1].slice(1, -1);
       nodes.push(
         <code key={match.index} style={{
-          background: 'rgba(99, 102, 241, 0.12)',
+          background: 'rgba(168, 85, 247, 0.12)',
           padding: '1px 5px',
           borderRadius: '3px',
           fontSize: '12px',
@@ -50,7 +50,7 @@ function parseInline(text: string): React.ReactNode[] {
       // Link: [text](url)
       nodes.push(
         <a key={match.index} href={match[8]} target="_blank" rel="noopener noreferrer" style={{
-          color: 'var(--ava-accent, #6366F1)',
+          color: 'var(--ava-accent, #A855F7)',
           textDecoration: 'none',
         }}>{match[7]}</a>
       );

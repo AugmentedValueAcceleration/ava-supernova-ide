@@ -179,7 +179,7 @@ function HistoryItem({
     <div
       style={{
         ...s.item,
-        background: hovered ? 'rgba(99, 102, 241, 0.06)' : 'transparent',
+        background: hovered ? 'rgba(168, 85, 247, 0.06)' : 'transparent',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setShowExport(false); setConfirming(false); }}

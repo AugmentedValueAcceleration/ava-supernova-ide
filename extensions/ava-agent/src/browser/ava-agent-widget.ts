@@ -13,6 +13,7 @@ import { AvaAgentApp } from './components/AvaAgentApp';
 import {
   IAvaAgentService,
   AvaAgentService,
+  AvaAttachment,
   AvaMode,
 } from '../common/ava-agent-protocol';
 
@@ -85,9 +86,9 @@ export class AvaAgentWidget extends ReactWidget {
     return React.createElement(AvaAgentApp, {
       state: this.client.getState(),
       contextSummary: this.contextManager.getContextSummary(),
-      onSend: async (text: string, mode: AvaMode) => {
+      onSend: async (text: string, mode: AvaMode, attachments?: AvaAttachment[]) => {
         const context = await this.contextManager.buildContext();
-        this.service.sendMessageWithContext(text, mode, context);
+        this.service.sendMessageWithContext(text, mode, context, attachments);
       },
       onCancel: () => {
         this.service.cancelRun();
