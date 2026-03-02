@@ -71,6 +71,7 @@ export interface ChatState {
   isStreaming: boolean;
   isThinking: boolean;
   needsSetup: boolean;
+  initialized: boolean;
   lastUsage: AvaUsageInfo | null;
   sessionUsage: SessionUsage;
   view: ChatView;
@@ -88,6 +89,7 @@ const initialState: ChatState = {
   isStreaming: false,
   isThinking: false,
   needsSetup: true,
+  initialized: false,
   lastUsage: null,
   sessionUsage: { ...initialSessionUsage },
   view: 'chat',
@@ -216,6 +218,7 @@ export class AvaAgentClient implements IAvaAgentClient {
       models: state.models,
       activeModel: state.activeModel,
       needsSetup: state.needsSetup,
+      initialized: true,
     });
   }
 
@@ -408,6 +411,7 @@ export class AvaAgentClient implements IAvaAgentClient {
     messageIdCounter = 0;
     this.state = {
       ...initialState,
+      initialized: true,
       models: this.state.models,
       activeModel: this.state.activeModel,
       needsSetup: this.state.needsSetup,

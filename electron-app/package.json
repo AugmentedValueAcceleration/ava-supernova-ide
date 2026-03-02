@@ -11,6 +11,11 @@
         "applicationName": "Ava | Supernova IDE",
         "defaultTheme": { "light": "ava-light", "dark": "ava-dark" },
         "defaultIconTheme": "theia-file-icons",
+        "electron": {
+          "windowOptions": {
+            "backgroundColor": "#13141b"
+          }
+        },
         "preferences": {
           "toolbar.showToolbar": true,
           "window.menuBarVisibility": "visible",

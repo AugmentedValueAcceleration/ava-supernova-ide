@@ -17,7 +17,7 @@
     "build:electron": "yarn download:plugins && yarn --cwd electron-app bundle",
     "build:browser": "yarn --cwd browser-app bundle",
     "start": "yarn --cwd browser-app start",
-    "start:electron": "yarn --cwd electron-app start",
+    "start:electron": "node scripts/launch-electron.js",
     "start:browser": "yarn --cwd browser-app start",
     "watch": "lerna run --parallel watch",
     "clean": "lerna run clean && lerna clean -y",

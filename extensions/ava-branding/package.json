@@ -8,7 +8,8 @@
   "main": "lib/browser/ava-branding-frontend-module.js",
   "theiaExtensions": [
     {
-      "frontend": "lib/browser/ava-branding-frontend-module"
+      "frontend": "lib/browser/ava-branding-frontend-module",
+      "electronMain": "lib/electron-main/ava-branding-electron-main-module"
     }
   ],
   "dependencies": {

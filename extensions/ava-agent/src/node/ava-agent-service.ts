@@ -76,9 +76,17 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   async initialize(): Promise<AvaInitState> {
     const core = await getCore();
 
+    // Enable debug logging for diagnostics
+    if (core.setLogLevel) core.setLogLevel('debug');
+
     // Load config from ~/.ava/config.json (same as CLI)
     this.configManager = new core.ConfigManager();
     const config = await this.configManager.load();
+    console.log('[ava-agent] Config loaded:', {
+      activeModel: config.activeModel,
+      providers: Object.keys(config.providers).filter(k => !!(config.providers as any)[k]?.apiKey),
+      hasPlatformKey: Boolean(config.platformKey),
+    });
 
     // Register providers from config
     this.providerRegistry = new core.ProviderRegistry();
@@ -95,10 +103,9 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
 
     // Register platform provider if key exists
-    const platformKey = (config as any).platformKey;
-    if (platformKey) {
+    if (config.platformKey) {
       try {
-        const platformProvider = new core.PlatformProvider({ apiKey: platformKey });
+        const platformProvider = new core.PlatformProvider({ apiKey: config.platformKey });
         this.providerRegistry.registerCustom('platform', platformProvider);
       } catch (err) {
         console.error('[ava-agent] Platform provider failed to register:', err);
@@ -108,9 +115,16 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     // Resolve active model
     const activeModelId = config.activeModel || '';
     const resolved = this.providerRegistry.resolveModel(activeModelId);
+    console.log('[ava-agent] Model resolution:', {
+      activeModelId,
+      resolved: resolved ? `${resolved.provider.name}:${resolved.model.id}` : null,
+      supportsToolCalls: resolved?.model.supportsToolCalls ?? false,
+    });
 
     if (resolved) {
       await this.setupAgent(core, resolved.provider, resolved.model);
+    } else if (activeModelId) {
+      console.warn(`[ava-agent] Failed to resolve model "${activeModelId}" — check provider registration`);
     }
 
     // Initialize history
@@ -387,7 +401,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       : [];
 
     // Check platform key and fetch account info (non-blocking on failure)
-    const platformKey = (config as any).platformKey;
+    const platformKey = config.platformKey;
     let account: AvaAccountInfo | null = null;
     if (platformKey) {
       try {
@@ -498,7 +512,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       await this.configManager.load();
     }
     const config = await this.configManager.load();
-    (config as any).platformKey = key;
+    config.platformKey = key;
     await this.configManager.save();
 
     // Reload providers so the platform provider is registered and agent is set up
@@ -522,7 +536,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       await this.configManager.load();
     }
     const config = await this.configManager.load();
-    delete (config as any).platformKey;
+    delete config.platformKey;
     await this.configManager.save();
 
     // Reload providers so the platform provider is removed
@@ -1095,10 +1109,9 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
 
     // Register platform provider if key exists
-    const platformKey = (config as any).platformKey;
-    if (platformKey) {
+    if (config.platformKey) {
       try {
-        const platformProvider = new core.PlatformProvider({ apiKey: platformKey });
+        const platformProvider = new core.PlatformProvider({ apiKey: config.platformKey });
         this.providerRegistry.registerCustom('platform', platformProvider);
       } catch (err) {
         console.error('[ava-agent] Platform provider failed to register:', err);

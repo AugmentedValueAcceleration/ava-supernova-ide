@@ -290,6 +290,12 @@ function AssistantMessage({ msg, onConfirmTool }: { msg: UIMessage; onConfirmToo
       {msg.isStreaming && !msg.content && msg.toolCalls.length === 0 && (
         <div style={{ opacity: 0.5 }}>Thinking...</div>
       )}
+      {msg.isStreaming && msg.content && msg.toolCalls.length === 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', opacity: 0.4, fontSize: '11px' }}>
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366F1', display: 'inline-block', animation: 'ava-pulse 1.5s infinite' }} />
+          Working...
+        </div>
+      )}
       {!msg.isStreaming && msg.cost != null && msg.cost > 0 && (
         <div style={{ fontSize: '10px', opacity: 0.35, marginTop: '4px' }}>
           ${msg.cost.toFixed(4)}
@@ -546,6 +552,21 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
       handleSend();
     }
   }, [handleSend]);
+
+  // Loading — backend hasn't responded yet
+  if (!state.initialized) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.header}>
+          <span style={styles.headerTitle}>Ava</span>
+          <span style={styles.headerSub}>Supernova</span>
+        </div>
+        <div style={{ ...styles.emptyState, opacity: 0.5 }}>
+          Loading...
+        </div>
+      </div>
+    );
+  }
 
   // Setup prompt — no API keys or account configured
   if (state.needsSetup) {
