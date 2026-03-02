@@ -102,6 +102,11 @@ function buildNativeModule(modulePath, name) {
     if (patchVcxprojFiles(modulePath)) {
       console.log(`[fix-native] Patched .vcxproj files for ${name}`);
     }
+    // Also patch sibling @vscode/node-addon-api (used by @vscode/windows-ca-certs etc.)
+    const nodeAddonApi = path.join(nodeModules, '@vscode', 'node-addon-api');
+    if (fs.existsSync(nodeAddonApi) && patchVcxprojFiles(nodeAddonApi)) {
+      console.log(`[fix-native] Patched .vcxproj files for @vscode/node-addon-api`);
+    }
     // Build
     execSync('npx node-gyp build', { cwd: modulePath, stdio: 'pipe' });
     console.log(`[fix-native] ${name} built successfully`);
