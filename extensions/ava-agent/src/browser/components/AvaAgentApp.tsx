@@ -288,13 +288,35 @@ function UserMessage({ msg }: { msg: UIMessage }) {
   );
 }
 
+function ThinkingBlock({ text }: { text: string }) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <div style={{
+      fontSize: '11px', opacity: 0.5, fontStyle: 'italic', marginBottom: '4px',
+      borderLeft: '2px solid var(--ava-accent, #A855F7)', paddingLeft: '8px',
+    }}>
+      <div
+        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span style={{ fontSize: '8px', transition: 'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}>&#9654;</span>
+        <span>Thinking{!expanded && text.length > 80 ? ` (${text.length} chars)` : ''}</span>
+      </div>
+      {expanded && (
+        <div style={{ marginTop: '4px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.9 }}>
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AssistantMessage({ msg, onConfirmTool }: { msg: UIMessage; onConfirmTool: AvaAgentAppProps['onConfirmTool'] }) {
   return (
     <div style={{ maxWidth: '95%' }}>
       {msg.thinking && (
-        <div style={{ fontSize: '11px', opacity: 0.5, fontStyle: 'italic', marginBottom: '4px', borderLeft: '2px solid var(--ava-accent, #A855F7)', paddingLeft: '8px' }}>
-          {msg.thinking.length > 200 ? msg.thinking.slice(0, 200) + '...' : msg.thinking}
-        </div>
+        <ThinkingBlock text={msg.thinking} />
       )}
       {msg.content && (
         <MarkdownContent content={msg.content} />
