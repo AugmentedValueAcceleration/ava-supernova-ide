@@ -42,6 +42,7 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  differentialPackage: false
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico
   shortcutName: "Ava Supernova IDE"

@@ -70,16 +70,16 @@ const styles = {
     fontFamily: 'var(--theia-ui-font-family)',
     color: 'var(--theia-foreground)',
     fontSize: '13px',
-    background: 'var(--theia-editor-background)',
+    background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(168, 85, 247, 0.06) 0%, transparent 70%), var(--theia-editor-background, #0d0d14)',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     padding: '8px 12px',
-    borderBottom: '1px solid var(--theia-panel-border)',
+    borderBottom: '1px solid rgba(168, 85, 247, 0.1)',
     flexShrink: 0 as const,
-    background: 'var(--theia-sideBar-background)',
+    background: 'var(--theia-sideBar-background, #0a0a10)',
   },
   headerTitle: {
     fontSize: '15px',
@@ -119,18 +119,18 @@ const styles = {
   inputArea: {
     flexShrink: 0 as const,
     padding: '8px 12px',
-    borderTop: '1px solid var(--theia-panel-border)',
+    borderTop: '1px solid rgba(168, 85, 247, 0.1)',
     display: 'flex',
     gap: '6px',
     alignItems: 'flex-end',
-    background: 'var(--theia-sideBar-background)',
+    background: 'var(--theia-sideBar-background, #0a0a10)',
   },
   textarea: {
     flex: 1,
     padding: '8px 10px',
-    border: '1px solid var(--theia-input-border)',
+    border: '1px solid rgba(168, 85, 247, 0.15)',
     borderRadius: '6px',
-    background: 'var(--theia-input-background)',
+    background: 'var(--theia-input-background, #141020)',
     color: 'var(--theia-input-foreground)',
     fontFamily: 'var(--theia-ui-font-family)',
     fontSize: '13px',
@@ -163,9 +163,9 @@ const styles = {
     display: 'flex',
     gap: '2px',
     padding: '4px 12px',
-    borderTop: '1px solid var(--theia-panel-border)',
+    borderTop: '1px solid rgba(168, 85, 247, 0.08)',
     flexShrink: 0 as const,
-    background: 'var(--theia-sideBar-background)',
+    background: 'var(--theia-sideBar-background, #0a0a10)',
   },
   modeButton: (active: boolean) => ({
     padding: '3px 8px',
@@ -247,7 +247,7 @@ const styles = {
     padding: '3px 12px',
     fontSize: '11px',
     opacity: 0.5,
-    borderTop: '1px solid var(--theia-panel-border)',
+    borderTop: '1px solid rgba(168, 85, 247, 0.08)',
     flexShrink: 0 as const,
   },
   contextFile: {
@@ -266,7 +266,7 @@ const styles = {
 
 function UserMessage({ msg }: { msg: UIMessage }) {
   return (
-    <div style={{ padding: '8px 12px', borderRadius: '8px', background: 'var(--theia-input-background)', alignSelf: 'flex-end', maxWidth: '85%' }}>
+    <div style={{ padding: '8px 12px', borderRadius: '8px', background: 'var(--theia-input-background, #141020)', alignSelf: 'flex-end', maxWidth: '85%' }}>
       <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</div>
       {msg.images && msg.images.length > 0 && (
         <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
@@ -337,7 +337,7 @@ function ToolCallCard({ tc, onConfirmTool }: { tc: ToolCallDisplay; onConfirmToo
 
   return (
     <div style={{
-      border: '1px solid var(--theia-panel-border)',
+      border: '1px solid rgba(168, 85, 247, 0.15)',
       borderRadius: '6px',
       padding: '8px 10px',
       fontSize: '12px',
@@ -419,7 +419,7 @@ function ToolCallCard({ tc, onConfirmTool }: { tc: ToolCallDisplay; onConfirmToo
       {expanded && tc.result && (
         <pre style={{
           marginTop: '6px', padding: '6px 8px',
-          background: 'var(--theia-editor-background)',
+          background: 'var(--theia-editor-background, #0d0d14)',
           borderRadius: '4px',
           fontSize: '11px', overflow: 'auto',
           maxHeight: '200px', whiteSpace: 'pre-wrap',

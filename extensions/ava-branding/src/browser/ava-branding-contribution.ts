@@ -387,6 +387,48 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         border-radius: 12px;
         overflow: hidden;
       }
+
+      /* Hide main toolbar — collapse the row entirely */
+      #main-toolbar {
+        display: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+      }
+
+      /* Purple border + rounded corners on Ava panels */
+      body.theia-dark .ava-agent-widget {
+        border: 2px solid rgba(168, 85, 247, 0.2);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      body.theia-dark #getting\\.started\\.widget {
+        border: 2px solid rgba(168, 85, 247, 0.2);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      body.theia-dark .ava-dashboard-widget {
+        border: 2px solid rgba(168, 85, 247, 0.2);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      /* Light theme — blue border + rounded corners */
+      body.theia-light .ava-agent-widget {
+        border: 2px solid rgba(14, 165, 233, 0.15);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      body.theia-light #getting\\.started\\.widget {
+        border: 2px solid rgba(14, 165, 233, 0.15);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      body.theia-light .ava-dashboard-widget {
+        border: 2px solid rgba(14, 165, 233, 0.15);
+        border-radius: 10px;
+        overflow: hidden;
+      }
     `;
     document.head.appendChild(style);
   }

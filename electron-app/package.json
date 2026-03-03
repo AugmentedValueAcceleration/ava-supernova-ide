@@ -20,7 +20,7 @@
           }
         },
         "preferences": {
-          "toolbar.showToolbar": true,
+          "toolbar.showToolbar": false,
           "window.menuBarVisibility": "visible",
           "workbench.startupEditor": "welcomePage",
           "workbench.colorTheme": "ava-dark",
