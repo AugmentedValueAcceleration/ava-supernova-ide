@@ -1,0 +1,68 @@
+appId: com.ava-supernova.ide
+productName: "Ava Supernova IDE"
+copyright: "Copyright 2026 Augmented Value Acceleration"
+
+directories:
+  output: dist
+
+# Webpack bundles everything — skip npm prune/rebuild
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+
+# Only include webpack output + package.json (node_modules not needed)
+files:
+  - package.json
+  - lib/**
+  - "!node_modules"
+
+# Native .node modules and binaries must be outside asar to load
+asarUnpack:
+  - "lib/backend/native/**"
+
+# Plugins bundled with the app
+extraResources:
+  - from: ../../plugins
+    to: plugins
+    filter:
+      - "**/*"
+  # @ava/core — single-file ESM bundle for runtime dynamic import
+  - from: resources/ava-core.mjs
+    to: ava-core.mjs
+
+# ——— Windows ———
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  shortcutName: "Ava Supernova IDE"
+
+# ——— macOS ———
+mac:
+  icon: resources/icon.png
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+# ——— Linux ———
+linux:
+  icon: resources/icon.png
+  category: Development
+  target:
+    - AppImage
+    - deb
+
+# No auto-update for now — downloads from website only
+publish: null

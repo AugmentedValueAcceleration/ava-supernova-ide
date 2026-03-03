@@ -80,71 +80,82 @@ const AVA_DARK_CSS = `
 }
 `;
 
-// ── Ava Light ─────────────────────────────────────────────────────────────────
+// ── Ava Light — Warm Cream & Electric Blue ───────────────────────────────────
 const AVA_LIGHT_CSS = `
 :root {
-  /* Base palette */
-  --theia-editor-background: #ffffff;
-  --theia-editor-foreground: #1e1e2e;
-  --theia-sideBar-background: #f5f5f7;
-  --theia-activityBar-background: #eeeef0;
-  --theia-panel-background: #ffffff;
-  --theia-titleBar-activeBackground: #eeeef0;
-  --theia-titleBar-inactiveBackground: #f0f0f2;
-  --theia-statusBar-background: #eeeef0;
-  --theia-statusBar-foreground: #4a4a5a;
-  --theia-tab-activeBackground: #ffffff;
-  --theia-tab-inactiveBackground: #f5f5f7;
-  --theia-tab-activeForeground: #1e1e2e;
-  --theia-tab-inactiveForeground: #8888a0;
-  --theia-list-activeSelectionBackground: rgba(147, 51, 234, 0.15);
-  --theia-list-hoverBackground: rgba(147, 51, 234, 0.06);
+  /* Base palette — warm cream whites */
+  --theia-editor-background: #fdfcfa;
+  --theia-editor-foreground: #1a1a2e;
+  --theia-sideBar-background: #f6f5f2;
+  --theia-activityBar-background: #f1f0ed;
+  --theia-panel-background: #fdfcfa;
+  --theia-titleBar-activeBackground: #f1f0ed;
+  --theia-titleBar-inactiveBackground: #f4f3f0;
+  --theia-statusBar-background: #f1f0ed;
+  --theia-statusBar-foreground: #4a4e5c;
+  --theia-tab-activeBackground: #fdfcfa;
+  --theia-tab-inactiveBackground: #f1f0ed;
+  --theia-tab-activeForeground: #1a1a2e;
+  --theia-tab-inactiveForeground: #8890a0;
+  --theia-list-activeSelectionBackground: rgba(14, 165, 233, 0.14);
+  --theia-list-hoverBackground: rgba(14, 165, 233, 0.06);
 
-  /* Ava accent — electric purple */
-  --theia-focusBorder: #9333EA;
-  --theia-button-background: #9333EA;
+  /* Ava accent — electric blue */
+  --theia-focusBorder: #0EA5E9;
+  --theia-button-background: #0EA5E9;
   --theia-button-foreground: #ffffff;
-  --theia-button-hoverBackground: #7C3AED;
-  --theia-progressBar-background: #9333EA;
-  --theia-textLink-foreground: #7C3AED;
-  --theia-textLink-activeForeground: #6D28D9;
-  --theia-notificationLink-foreground: #7C3AED;
+  --theia-button-hoverBackground: #0284C7;
+  --theia-progressBar-background: #0EA5E9;
+  --theia-textLink-foreground: #0284C7;
+  --theia-textLink-activeForeground: #0369A1;
+  --theia-notificationLink-foreground: #0284C7;
 
-  /* Borders */
-  --theia-panel-border: #e0e0e4;
-  --theia-sideBar-border: #e0e0e4;
-  --theia-activityBar-border: #e0e0e4;
-  --theia-tab-border: #e0e0e4;
-  --theia-editorGroup-border: #e0e0e4;
-  --theia-titleBar-border: #e0e0e4;
-  --theia-statusBar-border: #e0e0e4;
-  --theia-widget-border: #e0e0e4;
+  /* Borders — warm neutral grays */
+  --theia-panel-border: #e4e2de;
+  --theia-sideBar-border: #e4e2de;
+  --theia-activityBar-border: #e4e2de;
+  --theia-activityBar-activeBorder: #0EA5E9;
+  --theia-tab-border: #e4e2de;
+  --theia-editorGroup-border: #e4e2de;
+  --theia-titleBar-border: #e4e2de;
+  --theia-statusBar-border: #e4e2de;
+  --theia-widget-border: #e4e2de;
+  --theia-window-activeBorder: #e4e2de;
+  --theia-window-inactiveBorder: #eceae6;
+  --theia-contrastBorder: transparent;
+  --theia-sideBarSectionHeader-border: #e4e2de;
+  --theia-menu-border: #e4e2de;
+  --theia-menu-separatorBackground: #eceae6;
+  --theia-sash-hoverBorder: rgba(14, 165, 233, 0.4);
 
-  /* Input */
-  --theia-input-background: #f5f5f7;
-  --theia-input-foreground: #1e1e2e;
-  --theia-input-border: #d4d4d8;
-  --theia-dropdown-background: #f5f5f7;
-  --theia-dropdown-foreground: #1e1e2e;
-  --theia-dropdown-border: #d4d4d8;
+  /* Input — cream tint */
+  --theia-input-background: #f6f5f2;
+  --theia-input-foreground: #1a1a2e;
+  --theia-input-border: #dad8d4;
+  --theia-dropdown-background: #f6f5f2;
+  --theia-dropdown-foreground: #1a1a2e;
+  --theia-dropdown-border: #dad8d4;
 
-  /* Selection & highlights */
-  --theia-editor-selectionBackground: rgba(147, 51, 234, 0.2);
-  --theia-editor-lineHighlightBackground: rgba(147, 51, 234, 0.06);
-  --theia-editor-findMatchHighlightBackground: rgba(147, 51, 234, 0.15);
+  /* Selection & highlights — blue tint */
+  --theia-editor-selectionBackground: rgba(14, 165, 233, 0.18);
+  --theia-editor-lineHighlightBackground: rgba(14, 165, 233, 0.05);
+  --theia-editor-findMatchHighlightBackground: rgba(14, 165, 233, 0.15);
 
-  /* Scrollbar */
-  --theia-scrollbarSlider-background: rgba(147, 51, 234, 0.12);
-  --theia-scrollbarSlider-hoverBackground: rgba(147, 51, 234, 0.25);
-  --theia-scrollbarSlider-activeBackground: rgba(147, 51, 234, 0.35);
+  /* Scrollbar — subtle blue */
+  --theia-scrollbarSlider-background: rgba(14, 165, 233, 0.10);
+  --theia-scrollbarSlider-hoverBackground: rgba(14, 165, 233, 0.20);
+  --theia-scrollbarSlider-activeBackground: rgba(14, 165, 233, 0.30);
 
   /* Terminal */
-  --theia-terminal-background: #ffffff;
-  --theia-terminal-foreground: #1e1e2e;
+  --theia-terminal-background: #fdfcfa;
+  --theia-terminal-foreground: #1a1a2e;
 
-  /* Badges */
-  --theia-badge-background: #9333EA;
+  /* Badges — electric blue */
+  --theia-badge-background: #0EA5E9;
   --theia-badge-foreground: #ffffff;
+
+  /* Sidebar section header */
+  --theia-sideBarSectionHeader-background: rgba(14, 165, 233, 0.05);
 }
 `;
 
@@ -179,7 +190,7 @@ export class AvaThemeContribution implements FrontendApplicationContribution {
       id: 'ava-light',
       type: 'light',
       label: 'Ava Light',
-      description: 'Clean white with purple accents',
+      description: 'Clean white with electric blue accents',
       editorTheme: 'light-theia',
       activate: () => {
         this.removeAllThemeStyles();
@@ -193,12 +204,25 @@ export class AvaThemeContribution implements FrontendApplicationContribution {
     };
 
     this.themeService.register(avaDark, avaLight);
+
+    // Remove built-in Theia themes — only Ava Dark and Ava Light should appear
+    const registry = (this.themeService as any).themes;
+    if (registry) {
+      delete registry['dark'];
+      delete registry['light'];
+      delete registry['hc-theia'];
+      delete registry['hc-theia-light'];
+    }
+
+    // If the user previously had a built-in theme selected, switch to Ava Dark
+    const current = this.themeService.getCurrentTheme();
+    if (!current || !current.id.startsWith('ava-')) {
+      this.themeService.setCurrentTheme('ava-dark');
+    }
   }
 
   async onStart(): Promise<void> {
     // Theme registration happens in @postConstruct.
-    // ThemeService.loadUserTheme() runs during its own init, so by the
-    // time onStart fires the chosen theme is already active.
   }
 
   private createStyleEl(id: string, css: string): HTMLStyleElement {

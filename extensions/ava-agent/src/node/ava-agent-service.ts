@@ -40,7 +40,25 @@ type CoreModule = typeof import('@ava/core');
 let _core: CoreModule | null = null;
 async function getCore(): Promise<CoreModule> {
   if (!_core) {
-    _core = await dynamicImport('@ava/core');
+    // In packaged app, @ava/core is bundled as ava-core.mjs in resources/
+    const corePaths: string[] = [];
+    if (typeof process !== 'undefined' && process.resourcesPath) {
+      const path = require('path');
+      const { pathToFileURL } = require('url');
+      const mjsPath = path.join(process.resourcesPath, 'ava-core.mjs');
+      corePaths.push(pathToFileURL(mjsPath).href);
+    }
+    corePaths.push('@ava/core'); // fallback for dev mode
+    for (const specifier of corePaths) {
+      try {
+        _core = await dynamicImport(specifier);
+        console.log('[ava-agent] Loaded @ava/core from:', specifier);
+        break;
+      } catch (e: any) {
+        console.warn('[ava-agent] Failed to load core from', specifier, ':', e.message);
+      }
+    }
+    if (!_core) throw new Error('Failed to load @ava/core from any path');
   }
   return _core;
 }

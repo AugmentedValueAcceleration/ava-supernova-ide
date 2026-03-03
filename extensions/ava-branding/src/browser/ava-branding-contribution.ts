@@ -1,6 +1,7 @@
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution, FrontendApplication } from '@theia/core/lib/browser';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
+import { MenuModelRegistry } from '@theia/core/lib/common';
 import { AvaOnboardingDialogFactory, type AvaOnboardingDialogFactory as AvaOnboardingDialogFactoryType } from './ava-onboarding-types';
 
 const ONBOARDING_KEY = 'ava.onboarding.v1';
@@ -10,9 +11,11 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
 
   @inject(StorageService) protected readonly storageService: StorageService;
   @inject(AvaOnboardingDialogFactory) protected readonly createOnboardingDialog: AvaOnboardingDialogFactoryType;
+  @inject(MenuModelRegistry) protected readonly menuRegistry: MenuModelRegistry;
 
   async onStart(app: FrontendApplication): Promise<void> {
     this.applyBranding();
+    this.hideEditorLayoutMenu();
 
     const completed = await this.storageService.getData<boolean>(ONBOARDING_KEY, false);
     if (!completed) {
@@ -49,6 +52,23 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
     }
   }
 
+  /** Remove the empty "Editor Layout" submenu from View menu */
+  private hideEditorLayoutMenu(): void {
+    try {
+      // VIEW_APPEARANCE = ['menubar', '4_view', '1_appearance']
+      const parent = (this.menuRegistry as any).getMenu(['menubar', '4_view', '1_appearance']);
+      if (parent) {
+        const children = parent.children || [];
+        for (const child of children) {
+          if (child.id === '2_editor_submenu') {
+            parent.removeNode(child);
+            break;
+          }
+        }
+      }
+    } catch { /* Not critical — fail silently */ }
+  }
+
   private applyBranding(): void {
     document.title = 'Ava | Supernova IDE';
 
@@ -63,11 +83,11 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
       }
 
       /* ══════════════════════════════════════════════════════
-         Electric Purple Gradients — title bar, sidebars, activity bar
+         DARK THEME — Electric Purple Gradients
          ══════════════════════════════════════════════════════ */
 
       /* Title bar — horizontal gradient with purple glow center */
-      #theia-top-panel {
+      body.theia-dark #theia-top-panel {
         background: linear-gradient(90deg,
           #080810 0%,
           #150a2e 35%,
@@ -77,18 +97,16 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         ) !important;
       }
 
-      /* Editor tab bar — dark with faint purple tint */
-      .lm-TabBar.theia-app-centers {
+      /* Editor tab bar */
+      body.theia-dark .lm-TabBar.theia-app-centers {
         background: #0a0a12 !important;
       }
-      .lm-TabBar.theia-app-centers::after {
+      body.theia-dark .lm-TabBar.theia-app-centers::after {
         background-color: rgba(168, 85, 247, 0.12) !important;
       }
 
-      /* ── Editor tabs — active / inactive / hover ──────────── */
-
-      /* Inactive tab — deep dark, dimmed text */
-      #theia-main-content-panel .lm-TabBar .lm-TabBar-tab {
+      /* Inactive tab */
+      body.theia-dark #theia-main-content-panel .lm-TabBar .lm-TabBar-tab {
         background: #08080e !important;
         color: #5c5c80 !important;
         border-right: 1px solid rgba(168, 85, 247, 0.06) !important;
@@ -97,27 +115,27 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         transition: background 0.15s, color 0.15s;
       }
 
-      /* Active tab — slightly lifted, purple top accent, brighter text */
-      #theia-main-content-panel .lm-TabBar .lm-TabBar-tab.lm-mod-current {
+      /* Active tab */
+      body.theia-dark #theia-main-content-panel .lm-TabBar .lm-TabBar-tab.lm-mod-current {
         background: #0d0d14 !important;
         color: #e0e0f0 !important;
         border-top: 2px solid #A855F7 !important;
       }
 
-      /* Hover tab (non-active) — subtle purple lift */
-      #theia-main-content-panel .lm-TabBar .lm-TabBar-tab:not(.lm-mod-current):hover {
+      /* Hover tab (non-active) */
+      body.theia-dark #theia-main-content-panel .lm-TabBar .lm-TabBar-tab:not(.lm-mod-current):hover {
         background: rgba(168, 85, 247, 0.06) !important;
         color: #9898b8 !important;
       }
 
-      /* Unfocused tab bar — slightly dimmer active tab */
-      #theia-main-content-panel .lm-TabBar:not(.theia-tabBar-active) .lm-TabBar-tab.lm-mod-current {
+      /* Unfocused tab bar */
+      body.theia-dark #theia-main-content-panel .lm-TabBar:not(.theia-tabBar-active) .lm-TabBar-tab.lm-mod-current {
         border-top-color: rgba(168, 85, 247, 0.5) !important;
         color: #b0b0cc !important;
       }
 
-      /* Activity bars (left + right icon strips) — vertical purple glow */
-      .theia-app-sidebar-container {
+      /* Activity bars — vertical purple glow */
+      body.theia-dark .theia-app-sidebar-container {
         background: linear-gradient(180deg,
           #080810 0%,
           #140a28 40%,
@@ -126,25 +144,22 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         ) !important;
       }
 
-      /* The icon tab bars themselves — transparent so container gradient shows */
-      .lm-TabBar.theia-app-sides,
-      .lm-TabBar.theia-app-left,
-      .lm-TabBar.theia-app-right {
+      body.theia-dark .lm-TabBar.theia-app-sides,
+      body.theia-dark .lm-TabBar.theia-app-left,
+      body.theia-dark .lm-TabBar.theia-app-right {
         background: transparent !important;
       }
 
-      /* Sidebar menus (top/bottom icons) — transparent */
-      .theia-sidebar-menu {
+      body.theia-dark .theia-sidebar-menu {
         background: transparent !important;
       }
 
-      /* Sidebar menu item icons (Manage button etc.) — transparent so gradient shows */
-      .theia-sidebar-menu i {
+      body.theia-dark .theia-sidebar-menu i {
         background-color: transparent !important;
       }
 
-      /* Left content panel — gradient */
-      #theia-left-content-panel {
+      /* Left panel */
+      body.theia-dark #theia-left-content-panel {
         background: linear-gradient(180deg,
           #0a0a12 0%,
           #100a20 50%,
@@ -152,8 +167,8 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         ) !important;
       }
 
-      /* Right content panel — gradient */
-      #theia-right-content-panel {
+      /* Right panel */
+      body.theia-dark #theia-right-content-panel {
         background: linear-gradient(180deg,
           #0a0a12 0%,
           #100a20 50%,
@@ -161,15 +176,14 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         ) !important;
       }
 
-      /* Side panels (inner dock panels) — transparent so parent gradient shows */
-      #theia-left-side-panel,
-      #theia-right-side-panel,
-      .theia-side-panel {
+      body.theia-dark #theia-left-side-panel,
+      body.theia-dark #theia-right-side-panel,
+      body.theia-dark .theia-side-panel {
         background: transparent !important;
       }
 
-      /* Status bar — horizontal gradient matching title bar */
-      #theia-statusBar {
+      /* Status bar */
+      body.theia-dark #theia-statusBar {
         background: linear-gradient(90deg,
           #080810 0%,
           #120a22 50%,
@@ -177,27 +191,147 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         ) !important;
       }
 
-      /* Section headers in sidebars — translucent purple */
-      .theia-sidepanel-title,
-      .theia-sidepanel-toolbar {
+      /* Section headers */
+      body.theia-dark .theia-sidepanel-title,
+      body.theia-dark .theia-sidepanel-toolbar {
         background: rgba(168, 85, 247, 0.06) !important;
       }
 
-      /* Active activity bar icon — electric purple glow (left) */
-      .lm-TabBar.theia-app-left .lm-TabBar-tab.lm-mod-current {
+      /* Active activity icon (left) */
+      body.theia-dark .lm-TabBar.theia-app-left .lm-TabBar-tab.lm-mod-current {
         border-left-color: #A855F7 !important;
         box-shadow: inset 3px 0 8px -3px rgba(168, 85, 247, 0.4);
       }
 
-      /* Active activity bar icon — electric purple glow (right) */
-      .lm-TabBar.theia-app-right .lm-TabBar-tab.lm-mod-current {
+      /* Active activity icon (right) */
+      body.theia-dark .lm-TabBar.theia-app-right .lm-TabBar-tab.lm-mod-current {
         border-right-color: #A855F7 !important;
         box-shadow: inset -3px 0 8px -3px rgba(168, 85, 247, 0.4);
       }
 
       /* ══════════════════════════════════════════════════════
-         Custom scrollbar
+         LIGHT THEME — Clean White & Electric Blue
          ══════════════════════════════════════════════════════ */
+
+      /* Title bar — warm cream, subtle blue tint center */
+      body.theia-light #theia-top-panel {
+        background: linear-gradient(90deg,
+          #f1f0ed 0%,
+          #eef0f2 40%,
+          #eceff4 50%,
+          #eef0f2 60%,
+          #f1f0ed 100%
+        ) !important;
+      }
+
+      /* Editor tab bar — warm cream */
+      body.theia-light .lm-TabBar.theia-app-centers {
+        background: #f1f0ed !important;
+      }
+      body.theia-light .lm-TabBar.theia-app-centers::after {
+        background-color: rgba(14, 165, 233, 0.06) !important;
+      }
+
+      /* Inactive tab — warm cream */
+      body.theia-light #theia-main-content-panel .lm-TabBar .lm-TabBar-tab {
+        background: #f1f0ed !important;
+        color: #8890a0 !important;
+        border-right: 1px solid rgba(14, 165, 233, 0.06) !important;
+        border-top: 2px solid transparent !important;
+        border-bottom: none !important;
+        transition: background 0.15s, color 0.15s;
+      }
+
+      /* Active tab — cream white with blue top accent */
+      body.theia-light #theia-main-content-panel .lm-TabBar .lm-TabBar-tab.lm-mod-current {
+        background: #fdfcfa !important;
+        color: #1a1a2e !important;
+        border-top: 2px solid #0EA5E9 !important;
+      }
+
+      /* Hover tab (non-active) */
+      body.theia-light #theia-main-content-panel .lm-TabBar .lm-TabBar-tab:not(.lm-mod-current):hover {
+        background: rgba(14, 165, 233, 0.05) !important;
+        color: #505868 !important;
+      }
+
+      /* Unfocused tab bar — dimmed accent */
+      body.theia-light #theia-main-content-panel .lm-TabBar:not(.theia-tabBar-active) .lm-TabBar-tab.lm-mod-current {
+        border-top-color: rgba(14, 165, 233, 0.35) !important;
+        color: #404858 !important;
+      }
+
+      /* Activity bars — warm cream, nearly flat */
+      body.theia-light .theia-app-sidebar-container {
+        background: linear-gradient(180deg,
+          #f1f0ed 0%,
+          #edece9 50%,
+          #f1f0ed 100%
+        ) !important;
+      }
+
+      body.theia-light .lm-TabBar.theia-app-sides,
+      body.theia-light .lm-TabBar.theia-app-left,
+      body.theia-light .lm-TabBar.theia-app-right {
+        background: transparent !important;
+      }
+
+      body.theia-light .theia-sidebar-menu {
+        background: transparent !important;
+      }
+
+      body.theia-light .theia-sidebar-menu i {
+        background-color: transparent !important;
+      }
+
+      /* Left panel — warm cream */
+      body.theia-light #theia-left-content-panel {
+        background: #f6f5f2 !important;
+      }
+
+      /* Right panel — warm cream */
+      body.theia-light #theia-right-content-panel {
+        background: #f6f5f2 !important;
+      }
+
+      body.theia-light #theia-left-side-panel,
+      body.theia-light #theia-right-side-panel,
+      body.theia-light .theia-side-panel {
+        background: transparent !important;
+      }
+
+      /* Status bar — warm cream, subtle blue hint */
+      body.theia-light #theia-statusBar {
+        background: linear-gradient(90deg,
+          #f1f0ed 0%,
+          #eef0f2 50%,
+          #f1f0ed 100%
+        ) !important;
+      }
+
+      /* Section headers — very subtle blue tint */
+      body.theia-light .theia-sidepanel-title,
+      body.theia-light .theia-sidepanel-toolbar {
+        background: rgba(14, 165, 233, 0.04) !important;
+      }
+
+      /* Active activity icon (left) — blue accent */
+      body.theia-light .lm-TabBar.theia-app-left .lm-TabBar-tab.lm-mod-current {
+        border-left-color: #0EA5E9 !important;
+        box-shadow: inset 3px 0 8px -3px rgba(14, 165, 233, 0.2);
+      }
+
+      /* Active activity icon (right) — blue accent */
+      body.theia-light .lm-TabBar.theia-app-right .lm-TabBar-tab.lm-mod-current {
+        border-right-color: #0EA5E9 !important;
+        box-shadow: inset -3px 0 8px -3px rgba(14, 165, 233, 0.2);
+      }
+
+      /* ══════════════════════════════════════════════════════
+         COMMON — Both themes
+         ══════════════════════════════════════════════════════ */
+
+      /* Custom scrollbar */
       .ava-agent-widget ::-webkit-scrollbar,
       .ava-dashboard-widget ::-webkit-scrollbar {
         width: 6px;
@@ -216,7 +350,7 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         background: rgba(168, 85, 247, 0.5);
       }
 
-      /* ── Welcome page ──────────────────────────────────── */
+      /* Welcome page */
       .ava-welcome-action-card {
         transition: border-color 0.2s, background 0.2s;
       }
@@ -248,7 +382,7 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         text-decoration: underline;
       }
 
-      /* ── Onboarding dialog ─────────────────────────────── */
+      /* Onboarding dialog */
       .dialogBlock:has(.ava-onboarding) {
         border-radius: 12px;
         overflow: hidden;

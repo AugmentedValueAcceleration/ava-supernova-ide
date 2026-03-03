@@ -9,7 +9,10 @@
     "frontend": {
       "config": {
         "applicationName": "Ava | Supernova IDE",
-        "defaultTheme": { "light": "ava-light", "dark": "ava-dark" },
+        "defaultTheme": {
+          "light": "ava-light",
+          "dark": "ava-dark"
+        },
         "defaultIconTheme": "theia-file-icons",
         "electron": {
           "windowOptions": {
@@ -85,6 +88,7 @@
     "@theia/debug": "1.68.2",
     "@theia/editor": "1.68.2",
     "@theia/editor-preview": "1.68.2",
+    "@theia/electron": "1.68.2",
     "@theia/file-search": "1.68.2",
     "@theia/filesystem": "1.68.2",
     "@theia/getting-started": "1.68.2",
@@ -108,14 +112,14 @@
     "@theia/userstorage": "1.68.2",
     "@theia/variable-resolver": "1.68.2",
     "@theia/vsx-registry": "1.68.2",
-    "@theia/electron": "1.68.2",
     "@theia/workspace": "1.68.2",
     "ava-agent-extension": "0.1.0",
     "ava-branding-extension": "0.1.0"
   },
   "devDependencies": {
     "@theia/cli": "1.68.2",
-    "electron": "38.4.0"
+    "electron": "38.4.0",
+    "electron-builder": "^26.0.12"
   },
   "scripts": {
     "bundle": "yarn rebuild && theia build --mode development",
@@ -123,6 +127,10 @@
     "clean": "theia clean",
     "rebuild": "theia rebuild:electron --cacheRoot ..",
     "start": "theia start --plugins=local-dir:../../plugins",
-    "watch": "yarn rebuild && theia build --watch --mode development"
+    "watch": "yarn rebuild && theia build --watch --mode development",
+    "package": "electron-builder --config electron-builder.yml",
+    "package:win": "electron-builder --config electron-builder.yml --win",
+    "package:mac": "electron-builder --config electron-builder.yml --mac",
+    "package:linux": "electron-builder --config electron-builder.yml --linux"
   }
 }

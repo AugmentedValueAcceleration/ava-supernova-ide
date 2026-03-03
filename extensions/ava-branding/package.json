@@ -9,6 +9,7 @@
   "theiaExtensions": [
     {
       "frontend": "lib/browser/ava-branding-frontend-module",
+      "backend": "lib/node/ava-branding-backend-module",
       "electronMain": "lib/electron-main/ava-branding-electron-main-module"
     }
   ],
