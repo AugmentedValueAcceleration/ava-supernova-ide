@@ -42,6 +42,7 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
   differentialPackage: false
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico
