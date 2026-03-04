@@ -218,6 +218,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     // Restore the conversation
     this.conversation = new core.Conversation(record.id);
     this.conversation.setMessages(record.messages);
+    this.conversation.setSystemPrompt(await this.buildSystemPrompt());
 
     // Notify frontend to display the loaded messages
     const replayMessages = this.buildReplayMessages(record.messages);
@@ -918,6 +919,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     const core = await getCore();
     this.conversation = new core.Conversation(record.id);
     this.conversation.setMessages(record.messages);
+    this.conversation.setSystemPrompt(await this.buildSystemPrompt());
     this.sessionAllowedTools.clear();
     this.sessionAllowAll = false;
 
