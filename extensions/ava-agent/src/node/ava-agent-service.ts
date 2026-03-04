@@ -1301,6 +1301,24 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       projectInstructions = (await _core.loadProjectInstructions(projectRoot)) ?? undefined;
     }
 
+    // Fetch user identity from platform account (non-blocking)
+    let userName: string | undefined;
+    let isAdmin = false;
+    if (this.configManager) {
+      try {
+        const config = await this.configManager.load();
+        if (config.platformKey) {
+          const res = await this.platformApiFetch('/account-info', config.platformKey);
+          if (res.ok && res.data) {
+            userName = res.data.name || res.data.email?.split('@')[0];
+            isAdmin = res.data.tier === 'admin';
+          }
+        }
+      } catch {
+        // Network error — build prompt without user identity
+      }
+    }
+
     return _core.buildSystemPrompt({
       cwd: this.getCwd(),
       platform: process.platform,
@@ -1308,6 +1326,8 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       permissionMode: 'balanced',
       supportsVision: this.activeModelDef?.supportsVision,
       projectInstructions,
+      userName,
+      isAdmin,
     });
   }
 
