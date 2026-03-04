@@ -87,6 +87,10 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   private sessionAllowedTools = new Set<string>();
   private sessionAllowAll = false;
 
+  // Cached user identity — populated when account info is fetched
+  private cachedUserName: string | undefined;
+  private cachedIsAdmin = false;
+
   setClient(client: IAvaAgentClient | undefined): void {
     this.client = client;
   }
@@ -139,6 +143,18 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
         this.providerRegistry.registerCustom('platform', platformProvider);
       } catch (err) {
         console.error('[ava-agent] Platform provider failed to register:', err);
+      }
+
+      // Fetch and cache user identity for system prompt
+      try {
+        const acctRes = await this.platformApiFetch('/account-info', config.platformKey);
+        if (acctRes.ok && acctRes.data) {
+          this.cachedUserName = acctRes.data.name || acctRes.data.email?.split('@')[0];
+          this.cachedIsAdmin = acctRes.data.tier === 'admin';
+          console.log('[ava-agent] User identity cached:', this.cachedUserName, 'admin:', this.cachedIsAdmin);
+        }
+      } catch {
+        console.log('[ava-agent] Could not fetch user identity');
       }
     }
 
@@ -510,6 +526,9 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
             tier: res.data.tier,
             usage: res.data.usage ?? null,
           };
+          // Cache user identity for system prompt
+          this.cachedUserName = res.data.name || res.data.email?.split('@')[0];
+          this.cachedIsAdmin = res.data.tier === 'admin';
         }
       } catch {
         // Network error — account info unavailable but key is still valid
@@ -601,6 +620,12 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     if (!res.ok) {
       this.client?.notifyDashboardError('Could not verify key. Check it is correct and try again.');
       return false;
+    }
+
+    // Cache user identity for system prompt
+    if (res.data) {
+      this.cachedUserName = res.data.name || res.data.email?.split('@')[0];
+      this.cachedIsAdmin = res.data.tier === 'admin';
     }
 
     const core = await getCore();
@@ -1301,24 +1326,6 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       projectInstructions = (await _core.loadProjectInstructions(projectRoot)) ?? undefined;
     }
 
-    // Fetch user identity from platform account (non-blocking)
-    let userName: string | undefined;
-    let isAdmin = false;
-    if (this.configManager) {
-      try {
-        const config = await this.configManager.load();
-        if (config.platformKey) {
-          const res = await this.platformApiFetch('/account-info', config.platformKey);
-          if (res.ok && res.data) {
-            userName = res.data.name || res.data.email?.split('@')[0];
-            isAdmin = res.data.tier === 'admin';
-          }
-        }
-      } catch {
-        // Network error — build prompt without user identity
-      }
-    }
-
     return _core.buildSystemPrompt({
       cwd: this.getCwd(),
       platform: process.platform,
@@ -1326,8 +1333,8 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       permissionMode: 'balanced',
       supportsVision: this.activeModelDef?.supportsVision,
       projectInstructions,
-      userName,
-      isAdmin,
+      userName: this.cachedUserName,
+      isAdmin: this.cachedIsAdmin,
     });
   }
 
