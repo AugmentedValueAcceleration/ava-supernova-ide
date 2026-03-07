@@ -76,6 +76,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   private configManager: InstanceType<CoreModule['ConfigManager']> | undefined;
   private historyManager: InstanceType<CoreModule['HistoryManager']> | undefined;
   private activeModelDef: any | undefined; // ModelDefinition
+  private memoryManager: any | undefined; // MemoryManager
   private usageTracker = new UsageTracker();
   private healthCheckInterval: ReturnType<typeof setInterval> | undefined;
   private workspaceRoot: string | undefined;
@@ -173,10 +174,11 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       console.warn(`[ava-agent] Failed to resolve model "${activeModelId}" — check provider registration`);
     }
 
-    // Initialize history
+    // Initialize history and memory
     const projectRoot = core.detectProjectRoot(this.getCwd()) ?? undefined;
     this.historyManager = new core.HistoryManager(projectRoot);
     this.historyManager.init();
+    this.memoryManager = new core.MemoryManager({ globalDir: core.AVA_HOME, projectRoot });
 
     // Auto-restore last conversation for this project (non-blocking)
     this.autoRestoreLastConversation(core).catch(err => {
@@ -1347,6 +1349,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       model,
       toolRegistry: this.toolRegistry,
       cwd: this.getCwd(),
+      sharedState: { memoryManager: this.memoryManager },
     });
   }
 
@@ -1360,6 +1363,9 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       projectInstructions = (await _core.loadProjectInstructions(projectRoot)) ?? undefined;
     }
 
+    // Load persistent memory
+    const memory = (await this.memoryManager?.loadAll()) || undefined;
+
     return _core.buildSystemPrompt({
       cwd: this.getCwd(),
       platform: process.platform,
@@ -1367,6 +1373,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       permissionMode: 'balanced',
       supportsVision: this.activeModelDef?.supportsVision,
       projectInstructions,
+      memory,
       userName: this.cachedUserName,
       isAdmin: this.cachedIsAdmin,
     });
