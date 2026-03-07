@@ -568,9 +568,12 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     const config = await this.configManager.load();
 
     const providerKeys: AvaProviderKeyStatus = {
+      anthropic: Boolean(config.providers.anthropic?.apiKey),
       deepseek: Boolean(config.providers.deepseek?.apiKey),
       kimi: Boolean(config.providers.kimi?.apiKey),
+      glm: Boolean(config.providers.glm?.apiKey),
       qwen: Boolean(config.providers.qwen?.apiKey),
+      mistral: Boolean(config.providers.mistral?.apiKey),
     };
 
     const settings: AvaDashboardSettings = {
@@ -624,7 +627,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     };
   }
 
-  async saveProviderKey(provider: 'deepseek' | 'kimi' | 'qwen', apiKey: string): Promise<void> {
+  async saveProviderKey(provider: string, apiKey: string): Promise<void> {
     if (this.isRunning) {
       this.client?.notifyDashboardError('Cannot change providers while Ava is working.');
       return;
@@ -642,7 +645,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     await this.reloadProviders();
   }
 
-  async removeProviderKey(provider: 'deepseek' | 'kimi' | 'qwen'): Promise<void> {
+  async removeProviderKey(provider: string): Promise<void> {
     if (this.isRunning) {
       this.client?.notifyDashboardError('Cannot change providers while Ava is working.');
       return;
@@ -1360,9 +1363,12 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       : null;
 
     const providerKeys: AvaProviderKeyStatus = {
+      anthropic: Boolean(config.providers.anthropic?.apiKey),
       deepseek: Boolean(config.providers.deepseek?.apiKey),
       kimi: Boolean(config.providers.kimi?.apiKey),
+      glm: Boolean(config.providers.glm?.apiKey),
       qwen: Boolean(config.providers.qwen?.apiKey),
+      mistral: Boolean(config.providers.mistral?.apiKey),
     };
 
     // Fire notifications — both panels sync through the shared client

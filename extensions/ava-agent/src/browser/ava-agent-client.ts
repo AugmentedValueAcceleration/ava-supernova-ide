@@ -49,7 +49,7 @@ export interface SessionUsage {
   requestCount: number;
 }
 
-export type ChatView = 'chat' | 'history' | 'replay' | 'memory';
+export type ChatView = 'chat' | 'history' | 'replay' | 'memory' | 'docs';
 
 export interface HistoryState {
   entries: AvaHistoryEntry[];
@@ -119,7 +119,7 @@ export interface DashboardState {
 }
 
 const initialDashboardState: DashboardState = {
-  providerKeys: { deepseek: false, kimi: false, qwen: false },
+  providerKeys: { anthropic: false, deepseek: false, kimi: false, glm: false, qwen: false, mistral: false },
   providerHealth: [],
   settings: { language: 'auto', permissionMode: 'balanced', temperature: 0.7, maxTokens: 8192, completionsProvider: 'deepseek' },
   platformKeyConnected: false,
@@ -190,7 +190,7 @@ export class AvaAgentClient implements IAvaAgentClient {
 
   get isConnected(): boolean {
     const keys = this.dashboardState.providerKeys;
-    return keys.deepseek || keys.kimi || keys.qwen || this.dashboardState.platformKeyConnected;
+    return keys.anthropic || keys.deepseek || keys.kimi || keys.glm || keys.qwen || keys.mistral || this.dashboardState.platformKeyConnected;
   }
 
   /** Called by the dashboard widget after getDashboardState() RPC returns. */

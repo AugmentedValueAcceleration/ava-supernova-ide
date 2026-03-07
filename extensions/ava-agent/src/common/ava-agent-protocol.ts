@@ -73,9 +73,13 @@ export interface AvaDashboardSettings {
 }
 
 export interface AvaProviderKeyStatus {
+  anthropic: boolean;
   deepseek: boolean;
   kimi: boolean;
+  glm: boolean;
   qwen: boolean;
+  mistral: boolean;
+  [key: string]: boolean;
 }
 
 export interface AvaAccountInfo {
@@ -234,10 +238,10 @@ export interface IAvaAgentService {
   getDashboardState(): Promise<AvaDashboardState>;
 
   /** Save a provider API key. Re-registers providers and refreshes models. */
-  saveProviderKey(provider: 'deepseek' | 'kimi' | 'qwen', apiKey: string): Promise<void>;
+  saveProviderKey(provider: string, apiKey: string): Promise<void>;
 
   /** Remove a provider API key. Unregisters provider and refreshes models. */
-  removeProviderKey(provider: 'deepseek' | 'kimi' | 'qwen'): Promise<void>;
+  removeProviderKey(provider: string): Promise<void>;
 
   /** Save preferences (temperature, maxTokens, language, permissionMode). */
   savePreferences(settings: AvaDashboardSettings): Promise<void>;

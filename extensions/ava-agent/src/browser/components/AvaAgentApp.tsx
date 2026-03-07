@@ -4,6 +4,7 @@ import type { AvaAttachment, AvaMode, AvaModelInfo } from '../../common/ava-agen
 import { AvaHistoryBrowser } from './AvaHistoryBrowser';
 import { AvaMemoryBrowser } from './AvaMemoryBrowser';
 import { AvaSessionReplay } from './AvaSessionReplay';
+import { AvaDocsBrowser } from './AvaDocsBrowser';
 import { MarkdownContent } from './MarkdownContent';
 
 // ── Suggestion chips + mode hints ────────────────────────────────────────────
@@ -65,6 +66,8 @@ export interface AvaAgentAppProps {
   onShowMemory?: () => void;
   onSaveMemory?: (scope: 'global' | 'project', content: string) => void;
   onClearMemory?: (scope: 'global' | 'project') => void;
+  // Documentation
+  onShowDocs?: () => void;
 }
 
 // ── Styles (Theia CSS variables) ────────────────────────────────────────────
@@ -715,7 +718,7 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
     onOpenDashboard, onShowHistory, onSearchHistory, onResumeConversation, onDeleteConversation,
     onRenameConversation, onPinConversation, onExportConversation, onImportSession,
     onStartReplay, onReplayStep, onReplayJump, onBackToChat,
-    onShowMemory, onSaveMemory, onClearMemory } = props;
+    onShowMemory, onSaveMemory, onClearMemory, onShowDocs } = props;
   const [input, setInput] = React.useState('');
   const [mode, setMode] = React.useState<AvaMode>('code');
   const [attachments, setAttachments] = React.useState<AvaAttachment[]>([]);
@@ -888,6 +891,15 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
               {state.view === 'memory' ? 'Back' : 'Memory'}
             </button>
           )}
+          {onShowDocs && (
+            <button
+              style={styles.buttonSecondary}
+              onClick={state.view === 'docs' ? onBackToChat : onShowDocs}
+              title="Documentation"
+            >
+              {state.view === 'docs' ? 'Back' : 'Docs'}
+            </button>
+          )}
           <button style={styles.buttonSecondary} onClick={onNewChat} title="New chat">
             New
           </button>
@@ -932,6 +944,11 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
           onClear={onClearMemory}
           onBack={onBackToChat}
         />
+      )}
+
+      {/* Docs view */}
+      {state.view === 'docs' && onBackToChat && (
+        <AvaDocsBrowser onBack={onBackToChat} />
       )}
 
       {/* Chat view */}

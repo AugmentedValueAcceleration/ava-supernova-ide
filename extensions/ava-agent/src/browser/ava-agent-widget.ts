@@ -249,6 +249,9 @@ export class AvaAgentWidget extends ReactWidget {
         this.client.setView('chat');
       },
 
+      onShowDocs: () => {
+        this.client.setView('docs');
+      },
       onShowMemory: async () => {
         const mem = await this.service.getMemory();
         this.client.setMemoryState(mem);
