@@ -734,9 +734,14 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
     const el = messagesRef.current;
     if (!el || state.messages.length === 0) return;
     if (state.justLoaded) {
-      // Wait for DOM to fully render all restored messages before scrolling
+      // Restored conversation: double-rAF + timeout ensures DOM is fully painted
+      // before we measure scrollHeight (large conversations need multiple frames)
       requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            el.scrollTop = el.scrollHeight;
+          }, 50);
+        });
       });
     } else {
       el.scrollTop = el.scrollHeight;
