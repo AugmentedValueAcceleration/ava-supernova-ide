@@ -45,6 +45,8 @@ export interface AvaAgentAppProps {
   ) => void;
   // Open dashboard for setup
   onOpenDashboard?: () => void;
+  // Context compression
+  onCompress?: () => void;
   // Phase 5 — Session management
   onShowHistory?: () => void;
   onSearchHistory?: (query: string) => void;
@@ -347,7 +349,7 @@ function AssistantMessage({ msg, onConfirmTool }: { msg: UIMessage; onConfirmToo
 }
 
 function ToolCallCard({ tc, onConfirmTool }: { tc: ToolCallDisplay; onConfirmTool: AvaAgentAppProps['onConfirmTool'] }) {
-  const [expanded, setExpanded] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(tc.name === 'present_plan');
   const [userResponse, setUserResponse] = React.useState('');
 
   const statusColors: Record<string, string> = {
@@ -634,6 +636,73 @@ function ModelSelector({ models, activeModel, onSwitch }: {
   );
 }
 
+// ── Context usage bar ────────────────────────────────────────────────────────
+
+function ContextUsageBar({ contextUsage, isCompressing, onCompress, disabled }: {
+  contextUsage: { used: number; limit: number; percent: number };
+  isCompressing: boolean;
+  onCompress?: () => void;
+  disabled?: boolean;
+}) {
+  const { percent } = contextUsage;
+
+  const barColor =
+    percent >= 80 ? '#ef4444'
+    : percent >= 60 ? '#f59e0b'
+    : '#22c55e';
+
+  const labelColor =
+    percent >= 80 ? '#ef4444'
+    : percent >= 60 ? '#f59e0b'
+    : 'var(--theia-foreground)';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '4px 12px',
+        borderTop: '1px solid rgba(168, 85, 247, 0.08)',
+        flexShrink: 0,
+        cursor: isCompressing || disabled ? 'default' : 'pointer',
+        opacity: isCompressing || disabled ? 0.6 : 1,
+      }}
+      onClick={() => {
+        if (!isCompressing && !disabled && onCompress) onCompress();
+      }}
+      title={isCompressing ? 'Compressing...' : 'Click to compress context'}
+    >
+      <div style={{
+        flex: 1,
+        height: '4px',
+        borderRadius: '2px',
+        background: 'var(--theia-input-background, #141020)',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          height: '100%',
+          borderRadius: '2px',
+          background: barColor,
+          width: `${Math.min(percent, 100)}%`,
+          transition: 'width 0.3s, background 0.3s',
+        }} />
+      </div>
+      <span style={{
+        fontSize: '10px',
+        fontWeight: 500,
+        color: labelColor,
+        opacity: percent >= 60 ? 1 : 0.5,
+        whiteSpace: 'nowrap',
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        {isCompressing ? 'Compressing...' : `Context ${percent}%`}
+        {!isCompressing && percent >= 80 ? ' \u26A0' : ''}
+      </span>
+    </div>
+  );
+}
+
 // ── Main app ────────────────────────────────────────────────────────────────
 
 export function AvaAgentApp(props: AvaAgentAppProps) {
@@ -866,6 +935,16 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
               <div style={{ opacity: 0.5, fontSize: '12px' }}>Thinking...</div>
             )}
           </div>
+
+          {/* Context usage bar */}
+          {state.contextUsage && state.contextUsage.percent > 0 && (
+            <ContextUsageBar
+              contextUsage={state.contextUsage}
+              isCompressing={state.isCompressing}
+              onCompress={props.onCompress}
+              disabled={state.isStreaming}
+            />
+          )}
 
           {/* Context indicator */}
           {props.contextSummary && (

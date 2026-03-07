@@ -75,6 +75,8 @@ export interface ChatState {
   initialized: boolean;
   lastUsage: AvaUsageInfo | null;
   sessionUsage: SessionUsage;
+  contextUsage: { used: number; limit: number; percent: number } | null;
+  isCompressing: boolean;
   view: ChatView;
   history: HistoryState;
   replay: ReplayState | null;
@@ -93,6 +95,8 @@ const initialState: ChatState = {
   initialized: false,
   lastUsage: null,
   sessionUsage: { ...initialSessionUsage },
+  contextUsage: null,
+  isCompressing: false,
   view: 'chat',
   history: { ...initialHistoryState },
   replay: null,
@@ -418,6 +422,8 @@ export class AvaAgentClient implements IAvaAgentClient {
       activeModel: this.state.activeModel,
       needsSetup: this.state.needsSetup,
       sessionUsage: { ...initialSessionUsage },
+      contextUsage: null,
+      isCompressing: false,
       view: 'chat',
       history: { ...initialHistoryState },
       replay: null,
@@ -514,5 +520,33 @@ export class AvaAgentClient implements IAvaAgentClient {
   notifyHistoryChanged(): void {
     // Signal that history list should be re-fetched
     this.onStateChangedEmitter.fire(this.state);
+  }
+
+  // ── Context management notifications ──────────────────────────────────────
+
+  notifyContextUsage(used: number, limit: number, percent: number): void {
+    this.update({ contextUsage: { used, limit, percent } });
+  }
+
+  notifyCompressionStart(): void {
+    this.update({ isCompressing: true });
+  }
+
+  notifyCompressionEnd(originalTokens: number, compressedTokens: number): void {
+    if (originalTokens > 0) {
+      const msg: UIMessage = {
+        id: nextId(),
+        role: 'system',
+        content: `Context compressed: ${originalTokens.toLocaleString()} → ${compressedTokens.toLocaleString()} tokens`,
+        toolCalls: [],
+        isStreaming: false,
+      };
+      this.update({
+        isCompressing: false,
+        messages: [...this.state.messages, msg],
+      });
+    } else {
+      this.update({ isCompressing: false });
+    }
   }
 }

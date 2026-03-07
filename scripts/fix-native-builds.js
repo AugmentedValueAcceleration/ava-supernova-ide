@@ -81,6 +81,15 @@ function patchVcxprojFiles(rootDir) {
           changed = true;
         }
 
+        // Disable Spectre mitigation (requires libs not always installed)
+        if (content.includes('<SpectreMitigation>Spectre</SpectreMitigation>')) {
+          content = content.replace(
+            /<SpectreMitigation>Spectre<\/SpectreMitigation>/g,
+            '<SpectreMitigation>false</SpectreMitigation>'
+          );
+          changed = true;
+        }
+
         if (changed) {
           fs.writeFileSync(fullPath, content);
           patched = true;
@@ -92,12 +101,15 @@ function patchVcxprojFiles(rootDir) {
   return patched;
 }
 
-function buildNativeModule(modulePath, name) {
+function buildNativeModule(modulePath, name, electronVersion) {
   try {
-    console.log(`[fix-native] Building ${name}...`);
-    // Configure
-    execSync('npx node-gyp configure', { cwd: modulePath, stdio: 'pipe' });
-    // Patch vcxproj files (ClangCL + C++20) — search entire module dir
+    console.log(`[fix-native] Building ${name}${electronVersion ? ` (electron ${electronVersion})` : ''}...`);
+    // Configure — optionally targeting Electron headers
+    const configureArgs = electronVersion
+      ? `npx node-gyp configure --target=${electronVersion} --arch=x64 --dist-url=https://www.electronjs.org/headers`
+      : 'npx node-gyp configure';
+    execSync(configureArgs, { cwd: modulePath, stdio: 'pipe' });
+    // Patch vcxproj files (ClangCL + C++20 + Spectre) — search entire module dir
     // to catch node-addon-api subfolders too
     if (patchVcxprojFiles(modulePath)) {
       console.log(`[fix-native] Patched .vcxproj files for ${name}`);
@@ -129,12 +141,16 @@ function runRipgrepPostinstall() {
   }
 }
 
+// Parse CLI args: --electron=<version> builds against Electron headers
+const electronArg = process.argv.find(a => a.startsWith('--electron'));
+const electronVersion = electronArg ? electronArg.split('=')[1] : null;
+
 // Only run on Windows where these issues occur
 if (process.platform === 'win32') {
-  console.log('[fix-native] Fixing native module builds for Windows...');
+  console.log(`[fix-native] Fixing native module builds for Windows${electronVersion ? ` (electron ${electronVersion})` : ''}...`);
 
   patchWinptyGyp();
-  runRipgrepPostinstall();
+  if (!electronVersion) runRipgrepPostinstall();
 
   const nativeModules = [
     ['node-pty', path.join(nodeModules, 'node-pty')],
@@ -147,7 +163,7 @@ if (process.platform === 'win32') {
 
   for (const [name, modPath] of nativeModules) {
     if (fs.existsSync(modPath)) {
-      buildNativeModule(modPath, name);
+      buildNativeModule(modPath, name, electronVersion);
     }
   }
 

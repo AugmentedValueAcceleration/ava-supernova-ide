@@ -112,6 +112,9 @@ export class AvaAgentWidget extends ReactWidget {
       onOpenDashboard: () => {
         this.commands.executeCommand('ava.dashboard.toggle');
       },
+      onCompress: () => {
+        this.service.compressContext();
+      },
 
       // ── Phase 5 — Session management callbacks ──────────────────────────
 

@@ -344,11 +344,11 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
           this.client?.notifyError(msg);
           break;
         }
-        case 'context_truncated':
-          this.client?.notifyError(
-            `Context window full — ${event.droppedCount} older messages were dropped.`,
-            'context_truncated',
-            'Start a new chat for best results.',
+        case 'context_usage':
+          this.client?.notifyContextUsage(
+            event.context.used,
+            event.context.limit,
+            event.context.percent,
           );
           break;
         case 'done':
@@ -479,6 +479,41 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     this.sessionAllowAll = false;
 
     this.client?.notifyChatCleared();
+  }
+
+  // ── Context management ───────────────────────────────────────────────────────
+
+  async compressContext(): Promise<void> {
+    if (!this.agent || !this.conversation) {
+      this.client?.notifyError('No active conversation to compress.');
+      return;
+    }
+    if (this.isRunning) {
+      this.client?.notifyError('Cannot compress while Ava is working.');
+      return;
+    }
+
+    this.client?.notifyCompressionStart();
+
+    try {
+      const messages = this.conversation.getMessages();
+      const onEvent = (event: any): void => {
+        if (event.type === 'context_usage') {
+          this.client?.notifyContextUsage(event.context.used, event.context.limit, event.context.percent);
+        }
+      };
+
+      const result = await this.agent.manualCompress(messages, onEvent, new AbortController().signal);
+      if (result) {
+        this.conversation.setMessages(result.messages);
+        this.client?.notifyCompressionEnd(result.originalTokens, result.compressedTokens);
+      } else {
+        this.client?.notifyCompressionEnd(0, 0);
+      }
+    } catch (err: any) {
+      this.client?.notifyError(`Compression failed: ${err.message}`);
+      this.client?.notifyCompressionEnd(0, 0);
+    }
   }
 
   // ── Dashboard methods ──────────────────────────────────────────────────────

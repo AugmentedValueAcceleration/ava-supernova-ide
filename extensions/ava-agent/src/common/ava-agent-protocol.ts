@@ -326,6 +326,11 @@ export interface IAvaAgentService {
 
   /** Get messages for session replay (read-only, does not affect active session). */
   getReplayMessages(id: string): Promise<AvaReplayMessage[]>;
+
+  // ── Context management ──────────────────────────────────────────────────
+
+  /** Manually compress conversation context. */
+  compressContext(): Promise<void>;
 }
 
 // ── Backend → Frontend (fire-and-forget notifications) ───────────────────────
@@ -384,4 +389,15 @@ export interface IAvaAgentClient {
 
   /** History list changed (after delete, import, rename, pin). */
   notifyHistoryChanged(): void;
+
+  // ── Context management notifications ────────────────────────────────────
+
+  /** Context usage updated — UI can render a progress bar. */
+  notifyContextUsage(used: number, limit: number, percent: number): void;
+
+  /** Context compression started. */
+  notifyCompressionStart(): void;
+
+  /** Context compression finished. */
+  notifyCompressionEnd(originalTokens: number, compressedTokens: number): void;
 }
