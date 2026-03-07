@@ -2,7 +2,7 @@
   "private": true,
   "name": "ava-supernova-ide",
   "version": "0.2.0",
-  "description": "Ava | Supernova IDE — Agent-first development environment",
+  "description": "Ava | Supernova — Agent-first development environment",
   "license": "Apache-2.0",
   "packageManager": "yarn@1.22.22",
   "engines": {

@@ -1,13 +1,13 @@
 {
   "name": "ava-ide-browser",
   "version": "0.1.0",
-  "description": "Ava | Supernova IDE — Browser Application",
+  "description": "Ava | Supernova — Browser Application",
   "license": "Apache-2.0",
   "theia": {
     "target": "browser",
     "frontend": {
       "config": {
-        "applicationName": "Ava | Supernova IDE",
+        "applicationName": "Ava | Supernova",
         "defaultTheme": { "light": "ava-light", "dark": "ava-dark" },
         "defaultIconTheme": "theia-file-icons",
         "preferences": {

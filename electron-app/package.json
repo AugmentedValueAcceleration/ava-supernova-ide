@@ -1,14 +1,14 @@
 {
   "name": "ava-ide-electron",
   "version": "0.2.1",
-  "description": "Ava | Supernova IDE — Desktop Application",
+  "description": "Ava | Supernova — Desktop Application",
   "license": "Apache-2.0",
   "main": "lib/backend/electron-main.js",
   "theia": {
     "target": "electron",
     "frontend": {
       "config": {
-        "applicationName": "Ava | Supernova IDE",
+        "applicationName": "Ava | Supernova",
         "defaultTheme": {
           "light": "ava-light",
           "dark": "ava-dark"

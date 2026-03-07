@@ -70,7 +70,7 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
   }
 
   private applyBranding(): void {
-    document.title = 'Ava | Supernova IDE';
+    document.title = 'Ava | Supernova';
 
     const style = document.createElement('style');
     style.textContent = `

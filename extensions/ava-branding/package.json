@@ -1,7 +1,7 @@
 {
   "name": "ava-branding-extension",
   "version": "0.1.0",
-  "description": "Ava | Supernova IDE branding — custom theme, splash screen, and menus",
+  "description": "Ava | Supernova branding — custom theme, splash screen, and menus",
   "license": "Apache-2.0",
   "keywords": ["theia-extension"],
   "files": ["lib", "src"],

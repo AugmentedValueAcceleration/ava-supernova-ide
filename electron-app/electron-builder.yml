@@ -1,5 +1,5 @@
 appId: com.ava-supernova.ide
-productName: "Ava Supernova IDE"
+productName: "Ava Supernova"
 copyright: "Copyright 2026 Augmented Value Acceleration"
 
 directories:
@@ -46,7 +46,7 @@ nsis:
   differentialPackage: false
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico
-  shortcutName: "Ava Supernova IDE"
+  shortcutName: "Ava Supernova"
 
 # ——— macOS ———
 mac:
