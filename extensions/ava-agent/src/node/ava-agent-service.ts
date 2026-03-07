@@ -497,19 +497,16 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
 
     try {
       const messages = this.conversation.getMessages();
+      const originalCount = messages.length;
       const onEvent = (event: any): void => {
         if (event.type === 'context_usage') {
           this.client?.notifyContextUsage(event.context.used, event.context.limit, event.context.percent);
         }
       };
 
-      const result = await this.agent.manualCompress(messages, onEvent, new AbortController().signal);
-      if (result) {
-        this.conversation.setMessages(result.messages);
-        this.client?.notifyCompressionEnd(result.originalTokens, result.compressedTokens);
-      } else {
-        this.client?.notifyCompressionEnd(0, 0);
-      }
+      const compressed = await this.agent.manualCompress(messages, onEvent, new AbortController().signal);
+      this.conversation.setMessages(compressed);
+      this.client?.notifyCompressionEnd(originalCount, compressed.length);
     } catch (err: any) {
       this.client?.notifyError(`Compression failed: ${err.message}`);
       this.client?.notifyCompressionEnd(0, 0);
