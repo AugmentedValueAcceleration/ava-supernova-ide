@@ -159,6 +159,21 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       }
     }
 
+    // Initialize history and memory BEFORE setupAgent (agent needs memoryManager in sharedState)
+    const projectRoot = core.detectProjectRoot(this.getCwd()) ?? undefined;
+    this.historyManager = new core.HistoryManager(projectRoot);
+    this.historyManager.init();
+
+    // Set up memory with optional platform sync
+    let memSync: any | undefined;
+    if (config.platformKey && core.PlatformMemorySync) {
+      const projectId = projectRoot
+        ? crypto.createHash('sha256').update(projectRoot).digest('hex').slice(0, 16)
+        : undefined;
+      memSync = new core.PlatformMemorySync(PLATFORM_API, config.platformKey, projectId);
+    }
+    this.memoryManager = new core.MemoryManager({ globalDir: core.AVA_HOME, projectRoot, sync: memSync });
+
     // Resolve active model
     const activeModelId = config.activeModel || '';
     const resolved = this.providerRegistry.resolveModel(activeModelId);
@@ -173,21 +188,6 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     } else if (activeModelId) {
       console.warn(`[ava-agent] Failed to resolve model "${activeModelId}" — check provider registration`);
     }
-
-    // Initialize history and memory
-    const projectRoot = core.detectProjectRoot(this.getCwd()) ?? undefined;
-    this.historyManager = new core.HistoryManager(projectRoot);
-    this.historyManager.init();
-
-    // Set up memory with optional platform sync
-    let memSync: any | undefined;
-    if (config.platformKey && core.PlatformMemorySync) {
-      const projectId = projectRoot
-        ? crypto.createHash('sha256').update(projectRoot).digest('hex').slice(0, 16)
-        : undefined;
-      memSync = new core.PlatformMemorySync(PLATFORM_API, config.platformKey, projectId);
-    }
-    this.memoryManager = new core.MemoryManager({ globalDir: core.AVA_HOME, projectRoot, sync: memSync });
 
     // Auto-restore last conversation for this project (non-blocking)
     this.autoRestoreLastConversation(core).catch(err => {
