@@ -192,7 +192,7 @@ export const AvaDocsBrowser: React.FC<AvaDocsBrowserProps> = ({ onBack }) => {
 
         {/* Tools */}
         <div style={s.section}>
-          <div style={s.sectionTitle}>Built-in Tools (22)</div>
+          <div style={s.sectionTitle}>Built-in Tools (23)</div>
 
           {TOOL_GROUPS.map(group => (
             <div key={group.title}>
@@ -384,7 +384,7 @@ export const AvaDocsBrowser: React.FC<AvaDocsBrowserProps> = ({ onBack }) => {
 
         {/* Footer */}
         <div style={{ textAlign: 'center', padding: '16px 0', borderTop: '1px solid var(--theia-panel-border)' }}>
-          <p style={s.muted}>Ava | Supernova v0.3.0 — Apache License 2.0</p>
+          <p style={s.muted}>Ava | Supernova v0.4.0 — Apache License 2.0</p>
           <p style={{ ...s.muted, marginTop: '2px' }}>Built with purpose. Agentic coding for everyone.</p>
         </div>
       </div>
@@ -445,6 +445,7 @@ const TOOL_GROUPS = [
       { name: 'browser', desc: 'Open and interact with web pages using a headless browser.', risk: 'write' as Risk },
       { name: 'screenshot', desc: 'Capture screenshots of the current screen or a URL.', risk: 'safe' as Risk },
       { name: 'database_query', desc: 'Run read-only SQL queries against configured databases.', risk: 'safe' as Risk },
+      { name: 'docs_lookup', desc: 'Search Ava\'s own documentation to help with features, setup, and troubleshooting.', risk: 'safe' as Risk },
     ],
   },
   {
@@ -465,7 +466,7 @@ const TOOL_GROUPS = [
 ];
 
 const MODES = [
-  { name: 'Code Mode', desc: 'Full agent with all 22 tools. Reads, writes, searches, and executes across your codebase.' },
+  { name: 'Code Mode', desc: 'Full agent with all 23 tools. Reads, writes, searches, and executes across your codebase.' },
   { name: 'Plan Mode', desc: 'Read-only analysis. Reads your code and creates plans without modifying anything.' },
   { name: 'Chat Mode', desc: 'Conversation only. No tools, just discussion about code, architecture, or ideas.' },
   { name: 'Security Mode', desc: 'AI-powered OWASP-aligned security audit. Scans your project for vulnerabilities.' },
