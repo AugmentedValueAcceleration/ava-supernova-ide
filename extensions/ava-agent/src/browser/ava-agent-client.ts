@@ -81,6 +81,8 @@ export interface ChatState {
   history: HistoryState;
   replay: ReplayState | null;
   memory: { global: string | null; project: string | null };
+  /** Set to true after loading a conversation from history — cleared after scroll */
+  justLoaded?: boolean;
 }
 
 const initialSessionUsage: SessionUsage = { totalTokens: 0, totalCost: 0, requestCount: 0 };
@@ -516,6 +518,7 @@ export class AvaAgentClient implements IAvaAgentClient {
       isStreaming: false,
       isThinking: false,
       sessionUsage: { ...initialSessionUsage },
+      justLoaded: true,
     });
   }
 

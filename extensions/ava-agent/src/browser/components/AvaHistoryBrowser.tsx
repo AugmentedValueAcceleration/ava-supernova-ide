@@ -181,6 +181,7 @@ function HistoryItem({
         ...s.item,
         background: hovered ? 'rgba(168, 85, 247, 0.06)' : 'transparent',
       }}
+      onClick={() => { if (!editing) onResume(entry.id); }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setShowExport(false); setConfirming(false); }}
     >
@@ -194,10 +195,11 @@ function HistoryItem({
             if (e.key === 'Escape') setEditing(false);
           }}
           onBlur={handleRename}
+          onClick={e => e.stopPropagation()}
           style={{ ...s.searchInput, fontSize: '13px', width: '100%' }}
         />
       ) : (
-        <div style={s.itemTitle} onClick={() => onResume(entry.id)} title={entry.title}>
+        <div style={s.itemTitle} title={entry.title}>
           {entry.pinned && '$(codicon-pin) '}
           {entry.title}
         </div>

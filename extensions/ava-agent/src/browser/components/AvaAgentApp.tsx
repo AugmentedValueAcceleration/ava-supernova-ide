@@ -732,10 +732,16 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
   // Auto-scroll to bottom on new messages
   React.useEffect(() => {
     const el = messagesRef.current;
-    if (el) {
+    if (!el || state.messages.length === 0) return;
+    if (state.justLoaded) {
+      // Wait for DOM to fully render all restored messages before scrolling
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    } else {
       el.scrollTop = el.scrollHeight;
     }
-  }, [state.messages, state.isStreaming]);
+  }, [state.messages, state.isStreaming, state.justLoaded]);
 
   const addImageFile = React.useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return;
