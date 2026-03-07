@@ -1405,8 +1405,8 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       projectInstructions = (await _core.loadProjectInstructions(projectRoot)) ?? undefined;
     }
 
-    // Load persistent memory
-    const memory = (await this.memoryManager?.loadAll()) || undefined;
+    // Load persistent memory (pass project instructions as context for episodic retrieval)
+    const memory = (await this.memoryManager?.loadAll(projectInstructions)) || undefined;
 
     return _core.buildSystemPrompt({
       cwd: this.getCwd(),
