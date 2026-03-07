@@ -2,6 +2,7 @@ import * as React from '@theia/core/shared/react';
 import type { ChatState, UIMessage, ToolCallDisplay } from '../ava-agent-client';
 import type { AvaAttachment, AvaMode, AvaModelInfo } from '../../common/ava-agent-protocol';
 import { AvaHistoryBrowser } from './AvaHistoryBrowser';
+import { AvaMemoryBrowser } from './AvaMemoryBrowser';
 import { AvaSessionReplay } from './AvaSessionReplay';
 import { MarkdownContent } from './MarkdownContent';
 
@@ -60,6 +61,10 @@ export interface AvaAgentAppProps {
   onReplayStep?: (direction: 'forward' | 'backward') => void;
   onReplayJump?: (index: number) => void;
   onBackToChat?: () => void;
+  // Memory management
+  onShowMemory?: () => void;
+  onSaveMemory?: (scope: 'global' | 'project', content: string) => void;
+  onClearMemory?: (scope: 'global' | 'project') => void;
 }
 
 // ── Styles (Theia CSS variables) ────────────────────────────────────────────
@@ -709,7 +714,8 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
   const { state, onSend, onCancel, onNewChat, onSwitchModel, onConfirmTool,
     onOpenDashboard, onShowHistory, onSearchHistory, onResumeConversation, onDeleteConversation,
     onRenameConversation, onPinConversation, onExportConversation, onImportSession,
-    onStartReplay, onReplayStep, onReplayJump, onBackToChat } = props;
+    onStartReplay, onReplayStep, onReplayJump, onBackToChat,
+    onShowMemory, onSaveMemory, onClearMemory } = props;
   const [input, setInput] = React.useState('');
   const [mode, setMode] = React.useState<AvaMode>('code');
   const [attachments, setAttachments] = React.useState<AvaAttachment[]>([]);
@@ -873,6 +879,15 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
               {state.view === 'history' ? 'Back' : 'History'}
             </button>
           )}
+          {onShowMemory && (
+            <button
+              style={styles.buttonSecondary}
+              onClick={state.view === 'memory' ? onBackToChat : onShowMemory}
+              title="View and edit persistent memory"
+            >
+              {state.view === 'memory' ? 'Back' : 'Memory'}
+            </button>
+          )}
           <button style={styles.buttonSecondary} onClick={onNewChat} title="New chat">
             New
           </button>
@@ -904,6 +919,17 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
           onStepForward={() => onReplayStep('forward')}
           onStepBackward={() => onReplayStep('backward')}
           onJumpTo={onReplayJump}
+          onBack={onBackToChat}
+        />
+      )}
+
+      {/* Memory view */}
+      {state.view === 'memory' && onSaveMemory && onClearMemory && onBackToChat && (
+        <AvaMemoryBrowser
+          globalMemory={state.memory.global}
+          projectMemory={state.memory.project}
+          onSave={onSaveMemory}
+          onClear={onClearMemory}
           onBack={onBackToChat}
         />
       )}

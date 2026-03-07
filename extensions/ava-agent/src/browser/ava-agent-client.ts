@@ -49,7 +49,7 @@ export interface SessionUsage {
   requestCount: number;
 }
 
-export type ChatView = 'chat' | 'history' | 'replay';
+export type ChatView = 'chat' | 'history' | 'replay' | 'memory';
 
 export interface HistoryState {
   entries: AvaHistoryEntry[];
@@ -80,6 +80,7 @@ export interface ChatState {
   view: ChatView;
   history: HistoryState;
   replay: ReplayState | null;
+  memory: { global: string | null; project: string | null };
 }
 
 const initialSessionUsage: SessionUsage = { totalTokens: 0, totalCost: 0, requestCount: 0 };
@@ -100,6 +101,7 @@ const initialState: ChatState = {
   view: 'chat',
   history: { ...initialHistoryState },
   replay: null,
+  memory: { global: null, project: null },
 };
 
 // ── Dashboard state ──────────────────────────────────────────────────────────
@@ -548,5 +550,18 @@ export class AvaAgentClient implements IAvaAgentClient {
     } else {
       this.update({ isCompressing: false });
     }
+  }
+
+  notifyMemoryChanged(_scope: 'global' | 'project'): void {
+    // Memory changed notification from backend (e.g., after tool-based save).
+    // The widget will detect this via onMemoryChanged callback if set.
+    this.onMemoryChangedCallback?.();
+  }
+
+  /** Set by the widget to handle memory change notifications. */
+  onMemoryChangedCallback?: () => void;
+
+  setMemoryState(memory: { global: string | null; project: string | null }): void {
+    this.update({ memory });
   }
 }

@@ -13508,19 +13508,51 @@ var MEMORY_FILENAME = "memory.md";
 var MemoryManager = class {
   globalPath;
   projectPath;
+  sync;
   constructor(opts) {
     this.globalPath = join3(opts.globalDir, MEMORY_FILENAME);
     this.projectPath = opts.projectRoot ? join3(opts.projectRoot, ".ava", MEMORY_FILENAME) : null;
+    this.sync = opts.sync;
   }
-  /** Read global memory (~/.ava/memory.md). Returns null if not found. */
+  /** Read global memory (~/.ava/memory.md). Falls back to platform if local is empty. */
   async loadGlobalMemory() {
-    return this.readSafe(this.globalPath);
+    const local = await this.readSafe(this.globalPath);
+    if (local)
+      return local;
+    if (this.sync) {
+      try {
+        const remote = await this.sync.pull("global");
+        if (remote.length > 0) {
+          const content = remote.map((m) => m.content).join("\n\n");
+          await this.writeSafe(this.globalPath, content);
+          return content;
+        }
+      } catch {
+      }
+    }
+    return null;
   }
-  /** Read project memory (<projectRoot>/.ava/memory.md). Returns null if not found. */
+  /** Read project memory (<projectRoot>/.ava/memory.md). Falls back to platform if local is empty. */
   async loadProjectMemory() {
     if (!this.projectPath)
       return null;
-    return this.readSafe(this.projectPath);
+    const local = await this.readSafe(this.projectPath);
+    if (local)
+      return local;
+    if (this.sync) {
+      try {
+        const remote = await this.sync.pull("project");
+        if (remote.length > 0) {
+          const content = remote.map((m) => m.content).join("\n\n");
+          const dir = join3(this.projectPath, "..");
+          await mkdir2(dir, { recursive: true });
+          await this.writeSafe(this.projectPath, content);
+          return content;
+        }
+      } catch {
+      }
+    }
+    return null;
   }
   /** Load both memories, formatted for system prompt injection. Empty string if no memories. */
   async loadAll() {
@@ -13539,9 +13571,10 @@ ${project.trim()}`);
     }
     return sections.join("\n\n");
   }
-  /** Overwrite global memory with new content. */
+  /** Overwrite global memory with new content. Syncs to platform if available. */
   async saveGlobalMemory(content) {
     await this.writeSafe(this.globalPath, content);
+    this.syncPush("global", "memory.md", content);
   }
   /** Overwrite project memory with new content. Creates .ava/ dir if needed. */
   async saveProjectMemory(content) {
@@ -13551,6 +13584,7 @@ ${project.trim()}`);
     const dir = join3(this.projectPath, "..");
     await mkdir2(dir, { recursive: true });
     await this.writeSafe(this.projectPath, content);
+    this.syncPush("project", "memory.md", content);
   }
   /** Append an entry to global memory. */
   async appendGlobal(entry) {
@@ -13592,6 +13626,75 @@ ${entry}` : entry;
       });
       throw err;
     }
+  }
+  /** Fire-and-forget push to platform. Never throws. */
+  syncPush(scope, key, content) {
+    if (!this.sync)
+      return;
+    this.sync.push(scope, key, content).catch(() => {
+    });
+  }
+};
+
+// packages/ide/node_modules/@ava/core/dist/memory/platform-sync.js
+var PlatformMemorySync = class {
+  apiBase;
+  platformKey;
+  projectId;
+  constructor(apiBase, platformKey, projectId) {
+    this.apiBase = apiBase.replace(/\/+$/, "");
+    this.platformKey = platformKey;
+    this.projectId = projectId;
+  }
+  /** Fetch all memories for a given scope from the platform. */
+  async pull(scope) {
+    const params = new URLSearchParams({ scope });
+    if (scope === "project" && this.projectId) {
+      params.set("project_id", this.projectId);
+    }
+    const res = await fetch(`${this.apiBase}/memories?${params}`, {
+      headers: this.headers()
+    });
+    if (!res.ok)
+      return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+  /** Push a memory entry to the platform (upsert by key + scope). */
+  async push(scope, key, content) {
+    const existing = await this.pull(scope);
+    const match = existing.find((m) => m.key === key);
+    if (match) {
+      await fetch(`${this.apiBase}/memories/${match.id}`, {
+        method: "PATCH",
+        headers: this.headers(),
+        body: JSON.stringify({ content })
+      });
+    } else {
+      await fetch(`${this.apiBase}/memories`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          key,
+          content,
+          scope,
+          project_id: scope === "project" ? this.projectId : null
+        })
+      });
+    }
+  }
+  /** Delete a memory by ID. */
+  async delete(id) {
+    await fetch(`${this.apiBase}/memories/${id}`, {
+      method: "DELETE",
+      headers: this.headers()
+    });
+  }
+  headers() {
+    return {
+      "Authorization": `Bearer ${this.platformKey}`,
+      "Content-Type": "application/json"
+    };
   }
 };
 
@@ -15284,6 +15387,7 @@ export {
   MAX_TOOL_CALL_ITERATIONS,
   MEMORY_DIR,
   MemoryManager,
+  PlatformMemorySync,
   PlatformProvider,
   ProjectIndexer,
   ProviderError,

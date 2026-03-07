@@ -331,6 +331,17 @@ export interface IAvaAgentService {
 
   /** Manually compress conversation context. */
   compressContext(): Promise<void>;
+
+  // ── Memory management ──────────────────────────────────────────────────
+
+  /** Get current memory content for both scopes. */
+  getMemory(): Promise<{ global: string | null; project: string | null }>;
+
+  /** Save memory for a given scope. */
+  saveMemory(scope: 'global' | 'project', content: string): Promise<void>;
+
+  /** Clear memory for a given scope. */
+  clearMemory(scope: 'global' | 'project'): Promise<void>;
 }
 
 // ── Backend → Frontend (fire-and-forget notifications) ───────────────────────
@@ -400,4 +411,9 @@ export interface IAvaAgentClient {
 
   /** Context compression finished. */
   notifyCompressionEnd(originalTokens: number, compressedTokens: number): void;
+
+  // ── Memory notifications ──────────────────────────────────────────────────
+
+  /** Memory content changed (after save or clear). */
+  notifyMemoryChanged(scope: 'global' | 'project'): void;
 }

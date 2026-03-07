@@ -48,6 +48,14 @@ export class AvaAgentWidget extends ReactWidget {
     this.toDispose.push(this.client.onStateChanged(() => this.update()));
     this.toDispose.push(this.contextManager.onContextChanged(() => this.update()));
 
+    // Wire memory change notifications — refresh memory view when backend notifies
+    this.client.onMemoryChangedCallback = async () => {
+      if (this.client.getState().view === 'memory') {
+        const mem = await this.service.getMemory();
+        this.client.setMemoryState(mem);
+      }
+    };
+
     // Resolve workspace root from Theia, then initialize the backend
     this.resolveWorkspaceRoot().then(workspaceRoot => {
       return this.service.initialize(workspaceRoot);
@@ -239,6 +247,22 @@ export class AvaAgentWidget extends ReactWidget {
       onBackToChat: () => {
         this.client.setReplayState(null);
         this.client.setView('chat');
+      },
+
+      onShowMemory: async () => {
+        const mem = await this.service.getMemory();
+        this.client.setMemoryState(mem);
+        this.client.setView('memory');
+      },
+      onSaveMemory: async (scope: 'global' | 'project', content: string) => {
+        await this.service.saveMemory(scope, content);
+        const mem = await this.service.getMemory();
+        this.client.setMemoryState(mem);
+      },
+      onClearMemory: async (scope: 'global' | 'project') => {
+        await this.service.clearMemory(scope);
+        const mem = await this.service.getMemory();
+        this.client.setMemoryState(mem);
       },
     });
   }

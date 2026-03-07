@@ -178,7 +178,16 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     const projectRoot = core.detectProjectRoot(this.getCwd()) ?? undefined;
     this.historyManager = new core.HistoryManager(projectRoot);
     this.historyManager.init();
-    this.memoryManager = new core.MemoryManager({ globalDir: core.AVA_HOME, projectRoot });
+
+    // Set up memory with optional platform sync
+    let memSync: any | undefined;
+    if (config.platformKey && core.PlatformMemorySync) {
+      const projectId = projectRoot
+        ? crypto.createHash('sha256').update(projectRoot).digest('hex').slice(0, 16)
+        : undefined;
+      memSync = new core.PlatformMemorySync(PLATFORM_API, config.platformKey, projectId);
+    }
+    this.memoryManager = new core.MemoryManager({ globalDir: core.AVA_HOME, projectRoot, sync: memSync });
 
     // Auto-restore last conversation for this project (non-blocking)
     this.autoRestoreLastConversation(core).catch(err => {
@@ -513,6 +522,39 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       this.client?.notifyError(`Compression failed: ${err.message}`);
       this.client?.notifyCompressionEnd(0, 0);
     }
+  }
+
+  // ── Memory management ────────────────────────────────────────────────────────
+
+  async getMemory(): Promise<{ global: string | null; project: string | null }> {
+    if (!this.memoryManager) {
+      return { global: null, project: null };
+    }
+    const [global, project] = await Promise.all([
+      this.memoryManager.loadGlobalMemory(),
+      this.memoryManager.loadProjectMemory(),
+    ]);
+    return { global, project };
+  }
+
+  async saveMemory(scope: 'global' | 'project', content: string): Promise<void> {
+    if (!this.memoryManager) return;
+    if (scope === 'global') {
+      await this.memoryManager.saveGlobalMemory(content);
+    } else {
+      await this.memoryManager.saveProjectMemory(content);
+    }
+    this.client?.notifyMemoryChanged(scope);
+  }
+
+  async clearMemory(scope: 'global' | 'project'): Promise<void> {
+    if (!this.memoryManager) return;
+    if (scope === 'global') {
+      await this.memoryManager.saveGlobalMemory('');
+    } else {
+      await this.memoryManager.saveProjectMemory('');
+    }
+    this.client?.notifyMemoryChanged(scope);
   }
 
   // ── Dashboard methods ──────────────────────────────────────────────────────
