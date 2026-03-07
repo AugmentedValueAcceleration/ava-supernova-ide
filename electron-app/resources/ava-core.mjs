@@ -1166,6 +1166,7 @@ You have twenty-one tools. **When the user asks you to do something**, use them 
 
 ### Memory (${opts.permissionMode === "balanced" || opts.permissionMode === "autonomous" ? "auto-approved" : "requires user approval"})
 - **memory_save** \u2014 Save information to persistent memory that survives across conversations. Two scopes: \`global\` (all projects) and \`project\` (current project only). Modes: \`append\` (add to existing) or \`replace\` (overwrite). Use this proactively when you learn something worth remembering.
+- **memory_recall** \u2014 Search your saved memories by keyword. Returns matching sections from global and/or project memory. Use when you need to find specific stored knowledge without reading the entire memory section. Params: \`query\` (required), \`scope\` (optional: global/project/all, default: all).
 
 ### Safety (requires user approval)
 - **rollback** \u2014 Restore, discard, or check the status of a git checkpoint. Before making file changes, a checkpoint is automatically created via git stash. If something goes wrong, use this to undo all changes back to the checkpoint.
@@ -7748,6 +7749,92 @@ ${content}`;
   }
 };
 
+// packages/core/src/tools/memory-recall.ts
+var MemoryRecallTool = class {
+  name = "memory_recall";
+  description = "Search persistent memory for specific information";
+  riskLevel = "safe";
+  requiresConfirmation = false;
+  schema = {
+    name: "memory_recall",
+    description: "Search your saved memories by keyword. Use this when you need to find specific stored knowledge \u2014 user preferences, past decisions, project patterns. Memory is also shown in your system prompt, but this tool lets you search for specific entries when memory grows large.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Text to search for in memories (case-insensitive substring match)."
+        },
+        scope: {
+          type: "string",
+          enum: ["global", "project", "all"],
+          description: 'Where to search: "global", "project", or "all" (default).'
+        }
+      },
+      required: ["query"]
+    }
+  };
+  async execute(args, context) {
+    const query = args.query?.trim();
+    const scope = args.scope ?? "all";
+    if (!query) {
+      return { success: false, output: "Query is required." };
+    }
+    const memoryManager = context.sharedState?.memoryManager;
+    if (!memoryManager) {
+      return { success: false, output: "Memory system is not available in this context." };
+    }
+    const results = [];
+    const lowerQuery = query.toLowerCase();
+    if (scope === "global" || scope === "all") {
+      const global = await memoryManager.loadGlobalMemory();
+      if (global) {
+        const matches = this.searchSections(global, lowerQuery);
+        if (matches.length > 0) {
+          results.push(`### Global Memory Matches
+${matches.join("\n\n")}`);
+        }
+      }
+    }
+    if (scope === "project" || scope === "all") {
+      const project = await memoryManager.loadProjectMemory();
+      if (project) {
+        const matches = this.searchSections(project, lowerQuery);
+        if (matches.length > 0) {
+          results.push(`### Project Memory Matches
+${matches.join("\n\n")}`);
+        }
+      }
+    }
+    if (results.length === 0) {
+      const semanticResults = await memoryManager.loadRelevantMemories(query, 5);
+      if (semanticResults.length > 0) {
+        const items = semanticResults.map((m) => `- **${m.key}** (${m.scope}, ${Math.round(m.similarity * 100)}% match): ${m.content}`).join("\n");
+        return { success: true, output: `### Semantic Matches
+${items}` };
+      }
+      return { success: true, output: `No memories matching "${query}" found.` };
+    }
+    return { success: true, output: results.join("\n\n") };
+  }
+  /** Split memory by #### headers and return sections matching the query. */
+  searchSections(content, lowerQuery) {
+    const sections = content.split(/(?=^####\s)/m);
+    const matches = [];
+    for (const section of sections) {
+      const trimmed = section.trim();
+      if (!trimmed) continue;
+      if (trimmed.toLowerCase().includes(lowerQuery)) {
+        matches.push(trimmed);
+      }
+    }
+    if (matches.length === 0 && content.toLowerCase().includes(lowerQuery)) {
+      return [content.trim()];
+    }
+    return matches;
+  }
+};
+
 // packages/core/src/tools/rollback.ts
 var ALLOWED_ACTIONS2 = /* @__PURE__ */ new Set(["restore", "discard", "status"]);
 var RollbackTool = class {
@@ -8083,6 +8170,7 @@ var ToolRegistry = class {
       new DatabaseQueryTool(),
       new BrowserTool(),
       new MemorySaveTool(),
+      new MemoryRecallTool(),
       new RollbackTool(),
       new ProjectIndexTool(),
       new FindSymbolTool()
@@ -8154,24 +8242,55 @@ var MEMORY_FILENAME = "memory.md";
 var MemoryManager = class {
   globalPath;
   projectPath;
+  sync;
   constructor(opts) {
     this.globalPath = join3(opts.globalDir, MEMORY_FILENAME);
     this.projectPath = opts.projectRoot ? join3(opts.projectRoot, ".ava", MEMORY_FILENAME) : null;
+    this.sync = opts.sync;
   }
-  /** Read global memory (~/.ava/memory.md). Returns null if not found. */
+  /** Read global memory (~/.ava/memory.md). Falls back to platform if local is empty. */
   async loadGlobalMemory() {
-    return this.readSafe(this.globalPath);
+    const local = await this.readSafe(this.globalPath);
+    if (local) return local;
+    if (this.sync) {
+      try {
+        const remote = await this.sync.pull("global");
+        if (remote.length > 0) {
+          const content = remote.map((m) => m.content).join("\n\n");
+          await this.writeSafe(this.globalPath, content);
+          return content;
+        }
+      } catch {
+      }
+    }
+    return null;
   }
-  /** Read project memory (<projectRoot>/.ava/memory.md). Returns null if not found. */
+  /** Read project memory (<projectRoot>/.ava/memory.md). Falls back to platform if local is empty. */
   async loadProjectMemory() {
     if (!this.projectPath) return null;
-    return this.readSafe(this.projectPath);
+    const local = await this.readSafe(this.projectPath);
+    if (local) return local;
+    if (this.sync) {
+      try {
+        const remote = await this.sync.pull("project");
+        if (remote.length > 0) {
+          const content = remote.map((m) => m.content).join("\n\n");
+          const dir = join3(this.projectPath, "..");
+          await mkdir2(dir, { recursive: true });
+          await this.writeSafe(this.projectPath, content);
+          return content;
+        }
+      } catch {
+      }
+    }
+    return null;
   }
   /** Load both memories, formatted for system prompt injection. Empty string if no memories. */
-  async loadAll() {
-    const [global, project] = await Promise.all([
+  async loadAll(context) {
+    const [global, project, episodic] = await Promise.all([
       this.loadGlobalMemory(),
-      this.loadProjectMemory()
+      this.loadProjectMemory(),
+      context ? this.loadRelevantMemories(context) : Promise.resolve([])
     ]);
     const sections = [];
     if (global?.trim()) {
@@ -8182,11 +8301,29 @@ ${global.trim()}`);
       sections.push(`### Project Memory
 ${project.trim()}`);
     }
+    if (episodic.length > 0) {
+      const items = episodic.map((m) => `- **${m.key}** (${m.scope}, ${Math.round(m.similarity * 100)}% match): ${m.content}`).join("\n");
+      sections.push(`### Relevant Memories
+${items}`);
+    }
     return sections.join("\n\n");
   }
-  /** Overwrite global memory with new content. */
+  /**
+   * Semantic search for memories relevant to the current context.
+   * Requires platform sync with embeddings. Returns empty if unavailable.
+   */
+  async loadRelevantMemories(context, limit = 5) {
+    if (!this.sync) return [];
+    try {
+      return await this.sync.semanticSearch(context, { threshold: 0.65, limit });
+    } catch {
+      return [];
+    }
+  }
+  /** Overwrite global memory with new content. Syncs to platform if available. */
   async saveGlobalMemory(content) {
     await this.writeSafe(this.globalPath, content);
+    this.syncPush("global", "memory.md", content);
   }
   /** Overwrite project memory with new content. Creates .ava/ dir if needed. */
   async saveProjectMemory(content) {
@@ -8196,6 +8333,7 @@ ${project.trim()}`);
     const dir = join3(this.projectPath, "..");
     await mkdir2(dir, { recursive: true });
     await this.writeSafe(this.projectPath, content);
+    this.syncPush("project", "memory.md", content);
   }
   /** Append an entry to global memory. */
   async appendGlobal(entry) {
@@ -8237,6 +8375,94 @@ ${entry}` : entry;
       });
       throw err;
     }
+  }
+  /** Fire-and-forget push to platform. Never throws. */
+  syncPush(scope, key, content) {
+    if (!this.sync) return;
+    this.sync.push(scope, key, content).catch(() => {
+    });
+  }
+};
+
+// packages/core/src/memory/platform-sync.ts
+var PlatformMemorySync = class {
+  apiBase;
+  platformKey;
+  projectId;
+  constructor(apiBase, platformKey, projectId) {
+    this.apiBase = apiBase.replace(/\/+$/, "");
+    this.platformKey = platformKey;
+    this.projectId = projectId;
+  }
+  /** Fetch all memories for a given scope from the platform. */
+  async pull(scope) {
+    const params = new URLSearchParams({ scope });
+    if (scope === "project" && this.projectId) {
+      params.set("project_id", this.projectId);
+    }
+    const res = await fetch(`${this.apiBase}/memories?${params}`, {
+      headers: this.headers()
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+  /** Push a memory entry to the platform (upsert by key + scope). */
+  async push(scope, key, content) {
+    const existing = await this.pull(scope);
+    const match = existing.find((m) => m.key === key);
+    if (match) {
+      await fetch(`${this.apiBase}/memories/${match.id}`, {
+        method: "PATCH",
+        headers: this.headers(),
+        body: JSON.stringify({ content })
+      });
+    } else {
+      await fetch(`${this.apiBase}/memories`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          key,
+          content,
+          scope,
+          project_id: scope === "project" ? this.projectId : null
+        })
+      });
+    }
+  }
+  /** Semantic search across memories using vector similarity. */
+  async semanticSearch(query, opts) {
+    try {
+      const res = await fetch(`${this.apiBase}/memories/search`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          query,
+          scope: opts?.scope || null,
+          project_id: opts?.scope === "project" ? this.projectId : null,
+          threshold: opts?.threshold ?? 0.7,
+          limit: opts?.limit ?? 10
+        })
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
+  /** Delete a memory by ID. */
+  async delete(id) {
+    await fetch(`${this.apiBase}/memories/${id}`, {
+      method: "DELETE",
+      headers: this.headers()
+    });
+  }
+  headers() {
+    return {
+      "Authorization": `Bearer ${this.platformKey}`,
+      "Content-Type": "application/json"
+    };
   }
 };
 
@@ -9876,6 +10102,7 @@ export {
   MAX_TOOL_CALL_ITERATIONS,
   MEMORY_DIR,
   MemoryManager,
+  PlatformMemorySync,
   PlatformProvider,
   ProjectIndexer,
   ProviderError,
