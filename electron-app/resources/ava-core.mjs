@@ -499,14 +499,25 @@ var Agent = class _Agent {
       }
       const maxInputTokens = Math.floor(this.model.contextWindow * 0.7);
       const estimatedTotal = this.estimateTokenCount(messages);
-      if (estimatedTotal > maxInputTokens && messages.length >= 8) {
+      const contextPercent = Math.round(estimatedTotal / this.model.contextWindow * 100);
+      onEvent({
+        type: "context_usage",
+        context: { used: estimatedTotal, limit: this.model.contextWindow, percent: contextPercent }
+      });
+      if (estimatedTotal > maxInputTokens && messages.length >= 6) {
         messages = await this.compressContext(messages, onEvent, signal);
       }
       const preCount = messages.length;
       messages = this.truncateMessages(messages, maxInputTokens);
       const dropped = preCount - messages.length;
       if (dropped > 0) {
-        onEvent({ type: "context_truncated", droppedCount: dropped });
+        onEvent({
+          type: "error",
+          error: Object.assign(
+            new Error(`Context window full \u2014 ${dropped} older messages were compressed away. Consider starting a new chat for best results.`),
+            { code: "context_compressed" }
+          )
+        });
       }
       const sanitizedMessages = messages.map((m) => {
         let msg = m;
@@ -796,10 +807,21 @@ var Agent = class _Agent {
     }
     return messages;
   }
+  // ── Context usage ────────────────────────────────────────────────────────
+  /** Get current context usage for a set of messages. */
+  getContextUsage(messages) {
+    const used = this.estimateTokenCount(messages);
+    const limit = this.model.contextWindow;
+    return { used, limit, percent: Math.round(used / limit * 100) };
+  }
+  /** Manually compress context — triggered by user clicking the context bar. */
+  async manualCompress(messages, onEvent, signal) {
+    return this.compressContext(messages, onEvent, signal);
+  }
   // ── Context compression ──────────────────────────────────────────────────
   /**
    * Compress conversation context by summarizing older messages.
-   * Keeps the system prompt and last 4 messages (2 user-assistant exchanges)
+   * Keeps the system prompt and last 8 messages (4 user-assistant exchanges)
    * verbatim, summarizes everything in between using the model.
    * Falls back silently if the compression API call fails.
    */
@@ -807,7 +829,7 @@ var Agent = class _Agent {
     onEvent({ type: "context_compression_start" });
     const systemMsg = messages[0]?.role === "system" ? messages[0] : null;
     const rest = systemMsg ? messages.slice(1) : [...messages];
-    const KEEP_RECENT = 4;
+    const KEEP_RECENT = 8;
     if (rest.length <= KEEP_RECENT) {
       onEvent({ type: "context_compression_end", originalTokens: 0, compressedTokens: 0 });
       return messages;
@@ -821,7 +843,8 @@ var Agent = class _Agent {
     const compressionPrompt = `You are a conversation summarizer. Summarize this conversation transcript concisely while preserving:
 - Key decisions and conclusions reached
 - File paths, function names, and code identifiers mentioned
-- Current task state and what was accomplished
+- Tool calls made and their results (especially file edits, searches, and command outputs)
+- Current task state and what was accomplished vs. what remains
 - Any errors encountered and how they were resolved
 - Important technical context the assistant will need going forward
 
@@ -855,6 +878,11 @@ ${summary}`
       const originalTokens = this.estimateTokenCount(messages);
       const compressedTokens = this.estimateTokenCount(result);
       onEvent({ type: "context_compression_end", originalTokens, compressedTokens });
+      const newPercent = Math.round(compressedTokens / this.model.contextWindow * 100);
+      onEvent({
+        type: "context_usage",
+        context: { used: compressedTokens, limit: this.model.contextWindow, percent: newPercent }
+      });
       return result;
     } catch {
       onEvent({ type: "context_compression_end", originalTokens: 0, compressedTokens: 0 });
@@ -2202,13 +2230,402 @@ var MistralProvider = class extends BaseProvider {
   }
 };
 
+// packages/core/src/providers/anthropic/models.ts
+var ANTHROPIC_MODELS = [
+  {
+    id: "claude-opus-4-6",
+    name: "Claude Opus 4.6",
+    provider: "anthropic",
+    contextWindow: 2e5,
+    maxOutputTokens: 32768,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 5, outputPerMillion: 25 }
+  },
+  {
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    provider: "anthropic",
+    contextWindow: 2e5,
+    maxOutputTokens: 16384,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 3, outputPerMillion: 15 }
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    name: "Claude Haiku 4.5",
+    provider: "anthropic",
+    contextWindow: 2e5,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 1, outputPerMillion: 5 }
+  }
+];
+
+// packages/core/src/providers/anthropic/index.ts
+var ANTHROPIC_VERSION = "2023-06-01";
+var AnthropicProvider = class extends BaseProvider {
+  name = "anthropic";
+  displayName = "Anthropic";
+  getDefaultBaseUrl() {
+    return "https://api.anthropic.com";
+  }
+  getCompletionUrl() {
+    return `${this.baseUrl}/v1/messages`;
+  }
+  getAuthHeaders() {
+    return {
+      "Content-Type": "application/json",
+      "x-api-key": this.apiKey,
+      "anthropic-version": ANTHROPIC_VERSION
+    };
+  }
+  listModels() {
+    return ANTHROPIC_MODELS;
+  }
+  // ── Non-streaming completion ───────────────────────────────────────────
+  async createCompletion(request2, signal) {
+    const anthropicBody = this.toAnthropicRequest(request2, false);
+    const url = this.getCompletionUrl();
+    const headers = this.getAuthHeaders();
+    logger.debug(`[anthropic] POST ${url} | model=${request2.model}`);
+    const response = await this.fetchWithRetryPublic(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(anthropicBody),
+      signal
+    });
+    const data = await response.json();
+    return this.fromAnthropicResponse(data, request2.model);
+  }
+  // ── Streaming completion ───────────────────────────────────────────────
+  async *createStreamingCompletion(request2, signal) {
+    const anthropicBody = this.toAnthropicRequest(request2, true);
+    const url = this.getCompletionUrl();
+    const headers = this.getAuthHeaders();
+    logger.debug(`[anthropic] POST ${url} (stream) | model=${request2.model}`);
+    const response = await this.fetchWithRetryPublic(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(anthropicBody),
+      signal
+    });
+    if (!response.body) {
+      throw new ProviderError("No response body for streaming", this.name);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+    try {
+      while (true) {
+        if (signal?.aborted) break;
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === "[DONE]") continue;
+          let event;
+          try {
+            event = JSON.parse(jsonStr);
+          } catch {
+            continue;
+          }
+          if (event.type === "message_start" && event.message?.usage) {
+            inputTokens = event.message.usage.input_tokens || 0;
+          }
+          if (event.type === "message_delta" && event.usage) {
+            outputTokens = event.usage.output_tokens || 0;
+          }
+          const chunk = this.convertStreamEvent(event, request2.model, inputTokens, outputTokens);
+          if (chunk) yield chunk;
+        }
+      }
+    } finally {
+      try {
+        reader.cancel();
+      } catch {
+      }
+      reader.releaseLock();
+    }
+  }
+  // ── Request conversion: OpenAI → Anthropic ─────────────────────────────
+  toAnthropicRequest(request2, stream) {
+    let systemPrompt;
+    const messages = [];
+    for (const msg of request2.messages) {
+      if (msg.role === "system") {
+        systemPrompt = (systemPrompt ? systemPrompt + "\n\n" : "") + msg.content;
+        continue;
+      }
+      if (msg.role === "assistant" && "tool_calls" in msg && msg.tool_calls) {
+        const content = [];
+        if (msg.content) {
+          content.push({ type: "text", text: msg.content });
+        }
+        for (const tc of msg.tool_calls) {
+          content.push({
+            type: "tool_use",
+            id: tc.id,
+            name: tc.function.name,
+            input: safeParse(tc.function.arguments)
+          });
+        }
+        messages.push({ role: "assistant", content });
+        continue;
+      }
+      if (msg.role === "tool") {
+        messages.push({
+          role: "user",
+          content: [{
+            type: "tool_result",
+            tool_use_id: msg.tool_call_id,
+            content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)
+          }]
+        });
+        continue;
+      }
+      if (typeof msg.content === "string") {
+        messages.push({ role: msg.role, content: msg.content });
+      } else if (Array.isArray(msg.content)) {
+        const parts = msg.content.map((part) => {
+          if (part.type === "text") return { type: "text", text: part.text };
+          if (part.type === "image_url") {
+            const url = part.image_url.url;
+            if (url.startsWith("data:")) {
+              const match = url.match(/^data:(image\/\w+);base64,(.+)$/);
+              if (match) {
+                return { type: "image", source: { type: "base64", media_type: match[1], data: match[2] } };
+              }
+            }
+            return { type: "image", source: { type: "url", url } };
+          }
+          return { type: "text", text: "" };
+        });
+        messages.push({ role: msg.role, content: parts });
+      } else {
+        messages.push({ role: msg.role, content: msg.content || "" });
+      }
+    }
+    const tools = request2.tools?.map((t2) => ({
+      name: t2.function.name,
+      description: t2.function.description,
+      input_schema: t2.function.parameters || { type: "object", properties: {} }
+    }));
+    let toolChoice;
+    if (request2.tool_choice === "auto") toolChoice = { type: "auto" };
+    else if (request2.tool_choice === "none") toolChoice = { type: "none" };
+    else if (request2.tool_choice === "required") toolChoice = { type: "any" };
+    return {
+      model: request2.model,
+      messages,
+      max_tokens: request2.max_tokens || 4096,
+      ...systemPrompt && { system: systemPrompt },
+      ...request2.temperature !== void 0 && { temperature: request2.temperature },
+      ...request2.top_p !== void 0 && { top_p: request2.top_p },
+      ...request2.stop && { stop_sequences: Array.isArray(request2.stop) ? request2.stop : [request2.stop] },
+      ...tools && tools.length > 0 ? { tools } : {},
+      ...toolChoice ? { tool_choice: toolChoice } : {},
+      ...stream ? { stream: true } : {}
+    };
+  }
+  // ── Response conversion: Anthropic → OpenAI ────────────────────────────
+  fromAnthropicResponse(data, model) {
+    const content = data.content;
+    let textContent = "";
+    const toolCalls = [];
+    if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block.type === "text") textContent += block.text || "";
+        if (block.type === "tool_use") {
+          toolCalls.push({
+            id: block.id,
+            type: "function",
+            function: {
+              name: block.name,
+              arguments: JSON.stringify(block.input || {})
+            }
+          });
+        }
+      }
+    }
+    const usage = data.usage;
+    const stopReason = data.stop_reason;
+    return {
+      id: data.id || `chatcmpl-${Date.now()}`,
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1e3),
+      model,
+      choices: [{
+        index: 0,
+        message: {
+          role: "assistant",
+          content: textContent || null,
+          ...toolCalls.length > 0 && { tool_calls: toolCalls }
+        },
+        finish_reason: stopReason === "tool_use" ? "tool_calls" : stopReason === "max_tokens" ? "length" : "stop"
+      }],
+      usage: {
+        prompt_tokens: usage?.input_tokens || 0,
+        completion_tokens: usage?.output_tokens || 0,
+        total_tokens: (usage?.input_tokens || 0) + (usage?.output_tokens || 0)
+      }
+    };
+  }
+  // ── Stream event conversion ────────────────────────────────────────────
+  convertStreamEvent(event, model, inputTokens, outputTokens) {
+    const type = event.type;
+    const id = `chatcmpl-${Date.now()}`;
+    const created = Math.floor(Date.now() / 1e3);
+    if (type === "content_block_start") {
+      const block = event.content_block;
+      if (block?.type === "text") {
+        return {
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }]
+        };
+      }
+      if (block?.type === "tool_use") {
+        return {
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{
+            index: 0,
+            delta: {
+              role: "assistant",
+              tool_calls: [{
+                index: event.index,
+                id: block.id,
+                type: "function",
+                function: { name: block.name, arguments: "" }
+              }]
+            },
+            finish_reason: null
+          }]
+        };
+      }
+    }
+    if (type === "content_block_delta") {
+      const delta = event.delta;
+      if (delta?.type === "text_delta") {
+        return {
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{ index: 0, delta: { content: delta.text || "" }, finish_reason: null }]
+        };
+      }
+      if (delta?.type === "input_json_delta") {
+        return {
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{
+            index: 0,
+            delta: {
+              tool_calls: [{
+                index: event.index,
+                function: { arguments: delta.partial_json || "" }
+              }]
+            },
+            finish_reason: null
+          }]
+        };
+      }
+    }
+    if (type === "message_delta") {
+      const stopReason = event.delta?.stop_reason;
+      return {
+        id,
+        object: "chat.completion.chunk",
+        created,
+        model,
+        choices: [{
+          index: 0,
+          delta: {},
+          finish_reason: stopReason === "tool_use" ? "tool_calls" : "stop"
+        }],
+        usage: {
+          prompt_tokens: inputTokens,
+          completion_tokens: outputTokens,
+          total_tokens: inputTokens + outputTokens
+        }
+      };
+    }
+    return null;
+  }
+  // ── Expose base class fetchWithRetry ───────────────────────────────────
+  async fetchWithRetryPublic(url, init) {
+    let lastError;
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6e4);
+      const originalSignal = init.signal;
+      if (originalSignal) {
+        originalSignal.addEventListener("abort", () => controller.abort());
+      }
+      try {
+        const response = await fetch(url, { ...init, signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (response.ok) return response;
+        const errorBody = await response.text();
+        lastError = new ProviderError(
+          `Anthropic API error: ${response.status} ${response.statusText}`,
+          this.name,
+          response.status,
+          errorBody
+        );
+        if (![429, 500, 502, 503].includes(response.status)) throw lastError;
+        if (attempt === 3) break;
+        await new Promise((r) => setTimeout(r, 1e3 * Math.pow(2, attempt)));
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof ProviderError) throw err;
+        if (err instanceof DOMException && err.name === "AbortError") {
+          throw new ProviderError("Anthropic request timed out after 60s", this.name);
+        }
+        throw new ProviderError(
+          `Anthropic network error: ${err instanceof Error ? err.message : String(err)}`,
+          this.name
+        );
+      }
+    }
+    throw lastError;
+  }
+};
+function safeParse(str) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return {};
+  }
+}
+
 // packages/core/src/providers/provider-registry.ts
 var BUILT_IN_PROVIDERS = {
   deepseek: (config) => new DeepSeekProvider(config),
   kimi: (config) => new KimiProvider(config),
   qwen: (config) => new QwenProvider(config),
   zhipu: (config) => new ZhipuProvider(config),
-  mistral: (config) => new MistralProvider(config)
+  mistral: (config) => new MistralProvider(config),
+  anthropic: (config) => new AnthropicProvider(config)
 };
 var ProviderRegistry = class {
   providers = /* @__PURE__ */ new Map();
@@ -2283,6 +2700,40 @@ var PLATFORM_MODELS = [
     supportsThinking: true,
     supportsVision: true,
     pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  },
+  // Claude models — available to admin/pro/ultra tiers via platform proxy
+  {
+    id: "claude-opus-4-6",
+    name: "Claude Opus 4.6",
+    provider: "platform",
+    contextWindow: 2e5,
+    maxOutputTokens: 32768,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 5, outputPerMillion: 25 }
+  },
+  {
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    provider: "platform",
+    contextWindow: 2e5,
+    maxOutputTokens: 16384,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 3, outputPerMillion: 15 }
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    name: "Claude Haiku 4.5",
+    provider: "platform",
+    contextWindow: 2e5,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 1, outputPerMillion: 5 }
   }
 ];
 
