@@ -2688,6 +2688,7 @@ var ProviderRegistry = class {
 
 // packages/core/src/providers/platform/models.ts
 var PLATFORM_MODELS = [
+  // DeepSeek
   {
     id: "deepseek-chat",
     name: "DeepSeek V3.2",
@@ -2696,19 +2697,20 @@ var PLATFORM_MODELS = [
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+    pricing: { inputPerMillion: 0.28, outputPerMillion: 0.42 }
   },
   {
     id: "deepseek-reasoner",
-    name: "DeepSeek R1",
+    name: "DeepSeek V3.2 Reasoner",
     provider: "platform",
     contextWindow: 128e3,
     maxOutputTokens: 64e3,
     supportsToolCalls: true,
     supportsStreaming: true,
     supportsThinking: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+    pricing: { inputPerMillion: 0.28, outputPerMillion: 0.42 }
   },
+  // Kimi / Moonshot
   {
     id: "kimi-k2.5",
     name: "Kimi K2.5",
@@ -2719,9 +2721,118 @@ var PLATFORM_MODELS = [
     supportsStreaming: true,
     supportsThinking: true,
     supportsVision: true,
+    pricing: { inputPerMillion: 0.6, outputPerMillion: 3 }
+  },
+  {
+    id: "moonshot-v1-128k",
+    name: "Moonshot V1 128K",
+    provider: "platform",
+    contextWindow: 128e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 2, outputPerMillion: 5 }
+  },
+  // Qwen
+  {
+    id: "qwen3.5-plus",
+    name: "Qwen 3.5 Plus",
+    provider: "platform",
+    contextWindow: 256e3,
+    maxOutputTokens: 16384,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsThinking: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 0.4, outputPerMillion: 2.4 }
+  },
+  {
+    id: "qwen-turbo-latest",
+    name: "Qwen Turbo",
+    provider: "platform",
+    contextWindow: 1e6,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.05, outputPerMillion: 0.2 }
+  },
+  // Zhipu / GLM
+  {
+    id: "glm-5",
+    name: "GLM-5",
+    provider: "platform",
+    contextWindow: 2e5,
+    maxOutputTokens: 128e3,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsThinking: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 1, outputPerMillion: 3.2 }
+  },
+  {
+    id: "glm-4.7",
+    name: "GLM-4.7",
+    provider: "platform",
+    contextWindow: 2e5,
+    maxOutputTokens: 128e3,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsThinking: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 0.6, outputPerMillion: 2.2 }
+  },
+  {
+    id: "glm-4-flash",
+    name: "GLM-4 Flash (Free)",
+    provider: "platform",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
     pricing: { inputPerMillion: 0, outputPerMillion: 0 }
   },
-  // Claude models — available to admin/pro/ultra tiers via platform proxy
+  // Mistral
+  {
+    id: "mistral-large-latest",
+    name: "Mistral Large 3",
+    provider: "platform",
+    contextWindow: 256e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.5, outputPerMillion: 1.5 }
+  },
+  {
+    id: "codestral-latest",
+    name: "Codestral 25.08",
+    provider: "platform",
+    contextWindow: 256e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.3, outputPerMillion: 0.9 }
+  },
+  {
+    id: "devstral-2-25-12",
+    name: "Devstral 2",
+    provider: "platform",
+    contextWindow: 256e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
+  },
+  {
+    id: "mistral-small-latest",
+    name: "Mistral Small 3.2",
+    provider: "platform",
+    contextWindow: 128e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
+  },
+  // Claude — available to admin/pro/ultra tiers via platform proxy
   {
     id: "claude-opus-4-6",
     name: "Claude Opus 4.6",

@@ -125,14 +125,20 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
 
     // Register providers from config
     this.providerRegistry = new core.ProviderRegistry();
-    const providerNames = ['deepseek', 'kimi', 'qwen'] as const;
-    for (const name of providerNames) {
-      const settings = config.providers[name];
+    const providerEntries = [
+      { configKey: 'deepseek', registryKey: 'deepseek' },
+      { configKey: 'kimi', registryKey: 'kimi' },
+      { configKey: 'qwen', registryKey: 'qwen' },
+      { configKey: 'glm', registryKey: 'zhipu' },
+      { configKey: 'mistral', registryKey: 'mistral' },
+    ] as const;
+    for (const { configKey, registryKey } of providerEntries) {
+      const settings = (config.providers as any)[configKey];
       if (settings?.apiKey) {
         try {
-          this.providerRegistry.register(name, { apiKey: settings.apiKey, baseUrl: settings.baseUrl });
+          this.providerRegistry.register(registryKey, { apiKey: settings.apiKey, baseUrl: settings.baseUrl });
         } catch (err) {
-          console.error(`[ava-agent] Provider ${name} failed to register:`, err);
+          console.error(`[ava-agent] Provider ${registryKey} failed to register:`, err);
         }
       }
     }
@@ -875,7 +881,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     if (!this.providerRegistry) return [];
 
     const results: AvaProviderHealth[] = [];
-    const providerNames = ['deepseek', 'kimi', 'qwen'] as const;
+    const providerNames = ['deepseek', 'kimi', 'qwen', 'zhipu', 'mistral'] as const;
 
     for (const name of providerNames) {
       const provider = this.providerRegistry.get(name);
@@ -1260,7 +1266,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     if (!this.providerRegistry || !this.activeModelDef) return false;
 
     const currentProvider = this.activeModelDef.provider;
-    const providerNames = ['deepseek', 'kimi', 'qwen'] as const;
+    const providerNames = ['deepseek', 'kimi', 'qwen', 'zhipu', 'mistral'] as const;
 
     for (const name of providerNames) {
       if (name === currentProvider) continue;
@@ -1304,14 +1310,20 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
 
     // Re-create provider registry from scratch
     this.providerRegistry = new core.ProviderRegistry();
-    const providerNames = ['deepseek', 'kimi', 'qwen'] as const;
-    for (const name of providerNames) {
-      const settings = config.providers[name];
+    const providerEntries = [
+      { configKey: 'deepseek', registryKey: 'deepseek' },
+      { configKey: 'kimi', registryKey: 'kimi' },
+      { configKey: 'qwen', registryKey: 'qwen' },
+      { configKey: 'glm', registryKey: 'zhipu' },
+      { configKey: 'mistral', registryKey: 'mistral' },
+    ] as const;
+    for (const { configKey, registryKey } of providerEntries) {
+      const settings = (config.providers as any)[configKey];
       if (settings?.apiKey) {
         try {
-          this.providerRegistry.register(name, { apiKey: settings.apiKey, baseUrl: settings.baseUrl });
+          this.providerRegistry.register(registryKey, { apiKey: settings.apiKey, baseUrl: settings.baseUrl });
         } catch (err) {
-          console.error(`[ava-agent] Provider ${name} failed to register:`, err);
+          console.error(`[ava-agent] Provider ${registryKey} failed to register:`, err);
         }
       }
     }
