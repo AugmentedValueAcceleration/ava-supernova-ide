@@ -52,7 +52,6 @@ async function getCore(): Promise<CoreModule> {
     for (const specifier of corePaths) {
       try {
         _core = await dynamicImport(specifier);
-        console.log('[ava-agent] Loaded @ava/core from:', specifier);
         break;
       } catch (e: any) {
         console.warn('[ava-agent] Failed to load core from', specifier, ':', e.message);
@@ -106,22 +105,13 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   async initialize(workspaceRoot?: string): Promise<AvaInitState> {
     if (workspaceRoot) {
       this.workspaceRoot = workspaceRoot;
-      console.log('[ava-agent] Workspace root:', this.workspaceRoot);
     }
 
     const core = await getCore();
 
-    // Enable debug logging for diagnostics
-    if (core.setLogLevel) core.setLogLevel('debug');
-
     // Load config from ~/.ava/config.json (same as CLI)
     this.configManager = new core.ConfigManager();
     const config = await this.configManager.load();
-    console.log('[ava-agent] Config loaded:', {
-      activeModel: config.activeModel,
-      providers: Object.keys(config.providers).filter(k => !!(config.providers as any)[k]?.apiKey),
-      hasPlatformKey: Boolean(config.platformKey),
-    });
 
     // Register providers from config
     this.providerRegistry = new core.ProviderRegistry();
@@ -158,10 +148,9 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
         if (acctRes.ok && acctRes.data) {
           this.cachedUserName = acctRes.data.name || acctRes.data.email?.split('@')[0];
           this.cachedIsAdmin = acctRes.data.tier === 'admin';
-          console.log('[ava-agent] User identity cached:', this.cachedUserName, 'admin:', this.cachedIsAdmin);
         }
       } catch {
-        console.log('[ava-agent] Could not fetch user identity');
+        // Could not fetch user identity — continue without it
       }
     }
 
@@ -183,12 +172,6 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     // Resolve active model
     const activeModelId = config.activeModel || '';
     const resolved = this.providerRegistry.resolveModel(activeModelId);
-    console.log('[ava-agent] Model resolution:', {
-      activeModelId,
-      resolved: resolved ? `${resolved.provider.name}:${resolved.model.id}` : null,
-      supportsToolCalls: resolved?.model.supportsToolCalls ?? false,
-    });
-
     if (resolved) {
       await this.setupAgent(core, resolved.provider, resolved.model);
     } else if (activeModelId) {
@@ -240,7 +223,6 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     // Notify frontend to display the loaded messages
     const replayMessages = this.buildReplayMessages(record.messages);
     this.client?.notifyConversationLoaded(record.id, record.title, replayMessages);
-    console.log(`[ava-agent] Auto-restored conversation: "${record.title}" (${record.messages.length} messages)`);
   }
 
   async sendMessage(text: string, mode: AvaMode): Promise<void> {
