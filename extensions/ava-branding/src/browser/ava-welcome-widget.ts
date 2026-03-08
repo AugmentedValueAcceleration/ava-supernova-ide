@@ -390,7 +390,7 @@ export class AvaWelcomeWidget extends GettingStartedWidget {
   private renderLinksSection(): React.ReactNode {
     const links = [
       { label: 'GitHub', url: 'https://github.com/AugmentedValueAcceleration/ava-supernova' },
-      { label: 'Documentation', url: 'https://github.com/AugmentedValueAcceleration/ava-supernova' },
+      { label: 'Documentation', url: 'https://ava-supernova.com/documentation' },
       { label: 'Report an Issue', url: 'https://github.com/AugmentedValueAcceleration/ava-supernova/issues' },
     ];
 

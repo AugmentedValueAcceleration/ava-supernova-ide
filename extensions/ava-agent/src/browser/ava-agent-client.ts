@@ -567,4 +567,16 @@ export class AvaAgentClient implements IAvaAgentClient {
   setMemoryState(memory: { global: string | null; project: string | null }): void {
     this.update({ memory });
   }
+
+  notifyUpdateAvailable(_info: { version: string; releaseNotes?: string }): void {
+    // Handled by dashboard polling via checkForUpdates()
+  }
+
+  notifyUpdateDownloadProgress(_percent: number): void {
+    // Stub — download handled by browser opening URL
+  }
+
+  notifyUpdateDownloaded(_info: { version: string }): void {
+    // Stub — download handled by browser opening URL
+  }
 }
