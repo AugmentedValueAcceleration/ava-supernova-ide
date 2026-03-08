@@ -446,13 +446,15 @@ function FullWidthBar() {
 
 // ── NavSidebar ──────────────────────────────────────────────────────────────
 
-function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConnect }: {
+function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConnect, onCheckForUpdates, updateStatus }: {
   currentPage: DashboardPage;
   onNavigate: (page: DashboardPage) => void;
   mode: 'platform' | 'byok';
   email?: string | null;
   onDisconnect: () => void;
   onConnect: () => void;
+  onCheckForUpdates?: () => void;
+  updateStatus?: 'idle' | 'checking' | 'up-to-date' | 'available' | 'error';
 }) {
   const visibleItems = mode === 'byok'
     ? NAV_ITEMS.filter(item => !item.platformOnly)
@@ -490,6 +492,22 @@ function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConn
       </div>
 
       <div style={s.sidebarFooter}>
+        {onCheckForUpdates && (
+          <button
+            onClick={onCheckForUpdates}
+            disabled={updateStatus === 'checking'}
+            style={{
+              width: '100%', padding: '5px 10px', marginBottom: '10px',
+              fontSize: '11px', fontWeight: 500, borderRadius: '4px',
+              background: 'transparent', color: 'var(--theia-foreground, #e0e0e0)',
+              border: '1px solid rgba(255,255,255,0.1)', cursor: updateStatus === 'checking' ? 'default' : 'pointer',
+              opacity: updateStatus === 'checking' ? 0.5 : 0.7,
+              transition: 'opacity 0.15s',
+            }}
+          >
+            {updateStatus === 'checking' ? 'Checking...' : 'Check for Updates'}
+          </button>
+        )}
         {mode === 'platform' ? (
           <>
             {email && (
@@ -1521,6 +1539,24 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
     !hasAccess ? 'connect' : hasPlatform ? 'overview' : 'settings',
   );
   const [updateAvailable, setUpdateAvailable] = React.useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = React.useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
+
+  const doCheckForUpdates = React.useCallback(() => {
+    if (!props.onCheckForUpdates) return;
+    setUpdateStatus('checking');
+    props.onCheckForUpdates().then(result => {
+      if (result) {
+        setUpdateAvailable(result.version);
+        setUpdateStatus('available');
+      } else {
+        setUpdateStatus('up-to-date');
+        setTimeout(() => setUpdateStatus('idle'), 5000);
+      }
+    }).catch(() => {
+      setUpdateStatus('error');
+      setTimeout(() => setUpdateStatus('idle'), 5000);
+    });
+  }, [props.onCheckForUpdates]);
 
   React.useEffect(() => {
     if (hasAccess && page === 'connect') {
@@ -1530,11 +1566,7 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
 
   // Check for updates on mount
   React.useEffect(() => {
-    if (props.onCheckForUpdates) {
-      props.onCheckForUpdates().then(result => {
-        if (result) setUpdateAvailable(result.version);
-      }).catch(() => {});
-    }
+    doCheckForUpdates();
   }, []);
 
   if (!state.initialized) {
@@ -1595,9 +1627,12 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
         email={state.account?.email}
         onDisconnect={onDisconnectAccount}
         onConnect={() => setPage('connect')}
+        onCheckForUpdates={doCheckForUpdates}
+        updateStatus={updateStatus}
       />
       <div style={s.main}>
-        {updateAvailable && (
+        {/* Update status bar */}
+        {updateStatus === 'available' && updateAvailable ? (
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '8px 12px', marginBottom: '12px', borderRadius: '6px',
@@ -1617,7 +1652,23 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
               Download
             </a>
           </div>
-        )}
+        ) : updateStatus === 'checking' ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 12px', marginBottom: '12px', borderRadius: '6px',
+            background: 'rgba(168, 85, 247, 0.06)', border: '1px solid rgba(168, 85, 247, 0.15)',
+          }}>
+            <span style={{ fontSize: '12px', opacity: 0.7 }}>Checking for updates...</span>
+          </div>
+        ) : updateStatus === 'up-to-date' ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 12px', marginBottom: '12px', borderRadius: '6px',
+            background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.2)',
+          }}>
+            <span style={{ fontSize: '12px', color: 'rgba(34, 197, 94, 0.9)' }}>You're up to date!</span>
+          </div>
+        ) : null}
         {renderPage()}
       </div>
     </div>
