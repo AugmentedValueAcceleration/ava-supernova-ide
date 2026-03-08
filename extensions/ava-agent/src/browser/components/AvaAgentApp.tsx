@@ -730,23 +730,31 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
   const MAX_ATTACHMENTS = 5;
 
   // Auto-scroll to bottom on new messages
+  const justLoadedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (state.justLoaded) justLoadedRef.current = true;
+  }, [state.justLoaded]);
+
   React.useEffect(() => {
     const el = messagesRef.current;
     if (!el || state.messages.length === 0) return;
-    if (state.justLoaded) {
-      // Restored conversation: double-rAF + timeout ensures DOM is fully painted
-      // before we measure scrollHeight (large conversations need multiple frames)
+    if (justLoadedRef.current) {
+      justLoadedRef.current = false;
+      // Restored conversation: longer delay for initial load when DOM may not be ready
+      const scrollToBottom = () => { el.scrollTop = el.scrollHeight; };
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setTimeout(() => {
-            el.scrollTop = el.scrollHeight;
-          }, 50);
+            scrollToBottom();
+            // Safety: re-scroll after images/content finish loading
+            setTimeout(scrollToBottom, 200);
+          }, 100);
         });
       });
     } else {
       el.scrollTop = el.scrollHeight;
     }
-  }, [state.messages, state.isStreaming, state.justLoaded]);
+  }, [state.messages, state.isStreaming]);
 
   const addImageFile = React.useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return;
