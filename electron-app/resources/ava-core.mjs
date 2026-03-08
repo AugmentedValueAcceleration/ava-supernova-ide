@@ -2190,17 +2190,29 @@ var ZhipuProvider = class extends BaseProvider {
 var MISTRAL_MODELS = [
   {
     id: "mistral-large-latest",
-    name: "Mistral Large 3",
+    name: "Mistral Large",
     provider: "mistral",
-    contextWindow: 256e3,
+    contextWindow: 262e3,
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
-    pricing: { inputPerMillion: 0.5, outputPerMillion: 1.5 }
+    supportsVision: true,
+    pricing: { inputPerMillion: 2, outputPerMillion: 6 }
+  },
+  {
+    id: "mistral-medium-latest",
+    name: "Mistral Medium",
+    provider: "mistral",
+    contextWindow: 131e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
   },
   {
     id: "codestral-latest",
-    name: "Codestral 25.08",
+    name: "Codestral",
     provider: "mistral",
     contextWindow: 256e3,
     maxOutputTokens: 8192,
@@ -2209,23 +2221,35 @@ var MISTRAL_MODELS = [
     pricing: { inputPerMillion: 0.3, outputPerMillion: 0.9 }
   },
   {
-    id: "devstral-2-25-12",
-    name: "Devstral 2",
+    id: "devstral-latest",
+    name: "Devstral",
     provider: "mistral",
-    contextWindow: 256e3,
+    contextWindow: 262e3,
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
     pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
   },
   {
-    id: "mistral-small-latest",
-    name: "Mistral Small 3.2",
+    id: "devstral-small-latest",
+    name: "Devstral Small",
     provider: "mistral",
-    contextWindow: 128e3,
+    contextWindow: 262e3,
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
+  },
+  {
+    id: "mistral-small-latest",
+    name: "Mistral Small",
+    provider: "mistral",
+    contextWindow: 131e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
     pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
   }
 ];

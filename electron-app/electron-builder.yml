@@ -46,6 +46,9 @@ nsis:
   differentialPackage: false
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico
+  installerSidebar: resources/installer-sidebar.bmp
+  uninstallerSidebar: resources/installer-sidebar.bmp
+  installerHeader: resources/installer-header.bmp
   shortcutName: "Ava Supernova"
 
 # ——— macOS ———

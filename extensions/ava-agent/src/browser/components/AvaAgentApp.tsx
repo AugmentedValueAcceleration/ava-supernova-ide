@@ -740,17 +740,21 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
     if (!el || state.messages.length === 0) return;
     if (justLoadedRef.current) {
       justLoadedRef.current = false;
-      // Restored conversation: longer delay for initial load when DOM may not be ready
-      const scrollToBottom = () => { el.scrollTop = el.scrollHeight; };
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            scrollToBottom();
-            // Safety: re-scroll after images/content finish loading
-            setTimeout(scrollToBottom, 200);
-          }, 100);
-        });
-      });
+      // Restored conversation: poll until scroll actually works.
+      // On initial app load the Theia widget may not be laid out yet,
+      // so fixed delays are unreliable. Retry every 50ms up to 2s.
+      let attempts = 0;
+      const maxAttempts = 40; // 40 × 50ms = 2s
+      const poll = () => {
+        if (!el) return;
+        el.scrollTop = el.scrollHeight;
+        attempts++;
+        // Stop once we've scrolled near the bottom, or hit max attempts
+        if (attempts < maxAttempts && el.scrollTop < el.scrollHeight - el.clientHeight - 5) {
+          setTimeout(poll, 50);
+        }
+      };
+      requestAnimationFrame(poll);
     } else {
       el.scrollTop = el.scrollHeight;
     }
