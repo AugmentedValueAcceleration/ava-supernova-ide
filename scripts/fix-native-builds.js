@@ -141,11 +141,38 @@ function runRipgrepPostinstall() {
   }
 }
 
+/**
+ * Patch workspace trust race condition (all platforms).
+ *
+ * The vscode.git plugin activates on "*" and reads workspace.isTrusted before
+ * Theia's async WorkspaceTrustService resolves. With trust disabled (our default),
+ * the final value is always true — but the plugin sees undefined→false during the
+ * race window, causing "No repository found" in the SCM view.
+ *
+ * Fix: initialize _trusted = true instead of undefined in the plugin-host code.
+ */
+function patchWorkspaceTrust() {
+  const wsFile = path.join(nodeModules, '@theia', 'plugin-ext', 'lib', 'plugin', 'workspace.js');
+  if (!fs.existsSync(wsFile)) return;
+
+  let content = fs.readFileSync(wsFile, 'utf8');
+  if (content.includes('this._trusted = true')) return; // Already patched
+
+  if (content.includes('this._trusted = undefined')) {
+    content = content.replace('this._trusted = undefined', 'this._trusted = true');
+    fs.writeFileSync(wsFile, content);
+    console.log('[fix-native] Patched workspace trust default (_trusted = true)');
+  }
+}
+
 // Parse CLI args: --electron=<version> builds against Electron headers
 const electronArg = process.argv.find(a => a.startsWith('--electron'));
 const electronVersion = electronArg ? electronArg.split('=')[1] : null;
 
-// Only run on Windows where these issues occur
+// Workspace trust patch applies to all platforms
+patchWorkspaceTrust();
+
+// Native module fixes are Windows-only
 if (process.platform === 'win32') {
   console.log(`[fix-native] Fixing native module builds for Windows${electronVersion ? ` (electron ${electronVersion})` : ''}...`);
 
