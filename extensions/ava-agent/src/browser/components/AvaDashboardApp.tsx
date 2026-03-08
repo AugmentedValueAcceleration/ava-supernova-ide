@@ -15,6 +15,7 @@ export interface AvaDashboardAppProps {
   onGetMemory?: () => Promise<{ global: string | null; project: string | null }>;
   onSaveMemory?: (scope: 'global' | 'project', content: string) => Promise<void>;
   onClearMemory?: (scope: 'global' | 'project') => Promise<void>;
+  onCheckForUpdates?: () => Promise<{ version: string } | null>;
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -1519,12 +1520,22 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
   const [page, setPage] = React.useState<DashboardPage | 'connect'>(
     !hasAccess ? 'connect' : hasPlatform ? 'overview' : 'settings',
   );
+  const [updateAvailable, setUpdateAvailable] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (hasAccess && page === 'connect') {
       setPage(hasPlatform ? 'overview' : 'settings');
     }
   }, [hasAccess, hasPlatform]);
+
+  // Check for updates on mount
+  React.useEffect(() => {
+    if (props.onCheckForUpdates) {
+      props.onCheckForUpdates().then(result => {
+        if (result) setUpdateAvailable(result.version);
+      }).catch(() => {});
+    }
+  }, []);
 
   if (!state.initialized) {
     return (
@@ -1586,6 +1597,27 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
         onConnect={() => setPage('connect')}
       />
       <div style={s.main}>
+        {updateAvailable && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 12px', marginBottom: '12px', borderRadius: '6px',
+            background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)',
+          }}>
+            <span style={{ fontSize: '12px', color: 'var(--theia-foreground, #e0e0e0)' }}>
+              Update available: <strong>v{updateAvailable}</strong>
+            </span>
+            <a
+              href={`https://github.com/AugmentedValueAcceleration/ava-supernova-ide/releases/download/v${updateAvailable}/Ava.Supernova.Setup.${updateAvailable}.exe`}
+              style={{
+                padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
+                background: 'var(--ava-accent, #A855F7)', color: '#fff', textDecoration: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Download
+            </a>
+          </div>
+        )}
         {renderPage()}
       </div>
     </div>

@@ -346,6 +346,17 @@ export interface IAvaAgentService {
 
   /** Clear memory for a given scope. */
   clearMemory(scope: 'global' | 'project'): Promise<void>;
+
+  // ── Auto-update ──────────────────────────────────────────────────────────
+
+  /** Check for available updates. */
+  checkForUpdates(): Promise<{ version: string } | null>;
+
+  /** Download the available update. */
+  downloadUpdate(): Promise<boolean>;
+
+  /** Install the downloaded update (quits and restarts). */
+  installUpdate(): Promise<void>;
 }
 
 // ── Backend → Frontend (fire-and-forget notifications) ───────────────────────
@@ -420,4 +431,15 @@ export interface IAvaAgentClient {
 
   /** Memory content changed (after save or clear). */
   notifyMemoryChanged(scope: 'global' | 'project'): void;
+
+  // ── Auto-update notifications ──────────────────────────────────────────────
+
+  /** An update is available for download. */
+  notifyUpdateAvailable(info: { version: string; releaseNotes?: string }): void;
+
+  /** Update download progress. */
+  notifyUpdateDownloadProgress(percent: number): void;
+
+  /** Update has been downloaded and is ready to install. */
+  notifyUpdateDownloaded(info: { version: string }): void;
 }

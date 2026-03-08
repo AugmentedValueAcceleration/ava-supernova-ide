@@ -563,6 +563,49 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     this.client?.notifyMemoryChanged(scope);
   }
 
+  // ── Auto-update ────────────────────────────────────────────────────────────
+
+  async checkForUpdates(): Promise<{ version: string } | null> {
+    try {
+      const res = await fetch(
+        'https://api.github.com/repos/AugmentedValueAcceleration/ava-supernova-ide/releases/latest',
+        { headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ava-supernova-ide' } },
+      );
+      if (!res.ok) return null;
+      const data = await res.json() as { tag_name?: string };
+      const remoteVersion = data.tag_name?.replace(/^v/, '') || '';
+      const { join } = require('path');
+      const pkgPath = join(__dirname, '..', '..', 'package.json');
+      let currentVersion = '0.0.0';
+      try { currentVersion = require(pkgPath).version || '0.0.0'; } catch { /* fallback */ }
+      if (remoteVersion && remoteVersion !== currentVersion && this.isNewer(remoteVersion, currentVersion)) {
+        return { version: remoteVersion };
+      }
+      return null;
+    } catch (err: any) {
+      console.error('[ava-update] Check failed:', err.message);
+      return null;
+    }
+  }
+
+  async downloadUpdate(): Promise<boolean> {
+    return false;
+  }
+
+  async installUpdate(): Promise<void> {
+    // Handled by frontend opening the download URL
+  }
+
+  private isNewer(remote: string, current: string): boolean {
+    const r = remote.split('.').map(Number);
+    const c = current.split('.').map(Number);
+    for (let i = 0; i < Math.max(r.length, c.length); i++) {
+      if ((r[i] || 0) > (c[i] || 0)) return true;
+      if ((r[i] || 0) < (c[i] || 0)) return false;
+    }
+    return false;
+  }
+
   // ── Dashboard methods ──────────────────────────────────────────────────────
 
   async getDashboardState(): Promise<AvaDashboardState> {

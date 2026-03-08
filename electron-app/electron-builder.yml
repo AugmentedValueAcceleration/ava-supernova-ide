@@ -69,5 +69,8 @@ linux:
     - AppImage
     - deb
 
-# No auto-update for now — downloads from website only
-publish: null
+# Auto-update via GitHub Releases
+publish:
+  provider: github
+  owner: AugmentedValueAcceleration
+  repo: ava-supernova-ide
