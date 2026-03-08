@@ -12,6 +12,9 @@ export interface AvaDashboardAppProps {
   onConnectAccount: (key: string) => void;
   onDisconnectAccount: () => void;
   onGetUsageSummary?: () => Promise<AvaUsageSummary>;
+  onGetMemory?: () => Promise<{ global: string | null; project: string | null }>;
+  onSaveMemory?: (scope: 'global' | 'project', content: string) => Promise<void>;
+  onClearMemory?: (scope: 'global' | 'project') => Promise<void>;
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -106,7 +109,7 @@ const TOKEN_OPTIONS = [
 const NAV_ITEMS: Array<{ page: DashboardPage; label: string; icon: string; platformOnly?: boolean; comingSoon?: boolean }> = [
   { page: 'overview', label: 'Overview', icon: '\u26A1', platformOnly: true },
   { page: 'usage', label: 'Usage', icon: '\u2593', platformOnly: true },
-  { page: 'memory', label: 'Memory', icon: '\u2728', platformOnly: true, comingSoon: true },
+  { page: 'memory', label: 'Memory', icon: '\u2728' },
   { page: 'connections', label: 'Connections', icon: '\u{1F517}', platformOnly: true, comingSoon: true },
   { page: 'billing', label: 'Billing', icon: '\u{1F4B3}', platformOnly: true },
   { page: 'settings', label: 'Settings', icon: '\u2699' },
@@ -775,15 +778,6 @@ function OverviewPage({ account, onNavigate }: { account: AvaAccountInfo; onNavi
       <div style={s.statsGrid}>
         <div style={s.section}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.5 }}>{'\u2728'} Memory</div>
-            <span style={s.comingSoonBadge}>Coming Soon</span>
-          </div>
-          <div style={{ fontSize: '11px', opacity: 0.5 }}>
-            Memory sync between the IDE and your account is on the way.
-          </div>
-        </div>
-        <div style={s.section}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.5 }}>{'\u{1F517}'} Connections</div>
             <span style={s.comingSoonBadge}>Coming Soon</span>
           </div>
@@ -1352,6 +1346,167 @@ function UsageSummaryCard({ onGetUsageSummary }: { onGetUsageSummary: () => Prom
   );
 }
 
+// ── Memory page ─────────────────────────────────────────────────────────────
+
+function MemoryPage({ onGetMemory, onSaveMemory, onClearMemory }: {
+  onGetMemory: () => Promise<{ global: string | null; project: string | null }>;
+  onSaveMemory: (scope: 'global' | 'project', content: string) => Promise<void>;
+  onClearMemory: (scope: 'global' | 'project') => Promise<void>;
+}) {
+  const [activeTab, setActiveTab] = React.useState<'global' | 'project'>('global');
+  const [globalMemory, setGlobalMemory] = React.useState<string | null>(null);
+  const [projectMemory, setProjectMemory] = React.useState<string | null>(null);
+  const [editing, setEditing] = React.useState(false);
+  const [editContent, setEditContent] = React.useState('');
+  const [confirmClear, setConfirmClear] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    onGetMemory().then(({ global, project }) => {
+      setGlobalMemory(global);
+      setProjectMemory(project);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const currentContent = activeTab === 'global' ? globalMemory : projectMemory;
+
+  const handleEdit = () => {
+    setEditContent(currentContent ?? '');
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    await onSaveMemory(activeTab, editContent);
+    if (activeTab === 'global') setGlobalMemory(editContent);
+    else setProjectMemory(editContent);
+    setEditing(false);
+  };
+
+  const handleClear = async () => {
+    if (confirmClear) {
+      await onClearMemory(activeTab);
+      if (activeTab === 'global') setGlobalMemory(null);
+      else setProjectMemory(null);
+      setConfirmClear(false);
+      setEditing(false);
+    } else {
+      setConfirmClear(true);
+      setTimeout(() => setConfirmClear(false), 3000);
+    }
+  };
+
+  const handleTabSwitch = (tab: 'global' | 'project') => {
+    setActiveTab(tab);
+    setEditing(false);
+    setConfirmClear(false);
+  };
+
+  if (loading) {
+    return <div style={{ padding: '20px', opacity: 0.5, fontSize: '12px' }}>Loading memory...</div>;
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={s.pageTitle}>Memory</div>
+        <div style={s.pageSubtitle}>Persistent knowledge that Ava remembers across sessions</div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '0', marginBottom: '12px', borderBottom: '1px solid var(--theia-panel-border, rgba(255,255,255,0.08))' }}>
+        {(['global', 'project'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => handleTabSwitch(tab)}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              borderBottom: activeTab === tab ? '2px solid var(--ava-accent, #A855F7)' : '2px solid transparent',
+              background: 'transparent',
+              color: 'var(--theia-foreground, #e0e0e0)',
+              opacity: activeTab === tab ? 1 : 0.5,
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontFamily: 'inherit',
+            }}
+          >
+            {tab === 'global' ? 'Global' : 'Project'}
+          </button>
+        ))}
+      </div>
+
+      {/* Path hint */}
+      <div style={{ fontSize: '10px', opacity: 0.4, marginBottom: '10px' }}>
+        {activeTab === 'global' ? '~/.ava/memory.md' : '.ava/memory.md'}
+      </div>
+
+      {/* Content */}
+      <div style={s.section}>
+        {editing ? (
+          <textarea
+            autoFocus
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            style={{
+              width: '100%',
+              minHeight: '240px',
+              padding: '8px',
+              border: '1px solid var(--theia-input-border, rgba(255,255,255,0.1))',
+              borderRadius: '4px',
+              background: 'var(--theia-input-background, rgba(0,0,0,0.2))',
+              color: 'var(--theia-input-foreground, #e0e0e0)',
+              fontFamily: 'var(--theia-editor-font-family, monospace)',
+              fontSize: '12px',
+              lineHeight: '1.5',
+              resize: 'vertical' as const,
+              outline: 'none',
+              boxSizing: 'border-box' as const,
+            }}
+          />
+        ) : currentContent ? (
+          <pre style={{
+            margin: 0,
+            whiteSpace: 'pre-wrap' as const,
+            fontFamily: 'var(--theia-editor-font-family, monospace)',
+            fontSize: '12px',
+            lineHeight: '1.5',
+            opacity: 0.9,
+          }}>{currentContent}</pre>
+        ) : (
+          <div style={{ padding: '24px', textAlign: 'center', opacity: 0.5, fontSize: '12px' }}>
+            {activeTab === 'global'
+              ? 'No global memories yet. Ava will save memories as you work together.'
+              : 'No project memories yet. Ava will save project-specific patterns here.'}
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+        {editing ? (
+          <>
+            <button style={s.btnSmall} onClick={handleSave}>Save</button>
+            <button style={s.btnSecondary} onClick={() => { setEditing(false); setConfirmClear(false); }}>Cancel</button>
+          </>
+        ) : (
+          <>
+            <button style={s.btnSmall} onClick={handleEdit}>Edit</button>
+            {currentContent && (
+              <button
+                style={confirmClear ? { ...s.btnSmall, background: 'var(--theia-errorForeground, #e53935)' } : s.btnSecondary}
+                onClick={handleClear}
+              >
+                {confirmClear ? 'Confirm Clear' : 'Clear'}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main app ────────────────────────────────────────────────────────────────
 
 export function AvaDashboardApp(props: AvaDashboardAppProps) {
@@ -1402,6 +1557,11 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
       case 'usage':
         if (hasPlatform && state.account) {
           return <UsagePage account={state.account} onGetUsageSummary={props.onGetUsageSummary} />;
+        }
+        return <SettingsPage state={state} onSaveProviderKey={onSaveProviderKey} onRemoveProviderKey={onRemoveProviderKey} onSavePreferences={onSavePreferences} onGetUsageSummary={props.onGetUsageSummary} />;
+      case 'memory':
+        if (props.onGetMemory && props.onSaveMemory && props.onClearMemory) {
+          return <MemoryPage onGetMemory={props.onGetMemory} onSaveMemory={props.onSaveMemory} onClearMemory={props.onClearMemory} />;
         }
         return <SettingsPage state={state} onSaveProviderKey={onSaveProviderKey} onRemoveProviderKey={onRemoveProviderKey} onSavePreferences={onSavePreferences} onGetUsageSummary={props.onGetUsageSummary} />;
       case 'billing':

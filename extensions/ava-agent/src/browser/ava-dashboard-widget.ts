@@ -61,6 +61,9 @@ export class AvaDashboardWidget extends ReactWidget {
         this.service.disconnectPlatformAccount();
       },
       onGetUsageSummary: () => this.service.getUsageSummary(),
+      onGetMemory: () => this.service.getMemory(),
+      onSaveMemory: (scope: 'global' | 'project', content: string) => this.service.saveMemory(scope, content),
+      onClearMemory: (scope: 'global' | 'project') => this.service.clearMemory(scope),
     });
   }
 }
