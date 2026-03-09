@@ -613,7 +613,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
         { headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ava-supernova-ide' } },
       );
       if (!res.ok) return false;
-      const data = await res.json() as { assets?: { name: string; browser_download_url: string }[] };
+      const data = await res.json() as { assets?: { name: string; browser_download_url: string; size?: number }[] };
       const asset = data.assets?.find(a => a.name.endsWith('.exe'));
       if (!asset) return false;
 
@@ -624,13 +624,46 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       fs.mkdirSync(tempDir, { recursive: true });
       const installerPath = path.join(tempDir, asset.name);
 
-      // Download the installer
+      // Download the installer with streaming progress
       console.log(`[ava-update] Downloading ${asset.browser_download_url}...`);
+      this.client?.notifyUpdateDownloadProgress(0);
       const dlRes = await fetch(asset.browser_download_url, { redirect: 'follow' });
       if (!dlRes.ok) return false;
-      const buffer = Buffer.from(await dlRes.arrayBuffer());
-      fs.writeFileSync(installerPath, buffer);
-      console.log(`[ava-update] Downloaded to ${installerPath} (${(buffer.length / 1048576).toFixed(1)} MB)`);
+
+      const contentLength = parseInt(dlRes.headers.get('content-length') || '0', 10) || asset.size || 0;
+      const reader = dlRes.body?.getReader();
+
+      if (!reader) {
+        // Fallback: no streaming — download in one shot
+        const buffer = Buffer.from(await dlRes.arrayBuffer());
+        fs.writeFileSync(installerPath, buffer);
+        this.client?.notifyUpdateDownloadProgress(100);
+        console.log(`[ava-update] Downloaded to ${installerPath} (${(buffer.length / 1048576).toFixed(1)} MB)`);
+      } else {
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        let lastReportedPercent = -1;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+
+          if (contentLength > 0) {
+            const percent = Math.min(99, Math.round((received / contentLength) * 100));
+            if (percent !== lastReportedPercent) {
+              lastReportedPercent = percent;
+              this.client?.notifyUpdateDownloadProgress(percent);
+            }
+          }
+        }
+
+        const buffer = Buffer.concat(chunks);
+        fs.writeFileSync(installerPath, buffer);
+        this.client?.notifyUpdateDownloadProgress(100);
+        console.log(`[ava-update] Downloaded to ${installerPath} (${(buffer.length / 1048576).toFixed(1)} MB)`);
+      }
 
       // Store path for installUpdate
       this._pendingInstallerPath = installerPath;
@@ -648,22 +681,94 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
     try {
       const { spawn } = require('child_process');
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
       const installerPath = this._pendingInstallerPath;
       console.log(`[ava-update] Launching installer: ${installerPath}`);
 
-      // Launch NSIS installer in detached mode with /S for silent install.
-      // The installer waits for file locks to be released, so the frontend
-      // must close the Electron window (triggering app.quit()) after this
-      // RPC call returns. We do NOT call process.exit() here because that
-      // only kills the backend process — the Electron main process would
-      // still hold file locks, preventing the installer from replacing files.
-      const child = spawn(installerPath, ['/S'], {
+      // Resolve the app executable path so we can relaunch after install.
+      // In packaged Electron, process.execPath points to the .exe
+      const appExePath = process.execPath;
+      const installDir = path.dirname(appExePath);
+
+      // Write a PowerShell script that shows a visual progress window,
+      // runs the NSIS installer silently, then relaunches the app.
+      const updateScript = path.join(os.tmpdir(), 'ava-supernova-update', 'update.ps1');
+      const ps1Content = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = 'Ava Supernova'
+$form.Size = New-Object System.Drawing.Size(420, 180)
+$form.StartPosition = 'CenterScreen'
+$form.FormBorderStyle = 'FixedDialog'
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$form.BackColor = [System.Drawing.Color]::FromArgb(24, 24, 27)
+$form.TopMost = $true
+$form.ShowInTaskbar = $true
+
+$title = New-Object System.Windows.Forms.Label
+$title.Text = 'Updating Ava Supernova...'
+$title.ForeColor = [System.Drawing.Color]::White
+$title.Font = New-Object System.Drawing.Font('Segoe UI', 13, [System.Drawing.FontStyle]::Bold)
+$title.Location = New-Object System.Drawing.Point(24, 24)
+$title.AutoSize = $true
+$form.Controls.Add($title)
+
+$status = New-Object System.Windows.Forms.Label
+$status.Text = 'Installing update. Please wait...'
+$status.ForeColor = [System.Drawing.Color]::FromArgb(168, 85, 247)
+$status.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+$status.Location = New-Object System.Drawing.Point(24, 60)
+$status.AutoSize = $true
+$form.Controls.Add($status)
+
+$progress = New-Object System.Windows.Forms.ProgressBar
+$progress.Style = 'Marquee'
+$progress.MarqueeAnimationSpeed = 30
+$progress.Location = New-Object System.Drawing.Point(24, 95)
+$progress.Size = New-Object System.Drawing.Size(360, 20)
+$form.Controls.Add($progress)
+
+$form.Show()
+[System.Windows.Forms.Application]::DoEvents()
+
+# Run the NSIS installer silently and wait for it to finish
+$proc = Start-Process -FilePath '${installerPath.replace(/'/g, "''")}' -ArgumentList '/S','/D=${installDir.replace(/'/g, "''")}' -PassThru
+while (-not $proc.HasExited) {
+    [System.Windows.Forms.Application]::DoEvents()
+    Start-Sleep -Milliseconds 200
+}
+
+$status.Text = 'Update complete! Relaunching...'
+$status.ForeColor = [System.Drawing.Color]::FromArgb(34, 197, 94)
+$progress.Style = 'Continuous'
+$progress.Value = 100
+[System.Windows.Forms.Application]::DoEvents()
+Start-Sleep -Seconds 1
+
+$form.Close()
+
+# Relaunch the app
+Start-Process -FilePath '${appExePath.replace(/'/g, "''")}'
+`;
+      fs.writeFileSync(updateScript, ps1Content);
+
+      // Launch the PowerShell update script in a detached process.
+      // It shows a progress window, runs the installer, then relaunches.
+      const child = spawn('powershell.exe', [
+        '-ExecutionPolicy', 'Bypass',
+        '-WindowStyle', 'Hidden',
+        '-File', updateScript,
+      ], {
         detached: true,
         stdio: 'ignore',
-        windowsHide: true,
       });
       child.unref();
-      console.log('[ava-update] Installer launched. Frontend should close the app now.');
+      console.log('[ava-update] Update script started. Frontend should close the app now.');
     } catch (err: any) {
       console.error('[ava-update] Install failed:', err.message);
       throw err;

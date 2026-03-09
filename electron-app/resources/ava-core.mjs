@@ -1895,7 +1895,7 @@ var ProviderError = class extends AvaError {
       case 404:
         return t("error.msg.model_not_found", { provider: this.provider });
       case 429:
-        return t("error.msg.rate_limit", { provider: this.provider });
+        return t("error.msg.rate_limit", { provider: this.provider }) + " Retries exhausted \u2014 the provider may have very strict rate limits on this model.";
       case 500:
       case 502:
       case 503: {
@@ -1978,23 +1978,39 @@ var BaseProvider = class _BaseProvider {
   // ── Retry logic ─────────────────────────────────────────────────────────
   static RETRYABLE_STATUS_CODES = /* @__PURE__ */ new Set([429, 500, 502, 503]);
   static MAX_RETRIES = 3;
+  static RATE_LIMIT_MAX_RETRIES = 5;
+  // More retries for rate limits (free-tier models)
   static BASE_DELAY_MS = 1e3;
+  static RATE_LIMIT_BASE_DELAY_MS = 5e3;
+  // 5s base for rate limits (Zhipu free models need ~6s)
   static FETCH_TIMEOUT_MS = 6e4;
   // 60s connection timeout
   static STREAM_READ_TIMEOUT_MS = 9e4;
   // 90s per-chunk — reasoning models can think for a while
   async fetchWithRetry(url, init) {
+    const callerSignal = init.signal;
     let lastError;
-    for (let attempt = 0; attempt <= _BaseProvider.MAX_RETRIES; attempt++) {
+    for (let attempt = 0; attempt <= _BaseProvider.RATE_LIMIT_MAX_RETRIES; attempt++) {
+      if (callerSignal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), _BaseProvider.FETCH_TIMEOUT_MS);
+      const onCallerAbort = () => controller.abort();
+      callerSignal?.addEventListener("abort", onCallerAbort, { once: true });
       let response;
       try {
-        response = await fetch(url, { ...init, signal: controller.signal });
+        const { signal: _ignored, ...restInit } = init;
+        response = await fetch(url, { ...restInit, signal: controller.signal });
       } catch (err) {
         clearTimeout(timeoutId);
+        callerSignal?.removeEventListener("abort", onCallerAbort);
+        if (callerSignal?.aborted) {
+          throw new DOMException("Aborted", "AbortError");
+        }
         const isTimeout = err instanceof DOMException && err.name === "AbortError";
         const msg = isTimeout ? `${this.displayName} request timed out after ${_BaseProvider.FETCH_TIMEOUT_MS / 1e3}s` : `${this.displayName} network error: ${err instanceof Error ? err.message : String(err)}`;
+        logger.debug(`[${this.name}] Fetch error (attempt ${attempt + 1}/${_BaseProvider.MAX_RETRIES + 1}): ${msg}`);
         lastError = new ProviderError(msg, this.name);
         if (attempt < _BaseProvider.MAX_RETRIES) {
           const delay2 = _BaseProvider.BASE_DELAY_MS * Math.pow(2, attempt);
@@ -2004,9 +2020,13 @@ var BaseProvider = class _BaseProvider {
         throw lastError;
       } finally {
         clearTimeout(timeoutId);
+        callerSignal?.removeEventListener("abort", onCallerAbort);
       }
       if (response.ok) return response;
       const errorBody = await response.text();
+      const isRateLimit = response.status === 429 || response.status === 502 && errorBody.includes("429");
+      const maxRetries = isRateLimit ? _BaseProvider.RATE_LIMIT_MAX_RETRIES : _BaseProvider.MAX_RETRIES;
+      logger.debug(`[${this.name}] API error (attempt ${attempt + 1}/${maxRetries + 1}): ${response.status} ${response.statusText} \u2014 ${errorBody.slice(0, 500)}`);
       lastError = new ProviderError(
         `${this.displayName} API error: ${response.status} ${response.statusText}`,
         this.name,
@@ -2014,8 +2034,16 @@ var BaseProvider = class _BaseProvider {
         errorBody
       );
       if (!_BaseProvider.RETRYABLE_STATUS_CODES.has(response.status)) throw lastError;
-      if (attempt === _BaseProvider.MAX_RETRIES) break;
-      const delay = _BaseProvider.BASE_DELAY_MS * Math.pow(2, attempt);
+      if (attempt >= maxRetries) break;
+      let delay;
+      if (isRateLimit) {
+        const retryAfter = response.headers.get("retry-after");
+        const retryAfterMs = retryAfter ? Math.min(Number(retryAfter) * 1e3, 3e4) : 0;
+        delay = Math.max(retryAfterMs, _BaseProvider.RATE_LIMIT_BASE_DELAY_MS * Math.pow(1.5, attempt));
+      } else {
+        delay = _BaseProvider.BASE_DELAY_MS * Math.pow(2, attempt);
+      }
+      logger.debug(`[${this.name}] Retrying in ${Math.round(delay / 1e3)}s...`);
       await new Promise((r) => setTimeout(r, delay));
     }
     throw lastError;
@@ -2180,16 +2208,6 @@ var KIMI_MODELS = [
     supportsThinking: true,
     supportsVision: true,
     pricing: { inputPerMillion: 0.6, outputPerMillion: 3 }
-  },
-  {
-    id: "moonshot-v1-128k",
-    name: "Moonshot V1 128K",
-    provider: "kimi",
-    contextWindow: 128e3,
-    maxOutputTokens: 8192,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 2, outputPerMillion: 5 }
   }
 ];
 
@@ -2218,16 +2236,6 @@ var QWEN_MODELS = [
     supportsThinking: true,
     supportsVision: true,
     pricing: { inputPerMillion: 0.4, outputPerMillion: 2.4 }
-  },
-  {
-    id: "qwen-turbo-latest",
-    name: "Qwen Turbo",
-    provider: "qwen",
-    contextWindow: 1e6,
-    maxOutputTokens: 8192,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 0.05, outputPerMillion: 0.2 }
   }
 ];
 
@@ -2241,30 +2249,24 @@ var QwenProvider = class extends BaseProvider {
   listModels() {
     return QWEN_MODELS;
   }
+  transformRequest(request2) {
+    const transformed = { ...request2 };
+    delete transformed.frequency_penalty;
+    if (Array.isArray(transformed.messages)) {
+      transformed.messages = transformed.messages.map((msg) => {
+        if ("reasoning_content" in msg) {
+          const { reasoning_content: _rc, ...rest } = msg;
+          return rest;
+        }
+        return msg;
+      });
+    }
+    return transformed;
+  }
 };
 
 // packages/core/src/providers/zhipu/models.ts
 var ZHIPU_MODELS = [
-  {
-    id: "glm-4.7-flash",
-    name: "GLM-4.7 Flash (Free)",
-    provider: "zhipu",
-    contextWindow: 128e3,
-    maxOutputTokens: 4096,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
-  },
-  {
-    id: "glm-4.5-flash",
-    name: "GLM-4.5 Flash (Free)",
-    provider: "zhipu",
-    contextWindow: 128e3,
-    maxOutputTokens: 4096,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
-  },
   {
     id: "glm-5",
     name: "GLM-5",
@@ -2278,20 +2280,19 @@ var ZHIPU_MODELS = [
     pricing: { inputPerMillion: 1, outputPerMillion: 3.2 }
   },
   {
-    id: "glm-4.7",
-    name: "GLM-4.7",
+    id: "glm-4.5-flash",
+    name: "GLM-4.5 Flash (Free)",
     provider: "zhipu",
-    contextWindow: 2e5,
-    maxOutputTokens: 128e3,
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
     supportsToolCalls: true,
     supportsStreaming: true,
-    supportsThinking: true,
-    supportsVision: true,
-    pricing: { inputPerMillion: 0.6, outputPerMillion: 2.2 }
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
   }
 ];
 
 // packages/core/src/providers/zhipu/index.ts
+var FLASH_MODELS = /* @__PURE__ */ new Set(["glm-4.5-flash"]);
 var ZhipuProvider = class extends BaseProvider {
   name = "zhipu";
   displayName = "Zhipu AI";
@@ -2300,6 +2301,13 @@ var ZhipuProvider = class extends BaseProvider {
   }
   listModels() {
     return ZHIPU_MODELS;
+  }
+  transformRequest(request2) {
+    const transformed = { ...request2 };
+    if (FLASH_MODELS.has(request2.model)) {
+      transformed.enable_thinking = false;
+    }
+    return transformed;
   }
   // Zhipu sometimes returns tool_call arguments as objects instead of strings
   normalizeResponse(raw) {
@@ -2344,17 +2352,6 @@ var MISTRAL_MODELS = [
     pricing: { inputPerMillion: 2, outputPerMillion: 6 }
   },
   {
-    id: "mistral-medium-latest",
-    name: "Mistral Medium",
-    provider: "mistral",
-    contextWindow: 131e3,
-    maxOutputTokens: 8192,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    supportsVision: true,
-    pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
-  },
-  {
     id: "codestral-latest",
     name: "Codestral",
     provider: "mistral",
@@ -2366,35 +2363,13 @@ var MISTRAL_MODELS = [
   },
   {
     id: "devstral-latest",
-    name: "Devstral",
+    name: "Devstral 2",
     provider: "mistral",
     contextWindow: 262e3,
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
     pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
-  },
-  {
-    id: "devstral-small-latest",
-    name: "Devstral Small",
-    provider: "mistral",
-    contextWindow: 262e3,
-    maxOutputTokens: 8192,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    supportsVision: true,
-    pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
-  },
-  {
-    id: "mistral-small-latest",
-    name: "Mistral Small",
-    provider: "mistral",
-    contextWindow: 131e3,
-    maxOutputTokens: 8192,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    supportsVision: true,
-    pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
   }
 ];
 
@@ -2840,7 +2815,7 @@ var PLATFORM_MODELS = [
     supportsThinking: true,
     pricing: { inputPerMillion: 0.28, outputPerMillion: 0.42 }
   },
-  // Kimi / Moonshot
+  // Kimi
   {
     id: "kimi-k2.5",
     name: "Kimi K2.5",
@@ -2852,16 +2827,6 @@ var PLATFORM_MODELS = [
     supportsThinking: true,
     supportsVision: true,
     pricing: { inputPerMillion: 0.6, outputPerMillion: 3 }
-  },
-  {
-    id: "moonshot-v1-128k",
-    name: "Moonshot V1 128K",
-    provider: "platform",
-    contextWindow: 128e3,
-    maxOutputTokens: 8192,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 2, outputPerMillion: 5 }
   },
   // Qwen
   {
@@ -2875,16 +2840,6 @@ var PLATFORM_MODELS = [
     supportsThinking: true,
     supportsVision: true,
     pricing: { inputPerMillion: 0.4, outputPerMillion: 2.4 }
-  },
-  {
-    id: "qwen-turbo-latest",
-    name: "Qwen Turbo",
-    provider: "platform",
-    contextWindow: 1e6,
-    maxOutputTokens: 8192,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 0.05, outputPerMillion: 0.2 }
   },
   // Zhipu / GLM
   {
@@ -2900,28 +2855,6 @@ var PLATFORM_MODELS = [
     pricing: { inputPerMillion: 1, outputPerMillion: 3.2 }
   },
   {
-    id: "glm-4.7",
-    name: "GLM-4.7",
-    provider: "platform",
-    contextWindow: 2e5,
-    maxOutputTokens: 128e3,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    supportsThinking: true,
-    supportsVision: true,
-    pricing: { inputPerMillion: 0.6, outputPerMillion: 2.2 }
-  },
-  {
-    id: "glm-4.7-flash",
-    name: "GLM-4.7 Flash (Free)",
-    provider: "platform",
-    contextWindow: 128e3,
-    maxOutputTokens: 4096,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
-  },
-  {
     id: "glm-4.5-flash",
     name: "GLM-4.5 Flash (Free)",
     provider: "platform",
@@ -2934,7 +2867,7 @@ var PLATFORM_MODELS = [
   // Mistral
   {
     id: "mistral-large-latest",
-    name: "Mistral Large 3",
+    name: "Mistral Large",
     provider: "platform",
     contextWindow: 256e3,
     maxOutputTokens: 8192,
@@ -2944,7 +2877,7 @@ var PLATFORM_MODELS = [
   },
   {
     id: "codestral-latest",
-    name: "Codestral 25.08",
+    name: "Codestral",
     provider: "platform",
     contextWindow: 256e3,
     maxOutputTokens: 8192,
@@ -2953,7 +2886,7 @@ var PLATFORM_MODELS = [
     pricing: { inputPerMillion: 0.3, outputPerMillion: 0.9 }
   },
   {
-    id: "devstral-2-25-12",
+    id: "devstral-latest",
     name: "Devstral 2",
     provider: "platform",
     contextWindow: 256e3,
@@ -2961,16 +2894,6 @@ var PLATFORM_MODELS = [
     supportsToolCalls: true,
     supportsStreaming: true,
     pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
-  },
-  {
-    id: "mistral-small-latest",
-    name: "Mistral Small 3.2",
-    provider: "platform",
-    contextWindow: 128e3,
-    maxOutputTokens: 8192,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
   },
   // Claude — available to admin/pro/ultra tiers via platform proxy
   {

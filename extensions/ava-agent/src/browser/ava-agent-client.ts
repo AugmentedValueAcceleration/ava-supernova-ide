@@ -118,6 +118,8 @@ export interface DashboardState {
   activeModel: string | null;
   error: string | null;
   initialized: boolean;
+  /** Download progress (0–100) pushed from backend during update download. */
+  updateDownloadProgress: number;
 }
 
 const initialDashboardState: DashboardState = {
@@ -130,6 +132,7 @@ const initialDashboardState: DashboardState = {
   activeModel: null,
   error: null,
   initialized: false,
+  updateDownloadProgress: 0,
 };
 
 // ── Client implementation ───────────────────────────────────────────────────
@@ -572,8 +575,9 @@ export class AvaAgentClient implements IAvaAgentClient {
     // Handled by dashboard polling via checkForUpdates()
   }
 
-  notifyUpdateDownloadProgress(_percent: number): void {
-    // Stub — download handled by browser opening URL
+  notifyUpdateDownloadProgress(percent: number): void {
+    this.dashboardState = { ...this.dashboardState, updateDownloadProgress: percent };
+    this.onDashboardStateChangedEmitter.fire(this.dashboardState);
   }
 
   notifyUpdateDownloaded(_info: { version: string }): void {

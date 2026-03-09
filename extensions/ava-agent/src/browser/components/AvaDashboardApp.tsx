@@ -23,7 +23,7 @@ export interface AvaDashboardAppProps {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type DashboardPage = 'overview' | 'usage' | 'memory' | 'connections' | 'billing' | 'settings';
+type DashboardPage = 'overview' | 'usage' | 'memory' | 'connections' | 'billing' | 'docs' | 'settings';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -116,6 +116,7 @@ const NAV_ITEMS: Array<{ page: DashboardPage; label: string; icon: string; platf
   { page: 'memory', label: 'Memory', icon: '\u2728' },
   { page: 'connections', label: 'Connections', icon: '\u{1F517}', platformOnly: true, comingSoon: true },
   { page: 'billing', label: 'Billing', icon: '\u{1F4B3}', platformOnly: true },
+  { page: 'docs', label: 'Documentation', icon: '\u{1F4D6}' },
   { page: 'settings', label: 'Settings', icon: '\u2699' },
 ];
 
@@ -457,7 +458,7 @@ function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConn
   onDisconnect: () => void;
   onConnect: () => void;
   onCheckForUpdates?: () => void;
-  updateStatus?: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error';
+  updateStatus?: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'installing' | 'error';
   version?: string;
 }) {
   const visibleItems = mode === 'byok'
@@ -500,17 +501,21 @@ function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConn
         {onCheckForUpdates && (
           <button
             onClick={onCheckForUpdates}
-            disabled={updateStatus === 'checking'}
+            disabled={updateStatus === 'checking' || updateStatus === 'downloading' || updateStatus === 'installing'}
             style={{
               width: '100%', padding: '5px 10px', marginBottom: '10px',
               fontSize: '11px', fontWeight: 500, borderRadius: '4px',
               background: 'transparent', color: 'var(--theia-foreground, #e0e0e0)',
-              border: '1px solid rgba(255,255,255,0.1)', cursor: updateStatus === 'checking' ? 'default' : 'pointer',
-              opacity: updateStatus === 'checking' ? 0.5 : 0.7,
+              border: '1px solid rgba(255,255,255,0.1)',
+              cursor: updateStatus === 'checking' || updateStatus === 'downloading' || updateStatus === 'installing' ? 'default' : 'pointer',
+              opacity: updateStatus === 'checking' || updateStatus === 'downloading' || updateStatus === 'installing' ? 0.5 : 0.7,
               transition: 'opacity 0.15s',
             }}
           >
-            {updateStatus === 'checking' ? 'Checking...' : 'Check for Updates'}
+            {updateStatus === 'checking' ? 'Checking...'
+              : updateStatus === 'downloading' ? 'Downloading...'
+              : updateStatus === 'installing' ? 'Installing...'
+              : 'Check for Updates'}
           </button>
         )}
         {mode === 'platform' ? (
@@ -1532,6 +1537,619 @@ function MemoryPage({ onGetMemory, onSaveMemory, onClearMemory }: {
   );
 }
 
+// ── Documentation Page ──────────────────────────────────────────────────────
+
+type DocsTab = 'getting-started' | 'models' | 'tools' | 'commands' | 'modes' | 'config';
+
+const DOC_TABS: Array<{ id: DocsTab; label: string }> = [
+  { id: 'getting-started', label: 'Getting Started' },
+  { id: 'models', label: 'Models' },
+  { id: 'tools', label: 'Tools' },
+  { id: 'commands', label: 'Commands' },
+  { id: 'modes', label: 'Modes & Permissions' },
+  { id: 'config', label: 'Configuration' },
+];
+
+const docStyles = {
+  tabBar: {
+    display: 'flex',
+    gap: '2px',
+    padding: '3px',
+    borderRadius: '8px',
+    border: '1px solid var(--theia-panel-border)',
+    background: 'var(--theia-input-background)',
+    marginBottom: '16px',
+    flexWrap: 'wrap' as const,
+  },
+  tab: (active: boolean) => ({
+    flex: '1 1 auto',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    border: 'none' as const,
+    cursor: 'pointer' as const,
+    fontSize: '11px',
+    fontWeight: active ? 600 : 400 as const,
+    fontFamily: 'var(--theia-ui-font-family)',
+    background: active ? 'var(--ava-accent, #A855F7)' : 'transparent',
+    color: active ? '#fff' : 'var(--theia-foreground)',
+    opacity: active ? 1 : 0.6,
+    transition: 'all 0.15s',
+    whiteSpace: 'nowrap' as const,
+  }),
+  card: {
+    border: '1px solid var(--theia-panel-border)',
+    borderRadius: '8px',
+    padding: '12px',
+    background: 'rgba(168, 85, 247, 0.02)',
+    marginBottom: '10px',
+  },
+  cardTitle: {
+    fontSize: '12px',
+    fontWeight: 600 as const,
+    color: 'var(--ava-accent, #A855F7)',
+    marginBottom: '6px',
+  },
+  cardText: {
+    fontSize: '11px',
+    opacity: 0.7,
+    lineHeight: '1.5',
+  },
+  table: {
+    width: '100%',
+    fontSize: '11px',
+    borderCollapse: 'collapse' as const,
+  },
+  th: {
+    textAlign: 'left' as const,
+    padding: '6px 8px',
+    fontSize: '9px',
+    fontWeight: 700 as const,
+    letterSpacing: '1px',
+    textTransform: 'uppercase' as const,
+    color: 'var(--ava-accent, #A855F7)',
+    borderBottom: '1px solid var(--theia-panel-border)',
+  },
+  td: {
+    padding: '6px 8px',
+    borderBottom: '1px solid var(--theia-panel-border)',
+    opacity: 0.8,
+  },
+  tdBold: {
+    padding: '6px 8px',
+    borderBottom: '1px solid var(--theia-panel-border)',
+    fontWeight: 600 as const,
+  },
+  badge: (color: string) => ({
+    display: 'inline-block',
+    padding: '1px 6px',
+    borderRadius: '10px',
+    fontSize: '10px',
+    fontWeight: 600 as const,
+    background: color === 'safe' ? 'rgba(34, 197, 94, 0.15)' : color === 'write' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+    color: color === 'safe' ? '#22c55e' : color === 'write' ? '#eab308' : '#ef4444',
+  }),
+  code: {
+    fontFamily: 'monospace',
+    fontSize: '11px',
+    padding: '2px 5px',
+    borderRadius: '3px',
+    background: 'var(--theia-input-background)',
+    border: '1px solid var(--theia-panel-border)',
+  },
+  codeBlock: {
+    fontFamily: 'monospace',
+    fontSize: '11px',
+    padding: '10px',
+    borderRadius: '6px',
+    background: 'var(--theia-input-background)',
+    border: '1px solid var(--theia-panel-border)',
+    overflowX: 'auto' as const,
+    whiteSpace: 'pre' as const,
+    lineHeight: '1.5',
+    marginTop: '8px',
+  },
+  tip: {
+    padding: '10px 12px',
+    borderRadius: '6px',
+    border: '1px solid rgba(34, 197, 94, 0.2)',
+    background: 'rgba(34, 197, 94, 0.05)',
+    marginBottom: '12px',
+  },
+  tipTitle: {
+    fontSize: '11px',
+    fontWeight: 600 as const,
+    color: '#22c55e',
+    marginBottom: '4px',
+  },
+  grid2: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '10px',
+    marginBottom: '12px',
+  },
+  modelTag: {
+    display: 'inline-block',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    fontSize: '10px',
+    fontWeight: 600 as const,
+    border: '1px solid var(--theia-panel-border)',
+    marginRight: '4px',
+    marginBottom: '4px',
+  },
+  sectionHeading: {
+    fontSize: '14px',
+    fontWeight: 700 as const,
+    marginBottom: '8px',
+    marginTop: '16px',
+    borderBottom: '1px solid var(--theia-panel-border)',
+    paddingBottom: '6px',
+    color: 'var(--ava-accent, #A855F7)',
+  },
+};
+
+function DocsPage() {
+  const [activeTab, setActiveTab] = React.useState<DocsTab>('getting-started');
+
+  return (
+    <div>
+      <div style={s.pageHeader}>
+        <div style={s.pageTitle}>Documentation</div>
+        <div style={s.pageSubtitle}>Full reference guide for Ava | Supernova</div>
+      </div>
+
+      {/* Tab bar */}
+      <div style={docStyles.tabBar}>
+        {DOC_TABS.map(tab => (
+          <button key={tab.id} style={docStyles.tab(activeTab === tab.id)} onClick={() => setActiveTab(tab.id)}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {activeTab === 'getting-started' && <DocsGettingStarted />}
+      {activeTab === 'models' && <DocsModels />}
+      {activeTab === 'tools' && <DocsTools />}
+      {activeTab === 'commands' && <DocsCommands />}
+      {activeTab === 'modes' && <DocsModes />}
+      {activeTab === 'config' && <DocsConfig />}
+    </div>
+  );
+}
+
+function DocsGettingStarted() {
+  return (
+    <div>
+      <div style={docStyles.tip}>
+        <div style={docStyles.tipTitle}>New to Ava? Start here</div>
+        <div style={docStyles.cardText}>
+          <strong>GLM-4.5 Flash</strong> is free and a great way to try Ava with zero cost.
+          Once you're comfortable, upgrade to <strong>Kimi K2.5</strong> or <strong>DeepSeek V3.2</strong> for stronger agentic coding at low cost.
+        </div>
+      </div>
+
+      <div style={docStyles.sectionHeading}>Setup</div>
+      <div style={docStyles.grid2}>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>1. Add an API Key</div>
+          <div style={docStyles.cardText}>
+            Go to <strong>Settings</strong> in the sidebar and add a key from any provider (DeepSeek, Kimi, GLM, Qwen, Mistral, or Anthropic).
+            Or connect a platform account to skip this step.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>2. Start Coding</div>
+          <div style={docStyles.cardText}>
+            Open the Ava chat panel and start giving instructions. Ava reads your code, makes changes, runs commands, searches files, and more.
+          </div>
+        </div>
+      </div>
+
+      <div style={docStyles.sectionHeading}>Choosing Your Model</div>
+      <div style={docStyles.grid2}>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best for Agentic Coding</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>Kimi K2.5</span>
+            <span style={docStyles.modelTag}>GLM-5</span>
+          </div>
+          <div style={docStyles.cardText}>
+            Multi-step tool calling, file editing, and complex project work. Kimi K2.5 has 76.8% SWE-Bench. GLM-5 scores highest at 77.8%.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best Value</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>DeepSeek V3.2</span>
+            <span style={docStyles.modelTag}>GLM-4.5 Flash</span>
+          </div>
+          <div style={docStyles.cardText}>
+            DeepSeek V3.2 offers strong coding at $0.28/$0.42 per 1M tokens. GLM-4.5 Flash is completely free.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best for Large Codebases</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>Codestral</span>
+            <span style={docStyles.modelTag}>Qwen 3.5 Plus</span>
+            <span style={docStyles.modelTag}>Devstral 2</span>
+          </div>
+          <div style={docStyles.cardText}>
+            256K context window models. Codestral is code-focused, Qwen adds vision and multilingual, Devstral is built for agentic workflows.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best for Reasoning</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>DeepSeek V3.2 Reasoner</span>
+            <span style={docStyles.modelTag}>Claude Opus 4.6</span>
+          </div>
+          <div style={docStyles.cardText}>
+            Extended chain-of-thought models for complex logic and architecture decisions. Reasoner is budget-friendly, Opus is the most capable overall.
+          </div>
+        </div>
+      </div>
+
+      <div style={docStyles.sectionHeading}>Quick Comparison</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Need</th>
+            <th style={docStyles.th}>Best Pick</th>
+            <th style={{ ...docStyles.th, textAlign: 'right' }}>Cost / 1M tokens</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style={docStyles.td}>Free to try</td><td style={docStyles.tdBold}>GLM-4.5 Flash</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>Free</td></tr>
+          <tr><td style={docStyles.td}>Cheapest paid</td><td style={docStyles.tdBold}>DeepSeek V3.2</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$0.28 / $0.42</td></tr>
+          <tr><td style={docStyles.td}>Best tool calling</td><td style={docStyles.tdBold}>Kimi K2.5</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$0.60 / $3.00</td></tr>
+          <tr><td style={docStyles.td}>Best SWE-Bench</td><td style={docStyles.tdBold}>GLM-5</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$1.00 / $3.20</td></tr>
+          <tr><td style={docStyles.td}>Longest context</td><td style={docStyles.tdBold}>Codestral / Qwen / Devstral</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>256K tokens</td></tr>
+          <tr><td style={docStyles.td}>Maximum quality</td><td style={docStyles.tdBold}>Claude Opus 4.6</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$5.00 / $25.00</td></tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DocsModels() {
+  return (
+    <div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        All models work on every plan. Use our managed service or bring your own API keys.
+        You can also connect to locally hosted models via Ollama, LM Studio, or any standard API format endpoint.
+      </div>
+      <div style={{ marginTop: '12px' }}>
+        <table style={docStyles.table}>
+          <thead>
+            <tr>
+              <th style={docStyles.th}>Provider</th>
+              <th style={docStyles.th}>Model</th>
+              <th style={docStyles.th}>Highlights</th>
+              <th style={{ ...docStyles.th, textAlign: 'right' }}>Cost / 1M</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ['Anthropic', 'Claude Opus 4.6', 'Most capable, vision, 200K ctx', '$5.00 / $25.00'],
+              ['Anthropic', 'Claude Sonnet 4.6', 'Best balance of speed & capability', '$3.00 / $15.00'],
+              ['Anthropic', 'Claude Haiku 4.5', 'Fast and affordable, vision', '$1.00 / $5.00'],
+              ['DeepSeek', 'DeepSeek V3.2', 'Best price/performance', '$0.28 / $0.42'],
+              ['DeepSeek', 'DeepSeek V3.2 Reasoner', 'Extended thinking, reasoning', '$0.28 / $0.42'],
+              ['Moonshot AI', 'Kimi K2.5', 'Best multi-step tool calling', '$0.60 / $3.00'],
+              ['Zhipu AI', 'GLM-5', 'Best tool-call reliability, vision', '$1.00 / $3.20'],
+              ['Zhipu AI', 'GLM-4.5 Flash', 'Free tier', 'Free'],
+              ['Alibaba', 'Qwen 3.5 Plus', 'Vision, thinking, 256K context', '$0.40 / $2.40'],
+              ['Mistral AI', 'Mistral Large 3', 'Flagship general-purpose', '$0.50 / $1.50'],
+              ['Mistral AI', 'Codestral', 'Code-focused, 256K context', '$0.30 / $0.90'],
+              ['Mistral AI', 'Devstral 2', 'Agentic coding specialist', '$0.40 / $2.00'],
+            ].map(([provider, model, highlights, cost], i) => (
+              <tr key={i}>
+                <td style={docStyles.td}>{provider}</td>
+                <td style={docStyles.tdBold}>{model}</td>
+                <td style={docStyles.td}>{highlights}</td>
+                <td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>{cost}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ ...docStyles.sectionHeading, marginTop: '20px' }}>Custom Provider (Ollama / LM Studio)</div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Add a <span style={docStyles.code}>baseUrl</span> to connect to any locally hosted model:
+      </div>
+      <div style={docStyles.codeBlock}>{`{
+  "providers": {
+    "deepseek": {
+      "apiKey": "sk-...",
+      "baseUrl": "http://localhost:11434/v1"
+    }
+  }
+}`}</div>
+    </div>
+  );
+}
+
+function DocsTools() {
+  const tools = {
+    'Reading & Searching': [
+      ['file_read', 'Read files with line numbers. Supports offset and limit for large files.', 'safe'],
+      ['glob', 'Find files matching glob patterns (e.g. **/*.ts).', 'safe'],
+      ['grep', 'Search file contents with regex. Filter by file pattern.', 'safe'],
+      ['list_directory', 'List directory contents with file sizes and types.', 'safe'],
+      ['git_status', 'Read-only git commands (status, diff, log, branch, show).', 'safe'],
+      ['git_diff', 'View detailed diffs between commits, branches, or working tree.', 'safe'],
+      ['project_index', 'Index the project structure for intelligent code navigation.', 'safe'],
+      ['find_symbol', 'Find symbols (functions, classes, variables) across the codebase.', 'safe'],
+    ],
+    'Writing & Editing': [
+      ['file_write', 'Create or overwrite files. Auto-creates parent directories.', 'write'],
+      ['file_edit', 'Exact string replacement. Supports single or global replace.', 'write'],
+      ['bash', 'Execute shell commands with configurable timeout.', 'dangerous'],
+      ['rollback', 'Undo file changes made during the current session.', 'write'],
+    ],
+    'Research & Browser': [
+      ['web_search', 'Search the web via DuckDuckGo. No API key required.', 'safe'],
+      ['http_request', 'Make HTTP requests (GET, POST, PUT, DELETE).', 'write'],
+      ['browser', 'Open and interact with web pages using a headless browser.', 'write'],
+      ['screenshot', 'Capture screenshots of the current screen or a URL.', 'safe'],
+      ['database_query', 'Run read-only SQL queries against configured databases.', 'safe'],
+    ],
+    'Memory': [
+      ['memory_save', 'Save knowledge to persistent memory (global or project scope).', 'write'],
+      ['memory_recall', 'Search memories by keyword. Finds relevant stored knowledge.', 'safe'],
+    ],
+    'Collaboration': [
+      ['present_plan', 'Present a structured plan for your approval.', 'safe'],
+      ['todo_write', 'Track task progress with a structured to-do list.', 'safe'],
+      ['ask_user', 'Ask you a question mid-task and wait for a response.', 'safe'],
+    ],
+  };
+
+  return (
+    <div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        The agent runs up to 50 iterations per request, deciding which tools to use, executing them, reading results, and continuing.
+      </div>
+      {Object.entries(tools).map(([group, items]) => (
+        <div key={group}>
+          <div style={docStyles.sectionHeading}>{group}</div>
+          <table style={docStyles.table}>
+            <thead>
+              <tr>
+                <th style={docStyles.th}>Tool</th>
+                <th style={docStyles.th}>Description</th>
+                <th style={{ ...docStyles.th, textAlign: 'center' }}>Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(([name, desc, risk]) => (
+                <tr key={name}>
+                  <td style={docStyles.tdBold}><span style={docStyles.code}>{name}</span></td>
+                  <td style={docStyles.td}>{desc}</td>
+                  <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge(risk)}>{risk}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DocsCommands() {
+  return (
+    <div>
+      <div style={docStyles.sectionHeading}>General</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Command</th>
+            <th style={docStyles.th}>Aliases</th>
+            <th style={docStyles.th}>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            ['/help', '/h', 'Show all available commands'],
+            ['/model', '/m', 'List available models'],
+            ['/model <id>', '', 'Switch to a different model'],
+            ['/clear', '/c', 'Clear conversation history'],
+            ['/provider', '/p', 'List configured providers'],
+            ['/provider add <name>', '', 'Add a provider API key'],
+            ['/permission', '/perm', 'View or set permission mode'],
+            ['/tools', '', 'List available tools'],
+            ['/retry', '/r', 'Retry the last message'],
+            ['/init', '', 'Create .ava/instructions.md'],
+            ['/exit', '/quit, /q', 'Exit Ava'],
+          ].map(([cmd, aliases, desc], i) => (
+            <tr key={i}>
+              <td style={docStyles.tdBold}><span style={docStyles.code}>{cmd}</span></td>
+              <td style={docStyles.td}>{aliases || '\u2014'}</td>
+              <td style={docStyles.td}>{desc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={docStyles.sectionHeading}>History</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Command</th>
+            <th style={docStyles.th}>Aliases</th>
+            <th style={docStyles.th}>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            ['/history', '/ls', 'List saved conversations'],
+            ['/resume <id>', '', 'Resume a saved conversation'],
+            ['/search <query>', '/s', 'Search conversations'],
+            ['/delete <id>', '/rm', 'Delete a conversation'],
+            ['/rename <id> <title>', '', 'Rename a conversation'],
+            ['/pin <id>', '', 'Pin a conversation'],
+            ['/unpin <id>', '', 'Unpin a conversation'],
+            ['/export <id>', '', 'Export as Markdown or JSON'],
+          ].map(([cmd, aliases, desc], i) => (
+            <tr key={i}>
+              <td style={docStyles.tdBold}><span style={docStyles.code}>{cmd}</span></td>
+              <td style={docStyles.td}>{aliases || '\u2014'}</td>
+              <td style={docStyles.td}>{desc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DocsModes() {
+  return (
+    <div>
+      <div style={docStyles.sectionHeading}>Modes</div>
+      <div style={docStyles.grid2}>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Code Mode</div>
+          <div style={docStyles.cardText}>Full agent with all 22 tools. Ava reads, writes, searches, and executes across your codebase.</div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Plan Mode</div>
+          <div style={docStyles.cardText}>Read-only analysis. Ava reads your code and creates plans without modifying anything.</div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Chat Mode</div>
+          <div style={docStyles.cardText}>Conversation only. No tools, just discussion about code, architecture, or ideas.</div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Security Mode</div>
+          <div style={docStyles.cardText}>AI-powered OWASP-aligned security audit. Scans your project for vulnerabilities.</div>
+        </div>
+      </div>
+      <div style={{ fontSize: '11px', opacity: 0.5, marginBottom: '16px' }}>Switch modes from the dropdown in the chat input area.</div>
+
+      <div style={docStyles.sectionHeading}>Permission Modes</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Mode</th>
+            <th style={{ ...docStyles.th, textAlign: 'center' }}>File Reads</th>
+            <th style={{ ...docStyles.th, textAlign: 'center' }}>File Writes</th>
+            <th style={{ ...docStyles.th, textAlign: 'center' }}>Shell Commands</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={docStyles.tdBold}>Strict</td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
+          </tr>
+          <tr>
+            <td style={docStyles.tdBold}>Balanced</td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
+          </tr>
+          <tr>
+            <td style={docStyles.tdBold}>Autonomous</td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '8px' }}>
+        Plans and questions always require your approval, regardless of mode.
+        During a session, you can grant per-tool approval with <strong>Always Allow</strong> or blanket approval with <strong>Allow All</strong>.
+      </div>
+    </div>
+  );
+}
+
+function DocsConfig() {
+  return (
+    <div>
+      <div style={docStyles.sectionHeading}>Settings</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Setting</th>
+            <th style={docStyles.th}>Description</th>
+            <th style={docStyles.th}>Default</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            ['Active Model', 'The model Ava uses for responses', '(none)'],
+            ['Providers > API Key', 'Your API key for each provider', '(empty)'],
+            ['Temperature', 'Sampling temperature (0\u20132)', '0.7'],
+            ['Language', 'UI and response language', 'Auto-detect'],
+            ['Permission Mode', 'Tool approval behaviour', 'Strict'],
+            ['Max Tokens', 'Maximum output tokens per response', '8192'],
+            ['Auto Memory', 'Enable/disable automatic memory persistence', 'Enabled'],
+            ['Stream Responses', 'Enable/disable streaming output', 'Enabled'],
+          ].map(([setting, desc, def], i) => (
+            <tr key={i}>
+              <td style={docStyles.tdBold}>{setting}</td>
+              <td style={docStyles.td}>{desc}</td>
+              <td style={{ ...docStyles.td, fontStyle: 'italic' }}>{def}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={docStyles.sectionHeading}>Configuration File</div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Stored at <span style={docStyles.code}>~/.ava/config.json</span>:
+      </div>
+      <div style={docStyles.codeBlock}>{`{
+  "activeModel": "deepseek:deepseek-chat",
+  "providers": {
+    "anthropic": { "apiKey": "sk-ant-..." },
+    "deepseek": { "apiKey": "sk-..." },
+    "kimi": { "apiKey": "sk-..." },
+    "glm": { "apiKey": "..." },
+    "qwen": { "apiKey": "sk-..." },
+    "mistral": { "apiKey": "..." }
+  },
+  "preferences": {
+    "temperature": 0.7,
+    "maxTokens": 8192,
+    "language": "auto"
+  }
+}`}</div>
+
+      <div style={docStyles.sectionHeading}>Project Context</div>
+      <div style={docStyles.card}>
+        <div style={docStyles.cardTitle}>Project Instructions</div>
+        <div style={docStyles.cardText}>
+          Create a <span style={docStyles.code}>.ava/instructions.md</span> file in your project root to give Ava persistent knowledge about your codebase.
+          Include architecture overview, coding conventions, key file locations, and anything you'd tell a new team member.
+        </div>
+      </div>
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '8px' }}>
+        This file is loaded into Ava's system prompt every session. History is scoped per project.
+        Use <span style={docStyles.code}>/init</span> to generate a starter file.
+      </div>
+
+      <div style={docStyles.sectionHeading}>Language Support</div>
+      <div style={docStyles.card}>
+        <div style={docStyles.cardText}>
+          Ava supports <strong>20 languages</strong>: English, Chinese (Simplified & Traditional), Japanese, Korean, Spanish, Portuguese,
+          French, German, Russian, Arabic, Hindi, Vietnamese, Thai, Turkish, Italian, Polish, Ukrainian, Dutch, Indonesian.
+        </div>
+      </div>
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '6px' }}>
+        <strong>Auto-detect</strong> (default) uses your IDE language setting. Code and technical terms always stay in English.
+      </div>
+    </div>
+  );
+}
+
 // ── Main app ────────────────────────────────────────────────────────────────
 
 export function AvaDashboardApp(props: AvaDashboardAppProps) {
@@ -1546,7 +2164,7 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
   );
   const [currentVersion, setCurrentVersion] = React.useState<string>('');
   const [updateAvailable, setUpdateAvailable] = React.useState<string | null>(null);
-  const [updateStatus, setUpdateStatus] = React.useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error'>('idle');
+  const [updateStatus, setUpdateStatus] = React.useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'installing' | 'error'>('idle');
 
   // Fetch current version on mount
   React.useEffect(() => {
@@ -1624,6 +2242,8 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
           return <BillingPage account={state.account} />;
         }
         return <SettingsPage state={state} onSaveProviderKey={onSaveProviderKey} onRemoveProviderKey={onRemoveProviderKey} onSavePreferences={onSavePreferences} onGetUsageSummary={props.onGetUsageSummary} />;
+      case 'docs':
+        return <DocsPage />;
       case 'settings':
       default:
         return <SettingsPage state={state} onSaveProviderKey={onSaveProviderKey} onRemoveProviderKey={onRemoveProviderKey} onSavePreferences={onSavePreferences} onGetUsageSummary={props.onGetUsageSummary} />;
@@ -1681,11 +2301,22 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
           </div>
         ) : updateStatus === 'downloading' ? (
           <div style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
             padding: '8px 12px', marginBottom: '12px', borderRadius: '6px',
             background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)',
           }}>
-            <span style={{ fontSize: '12px', opacity: 0.8 }}>Downloading update...</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontSize: '12px', opacity: 0.8 }}>Downloading update...</span>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ava-accent, #A855F7)' }}>
+                {state.updateDownloadProgress}%
+              </span>
+            </div>
+            <div style={{ height: '4px', borderRadius: '2px', background: 'rgba(168, 85, 247, 0.2)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: '2px', transition: 'width 0.3s ease',
+                background: 'var(--ava-accent, #A855F7)',
+                width: `${state.updateDownloadProgress}%`,
+              }} />
+            </div>
           </div>
         ) : updateStatus === 'ready' ? (
           <div style={{
@@ -1698,12 +2329,16 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
             </span>
             <button
               onClick={() => {
+                setUpdateStatus('installing');
                 props.onInstallUpdate?.().then(() => {
-                  // Close the Electron window so file locks are released
-                  // and the NSIS installer can replace the app files.
-                  // Electron's app.quit() fires when the last window closes.
-                  setTimeout(() => window.close(), 500);
-                }).catch(() => {});
+                  // Wait for the update progress window to appear,
+                  // then close the Electron window to release file locks.
+                  // The update script handles installing and relaunching.
+                  setTimeout(() => window.close(), 2000);
+                }).catch(() => {
+                  setUpdateStatus('error');
+                  setTimeout(() => setUpdateStatus('ready'), 5000);
+                });
               }}
               style={{
                 padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
@@ -1713,6 +2348,16 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
             >
               Install &amp; Restart
             </button>
+          </div>
+        ) : updateStatus === 'installing' ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 12px', marginBottom: '12px', borderRadius: '6px',
+            background: 'rgba(34, 197, 94, 0.12)', border: '1px solid rgba(34, 197, 94, 0.3)',
+          }}>
+            <span style={{ fontSize: '12px', color: 'rgba(34, 197, 94, 0.9)' }}>
+              Installing update... Ava will restart automatically.
+            </span>
           </div>
         ) : updateStatus === 'checking' ? (
           <div style={{
