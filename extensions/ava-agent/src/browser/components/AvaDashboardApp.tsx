@@ -1539,15 +1539,21 @@ function MemoryPage({ onGetMemory, onSaveMemory, onClearMemory }: {
 
 // ── Documentation Page ──────────────────────────────────────────────────────
 
-type DocsTab = 'getting-started' | 'models' | 'tools' | 'commands' | 'modes' | 'config';
+type DocsTab = 'getting-started' | 'choosing-model' | 'models' | 'tools' | 'memory' | 'commands' | 'modes' | 'permissions' | 'config' | 'project-context' | 'languages' | 'shortcuts';
 
 const DOC_TABS: Array<{ id: DocsTab; label: string }> = [
   { id: 'getting-started', label: 'Getting Started' },
+  { id: 'choosing-model', label: 'Choosing Your Model' },
   { id: 'models', label: 'Models' },
   { id: 'tools', label: 'Tools' },
+  { id: 'memory', label: 'Memory' },
   { id: 'commands', label: 'Commands' },
-  { id: 'modes', label: 'Modes & Permissions' },
+  { id: 'modes', label: 'Modes' },
+  { id: 'permissions', label: 'Permissions' },
   { id: 'config', label: 'Configuration' },
+  { id: 'project-context', label: 'Project Context' },
+  { id: 'languages', label: 'Languages' },
+  { id: 'shortcuts', label: 'Keyboard Shortcuts' },
 ];
 
 const docStyles = {
@@ -1709,11 +1715,17 @@ function DocsPage() {
 
       {/* Tab content */}
       {activeTab === 'getting-started' && <DocsGettingStarted />}
+      {activeTab === 'choosing-model' && <DocsChoosingModel />}
       {activeTab === 'models' && <DocsModels />}
       {activeTab === 'tools' && <DocsTools />}
+      {activeTab === 'memory' && <DocsMemory />}
       {activeTab === 'commands' && <DocsCommands />}
       {activeTab === 'modes' && <DocsModes />}
+      {activeTab === 'permissions' && <DocsPermissions />}
       {activeTab === 'config' && <DocsConfig />}
+      {activeTab === 'project-context' && <DocsProjectContext />}
+      {activeTab === 'languages' && <DocsLanguages />}
+      {activeTab === 'shortcuts' && <DocsKeyboardShortcuts />}
     </div>
   );
 }
@@ -1746,69 +1758,9 @@ function DocsGettingStarted() {
         </div>
       </div>
 
-      <div style={docStyles.sectionHeading}>Choosing Your Model</div>
-      <div style={docStyles.grid2}>
-        <div style={docStyles.card}>
-          <div style={docStyles.cardTitle}>Best for Agentic Coding</div>
-          <div style={{ marginBottom: '6px' }}>
-            <span style={docStyles.modelTag}>Kimi K2.5</span>
-            <span style={docStyles.modelTag}>GLM-5</span>
-          </div>
-          <div style={docStyles.cardText}>
-            Multi-step tool calling, file editing, and complex project work. Kimi K2.5 has 76.8% SWE-Bench. GLM-5 scores highest at 77.8%.
-          </div>
-        </div>
-        <div style={docStyles.card}>
-          <div style={docStyles.cardTitle}>Best Value</div>
-          <div style={{ marginBottom: '6px' }}>
-            <span style={docStyles.modelTag}>DeepSeek V3.2</span>
-            <span style={docStyles.modelTag}>GLM-4.5 Flash</span>
-          </div>
-          <div style={docStyles.cardText}>
-            DeepSeek V3.2 offers strong coding at $0.28/$0.42 per 1M tokens. GLM-4.5 Flash is completely free.
-          </div>
-        </div>
-        <div style={docStyles.card}>
-          <div style={docStyles.cardTitle}>Best for Large Codebases</div>
-          <div style={{ marginBottom: '6px' }}>
-            <span style={docStyles.modelTag}>Codestral</span>
-            <span style={docStyles.modelTag}>Qwen 3.5 Plus</span>
-            <span style={docStyles.modelTag}>Devstral 2</span>
-          </div>
-          <div style={docStyles.cardText}>
-            256K context window models. Codestral is code-focused, Qwen adds vision and multilingual, Devstral is built for agentic workflows.
-          </div>
-        </div>
-        <div style={docStyles.card}>
-          <div style={docStyles.cardTitle}>Best for Reasoning</div>
-          <div style={{ marginBottom: '6px' }}>
-            <span style={docStyles.modelTag}>DeepSeek V3.2 Reasoner</span>
-            <span style={docStyles.modelTag}>Claude Opus 4.6</span>
-          </div>
-          <div style={docStyles.cardText}>
-            Extended chain-of-thought models for complex logic and architecture decisions. Reasoner is budget-friendly, Opus is the most capable overall.
-          </div>
-        </div>
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '8px' }}>
+        See the <strong>Choosing Your Model</strong> tab for detailed model recommendations.
       </div>
-
-      <div style={docStyles.sectionHeading}>Quick Comparison</div>
-      <table style={docStyles.table}>
-        <thead>
-          <tr>
-            <th style={docStyles.th}>Need</th>
-            <th style={docStyles.th}>Best Pick</th>
-            <th style={{ ...docStyles.th, textAlign: 'right' }}>Cost / 1M tokens</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td style={docStyles.td}>Free to try</td><td style={docStyles.tdBold}>GLM-4.5 Flash</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>Free</td></tr>
-          <tr><td style={docStyles.td}>Cheapest paid</td><td style={docStyles.tdBold}>DeepSeek V3.2</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$0.28 / $0.42</td></tr>
-          <tr><td style={docStyles.td}>Best tool calling</td><td style={docStyles.tdBold}>Kimi K2.5</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$0.60 / $3.00</td></tr>
-          <tr><td style={docStyles.td}>Best SWE-Bench</td><td style={docStyles.tdBold}>GLM-5</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$1.00 / $3.20</td></tr>
-          <tr><td style={docStyles.td}>Longest context</td><td style={docStyles.tdBold}>Codestral / Qwen / Devstral</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>256K tokens</td></tr>
-          <tr><td style={docStyles.td}>Maximum quality</td><td style={docStyles.tdBold}>Claude Opus 4.6</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$5.00 / $25.00</td></tr>
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -2010,61 +1962,29 @@ function DocsCommands() {
 function DocsModes() {
   return (
     <div>
-      <div style={docStyles.sectionHeading}>Modes</div>
-      <div style={docStyles.grid2}>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Ava has four operating modes that control what the agent can do. Switch modes from the dropdown in the chat input area.
+      </div>
+      <div style={{ ...docStyles.grid2, marginTop: '12px' }}>
         <div style={docStyles.card}>
           <div style={docStyles.cardTitle}>Code Mode</div>
-          <div style={docStyles.cardText}>Full agent with all 22 tools. Ava reads, writes, searches, and executes across your codebase.</div>
+          <div style={docStyles.cardText}>Full agent with all tools enabled. Ava reads, writes, searches, and executes across your codebase. This is the default mode for getting work done.</div>
         </div>
         <div style={docStyles.card}>
           <div style={docStyles.cardTitle}>Plan Mode</div>
-          <div style={docStyles.cardText}>Read-only analysis. Ava reads your code and creates plans without modifying anything.</div>
+          <div style={docStyles.cardText}>Read-only analysis. Ava reads your code and creates structured plans without modifying anything. Great for understanding a codebase before making changes.</div>
         </div>
         <div style={docStyles.card}>
           <div style={docStyles.cardTitle}>Chat Mode</div>
-          <div style={docStyles.cardText}>Conversation only. No tools, just discussion about code, architecture, or ideas.</div>
+          <div style={docStyles.cardText}>Conversation only, no tools. Discuss code, architecture, or ideas without Ava touching any files. Useful for brainstorming and Q&A.</div>
         </div>
         <div style={docStyles.card}>
           <div style={docStyles.cardTitle}>Security Mode</div>
-          <div style={docStyles.cardText}>AI-powered OWASP-aligned security audit. Scans your project for vulnerabilities.</div>
+          <div style={docStyles.cardText}>AI-powered OWASP-aligned security audit. Scans your project for vulnerabilities, insecure patterns, and common security issues.</div>
         </div>
       </div>
-      <div style={{ fontSize: '11px', opacity: 0.5, marginBottom: '16px' }}>Switch modes from the dropdown in the chat input area.</div>
-
-      <div style={docStyles.sectionHeading}>Permission Modes</div>
-      <table style={docStyles.table}>
-        <thead>
-          <tr>
-            <th style={docStyles.th}>Mode</th>
-            <th style={{ ...docStyles.th, textAlign: 'center' }}>File Reads</th>
-            <th style={{ ...docStyles.th, textAlign: 'center' }}>File Writes</th>
-            <th style={{ ...docStyles.th, textAlign: 'center' }}>Shell Commands</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style={docStyles.tdBold}>Strict</td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
-          </tr>
-          <tr>
-            <td style={docStyles.tdBold}>Balanced</td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
-          </tr>
-          <tr>
-            <td style={docStyles.tdBold}>Autonomous</td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
-            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
-          </tr>
-        </tbody>
-      </table>
-      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '8px' }}>
-        Plans and questions always require your approval, regardless of mode.
-        During a session, you can grant per-tool approval with <strong>Always Allow</strong> or blanket approval with <strong>Allow All</strong>.
+      <div style={{ fontSize: '11px', opacity: 0.5 }}>
+        Modes affect which tools are available. Permissions (see <strong>Permissions</strong> tab) control whether tools require confirmation.
       </div>
     </div>
   );
@@ -2123,28 +2043,402 @@ function DocsConfig() {
   }
 }`}</div>
 
-      <div style={docStyles.sectionHeading}>Project Context</div>
-      <div style={docStyles.card}>
-        <div style={docStyles.cardTitle}>Project Instructions</div>
+    </div>
+  );
+}
+
+function DocsChoosingModel() {
+  return (
+    <div>
+      <div style={docStyles.tip}>
+        <div style={docStyles.tipTitle}>Not sure which model to pick?</div>
         <div style={docStyles.cardText}>
-          Create a <span style={docStyles.code}>.ava/instructions.md</span> file in your project root to give Ava persistent knowledge about your codebase.
-          Include architecture overview, coding conventions, key file locations, and anything you'd tell a new team member.
+          Start with <strong>GLM-4.5 Flash</strong> (free) to try Ava, then upgrade to <strong>Kimi K2.5</strong> or <strong>DeepSeek V3.2</strong> for stronger agentic coding.
         </div>
-      </div>
-      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '8px' }}>
-        This file is loaded into Ava's system prompt every session. History is scoped per project.
-        Use <span style={docStyles.code}>/init</span> to generate a starter file.
       </div>
 
-      <div style={docStyles.sectionHeading}>Language Support</div>
-      <div style={docStyles.card}>
-        <div style={docStyles.cardText}>
-          Ava supports <strong>20 languages</strong>: English, Chinese (Simplified & Traditional), Japanese, Korean, Spanish, Portuguese,
-          French, German, Russian, Arabic, Hindi, Vietnamese, Thai, Turkish, Italian, Polish, Ukrainian, Dutch, Indonesian.
+      <div style={docStyles.sectionHeading}>Recommendations</div>
+      <div style={docStyles.grid2}>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best for Agentic Coding</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>Kimi K2.5</span>
+            <span style={docStyles.modelTag}>GLM-5</span>
+          </div>
+          <div style={docStyles.cardText}>
+            Multi-step tool calling, file editing, and complex project work. Kimi K2.5 scores 76.8% on SWE-Bench. GLM-5 leads at 77.8%.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best Value</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>DeepSeek V3.2</span>
+            <span style={docStyles.modelTag}>GLM-4.5 Flash</span>
+          </div>
+          <div style={docStyles.cardText}>
+            Strong coding at a fraction of frontier pricing. DeepSeek V3.2 is $0.28/$0.42 per 1M tokens. GLM-4.5 Flash is completely free.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best Reasoning</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>DeepSeek R1</span>
+          </div>
+          <div style={docStyles.cardText}>
+            Chain-of-thought reasoning for complex logic, math, and architecture decisions. Extended thinking produces step-by-step analysis.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Frontier Intelligence</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>Claude Opus 4.6</span>
+            <span style={docStyles.modelTag}>Claude Sonnet 4.6</span>
+          </div>
+          <div style={docStyles.cardText}>
+            Most capable overall with vision support. Bring your own Anthropic API key (BYOK). Best for complex, high-stakes tasks.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best for Code</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>Codestral 25.08</span>
+            <span style={docStyles.modelTag}>Devstral 2</span>
+          </div>
+          <div style={docStyles.cardText}>
+            Dedicated code models with 256K context. Codestral excels at code generation, Devstral is optimized for agentic coding workflows.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Best Long Context</div>
+          <div style={{ marginBottom: '6px' }}>
+            <span style={docStyles.modelTag}>Qwen 3.5 Plus</span>
+            <span style={docStyles.modelTag}>Mistral Large 3</span>
+          </div>
+          <div style={docStyles.cardText}>
+            256K context window for navigating large codebases. Read entire repositories without losing track of distant references.
+          </div>
         </div>
       </div>
-      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '6px' }}>
-        <strong>Auto-detect</strong> (default) uses your IDE language setting. Code and technical terms always stay in English.
+
+      <div style={docStyles.sectionHeading}>Quick Comparison</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Need</th>
+            <th style={docStyles.th}>Best Pick</th>
+            <th style={{ ...docStyles.th, textAlign: 'right' }}>Cost / 1M tokens</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style={docStyles.td}>Free to try</td><td style={docStyles.tdBold}>GLM-4.5 Flash</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>Free</td></tr>
+          <tr><td style={docStyles.td}>Cheapest paid</td><td style={docStyles.tdBold}>DeepSeek V3.2</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$0.28 / $0.42</td></tr>
+          <tr><td style={docStyles.td}>Best tool calling</td><td style={docStyles.tdBold}>Kimi K2.5</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$0.60 / $3.00</td></tr>
+          <tr><td style={docStyles.td}>Best SWE-Bench</td><td style={docStyles.tdBold}>GLM-5</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$1.00 / $3.20</td></tr>
+          <tr><td style={docStyles.td}>Best reasoning</td><td style={docStyles.tdBold}>DeepSeek R1</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$0.55 / $2.19</td></tr>
+          <tr><td style={docStyles.td}>Longest context</td><td style={docStyles.tdBold}>Codestral / Qwen / Devstral</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>256K tokens</td></tr>
+          <tr><td style={docStyles.td}>Maximum quality</td><td style={docStyles.tdBold}>Claude Opus 4.6</td><td style={{ ...docStyles.td, textAlign: 'right', fontFamily: 'monospace' }}>$5.00 / $25.00</td></tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DocsMemory() {
+  return (
+    <div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Ava remembers important context across sessions using persistent memory files. Memories are loaded automatically at the start of each conversation.
+      </div>
+
+      <div style={{ ...docStyles.grid2, marginTop: '12px' }}>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Global Memory</div>
+          <div style={docStyles.cardText}>
+            Stored at <span style={docStyles.code}>~/.ava/memory.md</span>. Contains your preferences and knowledge that apply across all projects.
+            Things like your coding style, preferred frameworks, and general instructions.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Project Memory</div>
+          <div style={docStyles.cardText}>
+            Stored at <span style={docStyles.code}>.ava/memory.md</span> in the project root. Project-specific context like architecture decisions,
+            key patterns, and things Ava should always know about this codebase.
+          </div>
+        </div>
+      </div>
+
+      <div style={docStyles.sectionHeading}>How It Works</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Tool</th>
+            <th style={docStyles.th}>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={docStyles.tdBold}><span style={docStyles.code}>memory_save</span></td>
+            <td style={docStyles.td}>Saves knowledge to persistent memory (global or project scope). Ava uses this automatically when it learns something important.</td>
+          </tr>
+          <tr>
+            <td style={docStyles.tdBold}><span style={docStyles.code}>memory_recall</span></td>
+            <td style={docStyles.td}>Searches stored knowledge by keyword. Finds relevant memories to inform the current task.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '8px' }}>
+        Memories auto-load at the start of each session. You can also edit memory files directly or use the Memory page in this dashboard.
+      </div>
+
+      <div style={docStyles.sectionHeading}>Cloud Sync</div>
+      <div style={docStyles.card}>
+        <div style={docStyles.cardText}>
+          With a platform account, your memories sync across machines automatically. Work on your desktop, pick up where you left off on your laptop.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DocsPermissions() {
+  return (
+    <div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Permission modes control which tool actions require your confirmation before executing. This gives you fine-grained control over what Ava can do autonomously.
+      </div>
+
+      <div style={{ ...docStyles.sectionHeading, marginTop: '12px' }}>Permission Modes</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Mode</th>
+            <th style={{ ...docStyles.th, textAlign: 'center' }}>File Reads</th>
+            <th style={{ ...docStyles.th, textAlign: 'center' }}>File Writes</th>
+            <th style={{ ...docStyles.th, textAlign: 'center' }}>Shell Commands</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={docStyles.tdBold}>Strict</td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
+          </tr>
+          <tr>
+            <td style={docStyles.tdBold}>Balanced</td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}>Confirm</td>
+          </tr>
+          <tr>
+            <td style={docStyles.tdBold}>Autonomous</td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+            <td style={{ ...docStyles.td, textAlign: 'center' }}><span style={docStyles.badge('safe')}>auto</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style={{ ...docStyles.sectionHeading, marginTop: '16px' }}>Session Overrides</div>
+      <div style={docStyles.grid2}>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Always Allow</div>
+          <div style={docStyles.cardText}>Grant per-tool approval for the current session. For example, always allow file_write without asking each time.</div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Allow All</div>
+          <div style={docStyles.cardText}>Blanket approval for all tools for the current session. Useful when you trust the current task and want Ava to work uninterrupted.</div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '4px' }}>
+        Plans and questions always require your approval, regardless of permission mode. Session overrides reset when you start a new conversation.
+      </div>
+    </div>
+  );
+}
+
+function DocsProjectContext() {
+  return (
+    <div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Give Ava persistent knowledge about your codebase by creating a project instructions file. This is loaded into Ava's system prompt every session.
+      </div>
+
+      <div style={{ ...docStyles.sectionHeading, marginTop: '12px' }}>Instructions File</div>
+      <div style={docStyles.card}>
+        <div style={docStyles.cardTitle}>.ava/instructions.md</div>
+        <div style={docStyles.cardText}>
+          Create this file in your project root. Everything in it becomes part of Ava's context when working in this project.
+          Think of it as onboarding documentation for the AI — anything you'd tell a new team member.
+        </div>
+      </div>
+
+      <div style={docStyles.sectionHeading}>What to Include</div>
+      <div style={docStyles.grid2}>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Architecture Overview</div>
+          <div style={docStyles.cardText}>Project structure, key directories, how packages relate to each other, build system, and deployment targets.</div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Coding Conventions</div>
+          <div style={docStyles.cardText}>Naming patterns, import style, error handling approach, testing patterns, and any project-specific rules.</div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Key File Locations</div>
+          <div style={docStyles.cardText}>Entry points, configuration files, shared types, utilities, and commonly edited files.</div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Gotchas & Notes</div>
+          <div style={docStyles.cardText}>Known issues, workarounds, platform-specific quirks, and things that are easy to get wrong.</div>
+        </div>
+      </div>
+
+      <div style={docStyles.sectionHeading}>Quick Start</div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Run <span style={docStyles.code}>/init</span> in the chat to generate a starter <span style={docStyles.code}>.ava/instructions.md</span> file. Ava will analyze your project and create an initial draft.
+      </div>
+
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '10px' }}>
+        History is scoped per project. Switching workspaces saves the current conversation and resets context automatically.
+      </div>
+    </div>
+  );
+}
+
+function DocsLanguages() {
+  return (
+    <div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Ava supports <strong>20 languages</strong> for the UI and AI responses. Code and technical terms always stay in English.
+      </div>
+
+      <div style={{ ...docStyles.sectionHeading, marginTop: '12px' }}>Supported Languages</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px', marginBottom: '12px' }}>
+        {[
+          'English', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Japanese', 'Korean',
+          'Spanish', 'Portuguese', 'French', 'German', 'Russian',
+          'Arabic', 'Hindi', 'Vietnamese', 'Thai', 'Turkish',
+          'Italian', 'Polish', 'Ukrainian', 'Dutch', 'Indonesian',
+        ].map(lang => (
+          <span key={lang} style={docStyles.modelTag}>{lang}</span>
+        ))}
+      </div>
+
+      <div style={docStyles.sectionHeading}>How It Works</div>
+      <div style={docStyles.grid2}>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Auto-detect (Default)</div>
+          <div style={docStyles.cardText}>
+            Ava uses your IDE language setting to determine the response language. No configuration needed — it just works.
+          </div>
+        </div>
+        <div style={docStyles.card}>
+          <div style={docStyles.cardTitle}>Manual Override</div>
+          <div style={docStyles.cardText}>
+            Set a specific language in <strong>Settings</strong> to override auto-detection. The AI will always respond in your chosen language.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '4px' }}>
+        Code output, file paths, and technical identifiers remain in English regardless of language setting.
+      </div>
+    </div>
+  );
+}
+
+function DocsKeyboardShortcuts() {
+  return (
+    <div>
+      <div style={docStyles.cardText as React.CSSProperties}>
+        Keyboard shortcuts for navigating the IDE and interacting with Ava.
+      </div>
+
+      <div style={{ ...docStyles.sectionHeading, marginTop: '12px' }}>General IDE</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Shortcut</th>
+            <th style={docStyles.th}>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            ['Ctrl+Shift+P', 'Open command palette'],
+            ['Ctrl+P', 'Quick open file'],
+            ['Ctrl+Shift+E', 'Focus file explorer'],
+            ['Ctrl+Shift+F', 'Search across files'],
+            ['Ctrl+Shift+G', 'Open source control'],
+            ['Ctrl+`', 'Toggle terminal'],
+            ['Ctrl+B', 'Toggle sidebar'],
+            ['Ctrl+J', 'Toggle bottom panel'],
+            ['Ctrl+\\', 'Split editor'],
+            ['Ctrl+Tab', 'Switch between open editors'],
+          ].map(([shortcut, action], i) => (
+            <tr key={i}>
+              <td style={docStyles.tdBold}><span style={docStyles.code}>{shortcut}</span></td>
+              <td style={docStyles.td}>{action}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={docStyles.sectionHeading}>Editing</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Shortcut</th>
+            <th style={docStyles.th}>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            ['Ctrl+D', 'Select next occurrence'],
+            ['Ctrl+Shift+L', 'Select all occurrences'],
+            ['Alt+Up/Down', 'Move line up/down'],
+            ['Ctrl+Shift+K', 'Delete line'],
+            ['Ctrl+/', 'Toggle line comment'],
+            ['Ctrl+Shift+A', 'Toggle block comment'],
+            ['Ctrl+H', 'Find and replace'],
+            ['F2', 'Rename symbol'],
+            ['F12', 'Go to definition'],
+            ['Ctrl+Shift+O', 'Go to symbol in file'],
+          ].map(([shortcut, action], i) => (
+            <tr key={i}>
+              <td style={docStyles.tdBold}><span style={docStyles.code}>{shortcut}</span></td>
+              <td style={docStyles.td}>{action}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={docStyles.sectionHeading}>Ava Panel</div>
+      <table style={docStyles.table}>
+        <thead>
+          <tr>
+            <th style={docStyles.th}>Shortcut</th>
+            <th style={docStyles.th}>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            ['Ctrl+Shift+A', 'Focus Ava chat panel'],
+            ['Enter', 'Send message'],
+            ['Shift+Enter', 'New line in input'],
+            ['Escape', 'Cancel current generation'],
+            ['Ctrl+L', 'Clear conversation'],
+          ].map(([shortcut, action], i) => (
+            <tr key={i}>
+              <td style={docStyles.tdBold}><span style={docStyles.code}>{shortcut}</span></td>
+              <td style={docStyles.td}>{action}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '8px' }}>
+        Shortcuts follow standard Theia/VS Code conventions. Customize them via <span style={docStyles.code}>Ctrl+Shift+P</span> &gt; Keyboard Shortcuts.
       </div>
     </div>
   );
