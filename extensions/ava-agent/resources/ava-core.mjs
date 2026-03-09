@@ -1,5508 +1,17 @@
-var __defProp = Object.defineProperty;
-var __getOwnPropNames = Object.getOwnPropertyNames;
 var __glob = (map) => (path) => {
   var fn = map[path];
   if (fn) return fn();
   throw new Error("Module not found in bundle: " + path);
 };
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
 
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/en.js
-var en_exports = {};
-__export(en_exports, {
-  enStrings: () => enStrings
-});
-var enStrings;
-var init_en = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/en.js"() {
-    enStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Ask anything about your code.",
-      "welcome.cli_hint": "Type your message, or /help for commands.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "What do you want to build?",
-      "input.placeholder.plan": "Describe what you want to plan...",
-      "input.placeholder.chat": "Ask a question or start a discussion...",
-      "input.placeholder.disabled": "Configure a provider to start...",
-      "input.placeholder.security": "Describe what to scan, or just hit Enter for a full audit...",
-      "input.mode.code": "Code",
-      "input.mode.plan": "Plan",
-      "input.mode.chat": "Chat",
-      "input.mode.security": "Security",
-      "input.send": "Send (Enter)",
-      "input.send_aria": "Send message",
-      "input.stop": "Stop",
-      "input.stop_aria": "Stop Ava",
-      "input.attach": "Attach image",
-      "input.drop_image": "Drop image here",
-      "input.compressing": "Compressing...",
-      "input.compress_title": "Context usage \u2014 click to compress",
-      "input.compress_title_warning": "Click to compress context",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "Chat History",
-      "header.settings": "Settings",
-      "header.new_chat": "New Chat",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "No providers configured.",
-      "model.open_settings": "Open Settings",
-      "model.vision": "vision",
-      "model.vision_title": "This model supports image/vision input",
-      "model.switched": "Switched to {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava is thinking...",
-      "thinking.1": "Analyzing your code...",
-      "thinking.2": "Considering approaches...",
-      "thinking.3": "Crafting a response...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "Explain this codebase",
-      "suggestion.explain_prompt": "Give me a high-level overview of this project structure and architecture.",
-      "suggestion.bug": "Find a bug",
-      "suggestion.bug_prompt": "Help me find and fix bugs in the current file.",
-      "suggestion.test": "Write tests",
-      "suggestion.test_prompt": "Write comprehensive tests for the main module.",
-      "suggestion.refactor": "Refactor code",
-      "suggestion.refactor_prompt": "Suggest refactoring improvements for the current file.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "Authentication",
-      "error.credits": "Billing",
-      "error.forbidden": "Access Denied",
-      "error.rate_limit": "Rate Limited",
-      "error.model_not_found": "Model Error",
-      "error.bad_request": "Bad Request",
-      "error.server_error": "Server Error",
-      "error.timeout": "Timeout",
-      "error.stream_stall": "Stream Stalled",
-      "error.network": "Network Error",
-      "error.setup": "Setup Required",
-      "error.busy": "Busy",
-      "error.iterations_exceeded": "Iteration Limit",
-      "error.context_truncated": "Context Truncated",
-      "error.provider_error": "Provider Error",
-      "error.unknown": "Error",
-      "error.continue": "Continue",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "Bad request to {provider}. The request format may be incompatible with this model.",
-      "error.msg.auth": "Invalid API key for {provider}. Check your key in ~/.ava/config.json",
-      "error.msg.credits": "Insufficient credits for {provider}. Top up your account balance.",
-      "error.msg.forbidden": "Access denied by {provider}. Your API key may lack the required permissions.",
-      "error.msg.model_not_found": "Model not found on {provider}. The model ID may have changed \u2014 run /model to see available models.",
-      "error.msg.rate_limit": "Rate limited by {provider}. Too many requests \u2014 wait a moment and try again.",
-      "error.msg.server_error": "{provider} is experiencing issues ({code}). Try again in a few moments.",
-      "error.msg.empty_response": "The model returned an empty response. This can happen when the API is overloaded or the request was filtered. Try again.",
-      "error.msg.iteration_limit": "Ava reached the {limit}-iteration safety limit. This usually means the task is very large or the model got stuck in a loop.",
-      "error.msg.iteration_warning": "[WARNING] You have {remaining} iterations remaining before the loop limit. Wrap up your current task \u2014 summarize what you've done and what's left. Don't start new multi-step work.",
-      "error.msg.image_stripped": "[An image was shared but this model does not support vision]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "Allow",
-      "tool.always_allow": "Always Allow",
-      "tool.allow_all": "Allow All",
-      "tool.deny": "Deny",
-      "tool.allow_prompt": "Allow {tool}?",
-      "tool.arguments": "Arguments",
-      "tool.output": "Output",
-      "tool.error": "Error",
-      "tool.truncated": "... (truncated)",
-      "tool.read": "Read {file}",
-      "tool.write": "Write {file}",
-      "tool.edit": "Edit {file}",
-      "tool.find_files": "Find files: {pattern}",
-      "tool.search": "Search: {pattern}",
-      "tool.run": "Run: {command}",
-      "tool.list_dir": "List {path}",
-      "tool.web_search": "Search: {query}",
-      "tool.ask_user": "Question for user",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "Chat History",
-      "history.new_chat": "+ New Chat",
-      "history.close": "Close",
-      "history.search": "Search conversations...",
-      "history.empty": "No saved conversations yet.",
-      "history.no_match": "No matching conversations.",
-      "history.delete_confirm": "Delete?",
-      "history.rename_hint": "Double-click to rename",
-      "history.pin": "Pin",
-      "history.unpin": "Unpin",
-      "history.export_md": "Export as Markdown",
-      "history.pinned": "Pinned",
-      "history.just_now": "just now",
-      "history.minutes_ago": "{n}m ago",
-      "history.hours_ago": "{n}h ago",
-      "history.days_ago": "{n}d ago",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "Question",
-      "ask.fallback": "Ava has a question",
-      "ask.placeholder": "Type your response...",
-      "ask.submit": "Submit",
-      "ask.skip": "Skip",
-      "ask.skipped": "Skipped",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "Plan data unavailable",
-      "plan.prefix": "Plan: {title}",
-      "plan.approved": "Approved",
-      "plan.rejected": "Rejected",
-      "plan.goal": "Goal",
-      "plan.steps": "Steps",
-      "plan.verification": "Verification",
-      "plan.approaches": "Approaches",
-      "plan.approve": "Approve",
-      "plan.reject": "Reject",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "Task list unavailable",
-      "todo.tasks": "Tasks",
-      "todo.done": "{done}/{total} done",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "in",
-      "status.out": "out",
-      "status.total": "total",
-      "status.tokens": "tokens",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "Compressing context...",
-      "compression.result": "Context compressed: ~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "Nothing to compress.",
-      "compression.failed": "Compression failed.",
-      "compression.busy": "Cannot compress while Ava is working.",
-      "compression.context_truncated": "Context truncated: {count} messages dropped.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "Continue where you left off.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "Show available commands",
-      "cmd.model.desc": "List or switch models (/model <provider:model-id>)",
-      "cmd.clear.desc": "Clear conversation history",
-      "cmd.provider.desc": "Add or list providers (/provider add <name>)",
-      "cmd.history.desc": "List saved conversations",
-      "cmd.resume.desc": "Resume a saved conversation (/resume <id-prefix>)",
-      "cmd.search.desc": "Search conversations (/search <query>)",
-      "cmd.delete.desc": "Delete a saved conversation (/delete <id-prefix>)",
-      "cmd.rename.desc": "Rename a conversation (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Pin a conversation (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Unpin a conversation (/unpin <id-prefix>)",
-      "cmd.export.desc": "Export a conversation (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Retry the last message",
-      "cmd.compact.desc": "Compress conversation context to free up space",
-      "cmd.permission.desc": "View or set permission mode (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "List available tools",
-      "cmd.init.desc": "Create .ava/instructions.md for project-specific context",
-      "cmd.exit.desc": "Exit Ava",
-      "cmd.security.desc": "Run a security audit (/security [focus area])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "Unknown model: {model}",
-      "cmd.model.switched": "Switched to {name} ({provider})",
-      "cmd.model.active": "(active)",
-      "cmd.clear.done": "Conversation cleared.",
-      "cmd.provider.usage": "Usage: /provider add <{providers}>",
-      "cmd.provider.enter_key": "Enter API key for {provider}: ",
-      "cmd.provider.cancelled": "Cancelled.",
-      "cmd.provider.added": "Provider {provider} added successfully.",
-      "cmd.provider.failed": "Failed to register {provider}: {error}",
-      "cmd.provider.title": "Configured providers:",
-      "cmd.provider.configured": "configured",
-      "cmd.provider.not_configured": "not configured",
-      "cmd.provider.hint": "Use /provider add <name> to add a provider.",
-      "cmd.history.empty": "No saved conversations.",
-      "cmd.history.title": "Saved conversations:",
-      "cmd.history.more": "... and {count} more",
-      "cmd.history.hint": "Use /resume <id-prefix> to load a conversation.",
-      "cmd.resume.usage": "Usage: /resume <id-prefix>",
-      "cmd.resume.hint": "Run /history to see available conversations.",
-      "cmd.resume.not_found": 'No conversation found matching "{prefix}".',
-      "cmd.resume.failed": "Failed to load conversation.",
-      "cmd.resume.done": "Resumed: {title}",
-      "cmd.resume.count": "{count} messages loaded.",
-      "cmd.search.usage": "Usage: /search <query>",
-      "cmd.search.empty": 'No conversations matching "{query}".',
-      "cmd.search.title": 'Search results for "{query}":',
-      "cmd.delete.usage": "Usage: /delete <id-prefix>",
-      "cmd.delete.confirm": 'Delete "{title}" ({id})? (y/n) ',
-      "cmd.delete.done": "Conversation deleted.",
-      "cmd.delete.failed": "Failed to delete conversation.",
-      "cmd.rename.usage": "Usage: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Renamed to: {title}",
-      "cmd.rename.failed": "Failed to rename conversation.",
-      "cmd.pin.usage": "Usage: /pin <id-prefix>",
-      "cmd.pin.done": "Pinned: {title}",
-      "cmd.pin.failed": "Failed to pin conversation.",
-      "cmd.unpin.usage": "Usage: /unpin <id-prefix>",
-      "cmd.unpin.done": "Unpinned: {title}",
-      "cmd.unpin.failed": "Failed to unpin conversation.",
-      "cmd.export.usage": "Usage: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Failed to export conversation.",
-      "cmd.export.done": "Exported to {filename}",
-      "cmd.retry.unavailable": "Retry not available.",
-      "cmd.compact.unavailable": "Compression not available.",
-      "cmd.permission.title": "Permission mode:",
-      "cmd.permission.strict": "confirm writes and shell commands",
-      "cmd.permission.balanced": "auto-approve writes, confirm shell commands",
-      "cmd.permission.autonomous": "auto-approve everything",
-      "cmd.permission.unknown": "Unknown mode. Choose: {modes}",
-      "cmd.permission.set": "Permission mode set to {mode}.",
-      "cmd.tools.title": "Available tools:",
-      "cmd.init.created": "Created {path}",
-      "cmd.init.hint": "Edit this file to give Ava project-specific context.",
-      "cmd.init.restart": "Restart Ava for changes to take effect.",
-      "cmd.init.exists": "{path} already exists.",
-      "cmd.unknown": "Unknown command: {input}. Type /help for available commands.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "Thinking...",
-      "cli.thinking_label": "[thinking] ",
-      "cli.thinking_words": "{count} words",
-      "cli.tool_label": "[tool] ",
-      "cli.tasks_label": "[tasks] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "Running {tool}...",
-      "cli.confirm_label": "[confirm] ",
-      "cli.allow_prompt": "Allow? ",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "Denied.",
-      "cli.question_label": "[question] ",
-      "cli.question_fallback": "Ava has a question for you",
-      "cli.your_response": "Your response: ",
-      "cli.skipped": "Skipped.",
-      "cli.user_response": "User response: {response}",
-      "cli.write_to": "write to {path}",
-      "cli.edit_file": "edit {path}",
-      "cli.list_path": "list {path}",
-      "cli.search_query": 'search "{query}"',
-      "cli.ok": "OK",
-      "cli.fail": "FAIL",
-      "cli.more_lines": "... ({count} more lines)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Welcome to Ava | Supernova",
-      "setup.intro": "Let's set up your LLM provider.",
-      "setup.choose": "Choose a provider (number): ",
-      "setup.invalid_choice": "Invalid choice. Please restart and try again.",
-      "setup.key_url": "Get your API key at: {url}",
-      "setup.enter_key": "{provider} API Key: ",
-      "setup.no_key": "No API key provided. Please restart and try again.",
-      "setup.complete": "Setup complete! Active model: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/ar.js
-var ar_exports = {};
-__export(ar_exports, {
-  arStrings: () => arStrings
-});
-var arStrings;
-var init_ar = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/ar.js"() {
-    arStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\u0627\u0633\u0623\u0644 \u0623\u064A \u0634\u064A\u0621 \u0639\u0646 \u0627\u0644\u0643\u0648\u062F \u0627\u0644\u062E\u0627\u0635 \u0628\u0643.",
-      "welcome.cli_hint": "\u0627\u0643\u062A\u0628 \u0631\u0633\u0627\u0644\u062A\u0643\u060C \u0623\u0648 /help \u0644\u0639\u0631\u0636 \u0627\u0644\u0623\u0648\u0627\u0645\u0631.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\u0645\u0627\u0630\u0627 \u062A\u0631\u064A\u062F \u0623\u0646 \u062A\u0628\u0646\u064A\u061F",
-      "input.placeholder.plan": "\u0635\u0650\u0641 \u0645\u0627 \u062A\u0631\u064A\u062F \u0627\u0644\u062A\u062E\u0637\u064A\u0637 \u0644\u0647...",
-      "input.placeholder.chat": "\u0627\u0637\u0631\u062D \u0633\u0624\u0627\u0644\u0627\u064B \u0623\u0648 \u0627\u0628\u062F\u0623 \u0646\u0642\u0627\u0634\u0627\u064B...",
-      "input.placeholder.disabled": "\u0642\u0645 \u0628\u0625\u0639\u062F\u0627\u062F \u0645\u0632\u0648\u0651\u062F \u0644\u0644\u0628\u062F\u0621...",
-      "input.placeholder.security": "\u0635\u0650\u0641 \u0645\u0627 \u062A\u0631\u064A\u062F \u0641\u062D\u0635\u0647\u060C \u0623\u0648 \u0627\u0636\u063A\u0637 Enter \u0644\u062A\u062F\u0642\u064A\u0642 \u0634\u0627\u0645\u0644...",
-      "input.mode.code": "\u0643\u0648\u062F",
-      "input.mode.plan": "\u062E\u0637\u0629",
-      "input.mode.chat": "\u0645\u062D\u0627\u062F\u062B\u0629",
-      "input.mode.security": "\u0623\u0645\u0627\u0646",
-      "input.send": "\u0625\u0631\u0633\u0627\u0644 (Enter)",
-      "input.send_aria": "\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0631\u0633\u0627\u0644\u0629",
-      "input.stop": "\u0625\u064A\u0642\u0627\u0641",
-      "input.stop_aria": "\u0625\u064A\u0642\u0627\u0641 Ava",
-      "input.attach": "\u0625\u0631\u0641\u0627\u0642 \u0635\u0648\u0631\u0629",
-      "input.drop_image": "\u0623\u0633\u0642\u0637 \u0627\u0644\u0635\u0648\u0631\u0629 \u0647\u0646\u0627",
-      "input.compressing": "\u062C\u0627\u0631\u064D \u0627\u0644\u0636\u063A\u0637...",
-      "input.compress_title": "\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0633\u064A\u0627\u0642 \u2014 \u0627\u0646\u0642\u0631 \u0644\u0644\u0636\u063A\u0637",
-      "input.compress_title_warning": "\u0627\u0646\u0642\u0631 \u0644\u0636\u063A\u0637 \u0627\u0644\u0633\u064A\u0627\u0642",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\u0633\u062C\u0644 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A",
-      "header.settings": "\u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A",
-      "header.new_chat": "\u0645\u062D\u0627\u062F\u062B\u0629 \u062C\u062F\u064A\u062F\u0629",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\u0644\u0645 \u064A\u062A\u0645 \u0625\u0639\u062F\u0627\u062F \u0623\u064A \u0645\u0632\u0648\u0651\u062F.",
-      "model.open_settings": "\u0641\u062A\u062D \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A",
-      "model.vision": "vision",
-      "model.vision_title": "\u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u064A\u062F\u0639\u0645 \u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0635\u0648\u0631",
-      "model.switched": "\u062A\u0645 \u0627\u0644\u062A\u0628\u062F\u064A\u0644 \u0625\u0644\u0649 {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u062A\u0641\u0643\u0651\u0631...",
-      "thinking.1": "\u062C\u0627\u0631\u064D \u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0643\u0648\u062F...",
-      "thinking.2": "\u062C\u0627\u0631\u064D \u062F\u0631\u0627\u0633\u0629 \u0627\u0644\u0623\u0633\u0627\u0644\u064A\u0628...",
-      "thinking.3": "\u062C\u0627\u0631\u064D \u0635\u064A\u0627\u063A\u0629 \u0627\u0644\u0631\u062F...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\u0627\u0634\u0631\u062D \u0647\u0630\u0627 \u0627\u0644\u0645\u0634\u0631\u0648\u0639",
-      "suggestion.explain_prompt": "\u0623\u0639\u0637\u0646\u064A \u0646\u0638\u0631\u0629 \u0639\u0627\u0645\u0629 \u0639\u0646 \u0628\u0646\u064A\u0629 \u0647\u0630\u0627 \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0648\u0647\u0646\u062F\u0633\u062A\u0647.",
-      "suggestion.bug": "\u0627\u0628\u062D\u062B \u0639\u0646 \u062E\u0637\u0623",
-      "suggestion.bug_prompt": "\u0633\u0627\u0639\u062F\u0646\u064A \u0641\u064A \u0625\u064A\u062C\u0627\u062F \u0648\u0625\u0635\u0644\u0627\u062D \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0641\u064A \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u062D\u0627\u0644\u064A.",
-      "suggestion.test": "\u0627\u0643\u062A\u0628 \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A",
-      "suggestion.test_prompt": "\u0627\u0643\u062A\u0628 \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0634\u0627\u0645\u0644\u0629 \u0644\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629.",
-      "suggestion.refactor": "\u0623\u0639\u062F \u0647\u064A\u0643\u0644\u0629 \u0627\u0644\u0643\u0648\u062F",
-      "suggestion.refactor_prompt": "\u0627\u0642\u062A\u0631\u062D \u062A\u062D\u0633\u064A\u0646\u0627\u062A \u0644\u0625\u0639\u0627\u062F\u0629 \u0647\u064A\u0643\u0644\u0629 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u062D\u0627\u0644\u064A.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629",
-      "error.credits": "\u0627\u0644\u0641\u0648\u062A\u0631\u0629",
-      "error.forbidden": "\u0627\u0644\u0648\u0635\u0648\u0644 \u0645\u0631\u0641\u0648\u0636",
-      "error.rate_limit": "\u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F",
-      "error.model_not_found": "\u062E\u0637\u0623 \u0641\u064A \u0627\u0644\u0646\u0645\u0648\u0630\u062C",
-      "error.bad_request": "\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D",
-      "error.server_error": "\u062E\u0637\u0623 \u0641\u064A \u0627\u0644\u062E\u0627\u062F\u0645",
-      "error.timeout": "\u0627\u0646\u062A\u0647\u062A \u0627\u0644\u0645\u0647\u0644\u0629",
-      "error.stream_stall": "\u062A\u0648\u0642\u0641 \u0627\u0644\u0628\u062B",
-      "error.network": "\u062E\u0637\u0623 \u0641\u064A \u0627\u0644\u0634\u0628\u0643\u0629",
-      "error.setup": "\u064A\u062A\u0637\u0644\u0628 \u0627\u0644\u0625\u0639\u062F\u0627\u062F",
-      "error.busy": "\u0645\u0634\u063A\u0648\u0644",
-      "error.iterations_exceeded": "\u062D\u062F \u0627\u0644\u062A\u0643\u0631\u0627\u0631",
-      "error.context_truncated": "\u062A\u0645 \u0627\u0642\u062A\u0637\u0627\u0639 \u0627\u0644\u0633\u064A\u0627\u0642",
-      "error.provider_error": "\u062E\u0637\u0623 \u0641\u064A \u0627\u0644\u0645\u0632\u0648\u0651\u062F",
-      "error.unknown": "\u062E\u0637\u0623",
-      "error.continue": "\u0645\u062A\u0627\u0628\u0639\u0629",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D \u0625\u0644\u0649 {provider}. \u0642\u062F \u064A\u0643\u0648\u0646 \u062A\u0646\u0633\u064A\u0642 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0645\u062A\u0648\u0627\u0641\u0642 \u0645\u0639 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C.",
-      "error.msg.auth": "API key \u063A\u064A\u0631 \u0635\u0627\u0644\u062D \u0644\u0640 {provider}. \u062A\u062D\u0642\u0642 \u0645\u0646 \u0627\u0644\u0645\u0641\u062A\u0627\u062D \u0641\u064A ~/.ava/config.json",
-      "error.msg.credits": "\u0631\u0635\u064A\u062F \u063A\u064A\u0631 \u0643\u0627\u0641\u064D \u0644\u0640 {provider}. \u0642\u0645 \u0628\u0634\u062D\u0646 \u0631\u0635\u064A\u062F \u062D\u0633\u0627\u0628\u0643.",
-      "error.msg.forbidden": "\u062A\u0645 \u0631\u0641\u0636 \u0627\u0644\u0648\u0635\u0648\u0644 \u0645\u0646 \u0642\u0628\u0644 {provider}. \u0642\u062F \u0644\u0627 \u064A\u0645\u0644\u0643 API key \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629.",
-      "error.msg.model_not_found": "\u0627\u0644\u0646\u0645\u0648\u0630\u062C \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0639\u0644\u0649 {provider}. \u0631\u0628\u0645\u0627 \u062A\u063A\u064A\u0651\u0631 \u0645\u0639\u0631\u0651\u0641 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u2014 \u0646\u0641\u0651\u0630 /model \u0644\u0639\u0631\u0636 \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0627\u0644\u0645\u062A\u0627\u062D\u0629.",
-      "error.msg.rate_limit": "\u062A\u0645 \u062A\u0642\u064A\u064A\u062F \u0627\u0644\u0645\u0639\u062F\u0644 \u0645\u0646 \u0642\u0628\u0644 {provider}. \u0637\u0644\u0628\u0627\u062A \u0643\u062B\u064A\u0631\u0629 \u062C\u062F\u0627\u064B \u2014 \u0627\u0646\u062A\u0638\u0631 \u0644\u062D\u0638\u0629 \u0648\u062D\u0627\u0648\u0644 \u0645\u062C\u062F\u062F\u0627\u064B.",
-      "error.msg.server_error": "{provider} \u064A\u0648\u0627\u062C\u0647 \u0645\u0634\u0627\u0643\u0644 ({code}). \u062D\u0627\u0648\u0644 \u0645\u062C\u062F\u062F\u0627\u064B \u0628\u0639\u062F \u0644\u062D\u0638\u0627\u062A.",
-      "error.msg.empty_response": "\u0623\u0631\u062C\u0639 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0633\u062A\u062C\u0627\u0628\u0629 \u0641\u0627\u0631\u063A\u0629. \u0642\u062F \u064A\u062D\u062F\u062B \u0647\u0630\u0627 \u0639\u0646\u062F \u062A\u062D\u0645\u064A\u0644 API \u0628\u0634\u0643\u0644 \u0632\u0627\u0626\u062F \u0623\u0648 \u062A\u0631\u0634\u064A\u062D \u0627\u0644\u0637\u0644\u0628. \u062D\u0627\u0648\u0644 \u0645\u062C\u062F\u062F\u0627\u064B.",
-      "error.msg.iteration_limit": "\u0648\u0635\u0644\u062A Ava \u0625\u0644\u0649 \u062D\u062F \u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0628\u0627\u0644\u063A {limit} \u062A\u0643\u0631\u0627\u0631. \u0639\u0627\u062F\u0629\u064B \u064A\u0639\u0646\u064A \u0647\u0630\u0627 \u0623\u0646 \u0627\u0644\u0645\u0647\u0645\u0629 \u0643\u0628\u064A\u0631\u0629 \u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0646 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u062F\u062E\u0644 \u0641\u064A \u062D\u0644\u0642\u0629.",
-      "error.msg.iteration_warning": "[\u062A\u062D\u0630\u064A\u0631] \u062A\u0628\u0642\u0649 \u0644\u062F\u064A\u0643 {remaining} \u062A\u0643\u0631\u0627\u0631\u0627\u062A \u0642\u0628\u0644 \u062D\u062F \u0627\u0644\u062D\u0644\u0642\u0629. \u0623\u0646\u0647\u0650 \u0645\u0647\u0645\u062A\u0643 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u2014 \u0644\u062E\u0651\u0635 \u0645\u0627 \u0623\u0646\u062C\u0632\u062A\u0647 \u0648\u0645\u0627 \u062A\u0628\u0642\u0651\u0649. \u0644\u0627 \u062A\u0628\u062F\u0623 \u0639\u0645\u0644\u0627\u064B \u062C\u062F\u064A\u062F\u0627\u064B \u0645\u062A\u0639\u062F\u062F \u0627\u0644\u062E\u0637\u0648\u0627\u062A.",
-      "error.msg.image_stripped": "[\u062A\u0645\u062A \u0645\u0634\u0627\u0631\u0643\u0629 \u0635\u0648\u0631\u0629 \u0644\u0643\u0646 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0644\u0627 \u064A\u062F\u0639\u0645 vision]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u0633\u0645\u0627\u062D",
-      "tool.always_allow": "\u0627\u0644\u0633\u0645\u0627\u062D \u062F\u0627\u0626\u0645\u0627\u064B",
-      "tool.allow_all": "\u0627\u0644\u0633\u0645\u0627\u062D \u0644\u0644\u0643\u0644",
-      "tool.deny": "\u0631\u0641\u0636",
-      "tool.allow_prompt": "\u0627\u0644\u0633\u0645\u0627\u062D \u0628\u0640 {tool}\u061F",
-      "tool.arguments": "\u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062A",
-      "tool.output": "\u0627\u0644\u0645\u062E\u0631\u062C\u0627\u062A",
-      "tool.error": "\u062E\u0637\u0623",
-      "tool.truncated": "... (\u062A\u0645 \u0627\u0644\u0627\u0642\u062A\u0637\u0627\u0639)",
-      "tool.read": "\u0642\u0631\u0627\u0621\u0629 {file}",
-      "tool.write": "\u0643\u062A\u0627\u0628\u0629 {file}",
-      "tool.edit": "\u062A\u0639\u062F\u064A\u0644 {file}",
-      "tool.find_files": "\u0627\u0644\u0628\u062D\u062B \u0639\u0646 \u0645\u0644\u0641\u0627\u062A: {pattern}",
-      "tool.search": "\u0628\u062D\u062B: {pattern}",
-      "tool.run": "\u062A\u0634\u063A\u064A\u0644: {command}",
-      "tool.list_dir": "\u0639\u0631\u0636 {path}",
-      "tool.web_search": "\u0628\u062D\u062B: {query}",
-      "tool.ask_user": "\u0633\u0624\u0627\u0644 \u0644\u0644\u0645\u0633\u062A\u062E\u062F\u0645",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\u0633\u062C\u0644 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A",
-      "history.new_chat": "+ \u0645\u062D\u0627\u062F\u062B\u0629 \u062C\u062F\u064A\u062F\u0629",
-      "history.close": "\u0625\u063A\u0644\u0627\u0642",
-      "history.search": "\u0627\u0644\u0628\u062D\u062B \u0641\u064A \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A...",
-      "history.empty": "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0645\u062D\u0641\u0648\u0638\u0629 \u0628\u0639\u062F.",
-      "history.no_match": "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0645\u0637\u0627\u0628\u0642\u0629.",
-      "history.delete_confirm": "\u062D\u0630\u0641\u061F",
-      "history.rename_hint": "\u0627\u0646\u0642\u0631 \u0645\u0631\u062A\u064A\u0646 \u0644\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u0633\u0645\u064A\u0629",
-      "history.pin": "\u062A\u062B\u0628\u064A\u062A",
-      "history.unpin": "\u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062A\u062B\u0628\u064A\u062A",
-      "history.export_md": "\u062A\u0635\u062F\u064A\u0631 \u0643\u0640 Markdown",
-      "history.pinned": "\u0645\u062B\u0628\u0651\u062A\u0629",
-      "history.just_now": "\u0627\u0644\u0622\u0646",
-      "history.minutes_ago": "\u0645\u0646\u0630 {n} \u062F",
-      "history.hours_ago": "\u0645\u0646\u0630 {n} \u0633",
-      "history.days_ago": "\u0645\u0646\u0630 {n} \u064A",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\u0633\u0624\u0627\u0644",
-      "ask.fallback": "\u0644\u062F\u0649 Ava \u0633\u0624\u0627\u0644",
-      "ask.placeholder": "\u0627\u0643\u062A\u0628 \u0631\u062F\u0643...",
-      "ask.submit": "\u0625\u0631\u0633\u0627\u0644",
-      "ask.skip": "\u062A\u062E\u0637\u064A",
-      "ask.skipped": "\u062A\u0645 \u0627\u0644\u062A\u062E\u0637\u064A",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062E\u0637\u0629 \u063A\u064A\u0631 \u0645\u062A\u0648\u0641\u0631\u0629",
-      "plan.prefix": "\u062E\u0637\u0629: {title}",
-      "plan.approved": "\u062A\u0645\u062A \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0629",
-      "plan.rejected": "\u062A\u0645 \u0627\u0644\u0631\u0641\u0636",
-      "plan.goal": "\u0627\u0644\u0647\u062F\u0641",
-      "plan.steps": "\u0627\u0644\u062E\u0637\u0648\u0627\u062A",
-      "plan.verification": "\u0627\u0644\u062A\u062D\u0642\u0642",
-      "plan.approaches": "\u0627\u0644\u0623\u0633\u0627\u0644\u064A\u0628",
-      "plan.approve": "\u0645\u0648\u0627\u0641\u0642\u0629",
-      "plan.reject": "\u0631\u0641\u0636",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0645\u0647\u0627\u0645 \u063A\u064A\u0631 \u0645\u062A\u0648\u0641\u0631\u0629",
-      "todo.tasks": "\u0627\u0644\u0645\u0647\u0627\u0645",
-      "todo.done": "{done}/{total} \u0645\u0643\u062A\u0645\u0644",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\u0648\u0627\u0631\u062F",
-      "status.out": "\u0635\u0627\u062F\u0631",
-      "status.total": "\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A",
-      "status.tokens": "\u0631\u0645\u0648\u0632",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u062C\u0627\u0631\u064D \u0636\u063A\u0637 \u0627\u0644\u0633\u064A\u0627\u0642...",
-      "compression.result": "\u062A\u0645 \u0636\u063A\u0637 \u0627\u0644\u0633\u064A\u0627\u0642: ~{original} \u2192 ~{compressed} \u0631\u0645\u0632",
-      "compression.nothing": "\u0644\u0627 \u064A\u0648\u062C\u062F \u0634\u064A\u0621 \u0644\u0636\u063A\u0637\u0647.",
-      "compression.failed": "\u0641\u0634\u0644 \u0627\u0644\u0636\u063A\u0637.",
-      "compression.busy": "\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u0636\u063A\u0637 \u0623\u062B\u0646\u0627\u0621 \u0639\u0645\u0644 Ava.",
-      "compression.context_truncated": "\u062A\u0645 \u0627\u0642\u062A\u0637\u0627\u0639 \u0627\u0644\u0633\u064A\u0627\u0642: \u062A\u0645 \u062D\u0630\u0641 {count} \u0631\u0633\u0627\u0626\u0644.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\u062A\u0627\u0628\u0639 \u0645\u0646 \u062D\u064A\u062B \u062A\u0648\u0642\u0641\u062A.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\u0639\u0631\u0636 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u0645\u062A\u0627\u062D\u0629",
-      "cmd.model.desc": "\u0639\u0631\u0636 \u0623\u0648 \u062A\u0628\u062F\u064A\u0644 \u0627\u0644\u0646\u0645\u0627\u0630\u062C (/model <provider:model-id>)",
-      "cmd.clear.desc": "\u0645\u0633\u062D \u0633\u062C\u0644 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629",
-      "cmd.provider.desc": "\u0625\u0636\u0627\u0641\u0629 \u0623\u0648 \u0639\u0631\u0636 \u0627\u0644\u0645\u0632\u0648\u0651\u062F\u064A\u0646 (/provider add <name>)",
-      "cmd.history.desc": "\u0639\u0631\u0636 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u0645\u062D\u0641\u0648\u0638\u0629",
-      "cmd.resume.desc": "\u0627\u0633\u062A\u0626\u0646\u0627\u0641 \u0645\u062D\u0627\u062F\u062B\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 (/resume <id-prefix>)",
-      "cmd.search.desc": "\u0627\u0644\u0628\u062D\u062B \u0641\u064A \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A (/search <query>)",
-      "cmd.delete.desc": "\u062D\u0630\u0641 \u0645\u062D\u0627\u062F\u062B\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u0625\u0639\u0627\u062F\u0629 \u062A\u0633\u0645\u064A\u0629 \u0645\u062D\u0627\u062F\u062B\u0629 (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\u062A\u062B\u0628\u064A\u062A \u0645\u062D\u0627\u062F\u062B\u0629 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\u0625\u0644\u063A\u0627\u0621 \u062A\u062B\u0628\u064A\u062A \u0645\u062D\u0627\u062F\u062B\u0629 (/unpin <id-prefix>)",
-      "cmd.export.desc": "\u062A\u0635\u062F\u064A\u0631 \u0645\u062D\u0627\u062F\u062B\u0629 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\u0625\u0639\u0627\u062F\u0629 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629",
-      "cmd.compact.desc": "\u0636\u063A\u0637 \u0633\u064A\u0627\u0642 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0644\u062A\u0648\u0641\u064A\u0631 \u0627\u0644\u0645\u0633\u0627\u062D\u0629",
-      "cmd.permission.desc": "\u0639\u0631\u0636 \u0623\u0648 \u062A\u0639\u064A\u064A\u0646 \u0648\u0636\u0639 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\u0639\u0631\u0636 \u0627\u0644\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0645\u062A\u0627\u062D\u0629",
-      "cmd.init.desc": "\u0625\u0646\u0634\u0627\u0621 .ava/instructions.md \u0644\u0633\u064A\u0627\u0642 \u0627\u0644\u0645\u0634\u0631\u0648\u0639",
-      "cmd.exit.desc": "\u0627\u0644\u062E\u0631\u0648\u062C \u0645\u0646 Ava",
-      "cmd.security.desc": "\u062A\u0634\u063A\u064A\u0644 \u062A\u062F\u0642\u064A\u0642 \u0623\u0645\u0646\u064A (/security [\u0645\u062C\u0627\u0644 \u0627\u0644\u062A\u0631\u0643\u064A\u0632])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\u0646\u0645\u0648\u0630\u062C \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641: {model}",
-      "cmd.model.switched": "\u062A\u0645 \u0627\u0644\u062A\u0628\u062F\u064A\u0644 \u0625\u0644\u0649 {name} ({provider})",
-      "cmd.model.active": "(\u0646\u0634\u0637)",
-      "cmd.clear.done": "\u062A\u0645 \u0645\u0633\u062D \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.provider.usage": "\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: /provider add <{providers}>",
-      "cmd.provider.enter_key": "\u0623\u062F\u062E\u0644 API key \u0644\u0640 {provider}: ",
-      "cmd.provider.cancelled": "\u062A\u0645 \u0627\u0644\u0625\u0644\u063A\u0627\u0621.",
-      "cmd.provider.added": "\u062A\u0645\u062A \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0645\u0632\u0648\u0651\u062F {provider} \u0628\u0646\u062C\u0627\u062D.",
-      "cmd.provider.failed": "\u0641\u0634\u0644 \u062A\u0633\u062C\u064A\u0644 {provider}: {error}",
-      "cmd.provider.title": "\u0627\u0644\u0645\u0632\u0648\u0651\u062F\u0648\u0646 \u0627\u0644\u0645\u064F\u0639\u062F\u0651\u0648\u0646:",
-      "cmd.provider.configured": "\u0645\u064F\u0639\u062F\u0651",
-      "cmd.provider.not_configured": "\u063A\u064A\u0631 \u0645\u064F\u0639\u062F\u0651",
-      "cmd.provider.hint": "\u0627\u0633\u062A\u062E\u062F\u0645 /provider add <name> \u0644\u0625\u0636\u0627\u0641\u0629 \u0645\u0632\u0648\u0651\u062F.",
-      "cmd.history.empty": "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0645\u062D\u0641\u0648\u0638\u0629.",
-      "cmd.history.title": "\u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u0645\u062D\u0641\u0648\u0638\u0629:",
-      "cmd.history.more": "... \u0648{count} \u0623\u062E\u0631\u0649",
-      "cmd.history.hint": "\u0627\u0633\u062A\u062E\u062F\u0645 /resume <id-prefix> \u0644\u062A\u062D\u0645\u064A\u0644 \u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.resume.usage": "\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: /resume <id-prefix>",
-      "cmd.resume.hint": "\u0646\u0641\u0651\u0630 /history \u0644\u0639\u0631\u0636 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u0645\u062A\u0627\u062D\u0629.",
-      "cmd.resume.not_found": '\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0645\u062D\u0627\u062F\u062B\u0629 \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0640 "{prefix}".',
-      "cmd.resume.failed": "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.resume.done": "\u062A\u0645 \u0627\u0644\u0627\u0633\u062A\u0626\u0646\u0627\u0641: {title}",
-      "cmd.resume.count": "\u062A\u0645 \u062A\u062D\u0645\u064A\u0644 {count} \u0631\u0633\u0627\u0626\u0644.",
-      "cmd.search.usage": "\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: /search <query>",
-      "cmd.search.empty": '\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0640 "{query}".',
-      "cmd.search.title": '\u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0628\u062D\u062B \u0639\u0646 "{query}":',
-      "cmd.delete.usage": "\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: /delete <id-prefix>",
-      "cmd.delete.confirm": '\u062D\u0630\u0641 "{title}" ({id})\u061F (y/n) ',
-      "cmd.delete.done": "\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.delete.failed": "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.rename.usage": "\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u062A\u0645\u062A \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u0633\u0645\u064A\u0629 \u0625\u0644\u0649: {title}",
-      "cmd.rename.failed": "\u0641\u0634\u0644\u062A \u0625\u0639\u0627\u062F\u0629 \u062A\u0633\u0645\u064A\u0629 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.pin.usage": "\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: /pin <id-prefix>",
-      "cmd.pin.done": "\u062A\u0645 \u0627\u0644\u062A\u062B\u0628\u064A\u062A: {title}",
-      "cmd.pin.failed": "\u0641\u0634\u0644 \u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.unpin.usage": "\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: /unpin <id-prefix>",
-      "cmd.unpin.done": "\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062A\u062B\u0628\u064A\u062A: {title}",
-      "cmd.unpin.failed": "\u0641\u0634\u0644 \u0625\u0644\u063A\u0627\u0621 \u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.export.usage": "\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\u0641\u0634\u0644 \u062A\u0635\u062F\u064A\u0631 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629.",
-      "cmd.export.done": "\u062A\u0645 \u0627\u0644\u062A\u0635\u062F\u064A\u0631 \u0625\u0644\u0649 {filename}",
-      "cmd.retry.unavailable": "\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D\u0629.",
-      "cmd.compact.unavailable": "\u0627\u0644\u0636\u063A\u0637 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D.",
-      "cmd.permission.title": "\u0648\u0636\u0639 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A:",
-      "cmd.permission.strict": "\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0643\u062A\u0627\u0628\u0629 \u0648\u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u0635\u062F\u0641\u0629",
-      "cmd.permission.balanced": "\u0645\u0648\u0627\u0641\u0642\u0629 \u062A\u0644\u0642\u0627\u0626\u064A\u0629 \u0639\u0644\u0649 \u0627\u0644\u0643\u062A\u0627\u0628\u0629\u060C \u062A\u0623\u0643\u064A\u062F \u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u0635\u062F\u0641\u0629",
-      "cmd.permission.autonomous": "\u0645\u0648\u0627\u0641\u0642\u0629 \u062A\u0644\u0642\u0627\u0626\u064A\u0629 \u0639\u0644\u0649 \u0643\u0644 \u0634\u064A\u0621",
-      "cmd.permission.unknown": "\u0648\u0636\u0639 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641. \u0627\u062E\u062A\u0631: {modes}",
-      "cmd.permission.set": "\u062A\u0645 \u062A\u0639\u064A\u064A\u0646 \u0648\u0636\u0639 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0625\u0644\u0649 {mode}.",
-      "cmd.tools.title": "\u0627\u0644\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0645\u062A\u0627\u062D\u0629:",
-      "cmd.init.created": "\u062A\u0645 \u0625\u0646\u0634\u0627\u0621 {path}",
-      "cmd.init.hint": "\u0639\u062F\u0651\u0644 \u0647\u0630\u0627 \u0627\u0644\u0645\u0644\u0641 \u0644\u0625\u0639\u0637\u0627\u0621 Ava \u0633\u064A\u0627\u0642 \u0627\u0644\u0645\u0634\u0631\u0648\u0639.",
-      "cmd.init.restart": "\u0623\u0639\u062F \u062A\u0634\u063A\u064A\u0644 Ava \u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062A\u063A\u064A\u064A\u0631\u0627\u062A.",
-      "cmd.init.exists": "{path} \u0645\u0648\u062C\u0648\u062F \u0628\u0627\u0644\u0641\u0639\u0644.",
-      "cmd.unknown": "\u0623\u0645\u0631 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641: {input}. \u0627\u0643\u062A\u0628 /help \u0644\u0639\u0631\u0636 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u0645\u062A\u0627\u062D\u0629.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u062C\u0627\u0631\u064D \u0627\u0644\u062A\u0641\u0643\u064A\u0631...",
-      "cli.thinking_label": "[\u062A\u0641\u0643\u064A\u0631] ",
-      "cli.thinking_words": "{count} \u0643\u0644\u0645\u0629",
-      "cli.tool_label": "[\u0623\u062F\u0627\u0629] ",
-      "cli.tasks_label": "[\u0645\u0647\u0627\u0645] ",
-      "cli.tokens_label": "[\u0631\u0645\u0648\u0632] ",
-      "cli.running": "\u062C\u0627\u0631\u064D \u062A\u0634\u063A\u064A\u0644 {tool}...",
-      "cli.confirm_label": "[\u062A\u0623\u0643\u064A\u062F] ",
-      "cli.allow_prompt": "\u0647\u0644 \u062A\u0633\u0645\u062D\u061F ",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\u062A\u0645 \u0627\u0644\u0631\u0641\u0636.",
-      "cli.question_label": "[\u0633\u0624\u0627\u0644] ",
-      "cli.question_fallback": "\u0644\u062F\u0649 Ava \u0633\u0624\u0627\u0644 \u0644\u0643",
-      "cli.your_response": "\u0631\u062F\u0643: ",
-      "cli.skipped": "\u062A\u0645 \u0627\u0644\u062A\u062E\u0637\u064A.",
-      "cli.user_response": "\u0631\u062F \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645: {response}",
-      "cli.write_to": "\u0643\u062A\u0627\u0628\u0629 \u0625\u0644\u0649 {path}",
-      "cli.edit_file": "\u062A\u0639\u062F\u064A\u0644 {path}",
-      "cli.list_path": "\u0639\u0631\u0636 {path}",
-      "cli.search_query": '\u0628\u062D\u062B "{query}"',
-      "cli.ok": "\u0645\u0648\u0627\u0641\u0642",
-      "cli.fail": "\u0641\u0634\u0644",
-      "cli.more_lines": "... ({count} \u0633\u0637\u0631 \u0625\u0636\u0627\u0641\u064A)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "\u0645\u0631\u062D\u0628\u0627\u064B \u0628\u0643 \u0641\u064A Ava | Supernova",
-      "setup.intro": "\u0644\u0646\u0642\u0645 \u0628\u0625\u0639\u062F\u0627\u062F \u0645\u0632\u0648\u0651\u062F LLM \u0627\u0644\u062E\u0627\u0635 \u0628\u0643.",
-      "setup.choose": "\u0627\u062E\u062A\u0631 \u0645\u0632\u0648\u0651\u062F\u0627\u064B (\u0631\u0642\u0645): ",
-      "setup.invalid_choice": "\u0627\u062E\u062A\u064A\u0627\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D. \u0623\u0639\u062F \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0648\u062D\u0627\u0648\u0644 \u0645\u062C\u062F\u062F\u0627\u064B.",
-      "setup.key_url": "\u0627\u062D\u0635\u0644 \u0639\u0644\u0649 API key \u0645\u0646: {url}",
-      "setup.enter_key": "API Key \u0644\u0640 {provider}: ",
-      "setup.no_key": "\u0644\u0645 \u064A\u062A\u0645 \u0625\u062F\u062E\u0627\u0644 API key. \u0623\u0639\u062F \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0648\u062D\u0627\u0648\u0644 \u0645\u062C\u062F\u062F\u0627\u064B.",
-      "setup.complete": "\u0627\u0643\u062A\u0645\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F! \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0646\u0634\u0637: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/de.js
-var de_exports = {};
-__export(de_exports, {
-  deStrings: () => deStrings
-});
-var deStrings;
-var init_de = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/de.js"() {
-    deStrings = {
-      // \u2500\u2500 Welcome / Branding \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Stell jede Frage zu deinem Code.",
-      "welcome.cli_hint": "Gib deine Nachricht ein, oder /help f\xFCr Befehle.",
-      // \u2500\u2500 Input Area \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "input.placeholder.code": "Was m\xF6chtest du bauen?",
-      "input.placeholder.plan": "Beschreibe, was du planen m\xF6chtest...",
-      "input.placeholder.chat": "Stelle eine Frage oder starte eine Diskussion...",
-      "input.placeholder.disabled": "Konfiguriere einen Anbieter, um zu beginnen...",
-      "input.placeholder.security": "Beschreibe, was gescannt werden soll, oder dr\xFCcke Enter f\xFCr ein vollst\xE4ndiges Audit...",
-      "input.mode.code": "Code",
-      "input.mode.plan": "Plan",
-      "input.mode.chat": "Chat",
-      "input.mode.security": "Sicherheit",
-      "input.send": "Senden (Enter)",
-      "input.send_aria": "Nachricht senden",
-      "input.stop": "Stopp",
-      "input.stop_aria": "Ava stoppen",
-      "input.attach": "Bild anh\xE4ngen",
-      "input.drop_image": "Bild hier ablegen",
-      "input.compressing": "Komprimiere...",
-      "input.compress_title": "Kontextnutzung \u2014 klicken zum Komprimieren",
-      "input.compress_title_warning": "Klicken zum Komprimieren des Kontexts",
-      // \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "header.history": "Chatverlauf",
-      "header.settings": "Einstellungen",
-      "header.new_chat": "Neuer Chat",
-      // \u2500\u2500 Model Selector \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "model.no_providers": "Keine Anbieter konfiguriert.",
-      "model.open_settings": "Einstellungen \xF6ffnen",
-      "model.vision": "Vision",
-      "model.vision_title": "Dieses Modell unterst\xFCtzt Bild-/Vision-Eingabe",
-      "model.switched": "Gewechselt zu {model}",
-      // \u2500\u2500 Thinking Indicator \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "thinking.0": "Ava denkt nach...",
-      "thinking.1": "Analysiere deinen Code...",
-      "thinking.2": "\xDCberpr\xFCfe Ans\xE4tze...",
-      "thinking.3": "Formuliere eine Antwort...",
-      // \u2500\u2500 Suggestions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "suggestion.explain": "Dieses Projekt erkl\xE4ren",
-      "suggestion.explain_prompt": "Gib mir einen \xDCberblick \xFCber die Struktur und Architektur dieses Projekts.",
-      "suggestion.bug": "Einen Bug finden",
-      "suggestion.bug_prompt": "Hilf mir, Fehler in der aktuellen Datei zu finden und zu beheben.",
-      "suggestion.test": "Tests schreiben",
-      "suggestion.test_prompt": "Schreibe umfassende Tests f\xFCr das Hauptmodul.",
-      "suggestion.refactor": "Code refaktorisieren",
-      "suggestion.refactor_prompt": "Schlage Verbesserungen zur Refaktorisierung der aktuellen Datei vor.",
-      // \u2500\u2500 Error Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.auth": "Authentifizierung",
-      "error.credits": "Abrechnung",
-      "error.forbidden": "Zugriff verweigert",
-      "error.rate_limit": "Ratenlimit",
-      "error.model_not_found": "Modellfehler",
-      "error.bad_request": "Ung\xFCltige Anfrage",
-      "error.server_error": "Serverfehler",
-      "error.timeout": "Zeitlimit \xFCberschritten",
-      "error.stream_stall": "Stream unterbrochen",
-      "error.network": "Netzwerkfehler",
-      "error.setup": "Einrichtung erforderlich",
-      "error.busy": "Besch\xE4ftigt",
-      "error.iterations_exceeded": "Iterationslimit",
-      "error.context_truncated": "Kontext gek\xFCrzt",
-      "error.provider_error": "Anbieterfehler",
-      "error.unknown": "Fehler",
-      "error.continue": "Fortfahren",
-      // \u2500\u2500 Error Messages (with interpolation) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.msg.bad_request": "Ung\xFCltige Anfrage an {provider}. Das Anfrageformat ist m\xF6glicherweise nicht mit diesem Modell kompatibel.",
-      "error.msg.auth": "Ung\xFCltiger API key f\xFCr {provider}. \xDCberpr\xFCfe deinen Schl\xFCssel in ~/.ava/config.json",
-      "error.msg.credits": "Nicht gen\xFCgend Guthaben f\xFCr {provider}. Lade dein Kontoguthaben auf.",
-      "error.msg.forbidden": "Zugriff verweigert von {provider}. Dein API key hat m\xF6glicherweise nicht die erforderlichen Berechtigungen.",
-      "error.msg.model_not_found": "Modell nicht gefunden bei {provider}. Die Modell-ID hat sich m\xF6glicherweise ge\xE4ndert \u2014 f\xFChre /model aus, um verf\xFCgbare Modelle zu sehen.",
-      "error.msg.rate_limit": "Ratenlimit erreicht bei {provider}. Zu viele Anfragen \u2014 warte einen Moment und versuche es erneut.",
-      "error.msg.server_error": "{provider} hat derzeit Probleme ({code}). Versuche es in wenigen Augenblicken erneut.",
-      "error.msg.empty_response": "Das Modell hat eine leere Antwort zur\xFCckgegeben. Dies kann passieren, wenn die API \xFCberlastet ist oder die Anfrage gefiltert wurde. Versuche es erneut.",
-      "error.msg.iteration_limit": "Ava hat das Sicherheitslimit von {limit} Iterationen erreicht. Dies bedeutet in der Regel, dass die Aufgabe zu gro\xDF ist oder das Modell in einer Schleife feststeckt.",
-      "error.msg.iteration_warning": "[WARNUNG] Du hast noch {remaining} Iterationen vor dem Limit. Schlie\xDFe deine aktuelle Aufgabe ab \u2014 fasse zusammen, was erledigt ist und was noch fehlt. Starte keine neuen mehrstufigen Aufgaben.",
-      "error.msg.image_stripped": "[Ein Bild wurde geteilt, aber dieses Modell unterst\xFCtzt keine Vision]",
-      // \u2500\u2500 Tool UI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "tool.allow": "Erlauben",
-      "tool.always_allow": "Immer erlauben",
-      "tool.allow_all": "Alles erlauben",
-      "tool.deny": "Ablehnen",
-      "tool.allow_prompt": "{tool} erlauben?",
-      "tool.arguments": "Argumente",
-      "tool.output": "Ausgabe",
-      "tool.error": "Fehler",
-      "tool.truncated": "... (gek\xFCrzt)",
-      "tool.read": "Lesen {file}",
-      "tool.write": "Schreiben {file}",
-      "tool.edit": "Bearbeiten {file}",
-      "tool.find_files": "Dateien suchen: {pattern}",
-      "tool.search": "Suchen: {pattern}",
-      "tool.run": "Ausf\xFChren: {command}",
-      "tool.list_dir": "Auflisten {path}",
-      "tool.web_search": "Suchen: {query}",
-      "tool.ask_user": "Frage an den Benutzer",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // \u2500\u2500 History Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "history.title": "Chatverlauf",
-      "history.new_chat": "+ Neuer Chat",
-      "history.close": "Schlie\xDFen",
-      "history.search": "Gespr\xE4che durchsuchen...",
-      "history.empty": "Noch keine gespeicherten Gespr\xE4che.",
-      "history.no_match": "Keine passenden Gespr\xE4che.",
-      "history.delete_confirm": "L\xF6schen?",
-      "history.rename_hint": "Doppelklick zum Umbenennen",
-      "history.pin": "Anheften",
-      "history.unpin": "Abheften",
-      "history.export_md": "Als Markdown exportieren",
-      "history.pinned": "Angeheftet",
-      "history.just_now": "gerade eben",
-      "history.minutes_ago": "vor {n}min",
-      "history.hours_ago": "vor {n}h",
-      "history.days_ago": "vor {n}T",
-      // \u2500\u2500 Ask User Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "ask.question": "Frage",
-      "ask.fallback": "Ava hat eine Frage",
-      "ask.placeholder": "Gib deine Antwort ein...",
-      "ask.submit": "Absenden",
-      "ask.skip": "\xDCberspringen",
-      "ask.skipped": "\xDCbersprungen",
-      // \u2500\u2500 Plan Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "plan.unavailable": "Plandaten nicht verf\xFCgbar",
-      "plan.prefix": "Plan: {title}",
-      "plan.approved": "Genehmigt",
-      "plan.rejected": "Abgelehnt",
-      "plan.goal": "Ziel",
-      "plan.steps": "Schritte",
-      "plan.verification": "\xDCberpr\xFCfung",
-      "plan.approaches": "Ans\xE4tze",
-      "plan.approve": "Genehmigen",
-      "plan.reject": "Ablehnen",
-      // \u2500\u2500 Todo Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "todo.unavailable": "Aufgabenliste nicht verf\xFCgbar",
-      "todo.tasks": "Aufgaben",
-      "todo.done": "{done}/{total} erledigt",
-      // \u2500\u2500 Status Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "status.in": "Eingang",
-      "status.out": "Ausgang",
-      "status.total": "Gesamt",
-      "status.tokens": "Tokens",
-      // \u2500\u2500 Compression \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "compression.start": "Komprimiere Kontext...",
-      "compression.result": "Kontext komprimiert: ~{original} \u2192 ~{compressed} Tokens",
-      "compression.nothing": "Nichts zu komprimieren.",
-      "compression.failed": "Komprimierung fehlgeschlagen.",
-      "compression.busy": "Komprimierung nicht m\xF6glich, w\xE4hrend Ava arbeitet.",
-      "compression.context_truncated": "Kontext gek\xFCrzt: {count} Nachrichten verworfen.",
-      // \u2500\u2500 Continue \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "continue.prompt": "Mach dort weiter, wo du aufgeh\xF6rt hast.",
-      // \u2500\u2500 CLI Command Descriptions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.help.desc": "Verf\xFCgbare Befehle anzeigen",
-      "cmd.model.desc": "Modelle auflisten oder wechseln (/model <provider:model-id>)",
-      "cmd.clear.desc": "Gespr\xE4chsverlauf l\xF6schen",
-      "cmd.provider.desc": "Anbieter hinzuf\xFCgen oder auflisten (/provider add <name>)",
-      "cmd.history.desc": "Gespeicherte Gespr\xE4che auflisten",
-      "cmd.resume.desc": "Ein gespeichertes Gespr\xE4ch fortsetzen (/resume <id-prefix>)",
-      "cmd.search.desc": "Gespr\xE4che durchsuchen (/search <query>)",
-      "cmd.delete.desc": "Ein gespeichertes Gespr\xE4ch l\xF6schen (/delete <id-prefix>)",
-      "cmd.rename.desc": "Ein Gespr\xE4ch umbenennen (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Ein Gespr\xE4ch anheften (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Ein Gespr\xE4ch abheften (/unpin <id-prefix>)",
-      "cmd.export.desc": "Ein Gespr\xE4ch exportieren (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Letzte Nachricht erneut senden",
-      "cmd.compact.desc": "Gespr\xE4chskontext komprimieren, um Platz freizugeben",
-      "cmd.permission.desc": "Berechtigungsmodus anzeigen oder setzen (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Verf\xFCgbare Werkzeuge auflisten",
-      "cmd.init.desc": ".ava/instructions.md f\xFCr projektspezifischen Kontext erstellen",
-      "cmd.exit.desc": "Ava beenden",
-      "cmd.security.desc": "Sicherheitsaudit durchf\xFChren (/security [Fokusbereich])",
-      // \u2500\u2500 CLI Command Messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.model.unknown": "Unbekanntes Modell: {model}",
-      "cmd.model.switched": "Gewechselt zu {name} ({provider})",
-      "cmd.model.active": "(aktiv)",
-      "cmd.clear.done": "Gespr\xE4ch gel\xF6scht.",
-      "cmd.provider.usage": "Verwendung: /provider add <{providers}>",
-      "cmd.provider.enter_key": "API key f\xFCr {provider} eingeben: ",
-      "cmd.provider.cancelled": "Abgebrochen.",
-      "cmd.provider.added": "Anbieter {provider} erfolgreich hinzugef\xFCgt.",
-      "cmd.provider.failed": "Registrierung von {provider} fehlgeschlagen: {error}",
-      "cmd.provider.title": "Konfigurierte Anbieter:",
-      "cmd.provider.configured": "konfiguriert",
-      "cmd.provider.not_configured": "nicht konfiguriert",
-      "cmd.provider.hint": "Verwende /provider add <name>, um einen Anbieter hinzuzuf\xFCgen.",
-      "cmd.history.empty": "Keine gespeicherten Gespr\xE4che.",
-      "cmd.history.title": "Gespeicherte Gespr\xE4che:",
-      "cmd.history.more": "... und {count} weitere",
-      "cmd.history.hint": "Verwende /resume <id-prefix>, um ein Gespr\xE4ch zu laden.",
-      "cmd.resume.usage": "Verwendung: /resume <id-prefix>",
-      "cmd.resume.hint": "F\xFChre /history aus, um verf\xFCgbare Gespr\xE4che zu sehen.",
-      "cmd.resume.not_found": "Kein Gespr\xE4ch mit dem Pr\xE4fix \u201E{prefix}\u201C gefunden.",
-      "cmd.resume.failed": "Fehler beim Laden des Gespr\xE4chs.",
-      "cmd.resume.done": "Fortgesetzt: {title}",
-      "cmd.resume.count": "{count} Nachrichten geladen.",
-      "cmd.search.usage": "Verwendung: /search <query>",
-      "cmd.search.empty": "Keine Gespr\xE4che f\xFCr \u201E{query}\u201C gefunden.",
-      "cmd.search.title": "Suchergebnisse f\xFCr \u201E{query}\u201C:",
-      "cmd.delete.usage": "Verwendung: /delete <id-prefix>",
-      "cmd.delete.confirm": "\u201E{title}\u201C ({id}) l\xF6schen? (j/n) ",
-      "cmd.delete.done": "Gespr\xE4ch gel\xF6scht.",
-      "cmd.delete.failed": "Fehler beim L\xF6schen des Gespr\xE4chs.",
-      "cmd.rename.usage": "Verwendung: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Umbenannt in: {title}",
-      "cmd.rename.failed": "Fehler beim Umbenennen des Gespr\xE4chs.",
-      "cmd.pin.usage": "Verwendung: /pin <id-prefix>",
-      "cmd.pin.done": "Angeheftet: {title}",
-      "cmd.pin.failed": "Fehler beim Anheften des Gespr\xE4chs.",
-      "cmd.unpin.usage": "Verwendung: /unpin <id-prefix>",
-      "cmd.unpin.done": "Abgeheftet: {title}",
-      "cmd.unpin.failed": "Fehler beim Abheften des Gespr\xE4chs.",
-      "cmd.export.usage": "Verwendung: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Fehler beim Exportieren des Gespr\xE4chs.",
-      "cmd.export.done": "Exportiert nach {filename}",
-      "cmd.retry.unavailable": "Erneut senden nicht verf\xFCgbar.",
-      "cmd.compact.unavailable": "Komprimierung nicht verf\xFCgbar.",
-      "cmd.permission.title": "Berechtigungsmodus:",
-      "cmd.permission.strict": "Schreibzugriffe und Shell-Befehle best\xE4tigen",
-      "cmd.permission.balanced": "Schreibzugriffe automatisch genehmigen, Shell-Befehle best\xE4tigen",
-      "cmd.permission.autonomous": "alles automatisch genehmigen",
-      "cmd.permission.unknown": "Unbekannter Modus. W\xE4hle: {modes}",
-      "cmd.permission.set": "Berechtigungsmodus auf {mode} gesetzt.",
-      "cmd.tools.title": "Verf\xFCgbare Werkzeuge:",
-      "cmd.init.created": "Erstellt: {path}",
-      "cmd.init.hint": "Bearbeite diese Datei, um Ava projektspezifischen Kontext zu geben.",
-      "cmd.init.restart": "Starte Ava neu, damit die \xC4nderungen wirksam werden.",
-      "cmd.init.exists": "{path} existiert bereits.",
-      "cmd.unknown": "Unbekannter Befehl: {input}. Gib /help ein, um verf\xFCgbare Befehle zu sehen.",
-      // \u2500\u2500 CLI Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cli.thinking": "Denke nach...",
-      "cli.thinking_label": "[denken] ",
-      "cli.thinking_words": "{count} W\xF6rter",
-      "cli.tool_label": "[Werkzeug] ",
-      "cli.tasks_label": "[Aufgaben] ",
-      "cli.tokens_label": "[Tokens] ",
-      "cli.running": "F\xFChre {tool} aus...",
-      "cli.confirm_label": "[best\xE4tigen] ",
-      "cli.allow_prompt": "Erlauben? ",
-      "cli.allow_yn": "(j/n) ",
-      "cli.denied": "Abgelehnt.",
-      "cli.question_label": "[Frage] ",
-      "cli.question_fallback": "Ava hat eine Frage an dich",
-      "cli.your_response": "Deine Antwort: ",
-      "cli.skipped": "\xDCbersprungen.",
-      "cli.user_response": "Benutzerantwort: {response}",
-      "cli.write_to": "schreiben nach {path}",
-      "cli.edit_file": "bearbeiten {path}",
-      "cli.list_path": "auflisten {path}",
-      "cli.search_query": "suchen \u201E{query}\u201C",
-      "cli.ok": "OK",
-      "cli.fail": "FEHLER",
-      "cli.more_lines": "... ({count} weitere Zeilen)",
-      // \u2500\u2500 Setup Wizard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "setup.welcome": "Willkommen bei Ava | Supernova",
-      "setup.intro": "Lass uns deinen LLM-Anbieter einrichten.",
-      "setup.choose": "W\xE4hle einen Anbieter (Nummer): ",
-      "setup.invalid_choice": "Ung\xFCltige Auswahl. Bitte starte neu und versuche es erneut.",
-      "setup.key_url": "Hole deinen API key hier: {url}",
-      "setup.enter_key": "API Key f\xFCr {provider}: ",
-      "setup.no_key": "Kein API key angegeben. Bitte starte neu und versuche es erneut.",
-      "setup.complete": "Einrichtung abgeschlossen! Aktives Modell: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/es.js
-var es_exports = {};
-__export(es_exports, {
-  esStrings: () => esStrings
-});
-var esStrings;
-var init_es = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/es.js"() {
-    esStrings = {
-      // \u2500\u2500 Welcome / Branding \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Pregunta lo que quieras sobre tu c\xF3digo.",
-      "welcome.cli_hint": "Escribe tu mensaje, o /help para ver los comandos.",
-      // \u2500\u2500 Input Area \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "input.placeholder.code": "\xBFQu\xE9 quieres construir?",
-      "input.placeholder.plan": "Describe lo que quieres planificar...",
-      "input.placeholder.chat": "Haz una pregunta o inicia una conversaci\xF3n...",
-      "input.placeholder.disabled": "Configura un proveedor para comenzar...",
-      "input.placeholder.security": "Describe qu\xE9 escanear, o pulsa Enter para una auditor\xEDa completa...",
-      "input.mode.code": "C\xF3digo",
-      "input.mode.plan": "Plan",
-      "input.mode.chat": "Chat",
-      "input.mode.security": "Seguridad",
-      "input.send": "Enviar (Enter)",
-      "input.send_aria": "Enviar mensaje",
-      "input.stop": "Detener",
-      "input.stop_aria": "Detener a Ava",
-      "input.attach": "Adjuntar imagen",
-      "input.drop_image": "Suelta la imagen aqu\xED",
-      "input.compressing": "Comprimiendo...",
-      "input.compress_title": "Uso de contexto \u2014 clic para comprimir",
-      "input.compress_title_warning": "Clic para comprimir el contexto",
-      // \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "header.history": "Historial de chats",
-      "header.settings": "Configuraci\xF3n",
-      "header.new_chat": "Nuevo chat",
-      // \u2500\u2500 Model Selector \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "model.no_providers": "No hay proveedores configurados.",
-      "model.open_settings": "Abrir configuraci\xF3n",
-      "model.vision": "visi\xF3n",
-      "model.vision_title": "Este modelo soporta entrada de imagen/visi\xF3n",
-      "model.switched": "Cambiado a {model}",
-      // \u2500\u2500 Thinking Indicator \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "thinking.0": "Ava est\xE1 pensando...",
-      "thinking.1": "Analizando tu c\xF3digo...",
-      "thinking.2": "Evaluando enfoques...",
-      "thinking.3": "Elaborando una respuesta...",
-      // \u2500\u2500 Suggestions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "suggestion.explain": "Explicar este proyecto",
-      "suggestion.explain_prompt": "Dame una visi\xF3n general de la estructura y arquitectura de este proyecto.",
-      "suggestion.bug": "Buscar un bug",
-      "suggestion.bug_prompt": "Ay\xFAdame a encontrar y corregir errores en el archivo actual.",
-      "suggestion.test": "Escribir tests",
-      "suggestion.test_prompt": "Escribe tests completos para el m\xF3dulo principal.",
-      "suggestion.refactor": "Refactorizar c\xF3digo",
-      "suggestion.refactor_prompt": "Sugiere mejoras de refactorizaci\xF3n para el archivo actual.",
-      // \u2500\u2500 Error Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.auth": "Autenticaci\xF3n",
-      "error.credits": "Facturaci\xF3n",
-      "error.forbidden": "Acceso denegado",
-      "error.rate_limit": "L\xEDmite de tasa",
-      "error.model_not_found": "Error de modelo",
-      "error.bad_request": "Solicitud inv\xE1lida",
-      "error.server_error": "Error del servidor",
-      "error.timeout": "Tiempo agotado",
-      "error.stream_stall": "Transmisi\xF3n detenida",
-      "error.network": "Error de red",
-      "error.setup": "Configuraci\xF3n requerida",
-      "error.busy": "Ocupado",
-      "error.iterations_exceeded": "L\xEDmite de iteraciones",
-      "error.context_truncated": "Contexto truncado",
-      "error.provider_error": "Error del proveedor",
-      "error.unknown": "Error",
-      "error.continue": "Continuar",
-      // \u2500\u2500 Error Messages (with interpolation) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.msg.bad_request": "Solicitud inv\xE1lida a {provider}. El formato de la solicitud puede ser incompatible con este modelo.",
-      "error.msg.auth": "API key inv\xE1lida para {provider}. Verifica tu clave en ~/.ava/config.json",
-      "error.msg.credits": "Cr\xE9ditos insuficientes para {provider}. Recarga el saldo de tu cuenta.",
-      "error.msg.forbidden": "Acceso denegado por {provider}. Tu API key podr\xEDa no tener los permisos necesarios.",
-      "error.msg.model_not_found": "Modelo no encontrado en {provider}. El ID del modelo puede haber cambiado \u2014 ejecuta /model para ver los modelos disponibles.",
-      "error.msg.rate_limit": "L\xEDmite de tasa alcanzado en {provider}. Demasiadas solicitudes \u2014 espera un momento e int\xE9ntalo de nuevo.",
-      "error.msg.server_error": "{provider} est\xE1 experimentando problemas ({code}). Intenta de nuevo en unos momentos.",
-      "error.msg.empty_response": "El modelo devolvi\xF3 una respuesta vac\xEDa. Esto puede ocurrir cuando la API est\xE1 sobrecargada o la solicitud fue filtrada. Int\xE9ntalo de nuevo.",
-      "error.msg.iteration_limit": "Ava alcanz\xF3 el l\xEDmite de seguridad de {limit} iteraciones. Esto suele significar que la tarea es muy grande o el modelo entr\xF3 en un bucle.",
-      "error.msg.iteration_warning": "[AVISO] Te quedan {remaining} iteraciones antes del l\xEDmite. Finaliza tu tarea actual \u2014 resume lo que has hecho y lo que falta. No inicies nuevas tareas de varios pasos.",
-      "error.msg.image_stripped": "[Se comparti\xF3 una imagen pero este modelo no soporta visi\xF3n]",
-      // \u2500\u2500 Tool UI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "tool.allow": "Permitir",
-      "tool.always_allow": "Permitir siempre",
-      "tool.allow_all": "Permitir todo",
-      "tool.deny": "Denegar",
-      "tool.allow_prompt": "\xBFPermitir {tool}?",
-      "tool.arguments": "Argumentos",
-      "tool.output": "Salida",
-      "tool.error": "Error",
-      "tool.truncated": "... (truncado)",
-      "tool.read": "Leer {file}",
-      "tool.write": "Escribir {file}",
-      "tool.edit": "Editar {file}",
-      "tool.find_files": "Buscar archivos: {pattern}",
-      "tool.search": "Buscar: {pattern}",
-      "tool.run": "Ejecutar: {command}",
-      "tool.list_dir": "Listar {path}",
-      "tool.web_search": "Buscar: {query}",
-      "tool.ask_user": "Pregunta para el usuario",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // \u2500\u2500 History Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "history.title": "Historial de chats",
-      "history.new_chat": "+ Nuevo chat",
-      "history.close": "Cerrar",
-      "history.search": "Buscar conversaciones...",
-      "history.empty": "A\xFAn no hay conversaciones guardadas.",
-      "history.no_match": "No hay conversaciones que coincidan.",
-      "history.delete_confirm": "\xBFEliminar?",
-      "history.rename_hint": "Doble clic para renombrar",
-      "history.pin": "Fijar",
-      "history.unpin": "Desfijar",
-      "history.export_md": "Exportar como Markdown",
-      "history.pinned": "Fijadas",
-      "history.just_now": "ahora mismo",
-      "history.minutes_ago": "hace {n}m",
-      "history.hours_ago": "hace {n}h",
-      "history.days_ago": "hace {n}d",
-      // \u2500\u2500 Ask User Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "ask.question": "Pregunta",
-      "ask.fallback": "Ava tiene una pregunta",
-      "ask.placeholder": "Escribe tu respuesta...",
-      "ask.submit": "Enviar",
-      "ask.skip": "Omitir",
-      "ask.skipped": "Omitida",
-      // \u2500\u2500 Plan Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "plan.unavailable": "Datos del plan no disponibles",
-      "plan.prefix": "Plan: {title}",
-      "plan.approved": "Aprobado",
-      "plan.rejected": "Rechazado",
-      "plan.goal": "Objetivo",
-      "plan.steps": "Pasos",
-      "plan.verification": "Verificaci\xF3n",
-      "plan.approaches": "Enfoques",
-      "plan.approve": "Aprobar",
-      "plan.reject": "Rechazar",
-      // \u2500\u2500 Todo Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "todo.unavailable": "Lista de tareas no disponible",
-      "todo.tasks": "Tareas",
-      "todo.done": "{done}/{total} completadas",
-      // \u2500\u2500 Status Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "status.in": "entrada",
-      "status.out": "salida",
-      "status.total": "total",
-      "status.tokens": "tokens",
-      // \u2500\u2500 Compression \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "compression.start": "Comprimiendo contexto...",
-      "compression.result": "Contexto comprimido: ~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "Nada que comprimir.",
-      "compression.failed": "La compresi\xF3n fall\xF3.",
-      "compression.busy": "No se puede comprimir mientras Ava est\xE1 trabajando.",
-      "compression.context_truncated": "Contexto truncado: {count} mensajes descartados.",
-      // \u2500\u2500 Continue \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "continue.prompt": "Contin\xFAa donde lo dejaste.",
-      // \u2500\u2500 CLI Command Descriptions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.help.desc": "Mostrar comandos disponibles",
-      "cmd.model.desc": "Listar o cambiar modelos (/model <provider:model-id>)",
-      "cmd.clear.desc": "Borrar historial de conversaci\xF3n",
-      "cmd.provider.desc": "A\xF1adir o listar proveedores (/provider add <name>)",
-      "cmd.history.desc": "Listar conversaciones guardadas",
-      "cmd.resume.desc": "Reanudar una conversaci\xF3n guardada (/resume <id-prefix>)",
-      "cmd.search.desc": "Buscar conversaciones (/search <query>)",
-      "cmd.delete.desc": "Eliminar una conversaci\xF3n guardada (/delete <id-prefix>)",
-      "cmd.rename.desc": "Renombrar una conversaci\xF3n (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Fijar una conversaci\xF3n (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Desfijar una conversaci\xF3n (/unpin <id-prefix>)",
-      "cmd.export.desc": "Exportar una conversaci\xF3n (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Reintentar el \xFAltimo mensaje",
-      "cmd.compact.desc": "Comprimir el contexto de la conversaci\xF3n para liberar espacio",
-      "cmd.permission.desc": "Ver o establecer el modo de permisos (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Listar herramientas disponibles",
-      "cmd.init.desc": "Crear .ava/instructions.md para contexto espec\xEDfico del proyecto",
-      "cmd.exit.desc": "Salir de Ava",
-      "cmd.security.desc": "Ejecutar una auditor\xEDa de seguridad (/security [\xE1rea de enfoque])",
-      // \u2500\u2500 CLI Command Messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.model.unknown": "Modelo desconocido: {model}",
-      "cmd.model.switched": "Cambiado a {name} ({provider})",
-      "cmd.model.active": "(activo)",
-      "cmd.clear.done": "Conversaci\xF3n borrada.",
-      "cmd.provider.usage": "Uso: /provider add <{providers}>",
-      "cmd.provider.enter_key": "Introduce la API key para {provider}: ",
-      "cmd.provider.cancelled": "Cancelado.",
-      "cmd.provider.added": "Proveedor {provider} a\xF1adido correctamente.",
-      "cmd.provider.failed": "Error al registrar {provider}: {error}",
-      "cmd.provider.title": "Proveedores configurados:",
-      "cmd.provider.configured": "configurado",
-      "cmd.provider.not_configured": "no configurado",
-      "cmd.provider.hint": "Usa /provider add <name> para a\xF1adir un proveedor.",
-      "cmd.history.empty": "No hay conversaciones guardadas.",
-      "cmd.history.title": "Conversaciones guardadas:",
-      "cmd.history.more": "... y {count} m\xE1s",
-      "cmd.history.hint": "Usa /resume <id-prefix> para cargar una conversaci\xF3n.",
-      "cmd.resume.usage": "Uso: /resume <id-prefix>",
-      "cmd.resume.hint": "Ejecuta /history para ver las conversaciones disponibles.",
-      "cmd.resume.not_found": 'No se encontr\xF3 ninguna conversaci\xF3n con el prefijo "{prefix}".',
-      "cmd.resume.failed": "Error al cargar la conversaci\xF3n.",
-      "cmd.resume.done": "Reanudada: {title}",
-      "cmd.resume.count": "{count} mensajes cargados.",
-      "cmd.search.usage": "Uso: /search <query>",
-      "cmd.search.empty": 'No hay conversaciones que coincidan con "{query}".',
-      "cmd.search.title": 'Resultados de b\xFAsqueda para "{query}":',
-      "cmd.delete.usage": "Uso: /delete <id-prefix>",
-      "cmd.delete.confirm": '\xBFEliminar "{title}" ({id})? (s/n) ',
-      "cmd.delete.done": "Conversaci\xF3n eliminada.",
-      "cmd.delete.failed": "Error al eliminar la conversaci\xF3n.",
-      "cmd.rename.usage": "Uso: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Renombrada a: {title}",
-      "cmd.rename.failed": "Error al renombrar la conversaci\xF3n.",
-      "cmd.pin.usage": "Uso: /pin <id-prefix>",
-      "cmd.pin.done": "Fijada: {title}",
-      "cmd.pin.failed": "Error al fijar la conversaci\xF3n.",
-      "cmd.unpin.usage": "Uso: /unpin <id-prefix>",
-      "cmd.unpin.done": "Desfijada: {title}",
-      "cmd.unpin.failed": "Error al desfijar la conversaci\xF3n.",
-      "cmd.export.usage": "Uso: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Error al exportar la conversaci\xF3n.",
-      "cmd.export.done": "Exportada a {filename}",
-      "cmd.retry.unavailable": "Reintento no disponible.",
-      "cmd.compact.unavailable": "Compresi\xF3n no disponible.",
-      "cmd.permission.title": "Modo de permisos:",
-      "cmd.permission.strict": "confirmar escrituras y comandos de shell",
-      "cmd.permission.balanced": "aprobar escrituras autom\xE1ticamente, confirmar comandos de shell",
-      "cmd.permission.autonomous": "aprobar todo autom\xE1ticamente",
-      "cmd.permission.unknown": "Modo desconocido. Elige: {modes}",
-      "cmd.permission.set": "Modo de permisos establecido a {mode}.",
-      "cmd.tools.title": "Herramientas disponibles:",
-      "cmd.init.created": "Creado {path}",
-      "cmd.init.hint": "Edita este archivo para dar a Ava contexto espec\xEDfico del proyecto.",
-      "cmd.init.restart": "Reinicia Ava para que los cambios surtan efecto.",
-      "cmd.init.exists": "{path} ya existe.",
-      "cmd.unknown": "Comando desconocido: {input}. Escribe /help para ver los comandos disponibles.",
-      // \u2500\u2500 CLI Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cli.thinking": "Pensando...",
-      "cli.thinking_label": "[pensando] ",
-      "cli.thinking_words": "{count} palabras",
-      "cli.tool_label": "[herramienta] ",
-      "cli.tasks_label": "[tareas] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "Ejecutando {tool}...",
-      "cli.confirm_label": "[confirmar] ",
-      "cli.allow_prompt": "\xBFPermitir? ",
-      "cli.allow_yn": "(s/n) ",
-      "cli.denied": "Denegado.",
-      "cli.question_label": "[pregunta] ",
-      "cli.question_fallback": "Ava tiene una pregunta para ti",
-      "cli.your_response": "Tu respuesta: ",
-      "cli.skipped": "Omitido.",
-      "cli.user_response": "Respuesta del usuario: {response}",
-      "cli.write_to": "escribir en {path}",
-      "cli.edit_file": "editar {path}",
-      "cli.list_path": "listar {path}",
-      "cli.search_query": 'buscar "{query}"',
-      "cli.ok": "OK",
-      "cli.fail": "ERROR",
-      "cli.more_lines": "... ({count} l\xEDneas m\xE1s)",
-      // \u2500\u2500 Setup Wizard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "setup.welcome": "Bienvenido a Ava | Supernova",
-      "setup.intro": "Vamos a configurar tu proveedor de LLM.",
-      "setup.choose": "Elige un proveedor (n\xFAmero): ",
-      "setup.invalid_choice": "Opci\xF3n inv\xE1lida. Reinicia e int\xE9ntalo de nuevo.",
-      "setup.key_url": "Obt\xE9n tu API key en: {url}",
-      "setup.enter_key": "API Key de {provider}: ",
-      "setup.no_key": "No se proporcion\xF3 API key. Reinicia e int\xE9ntalo de nuevo.",
-      "setup.complete": "Configuraci\xF3n completa. Modelo activo: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/fr.js
-var fr_exports = {};
-__export(fr_exports, {
-  frStrings: () => frStrings
-});
-var frStrings;
-var init_fr = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/fr.js"() {
-    frStrings = {
-      // \u2500\u2500 Welcome / Branding \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Posez n\u2019importe quelle question sur votre code.",
-      "welcome.cli_hint": "Tapez votre message, ou /help pour les commandes.",
-      // \u2500\u2500 Input Area \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "input.placeholder.code": "Que voulez-vous construire ?",
-      "input.placeholder.plan": "D\xE9crivez ce que vous voulez planifier...",
-      "input.placeholder.chat": "Posez une question ou lancez une discussion...",
-      "input.placeholder.disabled": "Configurez un fournisseur pour commencer...",
-      "input.placeholder.security": "D\xE9crivez ce que vous souhaitez analyser, ou appuyez sur Entr\xE9e pour un audit complet...",
-      "input.mode.code": "Code",
-      "input.mode.plan": "Plan",
-      "input.mode.chat": "Chat",
-      "input.mode.security": "S\xE9curit\xE9",
-      "input.send": "Envoyer (Entr\xE9e)",
-      "input.send_aria": "Envoyer le message",
-      "input.stop": "Arr\xEAter",
-      "input.stop_aria": "Arr\xEAter Ava",
-      "input.attach": "Joindre une image",
-      "input.drop_image": "D\xE9posez l\u2019image ici",
-      "input.compressing": "Compression...",
-      "input.compress_title": "Utilisation du contexte \u2014 cliquez pour comprimer",
-      "input.compress_title_warning": "Cliquez pour comprimer le contexte",
-      // \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "header.history": "Historique des chats",
-      "header.settings": "Param\xE8tres",
-      "header.new_chat": "Nouveau chat",
-      // \u2500\u2500 Model Selector \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "model.no_providers": "Aucun fournisseur configur\xE9.",
-      "model.open_settings": "Ouvrir les param\xE8tres",
-      "model.vision": "vision",
-      "model.vision_title": "Ce mod\xE8le prend en charge l\u2019entr\xE9e image/vision",
-      "model.switched": "Bascul\xE9 sur {model}",
-      // \u2500\u2500 Thinking Indicator \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "thinking.0": "Ava r\xE9fl\xE9chit...",
-      "thinking.1": "Analyse de votre code...",
-      "thinking.2": "\xC9valuation des approches...",
-      "thinking.3": "R\xE9daction d\u2019une r\xE9ponse...",
-      // \u2500\u2500 Suggestions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "suggestion.explain": "Expliquer ce projet",
-      "suggestion.explain_prompt": "Donnez-moi une vue d\u2019ensemble de la structure et de l\u2019architecture de ce projet.",
-      "suggestion.bug": "Trouver un bug",
-      "suggestion.bug_prompt": "Aidez-moi \xE0 trouver et corriger les bugs dans le fichier actuel.",
-      "suggestion.test": "\xC9crire des tests",
-      "suggestion.test_prompt": "\xC9crivez des tests complets pour le module principal.",
-      "suggestion.refactor": "Refactoriser le code",
-      "suggestion.refactor_prompt": "Sugg\xE9rez des am\xE9liorations de refactorisation pour le fichier actuel.",
-      // \u2500\u2500 Error Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.auth": "Authentification",
-      "error.credits": "Facturation",
-      "error.forbidden": "Acc\xE8s refus\xE9",
-      "error.rate_limit": "Limite de d\xE9bit",
-      "error.model_not_found": "Erreur de mod\xE8le",
-      "error.bad_request": "Requ\xEAte invalide",
-      "error.server_error": "Erreur serveur",
-      "error.timeout": "D\xE9lai d\xE9pass\xE9",
-      "error.stream_stall": "Flux interrompu",
-      "error.network": "Erreur r\xE9seau",
-      "error.setup": "Configuration requise",
-      "error.busy": "Occup\xE9",
-      "error.iterations_exceeded": "Limite d\u2019it\xE9rations",
-      "error.context_truncated": "Contexte tronqu\xE9",
-      "error.provider_error": "Erreur fournisseur",
-      "error.unknown": "Erreur",
-      "error.continue": "Continuer",
-      // \u2500\u2500 Error Messages (with interpolation) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.msg.bad_request": "Requ\xEAte invalide vers {provider}. Le format de la requ\xEAte est peut-\xEAtre incompatible avec ce mod\xE8le.",
-      "error.msg.auth": "API key invalide pour {provider}. V\xE9rifiez votre cl\xE9 dans ~/.ava/config.json",
-      "error.msg.credits": "Cr\xE9dits insuffisants pour {provider}. Rechargez le solde de votre compte.",
-      "error.msg.forbidden": "Acc\xE8s refus\xE9 par {provider}. Votre API key n\u2019a peut-\xEAtre pas les autorisations requises.",
-      "error.msg.model_not_found": "Mod\xE8le introuvable sur {provider}. L\u2019identifiant du mod\xE8le a peut-\xEAtre chang\xE9 \u2014 lancez /model pour voir les mod\xE8les disponibles.",
-      "error.msg.rate_limit": "Limite de d\xE9bit atteinte sur {provider}. Trop de requ\xEAtes \u2014 patientez un instant et r\xE9essayez.",
-      "error.msg.server_error": "{provider} rencontre des probl\xE8mes ({code}). R\xE9essayez dans quelques instants.",
-      "error.msg.empty_response": "Le mod\xE8le a renvoy\xE9 une r\xE9ponse vide. Cela peut arriver lorsque l\u2019API est surcharg\xE9e ou que la requ\xEAte a \xE9t\xE9 filtr\xE9e. R\xE9essayez.",
-      "error.msg.iteration_limit": "Ava a atteint la limite de s\xE9curit\xE9 de {limit} it\xE9rations. Cela signifie g\xE9n\xE9ralement que la t\xE2che est tr\xE8s volumineuse ou que le mod\xE8le est entr\xE9 dans une boucle.",
-      "error.msg.iteration_warning": "[AVERTISSEMENT] Il vous reste {remaining} it\xE9rations avant la limite. Terminez votre t\xE2che en cours \u2014 r\xE9sumez ce qui a \xE9t\xE9 fait et ce qu\u2019il reste. Ne commencez pas de nouvelles t\xE2ches \xE0 \xE9tapes multiples.",
-      "error.msg.image_stripped": "[Une image a \xE9t\xE9 partag\xE9e mais ce mod\xE8le ne prend pas en charge la vision]",
-      // \u2500\u2500 Tool UI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "tool.allow": "Autoriser",
-      "tool.always_allow": "Toujours autoriser",
-      "tool.allow_all": "Tout autoriser",
-      "tool.deny": "Refuser",
-      "tool.allow_prompt": "Autoriser {tool} ?",
-      "tool.arguments": "Arguments",
-      "tool.output": "Sortie",
-      "tool.error": "Erreur",
-      "tool.truncated": "... (tronqu\xE9)",
-      "tool.read": "Lire {file}",
-      "tool.write": "\xC9crire {file}",
-      "tool.edit": "Modifier {file}",
-      "tool.find_files": "Rechercher des fichiers : {pattern}",
-      "tool.search": "Rechercher : {pattern}",
-      "tool.run": "Ex\xE9cuter : {command}",
-      "tool.list_dir": "Lister {path}",
-      "tool.web_search": "Rechercher : {query}",
-      "tool.ask_user": "Question pour l\u2019utilisateur",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // \u2500\u2500 History Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "history.title": "Historique des chats",
-      "history.new_chat": "+ Nouveau chat",
-      "history.close": "Fermer",
-      "history.search": "Rechercher des conversations...",
-      "history.empty": "Aucune conversation enregistr\xE9e.",
-      "history.no_match": "Aucune conversation correspondante.",
-      "history.delete_confirm": "Supprimer ?",
-      "history.rename_hint": "Double-clic pour renommer",
-      "history.pin": "\xC9pingler",
-      "history.unpin": "D\xE9s\xE9pingler",
-      "history.export_md": "Exporter en Markdown",
-      "history.pinned": "\xC9pingl\xE9es",
-      "history.just_now": "\xE0 l\u2019instant",
-      "history.minutes_ago": "il y a {n}min",
-      "history.hours_ago": "il y a {n}h",
-      "history.days_ago": "il y a {n}j",
-      // \u2500\u2500 Ask User Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "ask.question": "Question",
-      "ask.fallback": "Ava a une question",
-      "ask.placeholder": "Tapez votre r\xE9ponse...",
-      "ask.submit": "Envoyer",
-      "ask.skip": "Passer",
-      "ask.skipped": "Pass\xE9e",
-      // \u2500\u2500 Plan Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "plan.unavailable": "Donn\xE9es du plan indisponibles",
-      "plan.prefix": "Plan : {title}",
-      "plan.approved": "Approuv\xE9",
-      "plan.rejected": "Rejet\xE9",
-      "plan.goal": "Objectif",
-      "plan.steps": "\xC9tapes",
-      "plan.verification": "V\xE9rification",
-      "plan.approaches": "Approches",
-      "plan.approve": "Approuver",
-      "plan.reject": "Rejeter",
-      // \u2500\u2500 Todo Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "todo.unavailable": "Liste de t\xE2ches indisponible",
-      "todo.tasks": "T\xE2ches",
-      "todo.done": "{done}/{total} termin\xE9es",
-      // \u2500\u2500 Status Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "status.in": "entr\xE9e",
-      "status.out": "sortie",
-      "status.total": "total",
-      "status.tokens": "tokens",
-      // \u2500\u2500 Compression \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "compression.start": "Compression du contexte...",
-      "compression.result": "Contexte comprim\xE9 : ~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "Rien \xE0 comprimer.",
-      "compression.failed": "La compression a \xE9chou\xE9.",
-      "compression.busy": "Impossible de comprimer pendant qu\u2019Ava travaille.",
-      "compression.context_truncated": "Contexte tronqu\xE9 : {count} messages supprim\xE9s.",
-      // \u2500\u2500 Continue \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "continue.prompt": "Reprenez l\xE0 o\xF9 vous en \xE9tiez.",
-      // \u2500\u2500 CLI Command Descriptions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.help.desc": "Afficher les commandes disponibles",
-      "cmd.model.desc": "Lister ou changer de mod\xE8le (/model <provider:model-id>)",
-      "cmd.clear.desc": "Effacer l\u2019historique de conversation",
-      "cmd.provider.desc": "Ajouter ou lister les fournisseurs (/provider add <name>)",
-      "cmd.history.desc": "Lister les conversations enregistr\xE9es",
-      "cmd.resume.desc": "Reprendre une conversation (/resume <id-prefix>)",
-      "cmd.search.desc": "Rechercher des conversations (/search <query>)",
-      "cmd.delete.desc": "Supprimer une conversation (/delete <id-prefix>)",
-      "cmd.rename.desc": "Renommer une conversation (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\xC9pingler une conversation (/pin <id-prefix>)",
-      "cmd.unpin.desc": "D\xE9s\xE9pingler une conversation (/unpin <id-prefix>)",
-      "cmd.export.desc": "Exporter une conversation (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "R\xE9essayer le dernier message",
-      "cmd.compact.desc": "Comprimer le contexte de la conversation pour lib\xE9rer de l\u2019espace",
-      "cmd.permission.desc": "Voir ou d\xE9finir le mode de permissions (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Lister les outils disponibles",
-      "cmd.init.desc": "Cr\xE9er .ava/instructions.md pour le contexte sp\xE9cifique au projet",
-      "cmd.exit.desc": "Quitter Ava",
-      "cmd.security.desc": "Lancer un audit de s\xE9curit\xE9 (/security [domaine cibl\xE9])",
-      // \u2500\u2500 CLI Command Messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.model.unknown": "Mod\xE8le inconnu : {model}",
-      "cmd.model.switched": "Bascul\xE9 sur {name} ({provider})",
-      "cmd.model.active": "(actif)",
-      "cmd.clear.done": "Conversation effac\xE9e.",
-      "cmd.provider.usage": "Utilisation : /provider add <{providers}>",
-      "cmd.provider.enter_key": "Saisissez l\u2019API key pour {provider} : ",
-      "cmd.provider.cancelled": "Annul\xE9.",
-      "cmd.provider.added": "Fournisseur {provider} ajout\xE9 avec succ\xE8s.",
-      "cmd.provider.failed": "\xC9chec de l\u2019enregistrement de {provider} : {error}",
-      "cmd.provider.title": "Fournisseurs configur\xE9s :",
-      "cmd.provider.configured": "configur\xE9",
-      "cmd.provider.not_configured": "non configur\xE9",
-      "cmd.provider.hint": "Utilisez /provider add <name> pour ajouter un fournisseur.",
-      "cmd.history.empty": "Aucune conversation enregistr\xE9e.",
-      "cmd.history.title": "Conversations enregistr\xE9es :",
-      "cmd.history.more": "... et {count} de plus",
-      "cmd.history.hint": "Utilisez /resume <id-prefix> pour charger une conversation.",
-      "cmd.resume.usage": "Utilisation : /resume <id-prefix>",
-      "cmd.resume.hint": "Lancez /history pour voir les conversations disponibles.",
-      "cmd.resume.not_found": "Aucune conversation trouv\xE9e avec le pr\xE9fixe \xAB {prefix} \xBB.",
-      "cmd.resume.failed": "\xC9chec du chargement de la conversation.",
-      "cmd.resume.done": "Reprise : {title}",
-      "cmd.resume.count": "{count} messages charg\xE9s.",
-      "cmd.search.usage": "Utilisation : /search <query>",
-      "cmd.search.empty": "Aucune conversation correspondant \xE0 \xAB {query} \xBB.",
-      "cmd.search.title": "R\xE9sultats pour \xAB {query} \xBB :",
-      "cmd.delete.usage": "Utilisation : /delete <id-prefix>",
-      "cmd.delete.confirm": "Supprimer \xAB {title} \xBB ({id}) ? (o/n) ",
-      "cmd.delete.done": "Conversation supprim\xE9e.",
-      "cmd.delete.failed": "\xC9chec de la suppression de la conversation.",
-      "cmd.rename.usage": "Utilisation : /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Renomm\xE9e en : {title}",
-      "cmd.rename.failed": "\xC9chec du renommage de la conversation.",
-      "cmd.pin.usage": "Utilisation : /pin <id-prefix>",
-      "cmd.pin.done": "\xC9pingl\xE9e : {title}",
-      "cmd.pin.failed": "\xC9chec de l\u2019\xE9pinglage de la conversation.",
-      "cmd.unpin.usage": "Utilisation : /unpin <id-prefix>",
-      "cmd.unpin.done": "D\xE9s\xE9pingl\xE9e : {title}",
-      "cmd.unpin.failed": "\xC9chec du d\xE9s\xE9pinglage de la conversation.",
-      "cmd.export.usage": "Utilisation : /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\xC9chec de l\u2019exportation de la conversation.",
-      "cmd.export.done": "Export\xE9e vers {filename}",
-      "cmd.retry.unavailable": "R\xE9essai non disponible.",
-      "cmd.compact.unavailable": "Compression non disponible.",
-      "cmd.permission.title": "Mode de permissions :",
-      "cmd.permission.strict": "confirmer les \xE9critures et commandes shell",
-      "cmd.permission.balanced": "approuver les \xE9critures automatiquement, confirmer les commandes shell",
-      "cmd.permission.autonomous": "tout approuver automatiquement",
-      "cmd.permission.unknown": "Mode inconnu. Choisissez : {modes}",
-      "cmd.permission.set": "Mode de permissions d\xE9fini sur {mode}.",
-      "cmd.tools.title": "Outils disponibles :",
-      "cmd.init.created": "Cr\xE9\xE9 {path}",
-      "cmd.init.hint": "Modifiez ce fichier pour donner \xE0 Ava un contexte sp\xE9cifique au projet.",
-      "cmd.init.restart": "Red\xE9marrez Ava pour que les modifications prennent effet.",
-      "cmd.init.exists": "{path} existe d\xE9j\xE0.",
-      "cmd.unknown": "Commande inconnue : {input}. Tapez /help pour les commandes disponibles.",
-      // \u2500\u2500 CLI Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cli.thinking": "R\xE9flexion...",
-      "cli.thinking_label": "[r\xE9flexion] ",
-      "cli.thinking_words": "{count} mots",
-      "cli.tool_label": "[outil] ",
-      "cli.tasks_label": "[t\xE2ches] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "Ex\xE9cution de {tool}...",
-      "cli.confirm_label": "[confirmer] ",
-      "cli.allow_prompt": "Autoriser ? ",
-      "cli.allow_yn": "(o/n) ",
-      "cli.denied": "Refus\xE9.",
-      "cli.question_label": "[question] ",
-      "cli.question_fallback": "Ava a une question pour vous",
-      "cli.your_response": "Votre r\xE9ponse : ",
-      "cli.skipped": "Pass\xE9.",
-      "cli.user_response": "R\xE9ponse de l\u2019utilisateur : {response}",
-      "cli.write_to": "\xE9crire dans {path}",
-      "cli.edit_file": "modifier {path}",
-      "cli.list_path": "lister {path}",
-      "cli.search_query": "rechercher \xAB {query} \xBB",
-      "cli.ok": "OK",
-      "cli.fail": "\xC9CHEC",
-      "cli.more_lines": "... ({count} lignes suppl\xE9mentaires)",
-      // \u2500\u2500 Setup Wizard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "setup.welcome": "Bienvenue sur Ava | Supernova",
-      "setup.intro": "Configurons votre fournisseur LLM.",
-      "setup.choose": "Choisissez un fournisseur (num\xE9ro) : ",
-      "setup.invalid_choice": "Choix invalide. Veuillez red\xE9marrer et r\xE9essayer.",
-      "setup.key_url": "Obtenez votre API key ici : {url}",
-      "setup.enter_key": "API Key de {provider} : ",
-      "setup.no_key": "Aucune API key fournie. Veuillez red\xE9marrer et r\xE9essayer.",
-      "setup.complete": "Configuration termin\xE9e ! Mod\xE8le actif : {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/hi.js
-var hi_exports = {};
-__export(hi_exports, {
-  hiStrings: () => hiStrings
-});
-var hiStrings;
-var init_hi = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/hi.js"() {
-    hiStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\u0905\u092A\u0928\u0947 \u0915\u094B\u0921 \u0915\u0947 \u092C\u093E\u0930\u0947 \u092E\u0947\u0902 \u0915\u0941\u091B \u092D\u0940 \u092A\u0942\u091B\u0947\u0902\u0964",
-      "welcome.cli_hint": "\u0905\u092A\u0928\u093E \u0938\u0902\u0926\u0947\u0936 \u0932\u093F\u0916\u0947\u0902, \u092F\u093E /help \u0938\u0947 \u0915\u092E\u093E\u0902\u0921 \u0926\u0947\u0916\u0947\u0902\u0964",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\u0906\u092A \u0915\u094D\u092F\u093E \u092C\u0928\u093E\u0928\u093E \u091A\u093E\u0939\u0924\u0947 \u0939\u0948\u0902?",
-      "input.placeholder.plan": "\u092C\u0924\u093E\u090F\u0901 \u0915\u093F \u0906\u092A \u0915\u094D\u092F\u093E \u092A\u094D\u0932\u093E\u0928 \u0915\u0930\u0928\u093E \u091A\u093E\u0939\u0924\u0947 \u0939\u0948\u0902...",
-      "input.placeholder.chat": "\u0915\u094B\u0908 \u0938\u0935\u093E\u0932 \u092A\u0942\u091B\u0947\u0902 \u092F\u093E \u091A\u0930\u094D\u091A\u093E \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902...",
-      "input.placeholder.disabled": "\u0936\u0941\u0930\u0942 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u090F\u0915 \u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930 \u0915\u0949\u0928\u094D\u092B\u093C\u093F\u0917\u0930 \u0915\u0930\u0947\u0902...",
-      "input.placeholder.security": "\u092C\u0924\u093E\u090F\u0901 \u0915\u093F \u0915\u094D\u092F\u093E \u0938\u094D\u0915\u0948\u0928 \u0915\u0930\u0928\u093E \u0939\u0948, \u092F\u093E \u092A\u0942\u0930\u094D\u0923 \u0911\u0921\u093F\u091F \u0915\u0947 \u0932\u093F\u090F Enter \u0926\u092C\u093E\u090F\u0901...",
-      "input.mode.code": "\u0915\u094B\u0921",
-      "input.mode.plan": "\u092A\u094D\u0932\u093E\u0928",
-      "input.mode.chat": "\u091A\u0948\u091F",
-      "input.mode.security": "\u0938\u0941\u0930\u0915\u094D\u0937\u093E",
-      "input.send": "\u092D\u0947\u091C\u0947\u0902 (Enter)",
-      "input.send_aria": "\u0938\u0902\u0926\u0947\u0936 \u092D\u0947\u091C\u0947\u0902",
-      "input.stop": "\u0930\u094B\u0915\u0947\u0902",
-      "input.stop_aria": "Ava \u0915\u094B \u0930\u094B\u0915\u0947\u0902",
-      "input.attach": "\u091B\u0935\u093F \u0938\u0902\u0932\u0917\u094D\u0928 \u0915\u0930\u0947\u0902",
-      "input.drop_image": "\u091B\u0935\u093F \u092F\u0939\u093E\u0901 \u091B\u094B\u0921\u093C\u0947\u0902",
-      "input.compressing": "\u0938\u0902\u092A\u0940\u0921\u093C\u093F\u0924 \u0939\u094B \u0930\u0939\u093E \u0939\u0948...",
-      "input.compress_title": "\u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0909\u092A\u092F\u094B\u0917 \u2014 \u0938\u0902\u092A\u0940\u0921\u093C\u093F\u0924 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0915\u094D\u0932\u093F\u0915 \u0915\u0930\u0947\u0902",
-      "input.compress_title_warning": "\u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0938\u0902\u092A\u0940\u0921\u093C\u093F\u0924 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0915\u094D\u0932\u093F\u0915 \u0915\u0930\u0947\u0902",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\u091A\u0948\u091F \u0907\u0924\u093F\u0939\u093E\u0938",
-      "header.settings": "\u0938\u0947\u091F\u093F\u0902\u0917\u094D\u0938",
-      "header.new_chat": "\u0928\u0908 \u091A\u0948\u091F",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\u0915\u094B\u0908 \u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930 \u0915\u0949\u0928\u094D\u092B\u093C\u093F\u0917\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964",
-      "model.open_settings": "\u0938\u0947\u091F\u093F\u0902\u0917\u094D\u0938 \u0916\u094B\u0932\u0947\u0902",
-      "model.vision": "vision",
-      "model.vision_title": "\u092F\u0939 \u092E\u0949\u0921\u0932 \u091B\u0935\u093F/vision \u0907\u0928\u092A\u0941\u091F \u0938\u092A\u094B\u0930\u094D\u091F \u0915\u0930\u0924\u093E \u0939\u0948",
-      "model.switched": "{model} \u092A\u0930 \u0938\u094D\u0935\u093F\u091A \u0915\u093F\u092F\u093E \u0917\u092F\u093E",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u0938\u094B\u091A \u0930\u0939\u0940 \u0939\u0948...",
-      "thinking.1": "\u0906\u092A\u0915\u093E \u0915\u094B\u0921 \u0935\u093F\u0936\u094D\u0932\u0947\u0937\u0923 \u0915\u0930 \u0930\u0939\u0940 \u0939\u0948...",
-      "thinking.2": "\u0924\u0930\u0940\u0915\u094B\u0902 \u092A\u0930 \u0935\u093F\u091A\u093E\u0930 \u0915\u0930 \u0930\u0939\u0940 \u0939\u0948...",
-      "thinking.3": "\u091C\u0935\u093E\u092C \u0924\u0948\u092F\u093E\u0930 \u0915\u0930 \u0930\u0939\u0940 \u0939\u0948...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\u0907\u0938 \u0915\u094B\u0921\u092C\u0947\u0938 \u0915\u094B \u0938\u092E\u091D\u093E\u090F\u0901",
-      "suggestion.explain_prompt": "\u0907\u0938 \u092A\u094D\u0930\u094B\u091C\u0947\u0915\u094D\u091F \u0915\u0940 \u0938\u0902\u0930\u091A\u0928\u093E \u0914\u0930 \u0906\u0930\u094D\u0915\u093F\u091F\u0947\u0915\u094D\u091A\u0930 \u0915\u093E \u0938\u093E\u092E\u093E\u0928\u094D\u092F \u0905\u0935\u0932\u094B\u0915\u0928 \u0926\u0947\u0902\u0964",
-      "suggestion.bug": "\u092C\u0917 \u0916\u094B\u091C\u0947\u0902",
-      "suggestion.bug_prompt": "\u092E\u094C\u091C\u0942\u0926\u093E \u092B\u093C\u093E\u0907\u0932 \u092E\u0947\u0902 \u092C\u0917 \u0916\u094B\u091C\u0928\u0947 \u0914\u0930 \u0920\u0940\u0915 \u0915\u0930\u0928\u0947 \u092E\u0947\u0902 \u092E\u0926\u0926 \u0915\u0930\u0947\u0902\u0964",
-      "suggestion.test": "\u091F\u0947\u0938\u094D\u091F \u0932\u093F\u0916\u0947\u0902",
-      "suggestion.test_prompt": "\u092E\u0941\u0916\u094D\u092F \u092E\u0949\u0921\u094D\u092F\u0942\u0932 \u0915\u0947 \u0932\u093F\u090F \u0935\u094D\u092F\u093E\u092A\u0915 \u091F\u0947\u0938\u094D\u091F \u0932\u093F\u0916\u0947\u0902\u0964",
-      "suggestion.refactor": "\u0915\u094B\u0921 \u0930\u0940\u092B\u093C\u0948\u0915\u094D\u091F\u0930 \u0915\u0930\u0947\u0902",
-      "suggestion.refactor_prompt": "\u092E\u094C\u091C\u0942\u0926\u093E \u092B\u093C\u093E\u0907\u0932 \u0915\u0947 \u0932\u093F\u090F \u0930\u0940\u092B\u093C\u0948\u0915\u094D\u091F\u0930\u093F\u0902\u0917 \u0938\u0941\u0927\u093E\u0930 \u0938\u0941\u091D\u093E\u090F\u0901\u0964",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\u092A\u094D\u0930\u092E\u093E\u0923\u0940\u0915\u0930\u0923",
-      "error.credits": "\u092C\u093F\u0932\u093F\u0902\u0917",
-      "error.forbidden": "\u092A\u0939\u0941\u0901\u091A \u0905\u0938\u094D\u0935\u0940\u0915\u0943\u0924",
-      "error.rate_limit": "\u0926\u0930 \u0938\u0940\u092E\u093F\u0924",
-      "error.model_not_found": "\u092E\u0949\u0921\u0932 \u0924\u094D\u0930\u0941\u091F\u093F",
-      "error.bad_request": "\u0917\u0932\u0924 \u0905\u0928\u0941\u0930\u094B\u0927",
-      "error.server_error": "\u0938\u0930\u094D\u0935\u0930 \u0924\u094D\u0930\u0941\u091F\u093F",
-      "error.timeout": "\u0938\u092E\u092F \u0938\u092E\u093E\u092A\u094D\u0924",
-      "error.stream_stall": "\u0938\u094D\u091F\u094D\u0930\u0940\u092E \u0930\u0941\u0915\u0940",
-      "error.network": "\u0928\u0947\u091F\u0935\u0930\u094D\u0915 \u0924\u094D\u0930\u0941\u091F\u093F",
-      "error.setup": "\u0938\u0947\u091F\u0905\u092A \u0906\u0935\u0936\u094D\u092F\u0915",
-      "error.busy": "\u0935\u094D\u092F\u0938\u094D\u0924",
-      "error.iterations_exceeded": "\u092A\u0941\u0928\u0930\u093E\u0935\u0943\u0924\u094D\u0924\u093F \u0938\u0940\u092E\u093E",
-      "error.context_truncated": "\u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0915\u093E\u091F\u093E \u0917\u092F\u093E",
-      "error.provider_error": "\u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930 \u0924\u094D\u0930\u0941\u091F\u093F",
-      "error.unknown": "\u0924\u094D\u0930\u0941\u091F\u093F",
-      "error.continue": "\u091C\u093E\u0930\u0940 \u0930\u0916\u0947\u0902",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "{provider} \u0915\u094B \u0917\u0932\u0924 \u0905\u0928\u0941\u0930\u094B\u0927\u0964 \u0905\u0928\u0941\u0930\u094B\u0927 \u0915\u093E \u092A\u094D\u0930\u093E\u0930\u0942\u092A \u0907\u0938 \u092E\u0949\u0921\u0932 \u0915\u0947 \u0938\u093E\u0925 \u0905\u0938\u0902\u0917\u0924 \u0939\u094B \u0938\u0915\u0924\u093E \u0939\u0948\u0964",
-      "error.msg.auth": "{provider} \u0915\u0947 \u0932\u093F\u090F \u0905\u092E\u093E\u0928\u094D\u092F API key\u0964 ~/.ava/config.json \u092E\u0947\u0902 \u0905\u092A\u0928\u0940 key \u091C\u093E\u0901\u091A\u0947\u0902",
-      "error.msg.credits": "{provider} \u0915\u0947 \u0932\u093F\u090F \u0905\u092A\u0930\u094D\u092F\u093E\u092A\u094D\u0924 \u0915\u094D\u0930\u0947\u0921\u093F\u091F\u0964 \u0905\u092A\u0928\u0947 \u0916\u093E\u0924\u0947 \u0915\u093E \u092C\u0948\u0932\u0947\u0902\u0938 \u0930\u0940\u091A\u093E\u0930\u094D\u091C \u0915\u0930\u0947\u0902\u0964",
-      "error.msg.forbidden": "{provider} \u0926\u094D\u0935\u093E\u0930\u093E \u092A\u0939\u0941\u0901\u091A \u0905\u0938\u094D\u0935\u0940\u0915\u0943\u0924\u0964 \u0906\u092A\u0915\u0940 API key \u092E\u0947\u0902 \u0906\u0935\u0936\u094D\u092F\u0915 \u0905\u0928\u0941\u092E\u0924\u093F\u092F\u093E\u0901 \u0928\u0939\u0940\u0902 \u0939\u094B \u0938\u0915\u0924\u0940\u0902\u0964",
-      "error.msg.model_not_found": "{provider} \u092A\u0930 \u092E\u0949\u0921\u0932 \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u093E\u0964 \u092E\u0949\u0921\u0932 ID \u092C\u0926\u0932 \u0917\u092F\u093E \u0939\u094B \u0938\u0915\u0924\u093E \u0939\u0948 \u2014 \u0909\u092A\u0932\u092C\u094D\u0927 \u092E\u0949\u0921\u0932 \u0926\u0947\u0916\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F /model \u091A\u0932\u093E\u090F\u0901\u0964",
-      "error.msg.rate_limit": "{provider} \u0926\u094D\u0935\u093E\u0930\u093E \u0926\u0930 \u0938\u0940\u092E\u093F\u0924\u0964 \u092C\u0939\u0941\u0924 \u0905\u0927\u093F\u0915 \u0905\u0928\u0941\u0930\u094B\u0927 \u2014 \u0925\u094B\u0921\u093C\u093E \u0907\u0902\u0924\u091C\u093C\u093E\u0930 \u0915\u0930\u0947\u0902 \u0914\u0930 \u092B\u093F\u0930 \u092A\u094D\u0930\u092F\u093E\u0938 \u0915\u0930\u0947\u0902\u0964",
-      "error.msg.server_error": "{provider} \u092E\u0947\u0902 \u0938\u092E\u0938\u094D\u092F\u093E \u0906 \u0930\u0939\u0940 \u0939\u0948 ({code})\u0964 \u0915\u0941\u091B \u0915\u094D\u0937\u0923\u094B\u0902 \u092E\u0947\u0902 \u092B\u093F\u0930 \u092A\u094D\u0930\u092F\u093E\u0938 \u0915\u0930\u0947\u0902\u0964",
-      "error.msg.empty_response": "\u092E\u0949\u0921\u0932 \u0928\u0947 \u0916\u093E\u0932\u0940 \u092A\u094D\u0930\u0924\u093F\u0915\u094D\u0930\u093F\u092F\u093E \u0926\u0940\u0964 \u0910\u0938\u093E \u0924\u092C \u0939\u094B \u0938\u0915\u0924\u093E \u0939\u0948 \u091C\u092C API \u0913\u0935\u0930\u0932\u094B\u0921 \u0939\u094B \u092F\u093E \u0905\u0928\u0941\u0930\u094B\u0927 \u092B\u093C\u093F\u0932\u094D\u091F\u0930 \u0939\u094B \u091C\u093E\u090F\u0964 \u092B\u093F\u0930 \u092A\u094D\u0930\u092F\u093E\u0938 \u0915\u0930\u0947\u0902\u0964",
-      "error.msg.iteration_limit": "Ava {limit}-\u092A\u0941\u0928\u0930\u093E\u0935\u0943\u0924\u094D\u0924\u093F \u0938\u0941\u0930\u0915\u094D\u0937\u093E \u0938\u0940\u092E\u093E \u092A\u0930 \u092A\u0939\u0941\u0901\u091A \u0917\u0908\u0964 \u0906\u092E \u0924\u094C\u0930 \u092A\u0930 \u0907\u0938\u0915\u093E \u092E\u0924\u0932\u092C \u0939\u0948 \u0915\u093F \u0915\u093E\u0930\u094D\u092F \u092C\u0939\u0941\u0924 \u092C\u0921\u093C\u093E \u0939\u0948 \u092F\u093E \u092E\u0949\u0921\u0932 \u0932\u0942\u092A \u092E\u0947\u0902 \u092B\u0901\u0938 \u0917\u092F\u093E\u0964",
-      "error.msg.iteration_warning": "[\u091A\u0947\u0924\u093E\u0935\u0928\u0940] \u0932\u0942\u092A \u0938\u0940\u092E\u093E \u0938\u0947 \u092A\u0939\u0932\u0947 {remaining} \u092A\u0941\u0928\u0930\u093E\u0935\u0943\u0924\u094D\u0924\u093F\u092F\u093E\u0901 \u092C\u093E\u0915\u0940 \u0939\u0948\u0902\u0964 \u0905\u092A\u0928\u093E \u092E\u094C\u091C\u0942\u0926\u093E \u0915\u093E\u0930\u094D\u092F \u0938\u092E\u0947\u091F\u0947\u0902 \u2014 \u092C\u0924\u093E\u090F\u0901 \u0915\u094D\u092F\u093E \u0915\u093F\u092F\u093E \u0914\u0930 \u0915\u094D\u092F\u093E \u092C\u093E\u0915\u0940 \u0939\u0948\u0964 \u0928\u092F\u093E \u092C\u0939\u0941-\u091A\u0930\u0923\u0940\u092F \u0915\u093E\u0930\u094D\u092F \u0936\u0941\u0930\u0942 \u0928 \u0915\u0930\u0947\u0902\u0964",
-      "error.msg.image_stripped": "[\u090F\u0915 \u091B\u0935\u093F \u0938\u093E\u091D\u093E \u0915\u0940 \u0917\u0908 \u0925\u0940 \u0932\u0947\u0915\u093F\u0928 \u092F\u0939 \u092E\u0949\u0921\u0932 vision \u0938\u092A\u094B\u0930\u094D\u091F \u0928\u0939\u0940\u0902 \u0915\u0930\u0924\u093E]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u0905\u0928\u0941\u092E\u0924\u093F \u0926\u0947\u0902",
-      "tool.always_allow": "\u0939\u092E\u0947\u0936\u093E \u0905\u0928\u0941\u092E\u0924\u093F \u0926\u0947\u0902",
-      "tool.allow_all": "\u0938\u092D\u0940 \u0915\u094B \u0905\u0928\u0941\u092E\u0924\u093F \u0926\u0947\u0902",
-      "tool.deny": "\u0905\u0938\u094D\u0935\u0940\u0915\u093E\u0930 \u0915\u0930\u0947\u0902",
-      "tool.allow_prompt": "{tool} \u0915\u094B \u0905\u0928\u0941\u092E\u0924\u093F \u0926\u0947\u0902?",
-      "tool.arguments": "\u0906\u0930\u094D\u0917\u0941\u092E\u0947\u0902\u091F",
-      "tool.output": "\u0906\u0909\u091F\u092A\u0941\u091F",
-      "tool.error": "\u0924\u094D\u0930\u0941\u091F\u093F",
-      "tool.truncated": "... (\u0915\u093E\u091F\u093E \u0917\u092F\u093E)",
-      "tool.read": "{file} \u092A\u0922\u093C\u0947\u0902",
-      "tool.write": "{file} \u0932\u093F\u0916\u0947\u0902",
-      "tool.edit": "{file} \u0938\u0902\u092A\u093E\u0926\u093F\u0924 \u0915\u0930\u0947\u0902",
-      "tool.find_files": "\u092B\u093C\u093E\u0907\u0932\u0947\u0902 \u0916\u094B\u091C\u0947\u0902: {pattern}",
-      "tool.search": "\u0916\u094B\u091C: {pattern}",
-      "tool.run": "\u091A\u0932\u093E\u090F\u0901: {command}",
-      "tool.list_dir": "{path} \u0915\u0940 \u0938\u0942\u091A\u0940",
-      "tool.web_search": "\u0916\u094B\u091C: {query}",
-      "tool.ask_user": "\u0909\u092A\u092F\u094B\u0917\u0915\u0930\u094D\u0924\u093E \u0938\u0947 \u0938\u0935\u093E\u0932",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\u091A\u0948\u091F \u0907\u0924\u093F\u0939\u093E\u0938",
-      "history.new_chat": "+ \u0928\u0908 \u091A\u0948\u091F",
-      "history.close": "\u092C\u0902\u0926 \u0915\u0930\u0947\u0902",
-      "history.search": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0916\u094B\u091C\u0947\u0902...",
-      "history.empty": "\u0905\u092D\u0940 \u0924\u0915 \u0915\u094B\u0908 \u0938\u0939\u0947\u091C\u0940 \u0917\u0908 \u092C\u093E\u0924\u091A\u0940\u0924 \u0928\u0939\u0940\u0902\u0964",
-      "history.no_match": "\u0915\u094B\u0908 \u092E\u093F\u0932\u0924\u0940-\u091C\u0941\u0932\u0924\u0940 \u092C\u093E\u0924\u091A\u0940\u0924 \u0928\u0939\u0940\u0902\u0964",
-      "history.delete_confirm": "\u0939\u091F\u093E\u090F\u0901?",
-      "history.rename_hint": "\u0928\u093E\u092E \u092C\u0926\u0932\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0921\u092C\u0932-\u0915\u094D\u0932\u093F\u0915 \u0915\u0930\u0947\u0902",
-      "history.pin": "\u092A\u093F\u0928 \u0915\u0930\u0947\u0902",
-      "history.unpin": "\u0905\u0928\u092A\u093F\u0928 \u0915\u0930\u0947\u0902",
-      "history.export_md": "Markdown \u0915\u0947 \u0930\u0942\u092A \u092E\u0947\u0902 \u0928\u093F\u0930\u094D\u092F\u093E\u0924 \u0915\u0930\u0947\u0902",
-      "history.pinned": "\u092A\u093F\u0928 \u0915\u0940 \u0917\u0908",
-      "history.just_now": "\u0905\u092D\u0940",
-      "history.minutes_ago": "{n} \u092E\u093F. \u092A\u0939\u0932\u0947",
-      "history.hours_ago": "{n} \u0918\u0902. \u092A\u0939\u0932\u0947",
-      "history.days_ago": "{n} \u0926\u093F\u0928 \u092A\u0939\u0932\u0947",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\u0938\u0935\u093E\u0932",
-      "ask.fallback": "Ava \u0915\u093E \u090F\u0915 \u0938\u0935\u093E\u0932 \u0939\u0948",
-      "ask.placeholder": "\u0905\u092A\u0928\u093E \u091C\u0935\u093E\u092C \u0932\u093F\u0916\u0947\u0902...",
-      "ask.submit": "\u0938\u092C\u092E\u093F\u091F \u0915\u0930\u0947\u0902",
-      "ask.skip": "\u091B\u094B\u0921\u093C\u0947\u0902",
-      "ask.skipped": "\u091B\u094B\u0921\u093C \u0926\u093F\u092F\u093E \u0917\u092F\u093E",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\u092A\u094D\u0932\u093E\u0928 \u0921\u0947\u091F\u093E \u0905\u0928\u0941\u092A\u0932\u092C\u094D\u0927",
-      "plan.prefix": "\u092A\u094D\u0932\u093E\u0928: {title}",
-      "plan.approved": "\u0938\u094D\u0935\u0940\u0915\u0943\u0924",
-      "plan.rejected": "\u0905\u0938\u094D\u0935\u0940\u0915\u0943\u0924",
-      "plan.goal": "\u0932\u0915\u094D\u0937\u094D\u092F",
-      "plan.steps": "\u091A\u0930\u0923",
-      "plan.verification": "\u0938\u0924\u094D\u092F\u093E\u092A\u0928",
-      "plan.approaches": "\u0926\u0943\u0937\u094D\u091F\u093F\u0915\u094B\u0923",
-      "plan.approve": "\u0938\u094D\u0935\u0940\u0915\u0943\u0924 \u0915\u0930\u0947\u0902",
-      "plan.reject": "\u0905\u0938\u094D\u0935\u0940\u0915\u093E\u0930 \u0915\u0930\u0947\u0902",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\u0915\u093E\u0930\u094D\u092F \u0938\u0942\u091A\u0940 \u0905\u0928\u0941\u092A\u0932\u092C\u094D\u0927",
-      "todo.tasks": "\u0915\u093E\u0930\u094D\u092F",
-      "todo.done": "{done}/{total} \u092A\u0942\u0930\u094D\u0923",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\u0907\u0928",
-      "status.out": "\u0906\u0909\u091F",
-      "status.total": "\u0915\u0941\u0932",
-      "status.tokens": "\u091F\u094B\u0915\u0928",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0938\u0902\u092A\u0940\u0921\u093C\u093F\u0924 \u0939\u094B \u0930\u0939\u093E \u0939\u0948...",
-      "compression.result": "\u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0938\u0902\u092A\u0940\u0921\u093C\u093F\u0924: ~{original} \u2192 ~{compressed} \u091F\u094B\u0915\u0928",
-      "compression.nothing": "\u0938\u0902\u092A\u0940\u0921\u093C\u093F\u0924 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0915\u0941\u091B \u0928\u0939\u0940\u0902\u0964",
-      "compression.failed": "\u0938\u0902\u092A\u0940\u0921\u093C\u0928 \u0935\u093F\u092B\u0932\u0964",
-      "compression.busy": "Ava \u0915\u093E\u092E \u0915\u0930 \u0930\u0939\u0940 \u0939\u0948, \u0905\u092D\u0940 \u0938\u0902\u092A\u0940\u0921\u093C\u093F\u0924 \u0928\u0939\u0940\u0902 \u0915\u093F\u092F\u093E \u091C\u093E \u0938\u0915\u0924\u093E\u0964",
-      "compression.context_truncated": "\u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0915\u093E\u091F\u093E \u0917\u092F\u093E: {count} \u0938\u0902\u0926\u0947\u0936 \u0939\u091F\u093E\u090F \u0917\u090F\u0964",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\u091C\u0939\u093E\u0901 \u091B\u094B\u0921\u093C\u093E \u0925\u093E \u0935\u0939\u093E\u0901 \u0938\u0947 \u091C\u093E\u0930\u0940 \u0930\u0916\u0947\u0902\u0964",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\u0909\u092A\u0932\u092C\u094D\u0927 \u0915\u092E\u093E\u0902\u0921 \u0926\u093F\u0916\u093E\u090F\u0901",
-      "cmd.model.desc": "\u092E\u0949\u0921\u0932 \u0938\u0942\u091A\u0940 \u092F\u093E \u0938\u094D\u0935\u093F\u091A \u0915\u0930\u0947\u0902 (/model <provider:model-id>)",
-      "cmd.clear.desc": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0915\u093E \u0907\u0924\u093F\u0939\u093E\u0938 \u0938\u093E\u092B\u093C \u0915\u0930\u0947\u0902",
-      "cmd.provider.desc": "\u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930 \u091C\u094B\u0921\u093C\u0947\u0902 \u092F\u093E \u0926\u0947\u0916\u0947\u0902 (/provider add <name>)",
-      "cmd.history.desc": "\u0938\u0939\u0947\u091C\u0940 \u0917\u0908 \u092C\u093E\u0924\u091A\u0940\u0924 \u0915\u0940 \u0938\u0942\u091A\u0940",
-      "cmd.resume.desc": "\u0938\u0939\u0947\u091C\u0940 \u0917\u0908 \u092C\u093E\u0924\u091A\u0940\u0924 \u092B\u093F\u0930 \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902 (/resume <id-prefix>)",
-      "cmd.search.desc": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0916\u094B\u091C\u0947\u0902 (/search <query>)",
-      "cmd.delete.desc": "\u0938\u0939\u0947\u091C\u0940 \u0917\u0908 \u092C\u093E\u0924\u091A\u0940\u0924 \u0939\u091F\u093E\u090F\u0901 (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0915\u093E \u0928\u093E\u092E \u092C\u0926\u0932\u0947\u0902 (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\u092C\u093E\u0924\u091A\u0940\u0924 \u092A\u093F\u0928 \u0915\u0930\u0947\u0902 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0905\u0928\u092A\u093F\u0928 \u0915\u0930\u0947\u0902 (/unpin <id-prefix>)",
-      "cmd.export.desc": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0928\u093F\u0930\u094D\u092F\u093E\u0924 \u0915\u0930\u0947\u0902 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\u0905\u0902\u0924\u093F\u092E \u0938\u0902\u0926\u0947\u0936 \u092B\u093F\u0930 \u092D\u0947\u091C\u0947\u0902",
-      "cmd.compact.desc": "\u091C\u0917\u0939 \u092C\u0928\u093E\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u092C\u093E\u0924\u091A\u0940\u0924 \u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0938\u0902\u092A\u0940\u0921\u093C\u093F\u0924 \u0915\u0930\u0947\u0902",
-      "cmd.permission.desc": "\u0905\u0928\u0941\u092E\u0924\u093F \u092E\u094B\u0921 \u0926\u0947\u0916\u0947\u0902 \u092F\u093E \u0938\u0947\u091F \u0915\u0930\u0947\u0902 (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\u0909\u092A\u0932\u092C\u094D\u0927 \u091F\u0942\u0932 \u0915\u0940 \u0938\u0942\u091A\u0940",
-      "cmd.init.desc": "\u092A\u094D\u0930\u094B\u091C\u0947\u0915\u094D\u091F \u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0915\u0947 \u0932\u093F\u090F .ava/instructions.md \u092C\u0928\u093E\u090F\u0901",
-      "cmd.exit.desc": "Ava \u0938\u0947 \u092C\u093E\u0939\u0930 \u0928\u093F\u0915\u0932\u0947\u0902",
-      "cmd.security.desc": "\u0938\u0941\u0930\u0915\u094D\u0937\u093E \u0911\u0921\u093F\u091F \u091A\u0932\u093E\u090F\u0901 (/security [\u092B\u094B\u0915\u0938 \u0915\u094D\u0937\u0947\u0924\u094D\u0930])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\u0905\u091C\u094D\u091E\u093E\u0924 \u092E\u0949\u0921\u0932: {model}",
-      "cmd.model.switched": "{name} ({provider}) \u092A\u0930 \u0938\u094D\u0935\u093F\u091A \u0915\u093F\u092F\u093E \u0917\u092F\u093E",
-      "cmd.model.active": "(\u0938\u0915\u094D\u0930\u093F\u092F)",
-      "cmd.clear.done": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0938\u093E\u092B\u093C \u0915\u0940 \u0917\u0908\u0964",
-      "cmd.provider.usage": "\u0909\u092A\u092F\u094B\u0917: /provider add <{providers}>",
-      "cmd.provider.enter_key": "{provider} \u0915\u0947 \u0932\u093F\u090F API key \u0926\u0930\u094D\u091C \u0915\u0930\u0947\u0902: ",
-      "cmd.provider.cancelled": "\u0930\u0926\u094D\u0926 \u0915\u093F\u092F\u093E \u0917\u092F\u093E\u0964",
-      "cmd.provider.added": "\u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930 {provider} \u0938\u092B\u0932\u0924\u093E\u092A\u0942\u0930\u094D\u0935\u0915 \u091C\u094B\u0921\u093C\u093E \u0917\u092F\u093E\u0964",
-      "cmd.provider.failed": "{provider} \u0930\u091C\u093F\u0938\u094D\u091F\u0930 \u0915\u0930\u0928\u0947 \u092E\u0947\u0902 \u0935\u093F\u092B\u0932: {error}",
-      "cmd.provider.title": "\u0915\u0949\u0928\u094D\u092B\u093C\u093F\u0917\u0930 \u0915\u093F\u090F \u0917\u090F \u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930:",
-      "cmd.provider.configured": "\u0915\u0949\u0928\u094D\u092B\u093C\u093F\u0917\u0930 \u0939\u0948",
-      "cmd.provider.not_configured": "\u0915\u0949\u0928\u094D\u092B\u093C\u093F\u0917\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948",
-      "cmd.provider.hint": "\u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930 \u091C\u094B\u0921\u093C\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F /provider add <name> \u0915\u093E \u0909\u092A\u092F\u094B\u0917 \u0915\u0930\u0947\u0902\u0964",
-      "cmd.history.empty": "\u0915\u094B\u0908 \u0938\u0939\u0947\u091C\u0940 \u0917\u0908 \u092C\u093E\u0924\u091A\u0940\u0924 \u0928\u0939\u0940\u0902\u0964",
-      "cmd.history.title": "\u0938\u0939\u0947\u091C\u0940 \u0917\u0908 \u092C\u093E\u0924\u091A\u0940\u0924:",
-      "cmd.history.more": "... \u0914\u0930 {count} \u0905\u0928\u094D\u092F",
-      "cmd.history.hint": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0932\u094B\u0921 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F /resume <id-prefix> \u0915\u093E \u0909\u092A\u092F\u094B\u0917 \u0915\u0930\u0947\u0902\u0964",
-      "cmd.resume.usage": "\u0909\u092A\u092F\u094B\u0917: /resume <id-prefix>",
-      "cmd.resume.hint": "\u0909\u092A\u0932\u092C\u094D\u0927 \u092C\u093E\u0924\u091A\u0940\u0924 \u0926\u0947\u0916\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F /history \u091A\u0932\u093E\u090F\u0901\u0964",
-      "cmd.resume.not_found": '"{prefix}" \u0938\u0947 \u092E\u093F\u0932\u0924\u0940-\u091C\u0941\u0932\u0924\u0940 \u0915\u094B\u0908 \u092C\u093E\u0924\u091A\u0940\u0924 \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u0940\u0964',
-      "cmd.resume.failed": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0932\u094B\u0921 \u0928\u0939\u0940\u0902 \u0939\u094B \u0938\u0915\u0940\u0964",
-      "cmd.resume.done": "\u092B\u093F\u0930 \u0936\u0941\u0930\u0942 \u0915\u0940: {title}",
-      "cmd.resume.count": "{count} \u0938\u0902\u0926\u0947\u0936 \u0932\u094B\u0921 \u0915\u093F\u090F \u0917\u090F\u0964",
-      "cmd.search.usage": "\u0909\u092A\u092F\u094B\u0917: /search <query>",
-      "cmd.search.empty": '"{query}" \u0938\u0947 \u092E\u093F\u0932\u0924\u0940-\u091C\u0941\u0932\u0924\u0940 \u0915\u094B\u0908 \u092C\u093E\u0924\u091A\u0940\u0924 \u0928\u0939\u0940\u0902\u0964',
-      "cmd.search.title": '"{query}" \u0915\u0947 \u0916\u094B\u091C \u092A\u0930\u093F\u0923\u093E\u092E:',
-      "cmd.delete.usage": "\u0909\u092A\u092F\u094B\u0917: /delete <id-prefix>",
-      "cmd.delete.confirm": '"{title}" ({id}) \u0939\u091F\u093E\u090F\u0901? (y/n) ',
-      "cmd.delete.done": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0939\u091F\u093E \u0926\u0940 \u0917\u0908\u0964",
-      "cmd.delete.failed": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0939\u091F\u093E\u0928\u0947 \u092E\u0947\u0902 \u0935\u093F\u092B\u0932\u0964",
-      "cmd.rename.usage": "\u0909\u092A\u092F\u094B\u0917: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u0928\u093E\u092E \u092C\u0926\u0932\u093E: {title}",
-      "cmd.rename.failed": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0915\u093E \u0928\u093E\u092E \u092C\u0926\u0932\u0928\u0947 \u092E\u0947\u0902 \u0935\u093F\u092B\u0932\u0964",
-      "cmd.pin.usage": "\u0909\u092A\u092F\u094B\u0917: /pin <id-prefix>",
-      "cmd.pin.done": "\u092A\u093F\u0928 \u0915\u093F\u092F\u093E: {title}",
-      "cmd.pin.failed": "\u092C\u093E\u0924\u091A\u0940\u0924 \u092A\u093F\u0928 \u0915\u0930\u0928\u0947 \u092E\u0947\u0902 \u0935\u093F\u092B\u0932\u0964",
-      "cmd.unpin.usage": "\u0909\u092A\u092F\u094B\u0917: /unpin <id-prefix>",
-      "cmd.unpin.done": "\u0905\u0928\u092A\u093F\u0928 \u0915\u093F\u092F\u093E: {title}",
-      "cmd.unpin.failed": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0905\u0928\u092A\u093F\u0928 \u0915\u0930\u0928\u0947 \u092E\u0947\u0902 \u0935\u093F\u092B\u0932\u0964",
-      "cmd.export.usage": "\u0909\u092A\u092F\u094B\u0917: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\u092C\u093E\u0924\u091A\u0940\u0924 \u0928\u093F\u0930\u094D\u092F\u093E\u0924 \u0915\u0930\u0928\u0947 \u092E\u0947\u0902 \u0935\u093F\u092B\u0932\u0964",
-      "cmd.export.done": "{filename} \u092E\u0947\u0902 \u0928\u093F\u0930\u094D\u092F\u093E\u0924 \u0915\u093F\u092F\u093E \u0917\u092F\u093E",
-      "cmd.retry.unavailable": "\u092A\u0941\u0928\u0903 \u092A\u094D\u0930\u092F\u093E\u0938 \u0909\u092A\u0932\u092C\u094D\u0927 \u0928\u0939\u0940\u0902\u0964",
-      "cmd.compact.unavailable": "\u0938\u0902\u092A\u0940\u0921\u093C\u0928 \u0909\u092A\u0932\u092C\u094D\u0927 \u0928\u0939\u0940\u0902\u0964",
-      "cmd.permission.title": "\u0905\u0928\u0941\u092E\u0924\u093F \u092E\u094B\u0921:",
-      "cmd.permission.strict": "\u0932\u0947\u0916\u0928 \u0914\u0930 \u0936\u0947\u0932 \u0915\u092E\u093E\u0902\u0921 \u0915\u0940 \u092A\u0941\u0937\u094D\u091F\u093F \u0915\u0930\u0947\u0902",
-      "cmd.permission.balanced": "\u0932\u0947\u0916\u0928 \u0938\u094D\u0935\u0924\u0903 \u0938\u094D\u0935\u0940\u0915\u0943\u0924, \u0936\u0947\u0932 \u0915\u092E\u093E\u0902\u0921 \u0915\u0940 \u092A\u0941\u0937\u094D\u091F\u093F \u0915\u0930\u0947\u0902",
-      "cmd.permission.autonomous": "\u0938\u092C \u0915\u0941\u091B \u0938\u094D\u0935\u0924\u0903 \u0938\u094D\u0935\u0940\u0915\u0943\u0924",
-      "cmd.permission.unknown": "\u0905\u091C\u094D\u091E\u093E\u0924 \u092E\u094B\u0921\u0964 \u091A\u0941\u0928\u0947\u0902: {modes}",
-      "cmd.permission.set": "\u0905\u0928\u0941\u092E\u0924\u093F \u092E\u094B\u0921 {mode} \u092A\u0930 \u0938\u0947\u091F \u0915\u093F\u092F\u093E \u0917\u092F\u093E\u0964",
-      "cmd.tools.title": "\u0909\u092A\u0932\u092C\u094D\u0927 \u091F\u0942\u0932:",
-      "cmd.init.created": "{path} \u092C\u0928\u093E\u092F\u093E \u0917\u092F\u093E",
-      "cmd.init.hint": "Ava \u0915\u094B \u092A\u094D\u0930\u094B\u091C\u0947\u0915\u094D\u091F \u0915\u0949\u0928\u094D\u091F\u0947\u0915\u094D\u0938\u094D\u091F \u0926\u0947\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0907\u0938 \u092B\u093C\u093E\u0907\u0932 \u0915\u094B \u0938\u0902\u092A\u093E\u0926\u093F\u0924 \u0915\u0930\u0947\u0902\u0964",
-      "cmd.init.restart": "\u092C\u0926\u0932\u093E\u0935 \u0932\u093E\u0917\u0942 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F Ava \u0915\u094B \u092B\u093F\u0930 \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902\u0964",
-      "cmd.init.exists": "{path} \u092A\u0939\u0932\u0947 \u0938\u0947 \u092E\u094C\u091C\u0942\u0926 \u0939\u0948\u0964",
-      "cmd.unknown": "\u0905\u091C\u094D\u091E\u093E\u0924 \u0915\u092E\u093E\u0902\u0921: {input}\u0964 /help \u0932\u093F\u0916\u0915\u0930 \u0909\u092A\u0932\u092C\u094D\u0927 \u0915\u092E\u093E\u0902\u0921 \u0926\u0947\u0916\u0947\u0902\u0964",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u0938\u094B\u091A \u0930\u0939\u0940 \u0939\u0948...",
-      "cli.thinking_label": "[\u0938\u094B\u091A] ",
-      "cli.thinking_words": "{count} \u0936\u092C\u094D\u0926",
-      "cli.tool_label": "[\u091F\u0942\u0932] ",
-      "cli.tasks_label": "[\u0915\u093E\u0930\u094D\u092F] ",
-      "cli.tokens_label": "[\u091F\u094B\u0915\u0928] ",
-      "cli.running": "{tool} \u091A\u0932 \u0930\u0939\u093E \u0939\u0948...",
-      "cli.confirm_label": "[\u092A\u0941\u0937\u094D\u091F\u093F] ",
-      "cli.allow_prompt": "\u0905\u0928\u0941\u092E\u0924\u093F \u0926\u0947\u0902? ",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\u0905\u0938\u094D\u0935\u0940\u0915\u0943\u0924\u0964",
-      "cli.question_label": "[\u0938\u0935\u093E\u0932] ",
-      "cli.question_fallback": "Ava \u0915\u093E \u0906\u092A\u0915\u0947 \u0932\u093F\u090F \u090F\u0915 \u0938\u0935\u093E\u0932 \u0939\u0948",
-      "cli.your_response": "\u0906\u092A\u0915\u093E \u091C\u0935\u093E\u092C: ",
-      "cli.skipped": "\u091B\u094B\u0921\u093C \u0926\u093F\u092F\u093E \u0917\u092F\u093E\u0964",
-      "cli.user_response": "\u0909\u092A\u092F\u094B\u0917\u0915\u0930\u094D\u0924\u093E \u0915\u093E \u091C\u0935\u093E\u092C: {response}",
-      "cli.write_to": "{path} \u092E\u0947\u0902 \u0932\u093F\u0916\u0947\u0902",
-      "cli.edit_file": "{path} \u0938\u0902\u092A\u093E\u0926\u093F\u0924 \u0915\u0930\u0947\u0902",
-      "cli.list_path": "{path} \u0915\u0940 \u0938\u0942\u091A\u0940",
-      "cli.search_query": '"{query}" \u0916\u094B\u091C\u0947\u0902',
-      "cli.ok": "\u0920\u0940\u0915",
-      "cli.fail": "\u0935\u093F\u092B\u0932",
-      "cli.more_lines": "... ({count} \u0914\u0930 \u092A\u0902\u0915\u094D\u0924\u093F\u092F\u093E\u0901)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Ava | Supernova \u092E\u0947\u0902 \u0906\u092A\u0915\u093E \u0938\u094D\u0935\u093E\u0917\u0924 \u0939\u0948",
-      "setup.intro": "\u091A\u0932\u093F\u090F \u0906\u092A\u0915\u093E LLM \u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930 \u0938\u0947\u091F \u0915\u0930\u0924\u0947 \u0939\u0948\u0902\u0964",
-      "setup.choose": "\u092A\u094D\u0930\u094B\u0935\u093E\u0907\u0921\u0930 \u091A\u0941\u0928\u0947\u0902 (\u0928\u0902\u092C\u0930): ",
-      "setup.invalid_choice": "\u0905\u092E\u093E\u0928\u094D\u092F \u091A\u092F\u0928\u0964 \u092B\u093F\u0930 \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902 \u0914\u0930 \u0926\u094B\u092C\u093E\u0930\u093E \u092A\u094D\u0930\u092F\u093E\u0938 \u0915\u0930\u0947\u0902\u0964",
-      "setup.key_url": "\u0905\u092A\u0928\u0940 API key \u092F\u0939\u093E\u0901 \u0938\u0947 \u092A\u094D\u0930\u093E\u092A\u094D\u0924 \u0915\u0930\u0947\u0902: {url}",
-      "setup.enter_key": "{provider} API Key: ",
-      "setup.no_key": "API key \u0928\u0939\u0940\u0902 \u0926\u0940 \u0917\u0908\u0964 \u092B\u093F\u0930 \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902 \u0914\u0930 \u0926\u094B\u092C\u093E\u0930\u093E \u092A\u094D\u0930\u092F\u093E\u0938 \u0915\u0930\u0947\u0902\u0964",
-      "setup.complete": "\u0938\u0947\u091F\u0905\u092A \u092A\u0942\u0930\u093E! \u0938\u0915\u094D\u0930\u093F\u092F \u092E\u0949\u0921\u0932: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/id.js
-var id_exports = {};
-__export(id_exports, {
-  idStrings: () => idStrings
-});
-var idStrings;
-var init_id = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/id.js"() {
-    idStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Tanyakan apa saja tentang kode Anda.",
-      "welcome.cli_hint": "Ketik pesan Anda, atau /help untuk daftar perintah.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "Apa yang ingin Anda buat?",
-      "input.placeholder.plan": "Jelaskan apa yang ingin Anda rencanakan...",
-      "input.placeholder.chat": "Ajukan pertanyaan atau mulai diskusi...",
-      "input.placeholder.disabled": "Konfigurasikan provider untuk memulai...",
-      "input.placeholder.security": "Jelaskan apa yang ingin dipindai, atau tekan Enter untuk audit lengkap...",
-      "input.mode.code": "Kode",
-      "input.mode.plan": "Rencana",
-      "input.mode.chat": "Obrolan",
-      "input.mode.security": "Keamanan",
-      "input.send": "Kirim (Enter)",
-      "input.send_aria": "Kirim pesan",
-      "input.stop": "Hentikan",
-      "input.stop_aria": "Hentikan Ava",
-      "input.attach": "Lampirkan gambar",
-      "input.drop_image": "Letakkan gambar di sini",
-      "input.compressing": "Mengompresi...",
-      "input.compress_title": "Penggunaan konteks \u2014 klik untuk mengompresi",
-      "input.compress_title_warning": "Klik untuk mengompresi konteks",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "Riwayat Obrolan",
-      "header.settings": "Pengaturan",
-      "header.new_chat": "Obrolan Baru",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "Belum ada provider yang dikonfigurasi.",
-      "model.open_settings": "Buka Pengaturan",
-      "model.vision": "vision",
-      "model.vision_title": "Model ini mendukung input gambar/vision",
-      "model.switched": "Beralih ke {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava sedang berpikir...",
-      "thinking.1": "Menganalisis kode Anda...",
-      "thinking.2": "Mempertimbangkan pendekatan...",
-      "thinking.3": "Menyusun respons...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "Jelaskan codebase ini",
-      "suggestion.explain_prompt": "Berikan gambaran umum tentang struktur dan arsitektur proyek ini.",
-      "suggestion.bug": "Cari bug",
-      "suggestion.bug_prompt": "Bantu saya menemukan dan memperbaiki bug di file saat ini.",
-      "suggestion.test": "Tulis tes",
-      "suggestion.test_prompt": "Tulis tes komprehensif untuk modul utama.",
-      "suggestion.refactor": "Refaktor kode",
-      "suggestion.refactor_prompt": "Sarankan perbaikan refaktor untuk file saat ini.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "Autentikasi",
-      "error.credits": "Penagihan",
-      "error.forbidden": "Akses Ditolak",
-      "error.rate_limit": "Batas Laju",
-      "error.model_not_found": "Error Model",
-      "error.bad_request": "Permintaan Tidak Valid",
-      "error.server_error": "Error Server",
-      "error.timeout": "Waktu Habis",
-      "error.stream_stall": "Stream Terhenti",
-      "error.network": "Error Jaringan",
-      "error.setup": "Konfigurasi Diperlukan",
-      "error.busy": "Sibuk",
-      "error.iterations_exceeded": "Batas Iterasi",
-      "error.context_truncated": "Konteks Terpotong",
-      "error.provider_error": "Error Provider",
-      "error.unknown": "Error",
-      "error.continue": "Lanjutkan",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "Permintaan tidak valid ke {provider}. Format permintaan mungkin tidak kompatibel dengan model ini.",
-      "error.msg.auth": "API key tidak valid untuk {provider}. Periksa kunci Anda di ~/.ava/config.json",
-      "error.msg.credits": "Saldo tidak mencukupi untuk {provider}. Isi ulang saldo akun Anda.",
-      "error.msg.forbidden": "Akses ditolak oleh {provider}. API key Anda mungkin tidak memiliki izin yang diperlukan.",
-      "error.msg.model_not_found": "Model tidak ditemukan di {provider}. ID model mungkin telah berubah \u2014 jalankan /model untuk melihat model yang tersedia.",
-      "error.msg.rate_limit": "Batas laju tercapai di {provider}. Terlalu banyak permintaan \u2014 tunggu sebentar dan coba lagi.",
-      "error.msg.server_error": "{provider} mengalami masalah ({code}). Coba lagi dalam beberapa saat.",
-      "error.msg.empty_response": "Model mengembalikan respons kosong. Ini bisa terjadi saat API kelebihan beban atau permintaan difilter. Coba lagi.",
-      "error.msg.iteration_limit": "Ava mencapai batas keamanan {limit} iterasi. Biasanya ini berarti tugas terlalu besar atau model terjebak dalam perulangan.",
-      "error.msg.iteration_warning": "[PERINGATAN] Tersisa {remaining} iterasi sebelum batas perulangan. Selesaikan tugas Anda saat ini \u2014 rangkum apa yang telah dilakukan dan apa yang tersisa. Jangan mulai pekerjaan multi-langkah baru.",
-      "error.msg.image_stripped": "[Gambar dibagikan tetapi model ini tidak mendukung vision]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "Izinkan",
-      "tool.always_allow": "Selalu Izinkan",
-      "tool.allow_all": "Izinkan Semua",
-      "tool.deny": "Tolak",
-      "tool.allow_prompt": "Izinkan {tool}?",
-      "tool.arguments": "Argumen",
-      "tool.output": "Output",
-      "tool.error": "Error",
-      "tool.truncated": "... (terpotong)",
-      "tool.read": "Baca {file}",
-      "tool.write": "Tulis {file}",
-      "tool.edit": "Edit {file}",
-      "tool.find_files": "Cari file: {pattern}",
-      "tool.search": "Cari: {pattern}",
-      "tool.run": "Jalankan: {command}",
-      "tool.list_dir": "Daftar {path}",
-      "tool.web_search": "Cari: {query}",
-      "tool.ask_user": "Pertanyaan untuk pengguna",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "Riwayat Obrolan",
-      "history.new_chat": "+ Obrolan Baru",
-      "history.close": "Tutup",
-      "history.search": "Cari percakapan...",
-      "history.empty": "Belum ada percakapan tersimpan.",
-      "history.no_match": "Tidak ada percakapan yang cocok.",
-      "history.delete_confirm": "Hapus?",
-      "history.rename_hint": "Klik dua kali untuk mengganti nama",
-      "history.pin": "Sematkan",
-      "history.unpin": "Lepas sematan",
-      "history.export_md": "Ekspor sebagai Markdown",
-      "history.pinned": "Disematkan",
-      "history.just_now": "baru saja",
-      "history.minutes_ago": "{n} menit lalu",
-      "history.hours_ago": "{n} jam lalu",
-      "history.days_ago": "{n} hari lalu",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "Pertanyaan",
-      "ask.fallback": "Ava punya pertanyaan",
-      "ask.placeholder": "Ketik jawaban Anda...",
-      "ask.submit": "Kirim",
-      "ask.skip": "Lewati",
-      "ask.skipped": "Dilewati",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "Data rencana tidak tersedia",
-      "plan.prefix": "Rencana: {title}",
-      "plan.approved": "Disetujui",
-      "plan.rejected": "Ditolak",
-      "plan.goal": "Tujuan",
-      "plan.steps": "Langkah",
-      "plan.verification": "Verifikasi",
-      "plan.approaches": "Pendekatan",
-      "plan.approve": "Setujui",
-      "plan.reject": "Tolak",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "Daftar tugas tidak tersedia",
-      "todo.tasks": "Tugas",
-      "todo.done": "{done}/{total} selesai",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "masuk",
-      "status.out": "keluar",
-      "status.total": "total",
-      "status.tokens": "token",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "Mengompresi konteks...",
-      "compression.result": "Konteks dikompresi: ~{original} \u2192 ~{compressed} token",
-      "compression.nothing": "Tidak ada yang perlu dikompresi.",
-      "compression.failed": "Kompresi gagal.",
-      "compression.busy": "Tidak dapat mengompresi saat Ava sedang bekerja.",
-      "compression.context_truncated": "Konteks terpotong: {count} pesan dihapus.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "Lanjutkan dari posisi terakhir.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "Tampilkan perintah yang tersedia",
-      "cmd.model.desc": "Daftar atau ganti model (/model <provider:model-id>)",
-      "cmd.clear.desc": "Hapus riwayat percakapan",
-      "cmd.provider.desc": "Tambah atau lihat provider (/provider add <name>)",
-      "cmd.history.desc": "Daftar percakapan tersimpan",
-      "cmd.resume.desc": "Lanjutkan percakapan tersimpan (/resume <id-prefix>)",
-      "cmd.search.desc": "Cari percakapan (/search <query>)",
-      "cmd.delete.desc": "Hapus percakapan tersimpan (/delete <id-prefix>)",
-      "cmd.rename.desc": "Ganti nama percakapan (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Sematkan percakapan (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Lepas sematan percakapan (/unpin <id-prefix>)",
-      "cmd.export.desc": "Ekspor percakapan (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Ulangi pesan terakhir",
-      "cmd.compact.desc": "Kompresi konteks percakapan untuk menghemat ruang",
-      "cmd.permission.desc": "Lihat atau atur mode izin (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Daftar alat yang tersedia",
-      "cmd.init.desc": "Buat .ava/instructions.md untuk konteks khusus proyek",
-      "cmd.exit.desc": "Keluar dari Ava",
-      "cmd.security.desc": "Jalankan audit keamanan (/security [area fokus])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "Model tidak dikenal: {model}",
-      "cmd.model.switched": "Beralih ke {name} ({provider})",
-      "cmd.model.active": "(aktif)",
-      "cmd.clear.done": "Percakapan dihapus.",
-      "cmd.provider.usage": "Penggunaan: /provider add <{providers}>",
-      "cmd.provider.enter_key": "Masukkan API key untuk {provider}: ",
-      "cmd.provider.cancelled": "Dibatalkan.",
-      "cmd.provider.added": "Provider {provider} berhasil ditambahkan.",
-      "cmd.provider.failed": "Gagal mendaftarkan {provider}: {error}",
-      "cmd.provider.title": "Provider yang dikonfigurasi:",
-      "cmd.provider.configured": "dikonfigurasi",
-      "cmd.provider.not_configured": "belum dikonfigurasi",
-      "cmd.provider.hint": "Gunakan /provider add <name> untuk menambahkan provider.",
-      "cmd.history.empty": "Tidak ada percakapan tersimpan.",
-      "cmd.history.title": "Percakapan tersimpan:",
-      "cmd.history.more": "... dan {count} lainnya",
-      "cmd.history.hint": "Gunakan /resume <id-prefix> untuk memuat percakapan.",
-      "cmd.resume.usage": "Penggunaan: /resume <id-prefix>",
-      "cmd.resume.hint": "Jalankan /history untuk melihat percakapan yang tersedia.",
-      "cmd.resume.not_found": 'Tidak ditemukan percakapan yang cocok dengan "{prefix}".',
-      "cmd.resume.failed": "Gagal memuat percakapan.",
-      "cmd.resume.done": "Dilanjutkan: {title}",
-      "cmd.resume.count": "{count} pesan dimuat.",
-      "cmd.search.usage": "Penggunaan: /search <query>",
-      "cmd.search.empty": 'Tidak ada percakapan untuk "{query}".',
-      "cmd.search.title": 'Hasil pencarian untuk "{query}":',
-      "cmd.delete.usage": "Penggunaan: /delete <id-prefix>",
-      "cmd.delete.confirm": 'Hapus "{title}" ({id})? (y/t) ',
-      "cmd.delete.done": "Percakapan dihapus.",
-      "cmd.delete.failed": "Gagal menghapus percakapan.",
-      "cmd.rename.usage": "Penggunaan: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Diganti nama menjadi: {title}",
-      "cmd.rename.failed": "Gagal mengganti nama percakapan.",
-      "cmd.pin.usage": "Penggunaan: /pin <id-prefix>",
-      "cmd.pin.done": "Disematkan: {title}",
-      "cmd.pin.failed": "Gagal menyematkan percakapan.",
-      "cmd.unpin.usage": "Penggunaan: /unpin <id-prefix>",
-      "cmd.unpin.done": "Sematan dilepas: {title}",
-      "cmd.unpin.failed": "Gagal melepas sematan percakapan.",
-      "cmd.export.usage": "Penggunaan: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Gagal mengekspor percakapan.",
-      "cmd.export.done": "Diekspor ke {filename}",
-      "cmd.retry.unavailable": "Ulangi tidak tersedia.",
-      "cmd.compact.unavailable": "Kompresi tidak tersedia.",
-      "cmd.permission.title": "Mode izin:",
-      "cmd.permission.strict": "konfirmasi penulisan dan perintah shell",
-      "cmd.permission.balanced": "otomatis izinkan penulisan, konfirmasi perintah shell",
-      "cmd.permission.autonomous": "otomatis izinkan semuanya",
-      "cmd.permission.unknown": "Mode tidak dikenal. Pilih: {modes}",
-      "cmd.permission.set": "Mode izin diatur ke {mode}.",
-      "cmd.tools.title": "Alat yang tersedia:",
-      "cmd.init.created": "{path} dibuat",
-      "cmd.init.hint": "Edit file ini untuk memberikan Ava konteks khusus proyek.",
-      "cmd.init.restart": "Mulai ulang Ava agar perubahan diterapkan.",
-      "cmd.init.exists": "{path} sudah ada.",
-      "cmd.unknown": "Perintah tidak dikenal: {input}. Ketik /help untuk melihat perintah yang tersedia.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "Berpikir...",
-      "cli.thinking_label": "[berpikir] ",
-      "cli.thinking_words": "{count} kata",
-      "cli.tool_label": "[alat] ",
-      "cli.tasks_label": "[tugas] ",
-      "cli.tokens_label": "[token] ",
-      "cli.running": "Menjalankan {tool}...",
-      "cli.confirm_label": "[konfirmasi] ",
-      "cli.allow_prompt": "Izinkan? ",
-      "cli.allow_yn": "(y/t) ",
-      "cli.denied": "Ditolak.",
-      "cli.question_label": "[pertanyaan] ",
-      "cli.question_fallback": "Ava punya pertanyaan untuk Anda",
-      "cli.your_response": "Jawaban Anda: ",
-      "cli.skipped": "Dilewati.",
-      "cli.user_response": "Jawaban pengguna: {response}",
-      "cli.write_to": "tulis ke {path}",
-      "cli.edit_file": "edit {path}",
-      "cli.list_path": "daftar {path}",
-      "cli.search_query": 'cari "{query}"',
-      "cli.ok": "OK",
-      "cli.fail": "GAGAL",
-      "cli.more_lines": "... ({count} baris lagi)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Selamat datang di Ava | Supernova",
-      "setup.intro": "Mari konfigurasikan provider LLM Anda.",
-      "setup.choose": "Pilih provider (nomor): ",
-      "setup.invalid_choice": "Pilihan tidak valid. Mulai ulang dan coba lagi.",
-      "setup.key_url": "Dapatkan API key Anda di: {url}",
-      "setup.enter_key": "API key {provider}: ",
-      "setup.no_key": "API key tidak diberikan. Mulai ulang dan coba lagi.",
-      "setup.complete": "Konfigurasi selesai! Model aktif: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/it.js
-var it_exports = {};
-__export(it_exports, {
-  itStrings: () => itStrings
-});
-var itStrings;
-var init_it = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/it.js"() {
-    itStrings = {
-      // \u2500\u2500 Welcome / Branding \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Chiedi qualsiasi cosa sul tuo codice.",
-      "welcome.cli_hint": "Scrivi il tuo messaggio, o /help per i comandi.",
-      // \u2500\u2500 Input Area \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "input.placeholder.code": "Cosa vuoi costruire?",
-      "input.placeholder.plan": "Descrivi cosa vuoi pianificare...",
-      "input.placeholder.chat": "Fai una domanda o avvia una discussione...",
-      "input.placeholder.disabled": "Configura un provider per iniziare...",
-      "input.placeholder.security": "Descrivi cosa analizzare, o premi Invio per un audit completo...",
-      "input.mode.code": "Codice",
-      "input.mode.plan": "Piano",
-      "input.mode.chat": "Chat",
-      "input.mode.security": "Sicurezza",
-      "input.send": "Invia (Invio)",
-      "input.send_aria": "Invia messaggio",
-      "input.stop": "Ferma",
-      "input.stop_aria": "Ferma Ava",
-      "input.attach": "Allega immagine",
-      "input.drop_image": "Trascina l\u2019immagine qui",
-      "input.compressing": "Compressione...",
-      "input.compress_title": "Utilizzo del contesto \u2014 clicca per comprimere",
-      "input.compress_title_warning": "Clicca per comprimere il contesto",
-      // \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "header.history": "Cronologia chat",
-      "header.settings": "Impostazioni",
-      "header.new_chat": "Nuova chat",
-      // \u2500\u2500 Model Selector \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "model.no_providers": "Nessun provider configurato.",
-      "model.open_settings": "Apri impostazioni",
-      "model.vision": "visione",
-      "model.vision_title": "Questo modello supporta input immagine/visione",
-      "model.switched": "Passato a {model}",
-      // \u2500\u2500 Thinking Indicator \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "thinking.0": "Ava sta pensando...",
-      "thinking.1": "Analisi del tuo codice...",
-      "thinking.2": "Valutazione degli approcci...",
-      "thinking.3": "Preparazione della risposta...",
-      // \u2500\u2500 Suggestions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "suggestion.explain": "Spiega questo progetto",
-      "suggestion.explain_prompt": "Dammi una panoramica della struttura e dell\u2019architettura di questo progetto.",
-      "suggestion.bug": "Trova un bug",
-      "suggestion.bug_prompt": "Aiutami a trovare e correggere i bug nel file corrente.",
-      "suggestion.test": "Scrivi test",
-      "suggestion.test_prompt": "Scrivi test completi per il modulo principale.",
-      "suggestion.refactor": "Refactoring del codice",
-      "suggestion.refactor_prompt": "Suggerisci miglioramenti di refactoring per il file corrente.",
-      // \u2500\u2500 Error Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.auth": "Autenticazione",
-      "error.credits": "Fatturazione",
-      "error.forbidden": "Accesso negato",
-      "error.rate_limit": "Limite di frequenza",
-      "error.model_not_found": "Errore modello",
-      "error.bad_request": "Richiesta non valida",
-      "error.server_error": "Errore del server",
-      "error.timeout": "Tempo scaduto",
-      "error.stream_stall": "Flusso interrotto",
-      "error.network": "Errore di rete",
-      "error.setup": "Configurazione necessaria",
-      "error.busy": "Occupato",
-      "error.iterations_exceeded": "Limite iterazioni",
-      "error.context_truncated": "Contesto troncato",
-      "error.provider_error": "Errore del provider",
-      "error.unknown": "Errore",
-      "error.continue": "Continua",
-      // \u2500\u2500 Error Messages (with interpolation) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.msg.bad_request": "Richiesta non valida a {provider}. Il formato della richiesta potrebbe essere incompatibile con questo modello.",
-      "error.msg.auth": "API key non valida per {provider}. Controlla la tua chiave in ~/.ava/config.json",
-      "error.msg.credits": "Crediti insufficienti per {provider}. Ricarica il saldo del tuo account.",
-      "error.msg.forbidden": "Accesso negato da {provider}. La tua API key potrebbe non avere le autorizzazioni necessarie.",
-      "error.msg.model_not_found": "Modello non trovato su {provider}. L\u2019ID del modello potrebbe essere cambiato \u2014 esegui /model per vedere i modelli disponibili.",
-      "error.msg.rate_limit": "Limite di frequenza raggiunto su {provider}. Troppe richieste \u2014 attendi un momento e riprova.",
-      "error.msg.server_error": "{provider} sta riscontrando problemi ({code}). Riprova tra qualche istante.",
-      "error.msg.empty_response": "Il modello ha restituito una risposta vuota. Questo pu\xF2 accadere quando l\u2019API \xE8 sovraccarica o la richiesta \xE8 stata filtrata. Riprova.",
-      "error.msg.iteration_limit": "Ava ha raggiunto il limite di sicurezza di {limit} iterazioni. Questo di solito significa che il compito \xE8 troppo grande o il modello \xE8 entrato in un ciclo.",
-      "error.msg.iteration_warning": "[ATTENZIONE] Hai {remaining} iterazioni rimanenti prima del limite. Concludi il compito attuale \u2014 riassumi cosa hai fatto e cosa manca. Non avviare nuovi compiti a pi\xF9 fasi.",
-      "error.msg.image_stripped": "[\xC8 stata condivisa un\u2019immagine ma questo modello non supporta la visione]",
-      // \u2500\u2500 Tool UI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "tool.allow": "Consenti",
-      "tool.always_allow": "Consenti sempre",
-      "tool.allow_all": "Consenti tutto",
-      "tool.deny": "Nega",
-      "tool.allow_prompt": "Consentire {tool}?",
-      "tool.arguments": "Argomenti",
-      "tool.output": "Output",
-      "tool.error": "Errore",
-      "tool.truncated": "... (troncato)",
-      "tool.read": "Leggi {file}",
-      "tool.write": "Scrivi {file}",
-      "tool.edit": "Modifica {file}",
-      "tool.find_files": "Cerca file: {pattern}",
-      "tool.search": "Cerca: {pattern}",
-      "tool.run": "Esegui: {command}",
-      "tool.list_dir": "Elenca {path}",
-      "tool.web_search": "Cerca: {query}",
-      "tool.ask_user": "Domanda per l\u2019utente",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // \u2500\u2500 History Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "history.title": "Cronologia chat",
-      "history.new_chat": "+ Nuova chat",
-      "history.close": "Chiudi",
-      "history.search": "Cerca conversazioni...",
-      "history.empty": "Nessuna conversazione salvata.",
-      "history.no_match": "Nessuna conversazione corrispondente.",
-      "history.delete_confirm": "Eliminare?",
-      "history.rename_hint": "Doppio clic per rinominare",
-      "history.pin": "Fissa",
-      "history.unpin": "Sblocca",
-      "history.export_md": "Esporta come Markdown",
-      "history.pinned": "Fissate",
-      "history.just_now": "proprio ora",
-      "history.minutes_ago": "{n}min fa",
-      "history.hours_ago": "{n}h fa",
-      "history.days_ago": "{n}g fa",
-      // \u2500\u2500 Ask User Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "ask.question": "Domanda",
-      "ask.fallback": "Ava ha una domanda",
-      "ask.placeholder": "Scrivi la tua risposta...",
-      "ask.submit": "Invia",
-      "ask.skip": "Salta",
-      "ask.skipped": "Saltata",
-      // \u2500\u2500 Plan Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "plan.unavailable": "Dati del piano non disponibili",
-      "plan.prefix": "Piano: {title}",
-      "plan.approved": "Approvato",
-      "plan.rejected": "Rifiutato",
-      "plan.goal": "Obiettivo",
-      "plan.steps": "Passaggi",
-      "plan.verification": "Verifica",
-      "plan.approaches": "Approcci",
-      "plan.approve": "Approva",
-      "plan.reject": "Rifiuta",
-      // \u2500\u2500 Todo Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "todo.unavailable": "Lista attivit\xE0 non disponibile",
-      "todo.tasks": "Attivit\xE0",
-      "todo.done": "{done}/{total} completate",
-      // \u2500\u2500 Status Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "status.in": "ingresso",
-      "status.out": "uscita",
-      "status.total": "totale",
-      "status.tokens": "token",
-      // \u2500\u2500 Compression \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "compression.start": "Compressione del contesto...",
-      "compression.result": "Contesto compresso: ~{original} \u2192 ~{compressed} token",
-      "compression.nothing": "Nulla da comprimere.",
-      "compression.failed": "Compressione fallita.",
-      "compression.busy": "Impossibile comprimere mentre Ava sta lavorando.",
-      "compression.context_truncated": "Contesto troncato: {count} messaggi scartati.",
-      // \u2500\u2500 Continue \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "continue.prompt": "Riprendi da dove avevi lasciato.",
-      // \u2500\u2500 CLI Command Descriptions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.help.desc": "Mostra i comandi disponibili",
-      "cmd.model.desc": "Elenca o cambia modello (/model <provider:model-id>)",
-      "cmd.clear.desc": "Cancella la cronologia della conversazione",
-      "cmd.provider.desc": "Aggiungi o elenca i provider (/provider add <name>)",
-      "cmd.history.desc": "Elenca le conversazioni salvate",
-      "cmd.resume.desc": "Riprendi una conversazione salvata (/resume <id-prefix>)",
-      "cmd.search.desc": "Cerca conversazioni (/search <query>)",
-      "cmd.delete.desc": "Elimina una conversazione salvata (/delete <id-prefix>)",
-      "cmd.rename.desc": "Rinomina una conversazione (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Fissa una conversazione (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Sblocca una conversazione (/unpin <id-prefix>)",
-      "cmd.export.desc": "Esporta una conversazione (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Riprova l\u2019ultimo messaggio",
-      "cmd.compact.desc": "Comprimi il contesto della conversazione per liberare spazio",
-      "cmd.permission.desc": "Visualizza o imposta la modalit\xE0 permessi (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Elenca gli strumenti disponibili",
-      "cmd.init.desc": "Crea .ava/instructions.md per il contesto specifico del progetto",
-      "cmd.exit.desc": "Esci da Ava",
-      "cmd.security.desc": "Esegui un audit di sicurezza (/security [area di interesse])",
-      // \u2500\u2500 CLI Command Messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.model.unknown": "Modello sconosciuto: {model}",
-      "cmd.model.switched": "Passato a {name} ({provider})",
-      "cmd.model.active": "(attivo)",
-      "cmd.clear.done": "Conversazione cancellata.",
-      "cmd.provider.usage": "Uso: /provider add <{providers}>",
-      "cmd.provider.enter_key": "Inserisci l\u2019API key per {provider}: ",
-      "cmd.provider.cancelled": "Annullato.",
-      "cmd.provider.added": "Provider {provider} aggiunto con successo.",
-      "cmd.provider.failed": "Registrazione di {provider} fallita: {error}",
-      "cmd.provider.title": "Provider configurati:",
-      "cmd.provider.configured": "configurato",
-      "cmd.provider.not_configured": "non configurato",
-      "cmd.provider.hint": "Usa /provider add <name> per aggiungere un provider.",
-      "cmd.history.empty": "Nessuna conversazione salvata.",
-      "cmd.history.title": "Conversazioni salvate:",
-      "cmd.history.more": "... e altre {count}",
-      "cmd.history.hint": "Usa /resume <id-prefix> per caricare una conversazione.",
-      "cmd.resume.usage": "Uso: /resume <id-prefix>",
-      "cmd.resume.hint": "Esegui /history per vedere le conversazioni disponibili.",
-      "cmd.resume.not_found": 'Nessuna conversazione trovata con il prefisso "{prefix}".',
-      "cmd.resume.failed": "Errore nel caricamento della conversazione.",
-      "cmd.resume.done": "Ripresa: {title}",
-      "cmd.resume.count": "{count} messaggi caricati.",
-      "cmd.search.usage": "Uso: /search <query>",
-      "cmd.search.empty": 'Nessuna conversazione corrispondente a "{query}".',
-      "cmd.search.title": 'Risultati della ricerca per "{query}":',
-      "cmd.delete.usage": "Uso: /delete <id-prefix>",
-      "cmd.delete.confirm": 'Eliminare "{title}" ({id})? (s/n) ',
-      "cmd.delete.done": "Conversazione eliminata.",
-      "cmd.delete.failed": "Errore nell\u2019eliminazione della conversazione.",
-      "cmd.rename.usage": "Uso: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Rinominata in: {title}",
-      "cmd.rename.failed": "Errore nella rinomina della conversazione.",
-      "cmd.pin.usage": "Uso: /pin <id-prefix>",
-      "cmd.pin.done": "Fissata: {title}",
-      "cmd.pin.failed": "Errore nel fissare la conversazione.",
-      "cmd.unpin.usage": "Uso: /unpin <id-prefix>",
-      "cmd.unpin.done": "Sbloccata: {title}",
-      "cmd.unpin.failed": "Errore nello sbloccare la conversazione.",
-      "cmd.export.usage": "Uso: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Errore nell\u2019esportazione della conversazione.",
-      "cmd.export.done": "Esportata in {filename}",
-      "cmd.retry.unavailable": "Ripetizione non disponibile.",
-      "cmd.compact.unavailable": "Compressione non disponibile.",
-      "cmd.permission.title": "Modalit\xE0 permessi:",
-      "cmd.permission.strict": "conferma scritture e comandi shell",
-      "cmd.permission.balanced": "approva scritture automaticamente, conferma comandi shell",
-      "cmd.permission.autonomous": "approva tutto automaticamente",
-      "cmd.permission.unknown": "Modalit\xE0 sconosciuta. Scegli: {modes}",
-      "cmd.permission.set": "Modalit\xE0 permessi impostata su {mode}.",
-      "cmd.tools.title": "Strumenti disponibili:",
-      "cmd.init.created": "Creato {path}",
-      "cmd.init.hint": "Modifica questo file per dare ad Ava contesto specifico del progetto.",
-      "cmd.init.restart": "Riavvia Ava per applicare le modifiche.",
-      "cmd.init.exists": "{path} esiste gi\xE0.",
-      "cmd.unknown": "Comando sconosciuto: {input}. Digita /help per i comandi disponibili.",
-      // \u2500\u2500 CLI Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cli.thinking": "Sto pensando...",
-      "cli.thinking_label": "[pensiero] ",
-      "cli.thinking_words": "{count} parole",
-      "cli.tool_label": "[strumento] ",
-      "cli.tasks_label": "[attivit\xE0] ",
-      "cli.tokens_label": "[token] ",
-      "cli.running": "Esecuzione di {tool}...",
-      "cli.confirm_label": "[conferma] ",
-      "cli.allow_prompt": "Consentire? ",
-      "cli.allow_yn": "(s/n) ",
-      "cli.denied": "Negato.",
-      "cli.question_label": "[domanda] ",
-      "cli.question_fallback": "Ava ha una domanda per te",
-      "cli.your_response": "La tua risposta: ",
-      "cli.skipped": "Saltato.",
-      "cli.user_response": "Risposta dell\u2019utente: {response}",
-      "cli.write_to": "scrivere in {path}",
-      "cli.edit_file": "modificare {path}",
-      "cli.list_path": "elencare {path}",
-      "cli.search_query": 'cercare "{query}"',
-      "cli.ok": "OK",
-      "cli.fail": "ERRORE",
-      "cli.more_lines": "... ({count} righe in pi\xF9)",
-      // \u2500\u2500 Setup Wizard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "setup.welcome": "Benvenuto in Ava | Supernova",
-      "setup.intro": "Configuriamo il tuo provider LLM.",
-      "setup.choose": "Scegli un provider (numero): ",
-      "setup.invalid_choice": "Scelta non valida. Riavvia e riprova.",
-      "setup.key_url": "Ottieni la tua API key su: {url}",
-      "setup.enter_key": "API Key di {provider}: ",
-      "setup.no_key": "Nessuna API key fornita. Riavvia e riprova.",
-      "setup.complete": "Configurazione completata! Modello attivo: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/ja.js
-var ja_exports = {};
-__export(ja_exports, {
-  jaStrings: () => jaStrings
-});
-var jaStrings;
-var init_ja = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/ja.js"() {
-    jaStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\u30B3\u30FC\u30C9\u306B\u3064\u3044\u3066\u4F55\u3067\u3082\u805E\u3044\u3066\u304F\u3060\u3055\u3044\u3002",
-      "welcome.cli_hint": "\u30E1\u30C3\u30BB\u30FC\u30B8\u3092\u5165\u529B\u3059\u308B\u304B\u3001/help \u3067\u30B3\u30DE\u30F3\u30C9\u4E00\u89A7\u3092\u8868\u793A\u3057\u307E\u3059\u3002",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\u4F55\u3092\u4F5C\u308A\u305F\u3044\u3067\u3059\u304B\uFF1F",
-      "input.placeholder.plan": "\u8A08\u753B\u3057\u305F\u3044\u5185\u5BB9\u3092\u8A18\u8FF0\u3057\u3066\u304F\u3060\u3055\u3044...",
-      "input.placeholder.chat": "\u8CEA\u554F\u3092\u3059\u308B\u304B\u3001\u8B70\u8AD6\u3092\u59CB\u3081\u307E\u3057\u3087\u3046...",
-      "input.placeholder.disabled": "\u307E\u305A\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u3092\u8A2D\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044...",
-      "input.placeholder.security": "\u30B9\u30AD\u30E3\u30F3\u5BFE\u8C61\u3092\u8A18\u8FF0\u3059\u308B\u304B\u3001Enter \u3092\u62BC\u3057\u3066\u5B8C\u5168\u306A\u76E3\u67FB\u3092\u5B9F\u884C...",
-      "input.mode.code": "\u30B3\u30FC\u30C9",
-      "input.mode.plan": "\u8A08\u753B",
-      "input.mode.chat": "\u30C1\u30E3\u30C3\u30C8",
-      "input.mode.security": "\u30BB\u30AD\u30E5\u30EA\u30C6\u30A3",
-      "input.send": "\u9001\u4FE1 (Enter)",
-      "input.send_aria": "\u30E1\u30C3\u30BB\u30FC\u30B8\u3092\u9001\u4FE1",
-      "input.stop": "\u505C\u6B62",
-      "input.stop_aria": "Ava \u3092\u505C\u6B62",
-      "input.attach": "\u753B\u50CF\u3092\u6DFB\u4ED8",
-      "input.drop_image": "\u3053\u3053\u306B\u753B\u50CF\u3092\u30C9\u30ED\u30C3\u30D7",
-      "input.compressing": "\u5727\u7E2E\u4E2D...",
-      "input.compress_title": "\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u4F7F\u7528\u91CF \u2014 \u30AF\u30EA\u30C3\u30AF\u3067\u5727\u7E2E",
-      "input.compress_title_warning": "\u30AF\u30EA\u30C3\u30AF\u3057\u3066\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u3092\u5727\u7E2E",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\u30C1\u30E3\u30C3\u30C8\u5C65\u6B74",
-      "header.settings": "\u8A2D\u5B9A",
-      "header.new_chat": "\u65B0\u3057\u3044\u30C1\u30E3\u30C3\u30C8",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u304C\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002",
-      "model.open_settings": "\u8A2D\u5B9A\u3092\u958B\u304F",
-      "model.vision": "\u30D3\u30B8\u30E7\u30F3",
-      "model.vision_title": "\u3053\u306E\u30E2\u30C7\u30EB\u306F\u753B\u50CF/\u30D3\u30B8\u30E7\u30F3\u5165\u529B\u306B\u5BFE\u5FDC\u3057\u3066\u3044\u307E\u3059",
-      "model.switched": "{model} \u306B\u5207\u308A\u66FF\u3048\u307E\u3057\u305F",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u304C\u8003\u3048\u3066\u3044\u307E\u3059...",
-      "thinking.1": "\u30B3\u30FC\u30C9\u3092\u5206\u6790\u3057\u3066\u3044\u307E\u3059...",
-      "thinking.2": "\u30A2\u30D7\u30ED\u30FC\u30C1\u3092\u691C\u8A0E\u3057\u3066\u3044\u307E\u3059...",
-      "thinking.3": "\u56DE\u7B54\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\u30B3\u30FC\u30C9\u30D9\u30FC\u30B9\u3092\u89E3\u8AAC",
-      "suggestion.explain_prompt": "\u3053\u306E\u30D7\u30ED\u30B8\u30A7\u30AF\u30C8\u306E\u69CB\u6210\u3068\u30A2\u30FC\u30AD\u30C6\u30AF\u30C1\u30E3\u306E\u6982\u8981\u3092\u6559\u3048\u3066\u304F\u3060\u3055\u3044\u3002",
-      "suggestion.bug": "\u30D0\u30B0\u3092\u63A2\u3059",
-      "suggestion.bug_prompt": "\u73FE\u5728\u306E\u30D5\u30A1\u30A4\u30EB\u306E\u30D0\u30B0\u3092\u898B\u3064\u3051\u3066\u4FEE\u6B63\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "suggestion.test": "\u30C6\u30B9\u30C8\u3092\u66F8\u304F",
-      "suggestion.test_prompt": "\u30E1\u30A4\u30F3\u30E2\u30B8\u30E5\u30FC\u30EB\u306E\u5305\u62EC\u7684\u306A\u30C6\u30B9\u30C8\u3092\u66F8\u3044\u3066\u304F\u3060\u3055\u3044\u3002",
-      "suggestion.refactor": "\u30B3\u30FC\u30C9\u3092\u30EA\u30D5\u30A1\u30AF\u30BF\u30EA\u30F3\u30B0",
-      "suggestion.refactor_prompt": "\u73FE\u5728\u306E\u30D5\u30A1\u30A4\u30EB\u306E\u30EA\u30D5\u30A1\u30AF\u30BF\u30EA\u30F3\u30B0\u6539\u5584\u6848\u3092\u63D0\u6848\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\u8A8D\u8A3C",
-      "error.credits": "\u8AB2\u91D1",
-      "error.forbidden": "\u30A2\u30AF\u30BB\u30B9\u62D2\u5426",
-      "error.rate_limit": "\u30EC\u30FC\u30C8\u5236\u9650",
-      "error.model_not_found": "\u30E2\u30C7\u30EB\u30A8\u30E9\u30FC",
-      "error.bad_request": "\u4E0D\u6B63\u306A\u30EA\u30AF\u30A8\u30B9\u30C8",
-      "error.server_error": "\u30B5\u30FC\u30D0\u30FC\u30A8\u30E9\u30FC",
-      "error.timeout": "\u30BF\u30A4\u30E0\u30A2\u30A6\u30C8",
-      "error.stream_stall": "\u30B9\u30C8\u30EA\u30FC\u30E0\u505C\u6B62",
-      "error.network": "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u30A8\u30E9\u30FC",
-      "error.setup": "\u30BB\u30C3\u30C8\u30A2\u30C3\u30D7\u304C\u5FC5\u8981",
-      "error.busy": "\u51E6\u7406\u4E2D",
-      "error.iterations_exceeded": "\u30A4\u30C6\u30EC\u30FC\u30B7\u30E7\u30F3\u4E0A\u9650",
-      "error.context_truncated": "\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u5207\u308A\u8A70\u3081",
-      "error.provider_error": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u30A8\u30E9\u30FC",
-      "error.unknown": "\u30A8\u30E9\u30FC",
-      "error.continue": "\u7D9A\u884C",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "{provider} \u3078\u306E\u30EA\u30AF\u30A8\u30B9\u30C8\u304C\u4E0D\u6B63\u3067\u3059\u3002\u30EA\u30AF\u30A8\u30B9\u30C8\u5F62\u5F0F\u304C\u3053\u306E\u30E2\u30C7\u30EB\u3068\u4E92\u63DB\u6027\u304C\u306A\u3044\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059\u3002",
-      "error.msg.auth": "{provider} \u306E API key \u304C\u7121\u52B9\u3067\u3059\u3002~/.ava/config.json \u306E\u30AD\u30FC\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "error.msg.credits": "{provider} \u306E\u6B8B\u9AD8\u304C\u4E0D\u8DB3\u3057\u3066\u3044\u307E\u3059\u3002\u30A2\u30AB\u30A6\u30F3\u30C8\u306B\u30C1\u30E3\u30FC\u30B8\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "error.msg.forbidden": "{provider} \u306B\u30A2\u30AF\u30BB\u30B9\u3092\u62D2\u5426\u3055\u308C\u307E\u3057\u305F\u3002API key \u306B\u5FC5\u8981\u306A\u6A29\u9650\u304C\u306A\u3044\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059\u3002",
-      "error.msg.model_not_found": "{provider} \u3067\u30E2\u30C7\u30EB\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3002\u30E2\u30C7\u30EB ID \u304C\u5909\u66F4\u3055\u308C\u305F\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059 \u2014 /model \u3067\u5229\u7528\u53EF\u80FD\u306A\u30E2\u30C7\u30EB\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "error.msg.rate_limit": "{provider} \u304B\u3089\u30EC\u30FC\u30C8\u5236\u9650\u3092\u53D7\u3051\u307E\u3057\u305F\u3002\u30EA\u30AF\u30A8\u30B9\u30C8\u304C\u591A\u3059\u304E\u307E\u3059 \u2014 \u3057\u3070\u3089\u304F\u5F85\u3063\u3066\u304B\u3089\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "error.msg.server_error": "{provider} \u3067\u554F\u984C\u304C\u767A\u751F\u3057\u3066\u3044\u307E\u3059 ({code})\u3002\u3057\u3070\u3089\u304F\u3057\u3066\u304B\u3089\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "error.msg.empty_response": "\u30E2\u30C7\u30EB\u304C\u7A7A\u306E\u30EC\u30B9\u30DD\u30F3\u30B9\u3092\u8FD4\u3057\u307E\u3057\u305F\u3002API \u304C\u904E\u8CA0\u8377\u306B\u306A\u3063\u3066\u3044\u308B\u304B\u3001\u30EA\u30AF\u30A8\u30B9\u30C8\u304C\u30D5\u30A3\u30EB\u30BF\u30EA\u30F3\u30B0\u3055\u308C\u305F\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059\u3002\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "error.msg.iteration_limit": "Ava \u306F {limit} \u56DE\u306E\u30A4\u30C6\u30EC\u30FC\u30B7\u30E7\u30F3\u5B89\u5168\u5236\u9650\u306B\u9054\u3057\u307E\u3057\u305F\u3002\u901A\u5E38\u3001\u30BF\u30B9\u30AF\u304C\u975E\u5E38\u306B\u5927\u304D\u3044\u304B\u3001\u30E2\u30C7\u30EB\u304C\u30EB\u30FC\u30D7\u306B\u9665\u3063\u3066\u3044\u308B\u3053\u3068\u3092\u610F\u5473\u3057\u307E\u3059\u3002",
-      "error.msg.iteration_warning": "[\u8B66\u544A] \u30EB\u30FC\u30D7\u5236\u9650\u307E\u3067\u6B8B\u308A {remaining} \u56DE\u306E\u30A4\u30C6\u30EC\u30FC\u30B7\u30E7\u30F3\u3067\u3059\u3002\u73FE\u5728\u306E\u30BF\u30B9\u30AF\u3092\u307E\u3068\u3081\u3066\u304F\u3060\u3055\u3044 \u2014 \u5B8C\u4E86\u3057\u305F\u5185\u5BB9\u3068\u6B8B\u308A\u306E\u4F5C\u696D\u3092\u8981\u7D04\u3057\u3001\u65B0\u3057\u3044\u591A\u6BB5\u968E\u306E\u4F5C\u696D\u306F\u958B\u59CB\u3057\u306A\u3044\u3067\u304F\u3060\u3055\u3044\u3002",
-      "error.msg.image_stripped": "[\u753B\u50CF\u304C\u5171\u6709\u3055\u308C\u307E\u3057\u305F\u304C\u3001\u3053\u306E\u30E2\u30C7\u30EB\u306F\u30D3\u30B8\u30E7\u30F3\u306B\u5BFE\u5FDC\u3057\u3066\u3044\u307E\u305B\u3093]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u8A31\u53EF",
-      "tool.always_allow": "\u5E38\u306B\u8A31\u53EF",
-      "tool.allow_all": "\u3059\u3079\u3066\u8A31\u53EF",
-      "tool.deny": "\u62D2\u5426",
-      "tool.allow_prompt": "{tool} \u3092\u8A31\u53EF\u3057\u307E\u3059\u304B\uFF1F",
-      "tool.arguments": "\u5F15\u6570",
-      "tool.output": "\u51FA\u529B",
-      "tool.error": "\u30A8\u30E9\u30FC",
-      "tool.truncated": "...\uFF08\u7701\u7565\uFF09",
-      "tool.read": "{file} \u3092\u8AAD\u307F\u53D6\u308A",
-      "tool.write": "{file} \u306B\u66F8\u304D\u8FBC\u307F",
-      "tool.edit": "{file} \u3092\u7DE8\u96C6",
-      "tool.find_files": "\u30D5\u30A1\u30A4\u30EB\u691C\u7D22\uFF1A{pattern}",
-      "tool.search": "\u691C\u7D22\uFF1A{pattern}",
-      "tool.run": "\u5B9F\u884C\uFF1A{command}",
-      "tool.list_dir": "{path} \u3092\u4E00\u89A7\u8868\u793A",
-      "tool.web_search": "\u691C\u7D22\uFF1A{query}",
-      "tool.ask_user": "\u30E6\u30FC\u30B6\u30FC\u3078\u306E\u8CEA\u554F",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\u30C1\u30E3\u30C3\u30C8\u5C65\u6B74",
-      "history.new_chat": "+ \u65B0\u3057\u3044\u30C1\u30E3\u30C3\u30C8",
-      "history.close": "\u9589\u3058\u308B",
-      "history.search": "\u4F1A\u8A71\u3092\u691C\u7D22...",
-      "history.empty": "\u4FDD\u5B58\u3055\u308C\u305F\u4F1A\u8A71\u306F\u307E\u3060\u3042\u308A\u307E\u305B\u3093\u3002",
-      "history.no_match": "\u4E00\u81F4\u3059\u308B\u4F1A\u8A71\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3002",
-      "history.delete_confirm": "\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F",
-      "history.rename_hint": "\u30C0\u30D6\u30EB\u30AF\u30EA\u30C3\u30AF\u3067\u540D\u524D\u3092\u5909\u66F4",
-      "history.pin": "\u30D4\u30F3\u7559\u3081",
-      "history.unpin": "\u30D4\u30F3\u7559\u3081\u89E3\u9664",
-      "history.export_md": "Markdown \u3068\u3057\u3066\u66F8\u304D\u51FA\u3057",
-      "history.pinned": "\u30D4\u30F3\u7559\u3081",
-      "history.just_now": "\u305F\u3063\u305F\u4ECA",
-      "history.minutes_ago": "{n}\u5206\u524D",
-      "history.hours_ago": "{n}\u6642\u9593\u524D",
-      "history.days_ago": "{n}\u65E5\u524D",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\u8CEA\u554F",
-      "ask.fallback": "Ava \u304B\u3089\u8CEA\u554F\u304C\u3042\u308A\u307E\u3059",
-      "ask.placeholder": "\u56DE\u7B54\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044...",
-      "ask.submit": "\u9001\u4FE1",
-      "ask.skip": "\u30B9\u30AD\u30C3\u30D7",
-      "ask.skipped": "\u30B9\u30AD\u30C3\u30D7\u3057\u307E\u3057\u305F",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\u30D7\u30E9\u30F3\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093",
-      "plan.prefix": "\u30D7\u30E9\u30F3\uFF1A{title}",
-      "plan.approved": "\u627F\u8A8D\u6E08\u307F",
-      "plan.rejected": "\u5374\u4E0B\u6E08\u307F",
-      "plan.goal": "\u76EE\u6A19",
-      "plan.steps": "\u30B9\u30C6\u30C3\u30D7",
-      "plan.verification": "\u691C\u8A3C",
-      "plan.approaches": "\u30A2\u30D7\u30ED\u30FC\u30C1",
-      "plan.approve": "\u627F\u8A8D",
-      "plan.reject": "\u5374\u4E0B",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\u30BF\u30B9\u30AF\u30EA\u30B9\u30C8\u304C\u3042\u308A\u307E\u305B\u3093",
-      "todo.tasks": "\u30BF\u30B9\u30AF",
-      "todo.done": "{done}/{total} \u5B8C\u4E86",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\u5165\u529B",
-      "status.out": "\u51FA\u529B",
-      "status.total": "\u5408\u8A08",
-      "status.tokens": "tokens",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u3092\u5727\u7E2E\u3057\u3066\u3044\u307E\u3059...",
-      "compression.result": "\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u3092\u5727\u7E2E\u3057\u307E\u3057\u305F\uFF1A~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "\u5727\u7E2E\u3059\u308B\u3082\u306E\u304C\u3042\u308A\u307E\u305B\u3093\u3002",
-      "compression.failed": "\u5727\u7E2E\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002",
-      "compression.busy": "Ava \u306E\u5B9F\u884C\u4E2D\u306F\u5727\u7E2E\u3067\u304D\u307E\u305B\u3093\u3002",
-      "compression.context_truncated": "\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u3092\u5207\u308A\u8A70\u3081\u307E\u3057\u305F\uFF1A{count} \u4EF6\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\u3092\u524A\u9664\u3057\u307E\u3057\u305F\u3002",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\u4E2D\u65AD\u3057\u305F\u3068\u3053\u308D\u304B\u3089\u7D9A\u3051\u307E\u3059\u3002",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\u5229\u7528\u53EF\u80FD\u306A\u30B3\u30DE\u30F3\u30C9\u3092\u8868\u793A",
-      "cmd.model.desc": "\u30E2\u30C7\u30EB\u306E\u4E00\u89A7\u8868\u793A\u307E\u305F\u306F\u5207\u308A\u66FF\u3048 (/model <provider:model-id>)",
-      "cmd.clear.desc": "\u4F1A\u8A71\u5C65\u6B74\u3092\u30AF\u30EA\u30A2",
-      "cmd.provider.desc": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u306E\u8FFD\u52A0\u307E\u305F\u306F\u4E00\u89A7\u8868\u793A (/provider add <name>)",
-      "cmd.history.desc": "\u4FDD\u5B58\u3055\u308C\u305F\u4F1A\u8A71\u3092\u4E00\u89A7\u8868\u793A",
-      "cmd.resume.desc": "\u4FDD\u5B58\u3055\u308C\u305F\u4F1A\u8A71\u3092\u518D\u958B (/resume <id-prefix>)",
-      "cmd.search.desc": "\u4F1A\u8A71\u3092\u691C\u7D22 (/search <query>)",
-      "cmd.delete.desc": "\u4FDD\u5B58\u3055\u308C\u305F\u4F1A\u8A71\u3092\u524A\u9664 (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u4F1A\u8A71\u306E\u540D\u524D\u3092\u5909\u66F4 (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\u4F1A\u8A71\u3092\u30D4\u30F3\u7559\u3081 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\u4F1A\u8A71\u306E\u30D4\u30F3\u7559\u3081\u3092\u89E3\u9664 (/unpin <id-prefix>)",
-      "cmd.export.desc": "\u4F1A\u8A71\u3092\u66F8\u304D\u51FA\u3057 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\u6700\u5F8C\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\u3092\u518D\u8A66\u884C",
-      "cmd.compact.desc": "\u4F1A\u8A71\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u3092\u5727\u7E2E\u3057\u3066\u30B9\u30DA\u30FC\u30B9\u3092\u78BA\u4FDD",
-      "cmd.permission.desc": "\u6A29\u9650\u30E2\u30FC\u30C9\u306E\u8868\u793A\u307E\u305F\u306F\u8A2D\u5B9A (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\u5229\u7528\u53EF\u80FD\u306A\u30C4\u30FC\u30EB\u3092\u4E00\u89A7\u8868\u793A",
-      "cmd.init.desc": "\u30D7\u30ED\u30B8\u30A7\u30AF\u30C8\u56FA\u6709\u306E\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u7528\u306B .ava/instructions.md \u3092\u4F5C\u6210",
-      "cmd.exit.desc": "Ava \u3092\u7D42\u4E86",
-      "cmd.security.desc": "\u30BB\u30AD\u30E5\u30EA\u30C6\u30A3\u76E3\u67FB\u3092\u5B9F\u884C (/security [\u5BFE\u8C61\u9818\u57DF])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\u4E0D\u660E\u306A\u30E2\u30C7\u30EB\uFF1A{model}",
-      "cmd.model.switched": "{name} ({provider}) \u306B\u5207\u308A\u66FF\u3048\u307E\u3057\u305F",
-      "cmd.model.active": "\uFF08\u4F7F\u7528\u4E2D\uFF09",
-      "cmd.clear.done": "\u4F1A\u8A71\u3092\u30AF\u30EA\u30A2\u3057\u307E\u3057\u305F\u3002",
-      "cmd.provider.usage": "\u4F7F\u3044\u65B9\uFF1A/provider add <{providers}>",
-      "cmd.provider.enter_key": "{provider} \u306E API key \u3092\u5165\u529B\uFF1A",
-      "cmd.provider.cancelled": "\u30AD\u30E3\u30F3\u30BB\u30EB\u3057\u307E\u3057\u305F\u3002",
-      "cmd.provider.added": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC {provider} \u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002",
-      "cmd.provider.failed": "{provider} \u306E\u767B\u9332\u306B\u5931\u6557\u3057\u307E\u3057\u305F\uFF1A{error}",
-      "cmd.provider.title": "\u8A2D\u5B9A\u6E08\u307F\u306E\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\uFF1A",
-      "cmd.provider.configured": "\u8A2D\u5B9A\u6E08\u307F",
-      "cmd.provider.not_configured": "\u672A\u8A2D\u5B9A",
-      "cmd.provider.hint": "/provider add <name> \u3067\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u3092\u8FFD\u52A0\u3057\u307E\u3059\u3002",
-      "cmd.history.empty": "\u4FDD\u5B58\u3055\u308C\u305F\u4F1A\u8A71\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
-      "cmd.history.title": "\u4FDD\u5B58\u3055\u308C\u305F\u4F1A\u8A71\uFF1A",
-      "cmd.history.more": "... \u4ED6 {count} \u4EF6",
-      "cmd.history.hint": "/resume <id-prefix> \u3067\u4F1A\u8A71\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3059\u3002",
-      "cmd.resume.usage": "\u4F7F\u3044\u65B9\uFF1A/resume <id-prefix>",
-      "cmd.resume.hint": "/history \u3092\u5B9F\u884C\u3057\u3066\u5229\u7528\u53EF\u80FD\u306A\u4F1A\u8A71\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "cmd.resume.not_found": '"{prefix}" \u306B\u4E00\u81F4\u3059\u308B\u4F1A\u8A71\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3002',
-      "cmd.resume.failed": "\u4F1A\u8A71\u306E\u8AAD\u307F\u8FBC\u307F\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002",
-      "cmd.resume.done": "\u518D\u958B\u3057\u307E\u3057\u305F\uFF1A{title}",
-      "cmd.resume.count": "{count} \u4EF6\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F\u3002",
-      "cmd.search.usage": "\u4F7F\u3044\u65B9\uFF1A/search <query>",
-      "cmd.search.empty": '"{query}" \u306B\u4E00\u81F4\u3059\u308B\u4F1A\u8A71\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3002',
-      "cmd.search.title": '"{query}" \u306E\u691C\u7D22\u7D50\u679C\uFF1A',
-      "cmd.delete.usage": "\u4F7F\u3044\u65B9\uFF1A/delete <id-prefix>",
-      "cmd.delete.confirm": '"{title}" ({id}) \u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F (y/n) ',
-      "cmd.delete.done": "\u4F1A\u8A71\u3092\u524A\u9664\u3057\u307E\u3057\u305F\u3002",
-      "cmd.delete.failed": "\u4F1A\u8A71\u306E\u524A\u9664\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002",
-      "cmd.rename.usage": "\u4F7F\u3044\u65B9\uFF1A/rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u540D\u524D\u3092\u5909\u66F4\u3057\u307E\u3057\u305F\uFF1A{title}",
-      "cmd.rename.failed": "\u4F1A\u8A71\u306E\u540D\u524D\u5909\u66F4\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002",
-      "cmd.pin.usage": "\u4F7F\u3044\u65B9\uFF1A/pin <id-prefix>",
-      "cmd.pin.done": "\u30D4\u30F3\u7559\u3081\u3057\u307E\u3057\u305F\uFF1A{title}",
-      "cmd.pin.failed": "\u4F1A\u8A71\u306E\u30D4\u30F3\u7559\u3081\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002",
-      "cmd.unpin.usage": "\u4F7F\u3044\u65B9\uFF1A/unpin <id-prefix>",
-      "cmd.unpin.done": "\u30D4\u30F3\u7559\u3081\u3092\u89E3\u9664\u3057\u307E\u3057\u305F\uFF1A{title}",
-      "cmd.unpin.failed": "\u30D4\u30F3\u7559\u3081\u89E3\u9664\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002",
-      "cmd.export.usage": "\u4F7F\u3044\u65B9\uFF1A/export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\u4F1A\u8A71\u306E\u66F8\u304D\u51FA\u3057\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002",
-      "cmd.export.done": "{filename} \u306B\u66F8\u304D\u51FA\u3057\u307E\u3057\u305F",
-      "cmd.retry.unavailable": "\u518D\u8A66\u884C\u306F\u5229\u7528\u3067\u304D\u307E\u305B\u3093\u3002",
-      "cmd.compact.unavailable": "\u5727\u7E2E\u306F\u5229\u7528\u3067\u304D\u307E\u305B\u3093\u3002",
-      "cmd.permission.title": "\u6A29\u9650\u30E2\u30FC\u30C9\uFF1A",
-      "cmd.permission.strict": "\u66F8\u304D\u8FBC\u307F\u3068\u30B7\u30A7\u30EB\u30B3\u30DE\u30F3\u30C9\u306E\u5B9F\u884C\u524D\u306B\u78BA\u8A8D",
-      "cmd.permission.balanced": "\u66F8\u304D\u8FBC\u307F\u306F\u81EA\u52D5\u627F\u8A8D\u3001\u30B7\u30A7\u30EB\u30B3\u30DE\u30F3\u30C9\u306F\u78BA\u8A8D",
-      "cmd.permission.autonomous": "\u3059\u3079\u3066\u3092\u81EA\u52D5\u627F\u8A8D",
-      "cmd.permission.unknown": "\u4E0D\u660E\u306A\u30E2\u30FC\u30C9\u3067\u3059\u3002\u9078\u629E\u80A2\uFF1A{modes}",
-      "cmd.permission.set": "\u6A29\u9650\u30E2\u30FC\u30C9\u3092 {mode} \u306B\u8A2D\u5B9A\u3057\u307E\u3057\u305F\u3002",
-      "cmd.tools.title": "\u5229\u7528\u53EF\u80FD\u306A\u30C4\u30FC\u30EB\uFF1A",
-      "cmd.init.created": "{path} \u3092\u4F5C\u6210\u3057\u307E\u3057\u305F",
-      "cmd.init.hint": "\u3053\u306E\u30D5\u30A1\u30A4\u30EB\u3092\u7DE8\u96C6\u3057\u3066 Ava \u306B\u30D7\u30ED\u30B8\u30A7\u30AF\u30C8\u56FA\u6709\u306E\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u3092\u63D0\u4F9B\u3057\u307E\u3059\u3002",
-      "cmd.init.restart": "\u5909\u66F4\u3092\u53CD\u6620\u3059\u308B\u306B\u306F Ava \u3092\u518D\u8D77\u52D5\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      "cmd.init.exists": "{path} \u306F\u65E2\u306B\u5B58\u5728\u3057\u307E\u3059\u3002",
-      "cmd.unknown": "\u4E0D\u660E\u306A\u30B3\u30DE\u30F3\u30C9\uFF1A{input}\u3002/help \u3067\u5229\u7528\u53EF\u80FD\u306A\u30B3\u30DE\u30F3\u30C9\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u8003\u3048\u4E2D...",
-      "cli.thinking_label": "[\u601D\u8003] ",
-      "cli.thinking_words": "{count} \u8A9E",
-      "cli.tool_label": "[\u30C4\u30FC\u30EB] ",
-      "cli.tasks_label": "[\u30BF\u30B9\u30AF] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "{tool} \u3092\u5B9F\u884C\u4E2D...",
-      "cli.confirm_label": "[\u78BA\u8A8D] ",
-      "cli.allow_prompt": "\u8A31\u53EF\u3057\u307E\u3059\u304B\uFF1F",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\u62D2\u5426\u3057\u307E\u3057\u305F\u3002",
-      "cli.question_label": "[\u8CEA\u554F] ",
-      "cli.question_fallback": "Ava \u304B\u3089\u8CEA\u554F\u304C\u3042\u308A\u307E\u3059",
-      "cli.your_response": "\u3042\u306A\u305F\u306E\u56DE\u7B54\uFF1A",
-      "cli.skipped": "\u30B9\u30AD\u30C3\u30D7\u3057\u307E\u3057\u305F\u3002",
-      "cli.user_response": "\u30E6\u30FC\u30B6\u30FC\u306E\u56DE\u7B54\uFF1A{response}",
-      "cli.write_to": "{path} \u306B\u66F8\u304D\u8FBC\u307F",
-      "cli.edit_file": "{path} \u3092\u7DE8\u96C6",
-      "cli.list_path": "{path} \u3092\u4E00\u89A7\u8868\u793A",
-      "cli.search_query": '"{query}" \u3092\u691C\u7D22',
-      "cli.ok": "OK",
-      "cli.fail": "\u5931\u6557",
-      "cli.more_lines": "...\uFF08\u6B8B\u308A {count} \u884C\uFF09",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Ava | Supernova \u3078\u3088\u3046\u3053\u305D",
-      "setup.intro": "LLM \u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u3092\u8A2D\u5B9A\u3057\u307E\u3057\u3087\u3046\u3002",
-      "setup.choose": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\uFF08\u756A\u53F7\uFF09\uFF1A",
-      "setup.invalid_choice": "\u7121\u52B9\u306A\u9078\u629E\u3067\u3059\u3002\u518D\u8D77\u52D5\u3057\u3066\u3082\u3046\u4E00\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002",
-      "setup.key_url": "API key \u306E\u53D6\u5F97\u5148\uFF1A{url}",
-      "setup.enter_key": "{provider} API Key\uFF1A",
-      "setup.no_key": "API key \u304C\u5165\u529B\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002\u518D\u8D77\u52D5\u3057\u3066\u3082\u3046\u4E00\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002",
-      "setup.complete": "\u30BB\u30C3\u30C8\u30A2\u30C3\u30D7\u5B8C\u4E86\uFF01\u4F7F\u7528\u4E2D\u306E\u30E2\u30C7\u30EB\uFF1A{model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/ko.js
-var ko_exports = {};
-__export(ko_exports, {
-  koStrings: () => koStrings
-});
-var koStrings;
-var init_ko = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/ko.js"() {
-    koStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\uCF54\uB4DC\uC5D0 \uB300\uD574 \uBB34\uC5C7\uC774\uB4E0 \uBB3C\uC5B4\uBCF4\uC138\uC694.",
-      "welcome.cli_hint": "\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uAC70\uB098 /help\uB85C \uBA85\uB839\uC5B4\uB97C \uD655\uC778\uD558\uC138\uC694.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\uBB34\uC5C7\uC744 \uB9CC\uB4E4\uACE0 \uC2F6\uC73C\uC2E0\uAC00\uC694?",
-      "input.placeholder.plan": "\uACC4\uD68D\uD558\uACE0 \uC2F6\uC740 \uB0B4\uC6A9\uC744 \uC124\uBA85\uD574 \uC8FC\uC138\uC694...",
-      "input.placeholder.chat": "\uC9C8\uBB38\uD558\uAC70\uB098 \uD1A0\uB860\uC744 \uC2DC\uC791\uD558\uC138\uC694...",
-      "input.placeholder.disabled": "\uBA3C\uC800 \uACF5\uAE09\uC790\uB97C \uC124\uC815\uD574 \uC8FC\uC138\uC694...",
-      "input.placeholder.security": "\uC2A4\uCE94\uD560 \uB0B4\uC6A9\uC744 \uC124\uBA85\uD558\uAC70\uB098, Enter\uB97C \uB20C\uB7EC \uC804\uCCB4 \uAC10\uC0AC\uB97C \uC2E4\uD589\uD558\uC138\uC694...",
-      "input.mode.code": "\uCF54\uB4DC",
-      "input.mode.plan": "\uACC4\uD68D",
-      "input.mode.chat": "\uCC44\uD305",
-      "input.mode.security": "\uBCF4\uC548",
-      "input.send": "\uC804\uC1A1 (Enter)",
-      "input.send_aria": "\uBA54\uC2DC\uC9C0 \uC804\uC1A1",
-      "input.stop": "\uC911\uC9C0",
-      "input.stop_aria": "Ava \uC911\uC9C0",
-      "input.attach": "\uC774\uBBF8\uC9C0 \uCCA8\uBD80",
-      "input.drop_image": "\uC5EC\uAE30\uC5D0 \uC774\uBBF8\uC9C0\uB97C \uB193\uC73C\uC138\uC694",
-      "input.compressing": "\uC555\uCD95 \uC911...",
-      "input.compress_title": "\uCEE8\uD14D\uC2A4\uD2B8 \uC0AC\uC6A9\uB7C9 \u2014 \uD074\uB9AD\uD558\uC5EC \uC555\uCD95",
-      "input.compress_title_warning": "\uD074\uB9AD\uD558\uC5EC \uCEE8\uD14D\uC2A4\uD2B8 \uC555\uCD95",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\uB300\uD654 \uAE30\uB85D",
-      "header.settings": "\uC124\uC815",
-      "header.new_chat": "\uC0C8 \uB300\uD654",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\uC124\uC815\uB41C \uACF5\uAE09\uC790\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      "model.open_settings": "\uC124\uC815 \uC5F4\uAE30",
-      "model.vision": "\uBE44\uC804",
-      "model.vision_title": "\uC774 \uBAA8\uB378\uC740 \uC774\uBBF8\uC9C0/\uBE44\uC804 \uC785\uB825\uC744 \uC9C0\uC6D0\uD569\uB2C8\uB2E4",
-      "model.switched": "{model}(\uC73C)\uB85C \uC804\uD658\uB418\uC5C8\uC2B5\uB2C8\uB2E4",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava\uAC00 \uC0DD\uAC01\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...",
-      "thinking.1": "\uCF54\uB4DC\uB97C \uBD84\uC11D\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...",
-      "thinking.2": "\uC811\uADFC \uBC29\uC2DD\uC744 \uAC80\uD1A0\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...",
-      "thinking.3": "\uC751\uB2F5\uC744 \uC791\uC131\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\uCF54\uB4DC\uBCA0\uC774\uC2A4 \uC124\uBA85",
-      "suggestion.explain_prompt": "\uC774 \uD504\uB85C\uC81D\uD2B8\uC758 \uAD6C\uC870\uC640 \uC544\uD0A4\uD14D\uCC98\uB97C \uAC1C\uAD04\uC801\uC73C\uB85C \uC124\uBA85\uD574 \uC8FC\uC138\uC694.",
-      "suggestion.bug": "\uBC84\uADF8 \uCC3E\uAE30",
-      "suggestion.bug_prompt": "\uD604\uC7AC \uD30C\uC77C\uC5D0\uC11C \uBC84\uADF8\uB97C \uCC3E\uC544 \uC218\uC815\uD574 \uC8FC\uC138\uC694.",
-      "suggestion.test": "\uD14C\uC2A4\uD2B8 \uC791\uC131",
-      "suggestion.test_prompt": "\uBA54\uC778 \uBAA8\uB4C8\uC5D0 \uB300\uD55C \uD3EC\uAD04\uC801\uC778 \uD14C\uC2A4\uD2B8\uB97C \uC791\uC131\uD574 \uC8FC\uC138\uC694.",
-      "suggestion.refactor": "\uCF54\uB4DC \uB9AC\uD329\uD130\uB9C1",
-      "suggestion.refactor_prompt": "\uD604\uC7AC \uD30C\uC77C\uC758 \uB9AC\uD329\uD130\uB9C1 \uAC1C\uC120 \uC0AC\uD56D\uC744 \uC81C\uC548\uD574 \uC8FC\uC138\uC694.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\uC778\uC99D",
-      "error.credits": "\uACB0\uC81C",
-      "error.forbidden": "\uC811\uADFC \uAC70\uBD80",
-      "error.rate_limit": "\uC694\uCCAD \uC81C\uD55C",
-      "error.model_not_found": "\uBAA8\uB378 \uC624\uB958",
-      "error.bad_request": "\uC798\uBABB\uB41C \uC694\uCCAD",
-      "error.server_error": "\uC11C\uBC84 \uC624\uB958",
-      "error.timeout": "\uC2DC\uAC04 \uCD08\uACFC",
-      "error.stream_stall": "\uC2A4\uD2B8\uB9BC \uC911\uB2E8",
-      "error.network": "\uB124\uD2B8\uC6CC\uD06C \uC624\uB958",
-      "error.setup": "\uC124\uC815 \uD544\uC694",
-      "error.busy": "\uCC98\uB9AC \uC911",
-      "error.iterations_exceeded": "\uBC18\uBCF5 \uC81C\uD55C",
-      "error.context_truncated": "\uCEE8\uD14D\uC2A4\uD2B8 \uC798\uB9BC",
-      "error.provider_error": "\uACF5\uAE09\uC790 \uC624\uB958",
-      "error.unknown": "\uC624\uB958",
-      "error.continue": "\uACC4\uC18D",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "{provider}\uC5D0 \uB300\uD55C \uC798\uBABB\uB41C \uC694\uCCAD\uC785\uB2C8\uB2E4. \uC694\uCCAD \uD615\uC2DD\uC774 \uC774 \uBAA8\uB378\uACFC \uD638\uD658\uB418\uC9C0 \uC54A\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
-      "error.msg.auth": "{provider}\uC758 API key\uAC00 \uC720\uD6A8\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. ~/.ava/config.json\uC5D0\uC11C \uD0A4\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694.",
-      "error.msg.credits": "{provider} \uC794\uC561\uC774 \uBD80\uC871\uD569\uB2C8\uB2E4. \uACC4\uC815\uC5D0 \uCDA9\uC804\uD574 \uC8FC\uC138\uC694.",
-      "error.msg.forbidden": "{provider}\uC5D0\uC11C \uC811\uADFC\uC744 \uAC70\uBD80\uD588\uC2B5\uB2C8\uB2E4. API key\uC5D0 \uD544\uC694\uD55C \uAD8C\uD55C\uC774 \uC5C6\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
-      "error.msg.model_not_found": "{provider}\uC5D0\uC11C \uBAA8\uB378\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uBAA8\uB378 ID\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4 \u2014 /model\uC744 \uC2E4\uD589\uD558\uC5EC \uC0AC\uC6A9 \uAC00\uB2A5\uD55C \uBAA8\uB378\uC744 \uD655\uC778\uD558\uC138\uC694.",
-      "error.msg.rate_limit": "{provider}\uC5D0\uC11C \uC694\uCCAD\uC744 \uC81C\uD55C\uD588\uC2B5\uB2C8\uB2E4. \uC694\uCCAD\uC774 \uB108\uBB34 \uB9CE\uC2B5\uB2C8\uB2E4 \u2014 \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.",
-      "error.msg.server_error": "{provider}\uC5D0 \uBB38\uC81C\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4 ({code}). \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.",
-      "error.msg.empty_response": "\uBAA8\uB378\uC774 \uBE48 \uC751\uB2F5\uC744 \uBC18\uD658\uD588\uC2B5\uB2C8\uB2E4. API\uAC00 \uACFC\uBD80\uD558\uB418\uC5C8\uAC70\uB098 \uC694\uCCAD\uC774 \uD544\uD130\uB9C1\uB418\uC5C8\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.",
-      "error.msg.iteration_limit": "Ava\uAC00 {limit}\uD68C \uBC18\uBCF5 \uC548\uC804 \uC81C\uD55C\uC5D0 \uB3C4\uB2EC\uD588\uC2B5\uB2C8\uB2E4. \uBCF4\uD1B5 \uC791\uC5C5\uC774 \uB108\uBB34 \uD06C\uAC70\uB098 \uBAA8\uB378\uC774 \uBC18\uBCF5\uC5D0 \uBE60\uC84C\uC74C\uC744 \uC758\uBBF8\uD569\uB2C8\uB2E4.",
-      "error.msg.iteration_warning": "[\uACBD\uACE0] \uBC18\uBCF5 \uC81C\uD55C\uAE4C\uC9C0 {remaining}\uD68C \uB0A8\uC558\uC2B5\uB2C8\uB2E4. \uD604\uC7AC \uC791\uC5C5\uC744 \uB9C8\uBB34\uB9AC\uD574 \uC8FC\uC138\uC694 \u2014 \uC644\uB8CC\uD55C \uB0B4\uC6A9\uACFC \uB0A8\uC740 \uC791\uC5C5\uC744 \uC694\uC57D\uD558\uACE0, \uC0C8\uB85C\uC6B4 \uB2E4\uB2E8\uACC4 \uC791\uC5C5\uC740 \uC2DC\uC791\uD558\uC9C0 \uB9C8\uC138\uC694.",
-      "error.msg.image_stripped": "[\uC774\uBBF8\uC9C0\uAC00 \uACF5\uC720\uB418\uC5C8\uC9C0\uB9CC \uC774 \uBAA8\uB378\uC740 \uBE44\uC804\uC744 \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\uD5C8\uC6A9",
-      "tool.always_allow": "\uD56D\uC0C1 \uD5C8\uC6A9",
-      "tool.allow_all": "\uBAA8\uB450 \uD5C8\uC6A9",
-      "tool.deny": "\uAC70\uBD80",
-      "tool.allow_prompt": "{tool}\uC744(\uB97C) \uD5C8\uC6A9\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?",
-      "tool.arguments": "\uC778\uC218",
-      "tool.output": "\uCD9C\uB825",
-      "tool.error": "\uC624\uB958",
-      "tool.truncated": "... (\uC798\uB9BC)",
-      "tool.read": "{file} \uC77D\uAE30",
-      "tool.write": "{file} \uC4F0\uAE30",
-      "tool.edit": "{file} \uD3B8\uC9D1",
-      "tool.find_files": "\uD30C\uC77C \uCC3E\uAE30: {pattern}",
-      "tool.search": "\uAC80\uC0C9: {pattern}",
-      "tool.run": "\uC2E4\uD589: {command}",
-      "tool.list_dir": "{path} \uBAA9\uB85D",
-      "tool.web_search": "\uAC80\uC0C9: {query}",
-      "tool.ask_user": "\uC0AC\uC6A9\uC790\uC5D0\uAC8C \uC9C8\uBB38",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\uB300\uD654 \uAE30\uB85D",
-      "history.new_chat": "+ \uC0C8 \uB300\uD654",
-      "history.close": "\uB2EB\uAE30",
-      "history.search": "\uB300\uD654 \uAC80\uC0C9...",
-      "history.empty": "\uC800\uC7A5\uB41C \uB300\uD654\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      "history.no_match": "\uC77C\uCE58\uD558\uB294 \uB300\uD654\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      "history.delete_confirm": "\uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?",
-      "history.rename_hint": "\uB354\uBE14\uD074\uB9AD\uD558\uC5EC \uC774\uB984 \uBCC0\uACBD",
-      "history.pin": "\uACE0\uC815",
-      "history.unpin": "\uACE0\uC815 \uD574\uC81C",
-      "history.export_md": "Markdown\uC73C\uB85C \uB0B4\uBCF4\uB0B4\uAE30",
-      "history.pinned": "\uACE0\uC815\uB428",
-      "history.just_now": "\uBC29\uAE08 \uC804",
-      "history.minutes_ago": "{n}\uBD84 \uC804",
-      "history.hours_ago": "{n}\uC2DC\uAC04 \uC804",
-      "history.days_ago": "{n}\uC77C \uC804",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\uC9C8\uBB38",
-      "ask.fallback": "Ava\uAC00 \uC9C8\uBB38\uC774 \uC788\uC2B5\uB2C8\uB2E4",
-      "ask.placeholder": "\uC751\uB2F5\uC744 \uC785\uB825\uD558\uC138\uC694...",
-      "ask.submit": "\uC81C\uCD9C",
-      "ask.skip": "\uAC74\uB108\uB6F0\uAE30",
-      "ask.skipped": "\uAC74\uB108\uB700",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\uACC4\uD68D \uB370\uC774\uD130\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4",
-      "plan.prefix": "\uACC4\uD68D: {title}",
-      "plan.approved": "\uC2B9\uC778\uB428",
-      "plan.rejected": "\uAC70\uBD80\uB428",
-      "plan.goal": "\uBAA9\uD45C",
-      "plan.steps": "\uB2E8\uACC4",
-      "plan.verification": "\uAC80\uC99D",
-      "plan.approaches": "\uC811\uADFC \uBC29\uC2DD",
-      "plan.approve": "\uC2B9\uC778",
-      "plan.reject": "\uAC70\uBD80",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\uC791\uC5C5 \uBAA9\uB85D\uC744 \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4",
-      "todo.tasks": "\uC791\uC5C5",
-      "todo.done": "{done}/{total} \uC644\uB8CC",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\uC785\uB825",
-      "status.out": "\uCD9C\uB825",
-      "status.total": "\uD569\uACC4",
-      "status.tokens": "tokens",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\uCEE8\uD14D\uC2A4\uD2B8 \uC555\uCD95 \uC911...",
-      "compression.result": "\uCEE8\uD14D\uC2A4\uD2B8 \uC555\uCD95 \uC644\uB8CC: ~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "\uC555\uCD95\uD560 \uB0B4\uC6A9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      "compression.failed": "\uC555\uCD95\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.",
-      "compression.busy": "Ava \uC2E4\uD589 \uC911\uC5D0\uB294 \uC555\uCD95\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      "compression.context_truncated": "\uCEE8\uD14D\uC2A4\uD2B8 \uC798\uB9BC: {count}\uAC1C \uBA54\uC2DC\uC9C0\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\uC911\uB2E8\uB41C \uACF3\uC5D0\uC11C \uACC4\uC18D\uD569\uB2C8\uB2E4.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\uC0AC\uC6A9 \uAC00\uB2A5\uD55C \uBA85\uB839\uC5B4 \uD45C\uC2DC",
-      "cmd.model.desc": "\uBAA8\uB378 \uBAA9\uB85D \uBCF4\uAE30 \uB610\uB294 \uC804\uD658 (/model <provider:model-id>)",
-      "cmd.clear.desc": "\uB300\uD654 \uAE30\uB85D \uC9C0\uC6B0\uAE30",
-      "cmd.provider.desc": "\uACF5\uAE09\uC790 \uCD94\uAC00 \uB610\uB294 \uBAA9\uB85D \uBCF4\uAE30 (/provider add <name>)",
-      "cmd.history.desc": "\uC800\uC7A5\uB41C \uB300\uD654 \uBAA9\uB85D \uBCF4\uAE30",
-      "cmd.resume.desc": "\uC800\uC7A5\uB41C \uB300\uD654 \uC7AC\uAC1C (/resume <id-prefix>)",
-      "cmd.search.desc": "\uB300\uD654 \uAC80\uC0C9 (/search <query>)",
-      "cmd.delete.desc": "\uC800\uC7A5\uB41C \uB300\uD654 \uC0AD\uC81C (/delete <id-prefix>)",
-      "cmd.rename.desc": "\uB300\uD654 \uC774\uB984 \uBCC0\uACBD (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\uB300\uD654 \uACE0\uC815 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\uB300\uD654 \uACE0\uC815 \uD574\uC81C (/unpin <id-prefix>)",
-      "cmd.export.desc": "\uB300\uD654 \uB0B4\uBCF4\uB0B4\uAE30 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\uB9C8\uC9C0\uB9C9 \uBA54\uC2DC\uC9C0 \uC7AC\uC2DC\uB3C4",
-      "cmd.compact.desc": "\uB300\uD654 \uCEE8\uD14D\uC2A4\uD2B8\uB97C \uC555\uCD95\uD558\uC5EC \uACF5\uAC04 \uD655\uBCF4",
-      "cmd.permission.desc": "\uAD8C\uD55C \uBAA8\uB4DC \uBCF4\uAE30 \uB610\uB294 \uC124\uC815 (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\uC0AC\uC6A9 \uAC00\uB2A5\uD55C \uB3C4\uAD6C \uBAA9\uB85D \uBCF4\uAE30",
-      "cmd.init.desc": "\uD504\uB85C\uC81D\uD2B8 \uC804\uC6A9 \uCEE8\uD14D\uC2A4\uD2B8\uB97C \uC704\uD55C .ava/instructions.md \uC0DD\uC131",
-      "cmd.exit.desc": "Ava \uC885\uB8CC",
-      "cmd.security.desc": "\uBCF4\uC548 \uAC10\uC0AC \uC2E4\uD589 (/security [\uCD08\uC810 \uC601\uC5ED])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\uC54C \uC218 \uC5C6\uB294 \uBAA8\uB378: {model}",
-      "cmd.model.switched": "{name} ({provider})(\uC73C)\uB85C \uC804\uD658\uB418\uC5C8\uC2B5\uB2C8\uB2E4",
-      "cmd.model.active": "(\uC0AC\uC6A9 \uC911)",
-      "cmd.clear.done": "\uB300\uD654\uAC00 \uC9C0\uC6CC\uC84C\uC2B5\uB2C8\uB2E4.",
-      "cmd.provider.usage": "\uC0AC\uC6A9\uBC95: /provider add <{providers}>",
-      "cmd.provider.enter_key": "{provider} API key \uC785\uB825: ",
-      "cmd.provider.cancelled": "\uCDE8\uC18C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      "cmd.provider.added": "\uACF5\uAE09\uC790 {provider}\uC774(\uAC00) \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      "cmd.provider.failed": "{provider} \uB4F1\uB85D \uC2E4\uD328: {error}",
-      "cmd.provider.title": "\uC124\uC815\uB41C \uACF5\uAE09\uC790:",
-      "cmd.provider.configured": "\uC124\uC815\uB428",
-      "cmd.provider.not_configured": "\uBBF8\uC124\uC815",
-      "cmd.provider.hint": "/provider add <name>\uC73C\uB85C \uACF5\uAE09\uC790\uB97C \uCD94\uAC00\uD558\uC138\uC694.",
-      "cmd.history.empty": "\uC800\uC7A5\uB41C \uB300\uD654\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      "cmd.history.title": "\uC800\uC7A5\uB41C \uB300\uD654:",
-      "cmd.history.more": "... \uC678 {count}\uAC1C",
-      "cmd.history.hint": "/resume <id-prefix>\uB85C \uB300\uD654\uB97C \uBD88\uB7EC\uC624\uC138\uC694.",
-      "cmd.resume.usage": "\uC0AC\uC6A9\uBC95: /resume <id-prefix>",
-      "cmd.resume.hint": "/history\uB97C \uC2E4\uD589\uD558\uC5EC \uC0AC\uC6A9 \uAC00\uB2A5\uD55C \uB300\uD654\uB97C \uD655\uC778\uD558\uC138\uC694.",
-      "cmd.resume.not_found": '"{prefix}"\uC5D0 \uC77C\uCE58\uD558\uB294 \uB300\uD654\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.',
-      "cmd.resume.failed": "\uB300\uD654\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.",
-      "cmd.resume.done": "\uC7AC\uAC1C\uB428: {title}",
-      "cmd.resume.count": "{count}\uAC1C \uBA54\uC2DC\uC9C0\uB97C \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4.",
-      "cmd.search.usage": "\uC0AC\uC6A9\uBC95: /search <query>",
-      "cmd.search.empty": '"{query}"\uC5D0 \uC77C\uCE58\uD558\uB294 \uB300\uD654\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
-      "cmd.search.title": '"{query}" \uAC80\uC0C9 \uACB0\uACFC:',
-      "cmd.delete.usage": "\uC0AC\uC6A9\uBC95: /delete <id-prefix>",
-      "cmd.delete.confirm": '"{title}" ({id})\uC744(\uB97C) \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C? (y/n) ',
-      "cmd.delete.done": "\uB300\uD654\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      "cmd.delete.failed": "\uB300\uD654 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.",
-      "cmd.rename.usage": "\uC0AC\uC6A9\uBC95: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "\uC774\uB984\uC774 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4: {title}",
-      "cmd.rename.failed": "\uB300\uD654 \uC774\uB984 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.",
-      "cmd.pin.usage": "\uC0AC\uC6A9\uBC95: /pin <id-prefix>",
-      "cmd.pin.done": "\uACE0\uC815\uB428: {title}",
-      "cmd.pin.failed": "\uB300\uD654 \uACE0\uC815\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.",
-      "cmd.unpin.usage": "\uC0AC\uC6A9\uBC95: /unpin <id-prefix>",
-      "cmd.unpin.done": "\uACE0\uC815 \uD574\uC81C\uB428: {title}",
-      "cmd.unpin.failed": "\uB300\uD654 \uACE0\uC815 \uD574\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.",
-      "cmd.export.usage": "\uC0AC\uC6A9\uBC95: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\uB300\uD654 \uB0B4\uBCF4\uB0B4\uAE30\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.",
-      "cmd.export.done": "{filename}(\uC73C)\uB85C \uB0B4\uBCF4\uB0C8\uC2B5\uB2C8\uB2E4",
-      "cmd.retry.unavailable": "\uC7AC\uC2DC\uB3C4\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      "cmd.compact.unavailable": "\uC555\uCD95\uC744 \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      "cmd.permission.title": "\uAD8C\uD55C \uBAA8\uB4DC:",
-      "cmd.permission.strict": "\uC4F0\uAE30 \uBC0F \uC178 \uBA85\uB839 \uC2E4\uD589 \uC2DC \uD655\uC778",
-      "cmd.permission.balanced": "\uC4F0\uAE30 \uC790\uB3D9 \uC2B9\uC778, \uC178 \uBA85\uB839\uC740 \uD655\uC778",
-      "cmd.permission.autonomous": "\uBAA8\uB4E0 \uC791\uC5C5 \uC790\uB3D9 \uC2B9\uC778",
-      "cmd.permission.unknown": "\uC54C \uC218 \uC5C6\uB294 \uBAA8\uB4DC\uC785\uB2C8\uB2E4. \uC120\uD0DD: {modes}",
-      "cmd.permission.set": "\uAD8C\uD55C \uBAA8\uB4DC\uAC00 {mode}(\uC73C)\uB85C \uC124\uC815\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      "cmd.tools.title": "\uC0AC\uC6A9 \uAC00\uB2A5\uD55C \uB3C4\uAD6C:",
-      "cmd.init.created": "{path} \uC0DD\uC131\uB428",
-      "cmd.init.hint": "\uC774 \uD30C\uC77C\uC744 \uD3B8\uC9D1\uD558\uC5EC Ava\uC5D0 \uD504\uB85C\uC81D\uD2B8 \uC804\uC6A9 \uCEE8\uD14D\uC2A4\uD2B8\uB97C \uC81C\uACF5\uD558\uC138\uC694.",
-      "cmd.init.restart": "\uBCC0\uACBD \uC0AC\uD56D\uC744 \uC801\uC6A9\uD558\uB824\uBA74 Ava\uB97C \uC7AC\uC2DC\uC791\uD558\uC138\uC694.",
-      "cmd.init.exists": "{path}\uC774(\uAC00) \uC774\uBBF8 \uC874\uC7AC\uD569\uB2C8\uB2E4.",
-      "cmd.unknown": "\uC54C \uC218 \uC5C6\uB294 \uBA85\uB839\uC5B4: {input}. /help\uB85C \uC0AC\uC6A9 \uAC00\uB2A5\uD55C \uBA85\uB839\uC5B4\uB97C \uD655\uC778\uD558\uC138\uC694.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\uC0DD\uAC01 \uC911...",
-      "cli.thinking_label": "[\uC0DD\uAC01] ",
-      "cli.thinking_words": "{count}\uB2E8\uC5B4",
-      "cli.tool_label": "[\uB3C4\uAD6C] ",
-      "cli.tasks_label": "[\uC791\uC5C5] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "{tool} \uC2E4\uD589 \uC911...",
-      "cli.confirm_label": "[\uD655\uC778] ",
-      "cli.allow_prompt": "\uD5C8\uC6A9\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C? ",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\uAC70\uBD80\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      "cli.question_label": "[\uC9C8\uBB38] ",
-      "cli.question_fallback": "Ava\uAC00 \uC9C8\uBB38\uC774 \uC788\uC2B5\uB2C8\uB2E4",
-      "cli.your_response": "\uC751\uB2F5: ",
-      "cli.skipped": "\uAC74\uB108\uB6F0\uC5C8\uC2B5\uB2C8\uB2E4.",
-      "cli.user_response": "\uC0AC\uC6A9\uC790 \uC751\uB2F5: {response}",
-      "cli.write_to": "{path}\uC5D0 \uC4F0\uAE30",
-      "cli.edit_file": "{path} \uD3B8\uC9D1",
-      "cli.list_path": "{path} \uBAA9\uB85D",
-      "cli.search_query": '"{query}" \uAC80\uC0C9',
-      "cli.ok": "\uC131\uACF5",
-      "cli.fail": "\uC2E4\uD328",
-      "cli.more_lines": "... ({count}\uC904 \uB354)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Ava | Supernova\uC5D0 \uC624\uC2E0 \uAC83\uC744 \uD658\uC601\uD569\uB2C8\uB2E4",
-      "setup.intro": "LLM \uACF5\uAE09\uC790\uB97C \uC124\uC815\uD558\uACA0\uC2B5\uB2C8\uB2E4.",
-      "setup.choose": "\uACF5\uAE09\uC790\uB97C \uC120\uD0DD\uD558\uC138\uC694 (\uBC88\uD638): ",
-      "setup.invalid_choice": "\uC798\uBABB\uB41C \uC120\uD0DD\uC785\uB2C8\uB2E4. \uC7AC\uC2DC\uC791 \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.",
-      "setup.key_url": "API key \uBC1C\uAE09\uCC98: {url}",
-      "setup.enter_key": "{provider} API Key: ",
-      "setup.no_key": "API key\uAC00 \uC785\uB825\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. \uC7AC\uC2DC\uC791 \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.",
-      "setup.complete": "\uC124\uC815 \uC644\uB8CC! \uC0AC\uC6A9 \uC911\uC778 \uBAA8\uB378: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/nl.js
-var nl_exports = {};
-__export(nl_exports, {
-  nlStrings: () => nlStrings
-});
-var nlStrings;
-var init_nl = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/nl.js"() {
-    nlStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Stel een vraag over je code.",
-      "welcome.cli_hint": "Typ je bericht, of /help voor opdrachten.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "Wat wil je bouwen?",
-      "input.placeholder.plan": "Beschrijf wat je wilt plannen...",
-      "input.placeholder.chat": "Stel een vraag of begin een gesprek...",
-      "input.placeholder.disabled": "Configureer een provider om te beginnen...",
-      "input.placeholder.security": "Beschrijf wat je wilt scannen, of druk op Enter voor een volledige audit...",
-      "input.mode.code": "Code",
-      "input.mode.plan": "Plan",
-      "input.mode.chat": "Chat",
-      "input.mode.security": "Beveiliging",
-      "input.send": "Versturen (Enter)",
-      "input.send_aria": "Bericht versturen",
-      "input.stop": "Stoppen",
-      "input.stop_aria": "Ava stoppen",
-      "input.attach": "Afbeelding bijvoegen",
-      "input.drop_image": "Sleep afbeelding hierheen",
-      "input.compressing": "Comprimeren...",
-      "input.compress_title": "Contextgebruik \u2014 klik om te comprimeren",
-      "input.compress_title_warning": "Klik om context te comprimeren",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "Chatgeschiedenis",
-      "header.settings": "Instellingen",
-      "header.new_chat": "Nieuw gesprek",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "Geen providers geconfigureerd.",
-      "model.open_settings": "Instellingen openen",
-      "model.vision": "vision",
-      "model.vision_title": "Dit model ondersteunt afbeelding-/visie-invoer",
-      "model.switched": "Overgeschakeld naar {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava denkt na...",
-      "thinking.1": "Je code analyseren...",
-      "thinking.2": "Benaderingen overwegen...",
-      "thinking.3": "Antwoord opstellen...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "Leg deze codebase uit",
-      "suggestion.explain_prompt": "Geef me een overzicht van de projectstructuur en architectuur.",
-      "suggestion.bug": "Zoek een bug",
-      "suggestion.bug_prompt": "Help me bugs te vinden en op te lossen in het huidige bestand.",
-      "suggestion.test": "Schrijf tests",
-      "suggestion.test_prompt": "Schrijf uitgebreide tests voor de hoofdmodule.",
-      "suggestion.refactor": "Refactor code",
-      "suggestion.refactor_prompt": "Stel verbeteringen voor om het huidige bestand te refactoren.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "Authenticatie",
-      "error.credits": "Facturering",
-      "error.forbidden": "Toegang geweigerd",
-      "error.rate_limit": "Limiet bereikt",
-      "error.model_not_found": "Modelfout",
-      "error.bad_request": "Ongeldig verzoek",
-      "error.server_error": "Serverfout",
-      "error.timeout": "Time-out",
-      "error.stream_stall": "Stream vastgelopen",
-      "error.network": "Netwerkfout",
-      "error.setup": "Configuratie vereist",
-      "error.busy": "Bezig",
-      "error.iterations_exceeded": "Iteratielimiet",
-      "error.context_truncated": "Context afgekapt",
-      "error.provider_error": "Providerfout",
-      "error.unknown": "Fout",
-      "error.continue": "Doorgaan",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "Ongeldig verzoek aan {provider}. Het verzoekformaat is mogelijk niet compatibel met dit model.",
-      "error.msg.auth": "Ongeldige API key voor {provider}. Controleer je sleutel in ~/.ava/config.json",
-      "error.msg.credits": "Onvoldoende tegoed bij {provider}. Vul je accountsaldo aan.",
-      "error.msg.forbidden": "Toegang geweigerd door {provider}. Je API key heeft mogelijk niet de juiste rechten.",
-      "error.msg.model_not_found": "Model niet gevonden bij {provider}. Het model-ID is mogelijk gewijzigd \u2014 gebruik /model om beschikbare modellen te bekijken.",
-      "error.msg.rate_limit": "Limiet bereikt bij {provider}. Te veel verzoeken \u2014 wacht even en probeer opnieuw.",
-      "error.msg.server_error": "{provider} ondervindt problemen ({code}). Probeer het over enkele ogenblikken opnieuw.",
-      "error.msg.empty_response": "Het model gaf een leeg antwoord. Dit kan gebeuren als de API overbelast is of het verzoek gefilterd werd. Probeer opnieuw.",
-      "error.msg.iteration_limit": "Ava heeft de veiligheidslimiet van {limit} iteraties bereikt. Dit betekent meestal dat de taak erg groot is of het model in een lus zit.",
-      "error.msg.iteration_warning": "[WAARSCHUWING] Je hebt nog {remaining} iteraties over tot de luslimiet. Rond je huidige taak af \u2014 vat samen wat je hebt gedaan en wat er nog over is. Begin geen nieuwe meerstapstaak.",
-      "error.msg.image_stripped": "[Er is een afbeelding gedeeld, maar dit model ondersteunt geen vision]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "Toestaan",
-      "tool.always_allow": "Altijd toestaan",
-      "tool.allow_all": "Alles toestaan",
-      "tool.deny": "Weigeren",
-      "tool.allow_prompt": "{tool} toestaan?",
-      "tool.arguments": "Argumenten",
-      "tool.output": "Uitvoer",
-      "tool.error": "Fout",
-      "tool.truncated": "... (afgekapt)",
-      "tool.read": "Lezen {file}",
-      "tool.write": "Schrijven {file}",
-      "tool.edit": "Bewerken {file}",
-      "tool.find_files": "Bestanden zoeken: {pattern}",
-      "tool.search": "Zoeken: {pattern}",
-      "tool.run": "Uitvoeren: {command}",
-      "tool.list_dir": "Lijst {path}",
-      "tool.web_search": "Zoeken: {query}",
-      "tool.ask_user": "Vraag aan gebruiker",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "Chatgeschiedenis",
-      "history.new_chat": "+ Nieuw gesprek",
-      "history.close": "Sluiten",
-      "history.search": "Gesprekken zoeken...",
-      "history.empty": "Nog geen opgeslagen gesprekken.",
-      "history.no_match": "Geen overeenkomende gesprekken.",
-      "history.delete_confirm": "Verwijderen?",
-      "history.rename_hint": "Dubbelklik om te hernoemen",
-      "history.pin": "Vastmaken",
-      "history.unpin": "Losmaken",
-      "history.export_md": "Exporteren als Markdown",
-      "history.pinned": "Vastgemaakt",
-      "history.just_now": "zojuist",
-      "history.minutes_ago": "{n} min geleden",
-      "history.hours_ago": "{n} uur geleden",
-      "history.days_ago": "{n} dgn geleden",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "Vraag",
-      "ask.fallback": "Ava heeft een vraag",
-      "ask.placeholder": "Typ je antwoord...",
-      "ask.submit": "Versturen",
-      "ask.skip": "Overslaan",
-      "ask.skipped": "Overgeslagen",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "Plangegevens niet beschikbaar",
-      "plan.prefix": "Plan: {title}",
-      "plan.approved": "Goedgekeurd",
-      "plan.rejected": "Afgewezen",
-      "plan.goal": "Doel",
-      "plan.steps": "Stappen",
-      "plan.verification": "Verificatie",
-      "plan.approaches": "Benaderingen",
-      "plan.approve": "Goedkeuren",
-      "plan.reject": "Afwijzen",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "Takenlijst niet beschikbaar",
-      "todo.tasks": "Taken",
-      "todo.done": "{done}/{total} voltooid",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "in",
-      "status.out": "uit",
-      "status.total": "totaal",
-      "status.tokens": "tokens",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "Context comprimeren...",
-      "compression.result": "Context gecomprimeerd: ~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "Niets om te comprimeren.",
-      "compression.failed": "Compressie mislukt.",
-      "compression.busy": "Kan niet comprimeren terwijl Ava werkt.",
-      "compression.context_truncated": "Context afgekapt: {count} berichten verwijderd.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "Ga verder waar je gebleven was.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "Beschikbare opdrachten tonen",
-      "cmd.model.desc": "Modellen weergeven of wisselen (/model <provider:model-id>)",
-      "cmd.clear.desc": "Gespreksgeschiedenis wissen",
-      "cmd.provider.desc": "Providers toevoegen of weergeven (/provider add <name>)",
-      "cmd.history.desc": "Opgeslagen gesprekken weergeven",
-      "cmd.resume.desc": "Een opgeslagen gesprek hervatten (/resume <id-prefix>)",
-      "cmd.search.desc": "Gesprekken doorzoeken (/search <query>)",
-      "cmd.delete.desc": "Een opgeslagen gesprek verwijderen (/delete <id-prefix>)",
-      "cmd.rename.desc": "Een gesprek hernoemen (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Een gesprek vastmaken (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Een gesprek losmaken (/unpin <id-prefix>)",
-      "cmd.export.desc": "Een gesprek exporteren (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Laatste bericht opnieuw proberen",
-      "cmd.compact.desc": "Gesprekscontext comprimeren om ruimte vrij te maken",
-      "cmd.permission.desc": "Toestemmingsmodus bekijken of instellen (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Beschikbare tools weergeven",
-      "cmd.init.desc": ".ava/instructions.md aanmaken voor projectspecifieke context",
-      "cmd.exit.desc": "Ava afsluiten",
-      "cmd.security.desc": "Beveiligingsaudit uitvoeren (/security [focusgebied])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "Onbekend model: {model}",
-      "cmd.model.switched": "Overgeschakeld naar {name} ({provider})",
-      "cmd.model.active": "(actief)",
-      "cmd.clear.done": "Gesprek gewist.",
-      "cmd.provider.usage": "Gebruik: /provider add <{providers}>",
-      "cmd.provider.enter_key": "Voer API key in voor {provider}: ",
-      "cmd.provider.cancelled": "Geannuleerd.",
-      "cmd.provider.added": "Provider {provider} succesvol toegevoegd.",
-      "cmd.provider.failed": "Kon {provider} niet registreren: {error}",
-      "cmd.provider.title": "Geconfigureerde providers:",
-      "cmd.provider.configured": "geconfigureerd",
-      "cmd.provider.not_configured": "niet geconfigureerd",
-      "cmd.provider.hint": "Gebruik /provider add <name> om een provider toe te voegen.",
-      "cmd.history.empty": "Geen opgeslagen gesprekken.",
-      "cmd.history.title": "Opgeslagen gesprekken:",
-      "cmd.history.more": "... en nog {count} meer",
-      "cmd.history.hint": "Gebruik /resume <id-prefix> om een gesprek te laden.",
-      "cmd.resume.usage": "Gebruik: /resume <id-prefix>",
-      "cmd.resume.hint": "Voer /history uit om beschikbare gesprekken te bekijken.",
-      "cmd.resume.not_found": 'Geen gesprek gevonden voor "{prefix}".',
-      "cmd.resume.failed": "Kon gesprek niet laden.",
-      "cmd.resume.done": "Hervat: {title}",
-      "cmd.resume.count": "{count} berichten geladen.",
-      "cmd.search.usage": "Gebruik: /search <query>",
-      "cmd.search.empty": 'Geen gesprekken voor "{query}".',
-      "cmd.search.title": 'Zoekresultaten voor "{query}":',
-      "cmd.delete.usage": "Gebruik: /delete <id-prefix>",
-      "cmd.delete.confirm": '"{title}" ({id}) verwijderen? (j/n) ',
-      "cmd.delete.done": "Gesprek verwijderd.",
-      "cmd.delete.failed": "Kon gesprek niet verwijderen.",
-      "cmd.rename.usage": "Gebruik: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Hernoemd naar: {title}",
-      "cmd.rename.failed": "Kon gesprek niet hernoemen.",
-      "cmd.pin.usage": "Gebruik: /pin <id-prefix>",
-      "cmd.pin.done": "Vastgemaakt: {title}",
-      "cmd.pin.failed": "Kon gesprek niet vastmaken.",
-      "cmd.unpin.usage": "Gebruik: /unpin <id-prefix>",
-      "cmd.unpin.done": "Losgemaakt: {title}",
-      "cmd.unpin.failed": "Kon gesprek niet losmaken.",
-      "cmd.export.usage": "Gebruik: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Kon gesprek niet exporteren.",
-      "cmd.export.done": "Ge\xEBxporteerd naar {filename}",
-      "cmd.retry.unavailable": "Opnieuw proberen niet beschikbaar.",
-      "cmd.compact.unavailable": "Compressie niet beschikbaar.",
-      "cmd.permission.title": "Toestemmingsmodus:",
-      "cmd.permission.strict": "bevestiging voor schrijven en shell-opdrachten",
-      "cmd.permission.balanced": "schrijven automatisch toestaan, bevestiging voor shell-opdrachten",
-      "cmd.permission.autonomous": "alles automatisch toestaan",
-      "cmd.permission.unknown": "Onbekende modus. Kies uit: {modes}",
-      "cmd.permission.set": "Toestemmingsmodus ingesteld op {mode}.",
-      "cmd.tools.title": "Beschikbare tools:",
-      "cmd.init.created": "{path} aangemaakt",
-      "cmd.init.hint": "Bewerk dit bestand om Ava projectspecifieke context te geven.",
-      "cmd.init.restart": "Herstart Ava om de wijzigingen door te voeren.",
-      "cmd.init.exists": "{path} bestaat al.",
-      "cmd.unknown": "Onbekende opdracht: {input}. Typ /help voor beschikbare opdrachten.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "Nadenken...",
-      "cli.thinking_label": "[denkt] ",
-      "cli.thinking_words": "{count} woorden",
-      "cli.tool_label": "[tool] ",
-      "cli.tasks_label": "[taken] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "{tool} uitvoeren...",
-      "cli.confirm_label": "[bevestiging] ",
-      "cli.allow_prompt": "Toestaan? ",
-      "cli.allow_yn": "(j/n) ",
-      "cli.denied": "Geweigerd.",
-      "cli.question_label": "[vraag] ",
-      "cli.question_fallback": "Ava heeft een vraag voor je",
-      "cli.your_response": "Jouw antwoord: ",
-      "cli.skipped": "Overgeslagen.",
-      "cli.user_response": "Antwoord gebruiker: {response}",
-      "cli.write_to": "schrijven naar {path}",
-      "cli.edit_file": "bewerken {path}",
-      "cli.list_path": "lijst {path}",
-      "cli.search_query": 'zoeken "{query}"',
-      "cli.ok": "OK",
-      "cli.fail": "FOUT",
-      "cli.more_lines": "... ({count} meer regels)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Welkom bij Ava | Supernova",
-      "setup.intro": "Laten we je LLM-provider instellen.",
-      "setup.choose": "Kies een provider (nummer): ",
-      "setup.invalid_choice": "Ongeldige keuze. Start opnieuw en probeer het nog eens.",
-      "setup.key_url": "Haal je API key op via: {url}",
-      "setup.enter_key": "{provider} API key: ",
-      "setup.no_key": "Geen API key opgegeven. Start opnieuw en probeer het nog eens.",
-      "setup.complete": "Configuratie voltooid! Actief model: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/pl.js
-var pl_exports = {};
-__export(pl_exports, {
-  plStrings: () => plStrings
-});
-var plStrings;
-var init_pl = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/pl.js"() {
-    plStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Zapytaj o cokolwiek dotycz\u0105cego Twojego kodu.",
-      "welcome.cli_hint": "Wpisz wiadomo\u015B\u0107 lub /help, aby zobaczy\u0107 komendy.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "Co chcesz zbudowa\u0107?",
-      "input.placeholder.plan": "Opisz, co chcesz zaplanowa\u0107...",
-      "input.placeholder.chat": "Zadaj pytanie lub rozpocznij dyskusj\u0119...",
-      "input.placeholder.disabled": "Skonfiguruj dostawc\u0119, aby rozpocz\u0105\u0107...",
-      "input.placeholder.security": "Opisz, co chcesz przeskanowa\u0107, lub naci\u015Bnij Enter, aby wykona\u0107 pe\u0142ny audyt...",
-      "input.mode.code": "Kod",
-      "input.mode.plan": "Plan",
-      "input.mode.chat": "Czat",
-      "input.mode.security": "Bezpiecze\u0144stwo",
-      "input.send": "Wy\u015Blij (Enter)",
-      "input.send_aria": "Wy\u015Blij wiadomo\u015B\u0107",
-      "input.stop": "Zatrzymaj",
-      "input.stop_aria": "Zatrzymaj Av\u0119",
-      "input.attach": "Do\u0142\u0105cz obraz",
-      "input.drop_image": "Upu\u015B\u0107 obraz tutaj",
-      "input.compressing": "Kompresowanie...",
-      "input.compress_title": "Wykorzystanie kontekstu \u2014 kliknij, aby skompresowa\u0107",
-      "input.compress_title_warning": "Kliknij, aby skompresowa\u0107 kontekst",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "Historia czatu",
-      "header.settings": "Ustawienia",
-      "header.new_chat": "Nowy czat",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "Brak skonfigurowanych dostawc\xF3w.",
-      "model.open_settings": "Otw\xF3rz ustawienia",
-      "model.vision": "wizja",
-      "model.vision_title": "Ten model obs\u0142uguje obrazy/dane wizualne",
-      "model.switched": "Prze\u0142\u0105czono na {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava my\u015Bli...",
-      "thinking.1": "Analizuj\u0119 Tw\xF3j kod...",
-      "thinking.2": "Rozwa\u017Cam podej\u015Bcia...",
-      "thinking.3": "Przygotowuj\u0119 odpowied\u017A...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "Wyja\u015Bnij ten projekt",
-      "suggestion.explain_prompt": "Przedstaw og\xF3lny przegl\u0105d struktury i architektury tego projektu.",
-      "suggestion.bug": "Znajd\u017A b\u0142\u0105d",
-      "suggestion.bug_prompt": "Pom\xF3\u017C mi znale\u017A\u0107 i naprawi\u0107 b\u0142\u0119dy w bie\u017C\u0105cym pliku.",
-      "suggestion.test": "Napisz testy",
-      "suggestion.test_prompt": "Napisz kompleksowe testy dla g\u0142\xF3wnego modu\u0142u.",
-      "suggestion.refactor": "Refaktoryzuj kod",
-      "suggestion.refactor_prompt": "Zaproponuj ulepszenia refaktoryzacji dla bie\u017C\u0105cego pliku.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "Uwierzytelnianie",
-      "error.credits": "Rozliczenia",
-      "error.forbidden": "Brak dost\u0119pu",
-      "error.rate_limit": "Limit zapyta\u0144",
-      "error.model_not_found": "B\u0142\u0105d modelu",
-      "error.bad_request": "B\u0142\u0119dne zapytanie",
-      "error.server_error": "B\u0142\u0105d serwera",
-      "error.timeout": "Przekroczenie czasu",
-      "error.stream_stall": "Strumie\u0144 utkn\u0105\u0142",
-      "error.network": "B\u0142\u0105d sieci",
-      "error.setup": "Wymagana konfiguracja",
-      "error.busy": "Zaj\u0119ta",
-      "error.iterations_exceeded": "Limit iteracji",
-      "error.context_truncated": "Kontekst obci\u0119ty",
-      "error.provider_error": "B\u0142\u0105d dostawcy",
-      "error.unknown": "B\u0142\u0105d",
-      "error.continue": "Kontynuuj",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "B\u0142\u0119dne zapytanie do {provider}. Format \u017C\u0105dania mo\u017Ce by\u0107 niezgodny z tym modelem.",
-      "error.msg.auth": "Nieprawid\u0142owy API key dla {provider}. Sprawd\u017A klucz w ~/.ava/config.json",
-      "error.msg.credits": "Niewystarczaj\u0105ce \u015Brodki na koncie {provider}. Do\u0142aduj saldo.",
-      "error.msg.forbidden": "Odmowa dost\u0119pu przez {provider}. Tw\xF3j API key mo\u017Ce nie mie\u0107 wymaganych uprawnie\u0144.",
-      "error.msg.model_not_found": "Nie znaleziono modelu u dostawcy {provider}. ID modelu mog\u0142o si\u0119 zmieni\u0107 \u2014 u\u017Cyj /model, aby zobaczy\u0107 dost\u0119pne modele.",
-      "error.msg.rate_limit": "Limit zapyta\u0144 przekroczony u {provider}. Zbyt wiele \u017C\u0105da\u0144 \u2014 poczekaj chwil\u0119 i spr\xF3buj ponownie.",
-      "error.msg.server_error": "{provider} ma problemy ({code}). Spr\xF3buj ponownie za chwil\u0119.",
-      "error.msg.empty_response": "Model zwr\xF3ci\u0142 pust\u0105 odpowied\u017A. Mo\u017Ce si\u0119 tak zdarzy\u0107 przy przeci\u0105\u017Ceniu API lub filtracji \u017C\u0105dania. Spr\xF3buj ponownie.",
-      "error.msg.iteration_limit": "Ava osi\u0105gn\u0119\u0142a limit bezpiecze\u0144stwa {limit} iteracji. Zwykle oznacza to, \u017Ce zadanie jest bardzo du\u017Ce lub model utkn\u0105\u0142 w p\u0119tli.",
-      "error.msg.iteration_warning": "[UWAGA] Pozosta\u0142o {remaining} iteracji do limitu p\u0119tli. Zako\u0144cz bie\u017C\u0105ce zadanie \u2014 podsumuj, co zosta\u0142o zrobione i co pozosta\u0142o. Nie rozpoczynaj nowej wieloetapowej pracy.",
-      "error.msg.image_stripped": "[Udost\u0119pniono obraz, ale ten model nie obs\u0142uguje wizji]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "Zezw\xF3l",
-      "tool.always_allow": "Zawsze zezwalaj",
-      "tool.allow_all": "Zezw\xF3l na wszystko",
-      "tool.deny": "Odm\xF3w",
-      "tool.allow_prompt": "Zezwoli\u0107 na {tool}?",
-      "tool.arguments": "Argumenty",
-      "tool.output": "Wynik",
-      "tool.error": "B\u0142\u0105d",
-      "tool.truncated": "... (obci\u0119to)",
-      "tool.read": "Odczyt {file}",
-      "tool.write": "Zapis {file}",
-      "tool.edit": "Edycja {file}",
-      "tool.find_files": "Szukaj plik\xF3w: {pattern}",
-      "tool.search": "Szukaj: {pattern}",
-      "tool.run": "Uruchom: {command}",
-      "tool.list_dir": "Lista {path}",
-      "tool.web_search": "Szukaj: {query}",
-      "tool.ask_user": "Pytanie do u\u017Cytkownika",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "Historia czatu",
-      "history.new_chat": "+ Nowy czat",
-      "history.close": "Zamknij",
-      "history.search": "Szukaj rozm\xF3w...",
-      "history.empty": "Brak zapisanych rozm\xF3w.",
-      "history.no_match": "Brak pasuj\u0105cych rozm\xF3w.",
-      "history.delete_confirm": "Usun\u0105\u0107?",
-      "history.rename_hint": "Kliknij dwukrotnie, aby zmieni\u0107 nazw\u0119",
-      "history.pin": "Przypnij",
-      "history.unpin": "Odepnij",
-      "history.export_md": "Eksportuj jako Markdown",
-      "history.pinned": "Przypi\u0119te",
-      "history.just_now": "przed chwil\u0105",
-      "history.minutes_ago": "{n} min temu",
-      "history.hours_ago": "{n} godz. temu",
-      "history.days_ago": "{n} dn. temu",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "Pytanie",
-      "ask.fallback": "Ava ma pytanie",
-      "ask.placeholder": "Wpisz swoj\u0105 odpowied\u017A...",
-      "ask.submit": "Wy\u015Blij",
-      "ask.skip": "Pomi\u0144",
-      "ask.skipped": "Pomini\u0119to",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "Dane planu niedost\u0119pne",
-      "plan.prefix": "Plan: {title}",
-      "plan.approved": "Zatwierdzony",
-      "plan.rejected": "Odrzucony",
-      "plan.goal": "Cel",
-      "plan.steps": "Kroki",
-      "plan.verification": "Weryfikacja",
-      "plan.approaches": "Podej\u015Bcia",
-      "plan.approve": "Zatwierd\u017A",
-      "plan.reject": "Odrzu\u0107",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "Lista zada\u0144 niedost\u0119pna",
-      "todo.tasks": "Zadania",
-      "todo.done": "{done}/{total} uko\u0144czono",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "wej.",
-      "status.out": "wyj.",
-      "status.total": "razem",
-      "status.tokens": "tokeny",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "Kompresowanie kontekstu...",
-      "compression.result": "Kontekst skompresowany: ~{original} \u2192 ~{compressed} token\xF3w",
-      "compression.nothing": "Nie ma czego kompresowa\u0107.",
-      "compression.failed": "Kompresja nie powiod\u0142a si\u0119.",
-      "compression.busy": "Nie mo\u017Cna kompresowa\u0107, gdy Ava pracuje.",
-      "compression.context_truncated": "Kontekst obci\u0119ty: pomini\u0119to {count} wiadomo\u015Bci.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "Kontynuuj od miejsca, w kt\xF3rym sko\u0144czy\u0142e\u015B.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "Poka\u017C dost\u0119pne komendy",
-      "cmd.model.desc": "Lista lub zmiana modeli (/model <provider:model-id>)",
-      "cmd.clear.desc": "Wyczy\u015B\u0107 histori\u0119 rozmowy",
-      "cmd.provider.desc": "Dodaj lub wy\u015Bwietl dostawc\xF3w (/provider add <name>)",
-      "cmd.history.desc": "Lista zapisanych rozm\xF3w",
-      "cmd.resume.desc": "Wzn\xF3w zapisan\u0105 rozmow\u0119 (/resume <id-prefix>)",
-      "cmd.search.desc": "Szukaj rozm\xF3w (/search <query>)",
-      "cmd.delete.desc": "Usu\u0144 zapisan\u0105 rozmow\u0119 (/delete <id-prefix>)",
-      "cmd.rename.desc": "Zmie\u0144 nazw\u0119 rozmowy (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Przypnij rozmow\u0119 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Odepnij rozmow\u0119 (/unpin <id-prefix>)",
-      "cmd.export.desc": "Eksportuj rozmow\u0119 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Pon\xF3w ostatni\u0105 wiadomo\u015B\u0107",
-      "cmd.compact.desc": "Skompresuj kontekst rozmowy, aby zwolni\u0107 miejsce",
-      "cmd.permission.desc": "Wy\u015Bwietl lub ustaw tryb uprawnie\u0144 (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Lista dost\u0119pnych narz\u0119dzi",
-      "cmd.init.desc": "Utw\xF3rz .ava/instructions.md dla kontekstu specyficznego dla projektu",
-      "cmd.exit.desc": "Zamknij Av\u0119",
-      "cmd.security.desc": "Uruchom audyt bezpiecze\u0144stwa (/security [obszar zainteresowania])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "Nieznany model: {model}",
-      "cmd.model.switched": "Prze\u0142\u0105czono na {name} ({provider})",
-      "cmd.model.active": "(aktywny)",
-      "cmd.clear.done": "Rozmowa wyczyszczona.",
-      "cmd.provider.usage": "U\u017Cycie: /provider add <{providers}>",
-      "cmd.provider.enter_key": "Podaj API key dla {provider}: ",
-      "cmd.provider.cancelled": "Anulowano.",
-      "cmd.provider.added": "Dostawca {provider} dodany pomy\u015Blnie.",
-      "cmd.provider.failed": "Nie uda\u0142o si\u0119 zarejestrowa\u0107 {provider}: {error}",
-      "cmd.provider.title": "Skonfigurowani dostawcy:",
-      "cmd.provider.configured": "skonfigurowany",
-      "cmd.provider.not_configured": "nie skonfigurowany",
-      "cmd.provider.hint": "U\u017Cyj /provider add <name>, aby doda\u0107 dostawc\u0119.",
-      "cmd.history.empty": "Brak zapisanych rozm\xF3w.",
-      "cmd.history.title": "Zapisane rozmowy:",
-      "cmd.history.more": "... i {count} wi\u0119cej",
-      "cmd.history.hint": "U\u017Cyj /resume <id-prefix>, aby wczyta\u0107 rozmow\u0119.",
-      "cmd.resume.usage": "U\u017Cycie: /resume <id-prefix>",
-      "cmd.resume.hint": "Uruchom /history, aby zobaczy\u0107 dost\u0119pne rozmowy.",
-      "cmd.resume.not_found": 'Nie znaleziono rozmowy pasuj\u0105cej do "{prefix}".',
-      "cmd.resume.failed": "Nie uda\u0142o si\u0119 wczyta\u0107 rozmowy.",
-      "cmd.resume.done": "Wznowiono: {title}",
-      "cmd.resume.count": "Wczytano {count} wiadomo\u015Bci.",
-      "cmd.search.usage": "U\u017Cycie: /search <query>",
-      "cmd.search.empty": 'Brak rozm\xF3w pasuj\u0105cych do "{query}".',
-      "cmd.search.title": 'Wyniki wyszukiwania dla "{query}":',
-      "cmd.delete.usage": "U\u017Cycie: /delete <id-prefix>",
-      "cmd.delete.confirm": 'Usun\u0105\u0107 "{title}" ({id})? (t/n) ',
-      "cmd.delete.done": "Rozmowa usuni\u0119ta.",
-      "cmd.delete.failed": "Nie uda\u0142o si\u0119 usun\u0105\u0107 rozmowy.",
-      "cmd.rename.usage": "U\u017Cycie: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Zmieniono nazw\u0119 na: {title}",
-      "cmd.rename.failed": "Nie uda\u0142o si\u0119 zmieni\u0107 nazwy rozmowy.",
-      "cmd.pin.usage": "U\u017Cycie: /pin <id-prefix>",
-      "cmd.pin.done": "Przypi\u0119to: {title}",
-      "cmd.pin.failed": "Nie uda\u0142o si\u0119 przypi\u0105\u0107 rozmowy.",
-      "cmd.unpin.usage": "U\u017Cycie: /unpin <id-prefix>",
-      "cmd.unpin.done": "Odpi\u0119to: {title}",
-      "cmd.unpin.failed": "Nie uda\u0142o si\u0119 odpi\u0105\u0107 rozmowy.",
-      "cmd.export.usage": "U\u017Cycie: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Nie uda\u0142o si\u0119 wyeksportowa\u0107 rozmowy.",
-      "cmd.export.done": "Wyeksportowano do {filename}",
-      "cmd.retry.unavailable": "Ponowienie niedost\u0119pne.",
-      "cmd.compact.unavailable": "Kompresja niedost\u0119pna.",
-      "cmd.permission.title": "Tryb uprawnie\u0144:",
-      "cmd.permission.strict": "potwierdzaj zapisy i komendy pow\u0142oki",
-      "cmd.permission.balanced": "automatycznie zatwierdzaj zapisy, potwierdzaj komendy pow\u0142oki",
-      "cmd.permission.autonomous": "automatycznie zatwierdzaj wszystko",
-      "cmd.permission.unknown": "Nieznany tryb. Wybierz: {modes}",
-      "cmd.permission.set": "Tryb uprawnie\u0144 ustawiony na {mode}.",
-      "cmd.tools.title": "Dost\u0119pne narz\u0119dzia:",
-      "cmd.init.created": "Utworzono {path}",
-      "cmd.init.hint": "Edytuj ten plik, aby nada\u0107 Avie kontekst specyficzny dla projektu.",
-      "cmd.init.restart": "Uruchom ponownie Av\u0119, aby zmiany zosta\u0142y uwzgl\u0119dnione.",
-      "cmd.init.exists": "{path} ju\u017C istnieje.",
-      "cmd.unknown": "Nieznana komenda: {input}. Wpisz /help, aby zobaczy\u0107 dost\u0119pne komendy.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "My\u015Bl\u0119...",
-      "cli.thinking_label": "[my\u015Blenie] ",
-      "cli.thinking_words": "{count} s\u0142\xF3w",
-      "cli.tool_label": "[narz\u0119dzie] ",
-      "cli.tasks_label": "[zadania] ",
-      "cli.tokens_label": "[tokeny] ",
-      "cli.running": "Uruchamiam {tool}...",
-      "cli.confirm_label": "[potwierdzenie] ",
-      "cli.allow_prompt": "Zezwoli\u0107? ",
-      "cli.allow_yn": "(t/n) ",
-      "cli.denied": "Odm\xF3wiono.",
-      "cli.question_label": "[pytanie] ",
-      "cli.question_fallback": "Ava ma do Ciebie pytanie",
-      "cli.your_response": "Twoja odpowied\u017A: ",
-      "cli.skipped": "Pomini\u0119to.",
-      "cli.user_response": "Odpowied\u017A u\u017Cytkownika: {response}",
-      "cli.write_to": "zapis do {path}",
-      "cli.edit_file": "edycja {path}",
-      "cli.list_path": "lista {path}",
-      "cli.search_query": 'szukaj "{query}"',
-      "cli.ok": "OK",
-      "cli.fail": "B\u0141\u0104D",
-      "cli.more_lines": "... ({count} wi\u0119cej linii)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Witaj w Ava | Supernova",
-      "setup.intro": "Skonfigurujmy Twojego dostawc\u0119 LLM.",
-      "setup.choose": "Wybierz dostawc\u0119 (numer): ",
-      "setup.invalid_choice": "Nieprawid\u0142owy wyb\xF3r. Uruchom ponownie i spr\xF3buj jeszcze raz.",
-      "setup.key_url": "Pobierz sw\xF3j API key pod adresem: {url}",
-      "setup.enter_key": "API key {provider}: ",
-      "setup.no_key": "Nie podano API key. Uruchom ponownie i spr\xF3buj jeszcze raz.",
-      "setup.complete": "Konfiguracja zako\u0144czona! Aktywny model: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/pt.js
-var pt_exports = {};
-__export(pt_exports, {
-  ptStrings: () => ptStrings
-});
-var ptStrings;
-var init_pt = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/pt.js"() {
-    ptStrings = {
-      // \u2500\u2500 Welcome / Branding \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Pergunte qualquer coisa sobre o seu c\xF3digo.",
-      "welcome.cli_hint": "Digite sua mensagem, ou /help para ver os comandos.",
-      // \u2500\u2500 Input Area \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "input.placeholder.code": "O que voc\xEA quer construir?",
-      "input.placeholder.plan": "Descreva o que voc\xEA quer planejar...",
-      "input.placeholder.chat": "Fa\xE7a uma pergunta ou inicie uma conversa...",
-      "input.placeholder.disabled": "Configure um provedor para come\xE7ar...",
-      "input.placeholder.security": "Descreva o que escanear, ou pressione Enter para uma auditoria completa...",
-      "input.mode.code": "C\xF3digo",
-      "input.mode.plan": "Plano",
-      "input.mode.chat": "Chat",
-      "input.mode.security": "Seguran\xE7a",
-      "input.send": "Enviar (Enter)",
-      "input.send_aria": "Enviar mensagem",
-      "input.stop": "Parar",
-      "input.stop_aria": "Parar Ava",
-      "input.attach": "Anexar imagem",
-      "input.drop_image": "Solte a imagem aqui",
-      "input.compressing": "Comprimindo...",
-      "input.compress_title": "Uso de contexto \u2014 clique para comprimir",
-      "input.compress_title_warning": "Clique para comprimir o contexto",
-      // \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "header.history": "Hist\xF3rico de chats",
-      "header.settings": "Configura\xE7\xF5es",
-      "header.new_chat": "Novo chat",
-      // \u2500\u2500 Model Selector \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "model.no_providers": "Nenhum provedor configurado.",
-      "model.open_settings": "Abrir configura\xE7\xF5es",
-      "model.vision": "vis\xE3o",
-      "model.vision_title": "Este modelo suporta entrada de imagem/vis\xE3o",
-      "model.switched": "Alterado para {model}",
-      // \u2500\u2500 Thinking Indicator \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "thinking.0": "Ava est\xE1 pensando...",
-      "thinking.1": "Analisando seu c\xF3digo...",
-      "thinking.2": "Considerando abordagens...",
-      "thinking.3": "Elaborando uma resposta...",
-      // \u2500\u2500 Suggestions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "suggestion.explain": "Explicar este projeto",
-      "suggestion.explain_prompt": "Me d\xEA uma vis\xE3o geral da estrutura e arquitetura deste projeto.",
-      "suggestion.bug": "Encontrar um bug",
-      "suggestion.bug_prompt": "Me ajude a encontrar e corrigir bugs no arquivo atual.",
-      "suggestion.test": "Escrever testes",
-      "suggestion.test_prompt": "Escreva testes abrangentes para o m\xF3dulo principal.",
-      "suggestion.refactor": "Refatorar c\xF3digo",
-      "suggestion.refactor_prompt": "Sugira melhorias de refatora\xE7\xE3o para o arquivo atual.",
-      // \u2500\u2500 Error Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.auth": "Autentica\xE7\xE3o",
-      "error.credits": "Faturamento",
-      "error.forbidden": "Acesso negado",
-      "error.rate_limit": "Limite de requisi\xE7\xF5es",
-      "error.model_not_found": "Erro de modelo",
-      "error.bad_request": "Requisi\xE7\xE3o inv\xE1lida",
-      "error.server_error": "Erro do servidor",
-      "error.timeout": "Tempo esgotado",
-      "error.stream_stall": "Transmiss\xE3o interrompida",
-      "error.network": "Erro de rede",
-      "error.setup": "Configura\xE7\xE3o necess\xE1ria",
-      "error.busy": "Ocupado",
-      "error.iterations_exceeded": "Limite de itera\xE7\xF5es",
-      "error.context_truncated": "Contexto truncado",
-      "error.provider_error": "Erro do provedor",
-      "error.unknown": "Erro",
-      "error.continue": "Continuar",
-      // \u2500\u2500 Error Messages (with interpolation) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "error.msg.bad_request": "Requisi\xE7\xE3o inv\xE1lida para {provider}. O formato da requisi\xE7\xE3o pode ser incompat\xEDvel com este modelo.",
-      "error.msg.auth": "API key inv\xE1lida para {provider}. Verifique sua chave em ~/.ava/config.json",
-      "error.msg.credits": "Cr\xE9ditos insuficientes para {provider}. Recarregue o saldo da sua conta.",
-      "error.msg.forbidden": "Acesso negado por {provider}. Sua API key pode n\xE3o ter as permiss\xF5es necess\xE1rias.",
-      "error.msg.model_not_found": "Modelo n\xE3o encontrado em {provider}. O ID do modelo pode ter mudado \u2014 execute /model para ver os modelos dispon\xEDveis.",
-      "error.msg.rate_limit": "Limite de requisi\xE7\xF5es atingido em {provider}. Muitas requisi\xE7\xF5es \u2014 aguarde um momento e tente novamente.",
-      "error.msg.server_error": "{provider} est\xE1 com problemas ({code}). Tente novamente em alguns instantes.",
-      "error.msg.empty_response": "O modelo retornou uma resposta vazia. Isso pode acontecer quando a API est\xE1 sobrecarregada ou a requisi\xE7\xE3o foi filtrada. Tente novamente.",
-      "error.msg.iteration_limit": "Ava atingiu o limite de seguran\xE7a de {limit} itera\xE7\xF5es. Isso geralmente significa que a tarefa \xE9 muito grande ou o modelo entrou em loop.",
-      "error.msg.iteration_warning": "[AVISO] Voc\xEA tem {remaining} itera\xE7\xF5es restantes antes do limite. Finalize sua tarefa atual \u2014 resuma o que foi feito e o que falta. N\xE3o inicie novas tarefas de v\xE1rios passos.",
-      "error.msg.image_stripped": "[Uma imagem foi compartilhada, mas este modelo n\xE3o suporta vis\xE3o]",
-      // \u2500\u2500 Tool UI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "tool.allow": "Permitir",
-      "tool.always_allow": "Permitir sempre",
-      "tool.allow_all": "Permitir tudo",
-      "tool.deny": "Negar",
-      "tool.allow_prompt": "Permitir {tool}?",
-      "tool.arguments": "Argumentos",
-      "tool.output": "Sa\xEDda",
-      "tool.error": "Erro",
-      "tool.truncated": "... (truncado)",
-      "tool.read": "Ler {file}",
-      "tool.write": "Escrever {file}",
-      "tool.edit": "Editar {file}",
-      "tool.find_files": "Buscar arquivos: {pattern}",
-      "tool.search": "Pesquisar: {pattern}",
-      "tool.run": "Executar: {command}",
-      "tool.list_dir": "Listar {path}",
-      "tool.web_search": "Pesquisar: {query}",
-      "tool.ask_user": "Pergunta para o usu\xE1rio",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // \u2500\u2500 History Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "history.title": "Hist\xF3rico de chats",
-      "history.new_chat": "+ Novo chat",
-      "history.close": "Fechar",
-      "history.search": "Pesquisar conversas...",
-      "history.empty": "Nenhuma conversa salva ainda.",
-      "history.no_match": "Nenhuma conversa encontrada.",
-      "history.delete_confirm": "Excluir?",
-      "history.rename_hint": "Clique duplo para renomear",
-      "history.pin": "Fixar",
-      "history.unpin": "Desafixar",
-      "history.export_md": "Exportar como Markdown",
-      "history.pinned": "Fixadas",
-      "history.just_now": "agora mesmo",
-      "history.minutes_ago": "{n}min atr\xE1s",
-      "history.hours_ago": "{n}h atr\xE1s",
-      "history.days_ago": "{n}d atr\xE1s",
-      // \u2500\u2500 Ask User Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "ask.question": "Pergunta",
-      "ask.fallback": "Ava tem uma pergunta",
-      "ask.placeholder": "Digite sua resposta...",
-      "ask.submit": "Enviar",
-      "ask.skip": "Pular",
-      "ask.skipped": "Pulada",
-      // \u2500\u2500 Plan Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "plan.unavailable": "Dados do plano indispon\xEDveis",
-      "plan.prefix": "Plano: {title}",
-      "plan.approved": "Aprovado",
-      "plan.rejected": "Rejeitado",
-      "plan.goal": "Objetivo",
-      "plan.steps": "Passos",
-      "plan.verification": "Verifica\xE7\xE3o",
-      "plan.approaches": "Abordagens",
-      "plan.approve": "Aprovar",
-      "plan.reject": "Rejeitar",
-      // \u2500\u2500 Todo Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "todo.unavailable": "Lista de tarefas indispon\xEDvel",
-      "todo.tasks": "Tarefas",
-      "todo.done": "{done}/{total} conclu\xEDdas",
-      // \u2500\u2500 Status Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "status.in": "entrada",
-      "status.out": "sa\xEDda",
-      "status.total": "total",
-      "status.tokens": "tokens",
-      // \u2500\u2500 Compression \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "compression.start": "Comprimindo contexto...",
-      "compression.result": "Contexto comprimido: ~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "Nada para comprimir.",
-      "compression.failed": "A compress\xE3o falhou.",
-      "compression.busy": "N\xE3o \xE9 poss\xEDvel comprimir enquanto Ava est\xE1 trabalhando.",
-      "compression.context_truncated": "Contexto truncado: {count} mensagens descartadas.",
-      // \u2500\u2500 Continue \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "continue.prompt": "Continue de onde parou.",
-      // \u2500\u2500 CLI Command Descriptions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.help.desc": "Mostrar comandos dispon\xEDveis",
-      "cmd.model.desc": "Listar ou trocar modelos (/model <provider:model-id>)",
-      "cmd.clear.desc": "Limpar hist\xF3rico de conversa",
-      "cmd.provider.desc": "Adicionar ou listar provedores (/provider add <name>)",
-      "cmd.history.desc": "Listar conversas salvas",
-      "cmd.resume.desc": "Retomar uma conversa salva (/resume <id-prefix>)",
-      "cmd.search.desc": "Pesquisar conversas (/search <query>)",
-      "cmd.delete.desc": "Excluir uma conversa salva (/delete <id-prefix>)",
-      "cmd.rename.desc": "Renomear uma conversa (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Fixar uma conversa (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Desafixar uma conversa (/unpin <id-prefix>)",
-      "cmd.export.desc": "Exportar uma conversa (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Reenviar a \xFAltima mensagem",
-      "cmd.compact.desc": "Comprimir o contexto da conversa para liberar espa\xE7o",
-      "cmd.permission.desc": "Ver ou definir o modo de permiss\xF5es (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Listar ferramentas dispon\xEDveis",
-      "cmd.init.desc": "Criar .ava/instructions.md para contexto espec\xEDfico do projeto",
-      "cmd.exit.desc": "Sair do Ava",
-      "cmd.security.desc": "Executar uma auditoria de seguran\xE7a (/security [\xE1rea de foco])",
-      // \u2500\u2500 CLI Command Messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cmd.model.unknown": "Modelo desconhecido: {model}",
-      "cmd.model.switched": "Alterado para {name} ({provider})",
-      "cmd.model.active": "(ativo)",
-      "cmd.clear.done": "Conversa limpa.",
-      "cmd.provider.usage": "Uso: /provider add <{providers}>",
-      "cmd.provider.enter_key": "Insira a API key para {provider}: ",
-      "cmd.provider.cancelled": "Cancelado.",
-      "cmd.provider.added": "Provedor {provider} adicionado com sucesso.",
-      "cmd.provider.failed": "Falha ao registrar {provider}: {error}",
-      "cmd.provider.title": "Provedores configurados:",
-      "cmd.provider.configured": "configurado",
-      "cmd.provider.not_configured": "n\xE3o configurado",
-      "cmd.provider.hint": "Use /provider add <name> para adicionar um provedor.",
-      "cmd.history.empty": "Nenhuma conversa salva.",
-      "cmd.history.title": "Conversas salvas:",
-      "cmd.history.more": "... e mais {count}",
-      "cmd.history.hint": "Use /resume <id-prefix> para carregar uma conversa.",
-      "cmd.resume.usage": "Uso: /resume <id-prefix>",
-      "cmd.resume.hint": "Execute /history para ver as conversas dispon\xEDveis.",
-      "cmd.resume.not_found": 'Nenhuma conversa encontrada com o prefixo "{prefix}".',
-      "cmd.resume.failed": "Falha ao carregar a conversa.",
-      "cmd.resume.done": "Retomada: {title}",
-      "cmd.resume.count": "{count} mensagens carregadas.",
-      "cmd.search.usage": "Uso: /search <query>",
-      "cmd.search.empty": 'Nenhuma conversa encontrada para "{query}".',
-      "cmd.search.title": 'Resultados da pesquisa para "{query}":',
-      "cmd.delete.usage": "Uso: /delete <id-prefix>",
-      "cmd.delete.confirm": 'Excluir "{title}" ({id})? (s/n) ',
-      "cmd.delete.done": "Conversa exclu\xEDda.",
-      "cmd.delete.failed": "Falha ao excluir a conversa.",
-      "cmd.rename.usage": "Uso: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Renomeada para: {title}",
-      "cmd.rename.failed": "Falha ao renomear a conversa.",
-      "cmd.pin.usage": "Uso: /pin <id-prefix>",
-      "cmd.pin.done": "Fixada: {title}",
-      "cmd.pin.failed": "Falha ao fixar a conversa.",
-      "cmd.unpin.usage": "Uso: /unpin <id-prefix>",
-      "cmd.unpin.done": "Desafixada: {title}",
-      "cmd.unpin.failed": "Falha ao desafixar a conversa.",
-      "cmd.export.usage": "Uso: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Falha ao exportar a conversa.",
-      "cmd.export.done": "Exportada para {filename}",
-      "cmd.retry.unavailable": "Reenvio n\xE3o dispon\xEDvel.",
-      "cmd.compact.unavailable": "Compress\xE3o n\xE3o dispon\xEDvel.",
-      "cmd.permission.title": "Modo de permiss\xF5es:",
-      "cmd.permission.strict": "confirmar escritas e comandos de shell",
-      "cmd.permission.balanced": "aprovar escritas automaticamente, confirmar comandos de shell",
-      "cmd.permission.autonomous": "aprovar tudo automaticamente",
-      "cmd.permission.unknown": "Modo desconhecido. Escolha: {modes}",
-      "cmd.permission.set": "Modo de permiss\xF5es definido para {mode}.",
-      "cmd.tools.title": "Ferramentas dispon\xEDveis:",
-      "cmd.init.created": "Criado {path}",
-      "cmd.init.hint": "Edite este arquivo para dar ao Ava contexto espec\xEDfico do projeto.",
-      "cmd.init.restart": "Reinicie o Ava para que as altera\xE7\xF5es tenham efeito.",
-      "cmd.init.exists": "{path} j\xE1 existe.",
-      "cmd.unknown": "Comando desconhecido: {input}. Digite /help para ver os comandos dispon\xEDveis.",
-      // \u2500\u2500 CLI Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "cli.thinking": "Pensando...",
-      "cli.thinking_label": "[pensando] ",
-      "cli.thinking_words": "{count} palavras",
-      "cli.tool_label": "[ferramenta] ",
-      "cli.tasks_label": "[tarefas] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "Executando {tool}...",
-      "cli.confirm_label": "[confirmar] ",
-      "cli.allow_prompt": "Permitir? ",
-      "cli.allow_yn": "(s/n) ",
-      "cli.denied": "Negado.",
-      "cli.question_label": "[pergunta] ",
-      "cli.question_fallback": "Ava tem uma pergunta para voc\xEA",
-      "cli.your_response": "Sua resposta: ",
-      "cli.skipped": "Pulado.",
-      "cli.user_response": "Resposta do usu\xE1rio: {response}",
-      "cli.write_to": "escrever em {path}",
-      "cli.edit_file": "editar {path}",
-      "cli.list_path": "listar {path}",
-      "cli.search_query": 'pesquisar "{query}"',
-      "cli.ok": "OK",
-      "cli.fail": "ERRO",
-      "cli.more_lines": "... ({count} linhas a mais)",
-      // \u2500\u2500 Setup Wizard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-      "setup.welcome": "Bem-vindo ao Ava | Supernova",
-      "setup.intro": "Vamos configurar seu provedor de LLM.",
-      "setup.choose": "Escolha um provedor (n\xFAmero): ",
-      "setup.invalid_choice": "Op\xE7\xE3o inv\xE1lida. Reinicie e tente novamente.",
-      "setup.key_url": "Obtenha sua API key em: {url}",
-      "setup.enter_key": "API Key de {provider}: ",
-      "setup.no_key": "Nenhuma API key fornecida. Reinicie e tente novamente.",
-      "setup.complete": "Configura\xE7\xE3o conclu\xEDda! Modelo ativo: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/ru.js
-var ru_exports = {};
-__export(ru_exports, {
-  ruStrings: () => ruStrings
-});
-var ruStrings;
-var init_ru = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/ru.js"() {
-    ruStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\u0417\u0430\u0434\u0430\u0439\u0442\u0435 \u043B\u044E\u0431\u043E\u0439 \u0432\u043E\u043F\u0440\u043E\u0441 \u043E \u0432\u0430\u0448\u0435\u043C \u043A\u043E\u0434\u0435.",
-      "welcome.cli_hint": "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u0438\u043B\u0438 /help \u0434\u043B\u044F \u0441\u043F\u0438\u0441\u043A\u0430 \u043A\u043E\u043C\u0430\u043D\u0434.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\u0427\u0442\u043E \u0432\u044B \u0445\u043E\u0442\u0438\u0442\u0435 \u0441\u043E\u0437\u0434\u0430\u0442\u044C?",
-      "input.placeholder.plan": "\u041E\u043F\u0438\u0448\u0438\u0442\u0435, \u0447\u0442\u043E \u0432\u044B \u0445\u043E\u0442\u0438\u0442\u0435 \u0441\u043F\u043B\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u0442\u044C...",
-      "input.placeholder.chat": "\u0417\u0430\u0434\u0430\u0439\u0442\u0435 \u0432\u043E\u043F\u0440\u043E\u0441 \u0438\u043B\u0438 \u043D\u0430\u0447\u043D\u0438\u0442\u0435 \u043E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0435...",
-      "input.placeholder.disabled": "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430 \u0434\u043B\u044F \u043D\u0430\u0447\u0430\u043B\u0430 \u0440\u0430\u0431\u043E\u0442\u044B...",
-      "input.placeholder.security": "\u041E\u043F\u0438\u0448\u0438\u0442\u0435, \u0447\u0442\u043E \u043D\u0443\u0436\u043D\u043E \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C, \u0438\u043B\u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 Enter \u0434\u043B\u044F \u043F\u043E\u043B\u043D\u043E\u0433\u043E \u0430\u0443\u0434\u0438\u0442\u0430...",
-      "input.mode.code": "\u041A\u043E\u0434",
-      "input.mode.plan": "\u041F\u043B\u0430\u043D",
-      "input.mode.chat": "\u0427\u0430\u0442",
-      "input.mode.security": "\u0411\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u044C",
-      "input.send": "\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C (Enter)",
-      "input.send_aria": "\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435",
-      "input.stop": "\u0421\u0442\u043E\u043F",
-      "input.stop_aria": "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C Ava",
-      "input.attach": "\u041F\u0440\u0438\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435",
-      "input.drop_image": "\u041F\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 \u0441\u044E\u0434\u0430",
-      "input.compressing": "\u0421\u0436\u0430\u0442\u0438\u0435...",
-      "input.compress_title": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u2014 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \u0434\u043B\u044F \u0441\u0436\u0430\u0442\u0438\u044F",
-      "input.compress_title_warning": "\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u0434\u043B\u044F \u0441\u0436\u0430\u0442\u0438\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0447\u0430\u0442\u043E\u0432",
-      "header.settings": "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
-      "header.new_chat": "\u041D\u043E\u0432\u044B\u0439 \u0447\u0430\u0442",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\u041F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u044B \u043D\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u044B.",
-      "model.open_settings": "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
-      "model.vision": "vision",
-      "model.vision_title": "\u042D\u0442\u0430 \u043C\u043E\u0434\u0435\u043B\u044C \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442 \u0432\u0432\u043E\u0434 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439",
-      "model.switched": "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043D\u0430 {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u0434\u0443\u043C\u0430\u0435\u0442...",
-      "thinking.1": "\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u044E \u0432\u0430\u0448 \u043A\u043E\u0434...",
-      "thinking.2": "\u0420\u0430\u0441\u0441\u043C\u0430\u0442\u0440\u0438\u0432\u0430\u044E \u043F\u043E\u0434\u0445\u043E\u0434\u044B...",
-      "thinking.3": "\u0424\u043E\u0440\u043C\u0438\u0440\u0443\u044E \u043E\u0442\u0432\u0435\u0442...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\u041E\u0431\u044A\u044F\u0441\u043D\u0438 \u044D\u0442\u0443 \u043A\u043E\u0434\u043E\u0432\u0443\u044E \u0431\u0430\u0437\u0443",
-      "suggestion.explain_prompt": "\u0414\u0430\u0439 \u043E\u0431\u0437\u043E\u0440 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B \u0438 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u0443\u0440\u044B \u044D\u0442\u043E\u0433\u043E \u043F\u0440\u043E\u0435\u043A\u0442\u0430.",
-      "suggestion.bug": "\u041D\u0430\u0439\u0434\u0438 \u0431\u0430\u0433",
-      "suggestion.bug_prompt": "\u041F\u043E\u043C\u043E\u0433\u0438 \u043D\u0430\u0439\u0442\u0438 \u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u0438\u0442\u044C \u0431\u0430\u0433\u0438 \u0432 \u0442\u0435\u043A\u0443\u0449\u0435\u043C \u0444\u0430\u0439\u043B\u0435.",
-      "suggestion.test": "\u041D\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0442\u0435\u0441\u0442\u044B",
-      "suggestion.test_prompt": "\u041D\u0430\u043F\u0438\u0448\u0438 \u043F\u043E\u043B\u043D\u044B\u0435 \u0442\u0435\u0441\u0442\u044B \u0434\u043B\u044F \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0433\u043E \u043C\u043E\u0434\u0443\u043B\u044F.",
-      "suggestion.refactor": "\u0420\u0435\u0444\u0430\u043A\u0442\u043E\u0440\u0438\u043D\u0433 \u043A\u043E\u0434\u0430",
-      "suggestion.refactor_prompt": "\u041F\u0440\u0435\u0434\u043B\u043E\u0436\u0438 \u0443\u043B\u0443\u0447\u0448\u0435\u043D\u0438\u044F \u0440\u0435\u0444\u0430\u043A\u0442\u043E\u0440\u0438\u043D\u0433\u0430 \u0434\u043B\u044F \u0442\u0435\u043A\u0443\u0449\u0435\u0433\u043E \u0444\u0430\u0439\u043B\u0430.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\u0410\u0443\u0442\u0435\u043D\u0442\u0438\u0444\u0438\u043A\u0430\u0446\u0438\u044F",
-      "error.credits": "\u041E\u043F\u043B\u0430\u0442\u0430",
-      "error.forbidden": "\u0414\u043E\u0441\u0442\u0443\u043F \u0437\u0430\u043F\u0440\u0435\u0449\u0451\u043D",
-      "error.rate_limit": "\u041B\u0438\u043C\u0438\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u043E\u0432",
-      "error.model_not_found": "\u041E\u0448\u0438\u0431\u043A\u0430 \u043C\u043E\u0434\u0435\u043B\u0438",
-      "error.bad_request": "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0437\u0430\u043F\u0440\u043E\u0441",
-      "error.server_error": "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0430",
-      "error.timeout": "\u0422\u0430\u0439\u043C-\u0430\u0443\u0442",
-      "error.stream_stall": "\u041F\u043E\u0442\u043E\u043A \u0437\u0430\u0432\u0438\u0441",
-      "error.network": "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0435\u0442\u0438",
-      "error.setup": "\u0422\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430",
-      "error.busy": "\u0417\u0430\u043D\u044F\u0442",
-      "error.iterations_exceeded": "\u041B\u0438\u043C\u0438\u0442 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439",
-      "error.context_truncated": "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D",
-      "error.provider_error": "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430",
-      "error.unknown": "\u041E\u0448\u0438\u0431\u043A\u0430",
-      "error.continue": "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0437\u0430\u043F\u0440\u043E\u0441 \u043A {provider}. \u0424\u043E\u0440\u043C\u0430\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043D\u0435\u0441\u043E\u0432\u043C\u0435\u0441\u0442\u0438\u043C \u0441 \u044D\u0442\u043E\u0439 \u043C\u043E\u0434\u0435\u043B\u044C\u044E.",
-      "error.msg.auth": "\u041D\u0435\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 API key \u0434\u043B\u044F {provider}. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043B\u044E\u0447 \u0432 ~/.ava/config.json",
-      "error.msg.credits": "\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u0441\u0440\u0435\u0434\u0441\u0442\u0432 \u0434\u043B\u044F {provider}. \u041F\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0431\u0430\u043B\u0430\u043D\u0441 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430.",
-      "error.msg.forbidden": "\u0414\u043E\u0441\u0442\u0443\u043F \u0437\u0430\u043F\u0440\u0435\u0449\u0451\u043D {provider}. \u0412\u043E\u0437\u043C\u043E\u0436\u043D\u043E, \u0443 \u0432\u0430\u0448\u0435\u0433\u043E API key \u043D\u0435\u0442 \u043D\u0443\u0436\u043D\u044B\u0445 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0439.",
-      "error.msg.model_not_found": "\u041C\u043E\u0434\u0435\u043B\u044C \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430 \u043D\u0430 {provider}. \u0418\u0434\u0435\u043D\u0442\u0438\u0444\u0438\u043A\u0430\u0442\u043E\u0440 \u043C\u043E\u0434\u0435\u043B\u0438 \u043C\u043E\u0433 \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C\u0441\u044F \u2014 \u0432\u044B\u043F\u043E\u043B\u043D\u0438\u0442\u0435 /model \u0434\u043B\u044F \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u0435\u0439.",
-      "error.msg.rate_limit": "\u041F\u0440\u0435\u0432\u044B\u0448\u0435\u043D \u043B\u0438\u043C\u0438\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u043E\u0432 {provider}. \u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u043D\u043E\u0433\u043E \u0437\u0430\u043F\u0440\u043E\u0441\u043E\u0432 \u2014 \u043F\u043E\u0434\u043E\u0436\u0434\u0438\u0442\u0435 \u043D\u0435\u043C\u043D\u043E\u0433\u043E \u0438 \u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0441\u043D\u043E\u0432\u0430.",
-      "error.msg.server_error": "{provider} \u0438\u0441\u043F\u044B\u0442\u044B\u0432\u0430\u0435\u0442 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B ({code}). \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0441\u043D\u043E\u0432\u0430 \u0447\u0435\u0440\u0435\u0437 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u043C\u0438\u043D\u0443\u0442.",
-      "error.msg.empty_response": "\u041C\u043E\u0434\u0435\u043B\u044C \u0432\u0435\u0440\u043D\u0443\u043B\u0430 \u043F\u0443\u0441\u0442\u043E\u0439 \u043E\u0442\u0432\u0435\u0442. \u042D\u0442\u043E \u043C\u043E\u0436\u0435\u0442 \u043F\u0440\u043E\u0438\u0437\u043E\u0439\u0442\u0438 \u043F\u0440\u0438 \u043F\u0435\u0440\u0435\u0433\u0440\u0443\u0437\u043A\u0435 API \u0438\u043B\u0438 \u0444\u0438\u043B\u044C\u0442\u0440\u0430\u0446\u0438\u0438 \u0437\u0430\u043F\u0440\u043E\u0441\u0430. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0441\u043D\u043E\u0432\u0430.",
-      "error.msg.iteration_limit": "Ava \u0434\u043E\u0441\u0442\u0438\u0433\u043B\u0430 \u043B\u0438\u043C\u0438\u0442\u0430 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u0438 \u0432 {limit} \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439. \u041E\u0431\u044B\u0447\u043D\u043E \u044D\u0442\u043E \u0437\u043D\u0430\u0447\u0438\u0442, \u0447\u0442\u043E \u0437\u0430\u0434\u0430\u0447\u0430 \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u0430\u044F \u0438\u043B\u0438 \u043C\u043E\u0434\u0435\u043B\u044C \u0437\u0430\u0446\u0438\u043A\u043B\u0438\u043B\u0430\u0441\u044C.",
-      "error.msg.iteration_warning": "[\u0412\u041D\u0418\u041C\u0410\u041D\u0418\u0415] \u041E\u0441\u0442\u0430\u043B\u043E\u0441\u044C {remaining} \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439 \u0434\u043E \u043B\u0438\u043C\u0438\u0442\u0430 \u0446\u0438\u043A\u043B\u0430. \u0417\u0430\u0432\u0435\u0440\u0448\u0430\u0439\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0443\u044E \u0437\u0430\u0434\u0430\u0447\u0443 \u2014 \u043E\u043F\u0438\u0448\u0438\u0442\u0435, \u0447\u0442\u043E \u0441\u0434\u0435\u043B\u0430\u043D\u043E \u0438 \u0447\u0442\u043E \u043E\u0441\u0442\u0430\u043B\u043E\u0441\u044C. \u041D\u0435 \u043D\u0430\u0447\u0438\u043D\u0430\u0439\u0442\u0435 \u043D\u043E\u0432\u0443\u044E \u043C\u043D\u043E\u0433\u043E\u0448\u0430\u0433\u043E\u0432\u0443\u044E \u0440\u0430\u0431\u043E\u0442\u0443.",
-      "error.msg.image_stripped": "[\u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 \u0431\u044B\u043B\u043E \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E, \u043D\u043E \u044D\u0442\u0430 \u043C\u043E\u0434\u0435\u043B\u044C \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442 vision]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C",
-      "tool.always_allow": "\u0412\u0441\u0435\u0433\u0434\u0430 \u0440\u0430\u0437\u0440\u0435\u0448\u0430\u0442\u044C",
-      "tool.allow_all": "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C \u0432\u0441\u0435",
-      "tool.deny": "\u0417\u0430\u043F\u0440\u0435\u0442\u0438\u0442\u044C",
-      "tool.allow_prompt": "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C {tool}?",
-      "tool.arguments": "\u0410\u0440\u0433\u0443\u043C\u0435\u043D\u0442\u044B",
-      "tool.output": "\u0412\u044B\u0432\u043E\u0434",
-      "tool.error": "\u041E\u0448\u0438\u0431\u043A\u0430",
-      "tool.truncated": "... (\u043E\u0431\u0440\u0435\u0437\u0430\u043D\u043E)",
-      "tool.read": "\u0427\u0442\u0435\u043D\u0438\u0435 {file}",
-      "tool.write": "\u0417\u0430\u043F\u0438\u0441\u044C {file}",
-      "tool.edit": "\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 {file}",
-      "tool.find_files": "\u041F\u043E\u0438\u0441\u043A \u0444\u0430\u0439\u043B\u043E\u0432: {pattern}",
-      "tool.search": "\u041F\u043E\u0438\u0441\u043A: {pattern}",
-      "tool.run": "\u0417\u0430\u043F\u0443\u0441\u043A: {command}",
-      "tool.list_dir": "\u0421\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 {path}",
-      "tool.web_search": "\u041F\u043E\u0438\u0441\u043A: {query}",
-      "tool.ask_user": "\u0412\u043E\u043F\u0440\u043E\u0441 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0447\u0430\u0442\u043E\u0432",
-      "history.new_chat": "+ \u041D\u043E\u0432\u044B\u0439 \u0447\u0430\u0442",
-      "history.close": "\u0417\u0430\u043A\u0440\u044B\u0442\u044C",
-      "history.search": "\u041F\u043E\u0438\u0441\u043A \u043F\u043E \u0447\u0430\u0442\u0430\u043C...",
-      "history.empty": "\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0447\u0430\u0442\u043E\u0432 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442.",
-      "history.no_match": "\u0421\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0439 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E.",
-      "history.delete_confirm": "\u0423\u0434\u0430\u043B\u0438\u0442\u044C?",
-      "history.rename_hint": "\u0414\u0432\u043E\u0439\u043D\u043E\u0439 \u043A\u043B\u0438\u043A \u0434\u043B\u044F \u043F\u0435\u0440\u0435\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u044F",
-      "history.pin": "\u0417\u0430\u043A\u0440\u0435\u043F\u0438\u0442\u044C",
-      "history.unpin": "\u041E\u0442\u043A\u0440\u0435\u043F\u0438\u0442\u044C",
-      "history.export_md": "\u042D\u043A\u0441\u043F\u043E\u0440\u0442 \u0432 Markdown",
-      "history.pinned": "\u0417\u0430\u043A\u0440\u0435\u043F\u043B\u0451\u043D\u043D\u044B\u0435",
-      "history.just_now": "\u0442\u043E\u043B\u044C\u043A\u043E \u0447\u0442\u043E",
-      "history.minutes_ago": "{n} \u043C\u0438\u043D. \u043D\u0430\u0437\u0430\u0434",
-      "history.hours_ago": "{n} \u0447. \u043D\u0430\u0437\u0430\u0434",
-      "history.days_ago": "{n} \u0434\u043D. \u043D\u0430\u0437\u0430\u0434",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\u0412\u043E\u043F\u0440\u043E\u0441",
-      "ask.fallback": "\u0423 Ava \u0435\u0441\u0442\u044C \u0432\u043E\u043F\u0440\u043E\u0441",
-      "ask.placeholder": "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0432\u0430\u0448 \u043E\u0442\u0432\u0435\u0442...",
-      "ask.submit": "\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C",
-      "ask.skip": "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C",
-      "ask.skipped": "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043E",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\u0414\u0430\u043D\u043D\u044B\u0435 \u043F\u043B\u0430\u043D\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B",
-      "plan.prefix": "\u041F\u043B\u0430\u043D: {title}",
-      "plan.approved": "\u041E\u0434\u043E\u0431\u0440\u0435\u043D\u043E",
-      "plan.rejected": "\u041E\u0442\u043A\u043B\u043E\u043D\u0435\u043D\u043E",
-      "plan.goal": "\u0426\u0435\u043B\u044C",
-      "plan.steps": "\u0428\u0430\u0433\u0438",
-      "plan.verification": "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430",
-      "plan.approaches": "\u041F\u043E\u0434\u0445\u043E\u0434\u044B",
-      "plan.approve": "\u041E\u0434\u043E\u0431\u0440\u0438\u0442\u044C",
-      "plan.reject": "\u041E\u0442\u043A\u043B\u043E\u043D\u0438\u0442\u044C",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\u0421\u043F\u0438\u0441\u043E\u043A \u0437\u0430\u0434\u0430\u0447 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D",
-      "todo.tasks": "\u0417\u0430\u0434\u0430\u0447\u0438",
-      "todo.done": "{done}/{total} \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u043E",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\u0432\u0445\u043E\u0434",
-      "status.out": "\u0432\u044B\u0445\u043E\u0434",
-      "status.total": "\u0432\u0441\u0435\u0433\u043E",
-      "status.tokens": "\u0442\u043E\u043A\u0435\u043D\u044B",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u0421\u0436\u0430\u0442\u0438\u0435 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430...",
-      "compression.result": "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0441\u0436\u0430\u0442: ~{original} \u2192 ~{compressed} \u0442\u043E\u043A\u0435\u043D\u043E\u0432",
-      "compression.nothing": "\u041D\u0435\u0447\u0435\u0433\u043E \u0441\u0436\u0438\u043C\u0430\u0442\u044C.",
-      "compression.failed": "\u0421\u0436\u0430\u0442\u0438\u0435 \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C.",
-      "compression.busy": "\u041D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E \u0441\u0436\u0430\u0442\u044C, \u043F\u043E\u043A\u0430 Ava \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442.",
-      "compression.context_truncated": "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D: {count} \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u0443\u0434\u0430\u043B\u0435\u043D\u043E.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0441 \u0442\u043E\u0433\u043E \u043C\u0435\u0441\u0442\u0430, \u0433\u0434\u0435 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u043B\u0438\u0441\u044C.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0435 \u043A\u043E\u043C\u0430\u043D\u0434\u044B",
-      "cmd.model.desc": "\u0421\u043F\u0438\u0441\u043E\u043A \u0438\u043B\u0438 \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043C\u043E\u0434\u0435\u043B\u0435\u0439 (/model <provider:model-id>)",
-      "cmd.clear.desc": "\u041E\u0447\u0438\u0441\u0442\u0438\u0442\u044C \u0438\u0441\u0442\u043E\u0440\u0438\u044E \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u0430",
-      "cmd.provider.desc": "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0438\u043B\u0438 \u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u043E\u0432 (/provider add <name>)",
-      "cmd.history.desc": "\u0421\u043F\u0438\u0441\u043E\u043A \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u043E\u0432",
-      "cmd.resume.desc": "\u0412\u043E\u0437\u043E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440 (/resume <id-prefix>)",
-      "cmd.search.desc": "\u041F\u043E\u0438\u0441\u043A \u043F\u043E \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u0430\u043C (/search <query>)",
-      "cmd.delete.desc": "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440 (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u041F\u0435\u0440\u0435\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440 (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\u0417\u0430\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\u041E\u0442\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440 (/unpin <id-prefix>)",
-      "cmd.export.desc": "\u042D\u043A\u0441\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435",
-      "cmd.compact.desc": "\u0421\u0436\u0430\u0442\u044C \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u0430 \u0434\u043B\u044F \u043E\u0441\u0432\u043E\u0431\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u043C\u0435\u0441\u0442\u0430",
-      "cmd.permission.desc": "\u041F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0438\u043B\u0438 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u0440\u0435\u0436\u0438\u043C\u0430 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0439 (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\u0421\u043F\u0438\u0441\u043E\u043A \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u0438\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u043E\u0432",
-      "cmd.init.desc": "\u0421\u043E\u0437\u0434\u0430\u0442\u044C .ava/instructions.md \u0434\u043B\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043F\u0440\u043E\u0435\u043A\u0442\u0430",
-      "cmd.exit.desc": "\u0412\u044B\u0439\u0442\u0438 \u0438\u0437 Ava",
-      "cmd.security.desc": "\u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u0430\u0443\u0434\u0438\u0442 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u0438 (/security [\u043E\u0431\u043B\u0430\u0441\u0442\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043C\u043E\u0434\u0435\u043B\u044C: {model}",
-      "cmd.model.switched": "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043D\u0430 {name} ({provider})",
-      "cmd.model.active": "(\u0430\u043A\u0442\u0438\u0432\u043D\u0430)",
-      "cmd.clear.done": "\u0420\u0430\u0437\u0433\u043E\u0432\u043E\u0440 \u043E\u0447\u0438\u0449\u0435\u043D.",
-      "cmd.provider.usage": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435: /provider add <{providers}>",
-      "cmd.provider.enter_key": "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 API key \u0434\u043B\u044F {provider}: ",
-      "cmd.provider.cancelled": "\u041E\u0442\u043C\u0435\u043D\u0435\u043D\u043E.",
-      "cmd.provider.added": "\u041F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440 {provider} \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D.",
-      "cmd.provider.failed": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043E\u0432\u0430\u0442\u044C {provider}: {error}",
-      "cmd.provider.title": "\u041D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u044B:",
-      "cmd.provider.configured": "\u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D",
-      "cmd.provider.not_configured": "\u043D\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D",
-      "cmd.provider.hint": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 /provider add <name> \u0434\u043B\u044F \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430.",
-      "cmd.history.empty": "\u041D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u043E\u0432.",
-      "cmd.history.title": "\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u044B:",
-      "cmd.history.more": "... \u0438 \u0435\u0449\u0451 {count}",
-      "cmd.history.hint": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 /resume <id-prefix> \u0434\u043B\u044F \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u0430.",
-      "cmd.resume.usage": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435: /resume <id-prefix>",
-      "cmd.resume.hint": "\u0412\u044B\u043F\u043E\u043B\u043D\u0438\u0442\u0435 /history \u0434\u043B\u044F \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u043E\u0432.",
-      "cmd.resume.not_found": '\u0420\u0430\u0437\u0433\u043E\u0432\u043E\u0440 \u043F\u043E \u0437\u0430\u043F\u0440\u043E\u0441\u0443 "{prefix}" \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D.',
-      "cmd.resume.failed": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440.",
-      "cmd.resume.done": "\u0412\u043E\u0437\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E: {title}",
-      "cmd.resume.count": "{count} \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E.",
-      "cmd.search.usage": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435: /search <query>",
-      "cmd.search.empty": '\u0420\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u043E\u0432 \u043F\u043E \u0437\u0430\u043F\u0440\u043E\u0441\u0443 "{query}" \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E.',
-      "cmd.search.title": '\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u044B \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E "{query}":',
-      "cmd.delete.usage": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435: /delete <id-prefix>",
-      "cmd.delete.confirm": '\u0423\u0434\u0430\u043B\u0438\u0442\u044C "{title}" ({id})? (y/n) ',
-      "cmd.delete.done": "\u0420\u0430\u0437\u0433\u043E\u0432\u043E\u0440 \u0443\u0434\u0430\u043B\u0451\u043D.",
-      "cmd.delete.failed": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440.",
-      "cmd.rename.usage": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u041F\u0435\u0440\u0435\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u043E \u0432: {title}",
-      "cmd.rename.failed": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0435\u0440\u0435\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440.",
-      "cmd.pin.usage": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435: /pin <id-prefix>",
-      "cmd.pin.done": "\u0417\u0430\u043A\u0440\u0435\u043F\u043B\u0435\u043D\u043E: {title}",
-      "cmd.pin.failed": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440.",
-      "cmd.unpin.usage": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435: /unpin <id-prefix>",
-      "cmd.unpin.done": "\u041E\u0442\u043A\u0440\u0435\u043F\u043B\u0435\u043D\u043E: {title}",
-      "cmd.unpin.failed": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440.",
-      "cmd.export.usage": "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0435: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u044D\u043A\u0441\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440.",
-      "cmd.export.done": "\u042D\u043A\u0441\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043E \u0432 {filename}",
-      "cmd.retry.unavailable": "\u041F\u043E\u0432\u0442\u043E\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D.",
-      "cmd.compact.unavailable": "\u0421\u0436\u0430\u0442\u0438\u0435 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.",
-      "cmd.permission.title": "\u0420\u0435\u0436\u0438\u043C \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0439:",
-      "cmd.permission.strict": "\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u0442\u044C \u0437\u0430\u043F\u0438\u0441\u044C \u0438 \u043A\u043E\u043C\u0430\u043D\u0434\u044B \u043E\u0431\u043E\u043B\u043E\u0447\u043A\u0438",
-      "cmd.permission.balanced": "\u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043E\u0434\u043E\u0431\u0440\u044F\u0442\u044C \u0437\u0430\u043F\u0438\u0441\u044C, \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u0442\u044C \u043A\u043E\u043C\u0430\u043D\u0434\u044B \u043E\u0431\u043E\u043B\u043E\u0447\u043A\u0438",
-      "cmd.permission.autonomous": "\u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043E\u0434\u043E\u0431\u0440\u044F\u0442\u044C \u0432\u0441\u0451",
-      "cmd.permission.unknown": "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u0440\u0435\u0436\u0438\u043C. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435: {modes}",
-      "cmd.permission.set": "\u0420\u0435\u0436\u0438\u043C \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0439 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D \u043D\u0430 {mode}.",
-      "cmd.tools.title": "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0435 \u0438\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u044B:",
-      "cmd.init.created": "\u0421\u043E\u0437\u0434\u0430\u043D\u043E {path}",
-      "cmd.init.hint": "\u041E\u0442\u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u044D\u0442\u043E\u0442 \u0444\u0430\u0439\u043B, \u0447\u0442\u043E\u0431\u044B \u0434\u0430\u0442\u044C Ava \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043F\u0440\u043E\u0435\u043A\u0442\u0430.",
-      "cmd.init.restart": "\u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 Ava \u0434\u043B\u044F \u043F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439.",
-      "cmd.init.exists": "{path} \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442.",
-      "cmd.unknown": "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043A\u043E\u043C\u0430\u043D\u0434\u0430: {input}. \u0412\u0432\u0435\u0434\u0438\u0442\u0435 /help \u0434\u043B\u044F \u0441\u043F\u0438\u0441\u043A\u0430 \u043A\u043E\u043C\u0430\u043D\u0434.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u0414\u0443\u043C\u0430\u044E...",
-      "cli.thinking_label": "[\u0434\u0443\u043C\u0430\u044E] ",
-      "cli.thinking_words": "{count} \u0441\u043B\u043E\u0432",
-      "cli.tool_label": "[\u0438\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442] ",
-      "cli.tasks_label": "[\u0437\u0430\u0434\u0430\u0447\u0438] ",
-      "cli.tokens_label": "[\u0442\u043E\u043A\u0435\u043D\u044B] ",
-      "cli.running": "\u0417\u0430\u043F\u0443\u0441\u043A {tool}...",
-      "cli.confirm_label": "[\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435] ",
-      "cli.allow_prompt": "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C? ",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\u041E\u0442\u043A\u043B\u043E\u043D\u0435\u043D\u043E.",
-      "cli.question_label": "[\u0432\u043E\u043F\u0440\u043E\u0441] ",
-      "cli.question_fallback": "\u0423 Ava \u0435\u0441\u0442\u044C \u0432\u043E\u043F\u0440\u043E\u0441 \u0434\u043B\u044F \u0432\u0430\u0441",
-      "cli.your_response": "\u0412\u0430\u0448 \u043E\u0442\u0432\u0435\u0442: ",
-      "cli.skipped": "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043E.",
-      "cli.user_response": "\u041E\u0442\u0432\u0435\u0442 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F: {response}",
-      "cli.write_to": "\u0437\u0430\u043F\u0438\u0441\u044C \u0432 {path}",
-      "cli.edit_file": "\u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 {path}",
-      "cli.list_path": "\u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 {path}",
-      "cli.search_query": '\u043F\u043E\u0438\u0441\u043A "{query}"',
-      "cli.ok": "\u041E\u041A",
-      "cli.fail": "\u041E\u0428\u0418\u0411\u041A\u0410",
-      "cli.more_lines": "... (\u0435\u0449\u0451 {count} \u0441\u0442\u0440\u043E\u043A)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "\u0414\u043E\u0431\u0440\u043E \u043F\u043E\u0436\u0430\u043B\u043E\u0432\u0430\u0442\u044C \u0432 Ava | Supernova",
-      "setup.intro": "\u0414\u0430\u0432\u0430\u0439\u0442\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0438\u043C \u0432\u0430\u0448\u0435\u0433\u043E LLM-\u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430.",
-      "setup.choose": "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430 (\u043D\u043E\u043C\u0435\u0440): ",
-      "setup.invalid_choice": "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0432\u044B\u0431\u043E\u0440. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u0438 \u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0441\u043D\u043E\u0432\u0430.",
-      "setup.key_url": "\u041F\u043E\u043B\u0443\u0447\u0438\u0442\u0435 API key \u0437\u0434\u0435\u0441\u044C: {url}",
-      "setup.enter_key": "API Key \u0434\u043B\u044F {provider}: ",
-      "setup.no_key": "API key \u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u0438 \u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0441\u043D\u043E\u0432\u0430.",
-      "setup.complete": "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430! \u0410\u043A\u0442\u0438\u0432\u043D\u0430\u044F \u043C\u043E\u0434\u0435\u043B\u044C: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/th.js
-var th_exports = {};
-__export(th_exports, {
-  thStrings: () => thStrings
-});
-var thStrings;
-var init_th = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/th.js"() {
-    thStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\u0E16\u0E32\u0E21\u0E2D\u0E30\u0E44\u0E23\u0E01\u0E47\u0E44\u0E14\u0E49\u0E40\u0E01\u0E35\u0E48\u0E22\u0E27\u0E01\u0E31\u0E1A\u0E42\u0E04\u0E49\u0E14\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13",
-      "welcome.cli_hint": "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21 \u0E2B\u0E23\u0E37\u0E2D /help \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E14\u0E39\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\u0E04\u0E38\u0E13\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E2D\u0E30\u0E44\u0E23?",
-      "input.placeholder.plan": "\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E04\u0E38\u0E13\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E27\u0E32\u0E07\u0E41\u0E1C\u0E19...",
-      "input.placeholder.chat": "\u0E16\u0E32\u0E21\u0E04\u0E33\u0E16\u0E32\u0E21\u0E2B\u0E23\u0E37\u0E2D\u0E40\u0E23\u0E34\u0E48\u0E21\u0E1E\u0E39\u0E14\u0E04\u0E38\u0E22...",
-      "input.placeholder.disabled": "\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E40\u0E23\u0E34\u0E48\u0E21\u0E15\u0E49\u0E19...",
-      "input.placeholder.security": "\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E2A\u0E41\u0E01\u0E19 \u0E2B\u0E23\u0E37\u0E2D\u0E01\u0E14 Enter \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14...",
-      "input.mode.code": "\u0E42\u0E04\u0E49\u0E14",
-      "input.mode.plan": "\u0E41\u0E1C\u0E19",
-      "input.mode.chat": "\u0E41\u0E0A\u0E17",
-      "input.mode.security": "\u0E04\u0E27\u0E32\u0E21\u0E1B\u0E25\u0E2D\u0E14\u0E20\u0E31\u0E22",
-      "input.send": "\u0E2A\u0E48\u0E07 (Enter)",
-      "input.send_aria": "\u0E2A\u0E48\u0E07\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21",
-      "input.stop": "\u0E2B\u0E22\u0E38\u0E14",
-      "input.stop_aria": "\u0E2B\u0E22\u0E38\u0E14 Ava",
-      "input.attach": "\u0E41\u0E19\u0E1A\u0E23\u0E39\u0E1B\u0E20\u0E32\u0E1E",
-      "input.drop_image": "\u0E27\u0E32\u0E07\u0E23\u0E39\u0E1B\u0E20\u0E32\u0E1E\u0E17\u0E35\u0E48\u0E19\u0E35\u0E48",
-      "input.compressing": "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14...",
-      "input.compress_title": "\u0E01\u0E32\u0E23\u0E43\u0E0A\u0E49\u0E1A\u0E23\u0E34\u0E1A\u0E17 \u2014 \u0E04\u0E25\u0E34\u0E01\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14",
-      "input.compress_title_warning": "\u0E04\u0E25\u0E34\u0E01\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14\u0E1A\u0E23\u0E34\u0E1A\u0E17",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\u0E1B\u0E23\u0E30\u0E27\u0E31\u0E15\u0E34\u0E41\u0E0A\u0E17",
-      "header.settings": "\u0E01\u0E32\u0E23\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32",
-      "header.new_chat": "\u0E41\u0E0A\u0E17\u0E43\u0E2B\u0E21\u0E48",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23\u0E17\u0E35\u0E48\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E44\u0E27\u0E49",
-      "model.open_settings": "\u0E40\u0E1B\u0E34\u0E14\u0E01\u0E32\u0E23\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32",
-      "model.vision": "vision",
-      "model.vision_title": "\u0E42\u0E21\u0E40\u0E14\u0E25\u0E19\u0E35\u0E49\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E01\u0E32\u0E23\u0E1B\u0E49\u0E2D\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E23\u0E39\u0E1B\u0E20\u0E32\u0E1E",
-      "model.switched": "\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E40\u0E1B\u0E47\u0E19 {model} \u0E41\u0E25\u0E49\u0E27",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u0E01\u0E33\u0E25\u0E31\u0E07\u0E04\u0E34\u0E14...",
-      "thinking.1": "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E27\u0E34\u0E40\u0E04\u0E23\u0E32\u0E30\u0E2B\u0E4C\u0E42\u0E04\u0E49\u0E14\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13...",
-      "thinking.2": "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E1E\u0E34\u0E08\u0E32\u0E23\u0E13\u0E32\u0E41\u0E19\u0E27\u0E17\u0E32\u0E07...",
-      "thinking.3": "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E40\u0E23\u0E35\u0E22\u0E1A\u0E40\u0E23\u0E35\u0E22\u0E07\u0E04\u0E33\u0E15\u0E2D\u0E1A...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22\u0E42\u0E04\u0E49\u0E14\u0E40\u0E1A\u0E2A\u0E19\u0E35\u0E49",
-      "suggestion.explain_prompt": "\u0E43\u0E2B\u0E49\u0E20\u0E32\u0E1E\u0E23\u0E27\u0E21\u0E23\u0E30\u0E14\u0E31\u0E1A\u0E2A\u0E39\u0E07\u0E02\u0E2D\u0E07\u0E42\u0E04\u0E23\u0E07\u0E2A\u0E23\u0E49\u0E32\u0E07\u0E41\u0E25\u0E30\u0E2A\u0E16\u0E32\u0E1B\u0E31\u0E15\u0E22\u0E01\u0E23\u0E23\u0E21\u0E02\u0E2D\u0E07\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E19\u0E35\u0E49",
-      "suggestion.bug": "\u0E2B\u0E32\u0E1A\u0E31\u0E4A\u0E01",
-      "suggestion.bug_prompt": "\u0E0A\u0E48\u0E27\u0E22\u0E2B\u0E32\u0E41\u0E25\u0E30\u0E41\u0E01\u0E49\u0E44\u0E02\u0E1A\u0E31\u0E4A\u0E01\u0E43\u0E19\u0E44\u0E1F\u0E25\u0E4C\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19",
-      "suggestion.test": "\u0E40\u0E02\u0E35\u0E22\u0E19\u0E40\u0E17\u0E2A\u0E15\u0E4C",
-      "suggestion.test_prompt": "\u0E40\u0E02\u0E35\u0E22\u0E19\u0E40\u0E17\u0E2A\u0E15\u0E4C\u0E17\u0E35\u0E48\u0E04\u0E23\u0E2D\u0E1A\u0E04\u0E25\u0E38\u0E21\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E42\u0E21\u0E14\u0E39\u0E25\u0E2B\u0E25\u0E31\u0E01",
-      "suggestion.refactor": "\u0E23\u0E35\u0E41\u0E1F\u0E01\u0E40\u0E15\u0E2D\u0E23\u0E4C\u0E42\u0E04\u0E49\u0E14",
-      "suggestion.refactor_prompt": "\u0E41\u0E19\u0E30\u0E19\u0E33\u0E01\u0E32\u0E23\u0E1B\u0E23\u0E31\u0E1A\u0E1B\u0E23\u0E38\u0E07\u0E23\u0E35\u0E41\u0E1F\u0E01\u0E40\u0E15\u0E2D\u0E23\u0E4C\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E44\u0E1F\u0E25\u0E4C\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\u0E01\u0E32\u0E23\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E15\u0E31\u0E27\u0E15\u0E19",
-      "error.credits": "\u0E01\u0E32\u0E23\u0E40\u0E23\u0E35\u0E22\u0E01\u0E40\u0E01\u0E47\u0E1A\u0E40\u0E07\u0E34\u0E19",
-      "error.forbidden": "\u0E01\u0E32\u0E23\u0E40\u0E02\u0E49\u0E32\u0E16\u0E36\u0E07\u0E16\u0E39\u0E01\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18",
-      "error.rate_limit": "\u0E08\u0E33\u0E01\u0E31\u0E14\u0E2D\u0E31\u0E15\u0E23\u0E32",
-      "error.model_not_found": "\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14\u0E42\u0E21\u0E40\u0E14\u0E25",
-      "error.bad_request": "\u0E04\u0E33\u0E02\u0E2D\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07",
-      "error.server_error": "\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14\u0E40\u0E0B\u0E34\u0E23\u0E4C\u0E1F\u0E40\u0E27\u0E2D\u0E23\u0E4C",
-      "error.timeout": "\u0E2B\u0E21\u0E14\u0E40\u0E27\u0E25\u0E32",
-      "error.stream_stall": "\u0E2A\u0E15\u0E23\u0E35\u0E21\u0E2B\u0E22\u0E38\u0E14",
-      "error.network": "\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14\u0E40\u0E04\u0E23\u0E37\u0E2D\u0E02\u0E48\u0E32\u0E22",
-      "error.setup": "\u0E15\u0E49\u0E2D\u0E07\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E01\u0E48\u0E2D\u0E19",
-      "error.busy": "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E17\u0E33\u0E07\u0E32\u0E19",
-      "error.iterations_exceeded": "\u0E16\u0E36\u0E07\u0E02\u0E35\u0E14\u0E08\u0E33\u0E01\u0E31\u0E14\u0E23\u0E2D\u0E1A",
-      "error.context_truncated": "\u0E1A\u0E23\u0E34\u0E1A\u0E17\u0E16\u0E39\u0E01\u0E15\u0E31\u0E14",
-      "error.provider_error": "\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23",
-      "error.unknown": "\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14",
-      "error.continue": "\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23\u0E15\u0E48\u0E2D",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "\u0E04\u0E33\u0E02\u0E2D\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E44\u0E1B\u0E22\u0E31\u0E07 {provider} \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E04\u0E33\u0E02\u0E2D\u0E2D\u0E32\u0E08\u0E44\u0E21\u0E48\u0E40\u0E02\u0E49\u0E32\u0E01\u0E31\u0E19\u0E01\u0E31\u0E1A\u0E42\u0E21\u0E40\u0E14\u0E25\u0E19\u0E35\u0E49",
-      "error.msg.auth": "API key \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A {provider} \u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E04\u0E35\u0E22\u0E4C\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13\u0E43\u0E19 ~/.ava/config.json",
-      "error.msg.credits": "\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15\u0E44\u0E21\u0E48\u0E40\u0E1E\u0E35\u0E22\u0E07\u0E1E\u0E2D\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A {provider} \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E15\u0E34\u0E21\u0E22\u0E2D\u0E14\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E1A\u0E31\u0E0D\u0E0A\u0E35",
-      "error.msg.forbidden": "\u0E01\u0E32\u0E23\u0E40\u0E02\u0E49\u0E32\u0E16\u0E36\u0E07\u0E16\u0E39\u0E01\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E42\u0E14\u0E22 {provider} API key \u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13\u0E2D\u0E32\u0E08\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E17\u0E35\u0E48\u0E08\u0E33\u0E40\u0E1B\u0E47\u0E19",
-      "error.msg.model_not_found": "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E42\u0E21\u0E40\u0E14\u0E25\u0E1A\u0E19 {provider} ID \u0E02\u0E2D\u0E07\u0E42\u0E21\u0E40\u0E14\u0E25\u0E2D\u0E32\u0E08\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E41\u0E1B\u0E25\u0E07\u0E44\u0E1B\u0E41\u0E25\u0E49\u0E27 \u2014 \u0E43\u0E0A\u0E49 /model \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E14\u0E39\u0E42\u0E21\u0E40\u0E14\u0E25\u0E17\u0E35\u0E48\u0E21\u0E35",
-      "error.msg.rate_limit": "\u0E16\u0E39\u0E01\u0E08\u0E33\u0E01\u0E31\u0E14\u0E2D\u0E31\u0E15\u0E23\u0E32\u0E42\u0E14\u0E22 {provider} \u0E04\u0E33\u0E02\u0E2D\u0E21\u0E32\u0E01\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u2014 \u0E23\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48",
-      "error.msg.server_error": "{provider} \u0E01\u0E33\u0E25\u0E31\u0E07\u0E1B\u0E23\u0E30\u0E2A\u0E1A\u0E1B\u0E31\u0E0D\u0E2B\u0E32 ({code}) \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E43\u0E19\u0E2D\u0E35\u0E01\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48",
-      "error.msg.empty_response": "\u0E42\u0E21\u0E40\u0E14\u0E25\u0E2A\u0E48\u0E07\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E27\u0E48\u0E32\u0E07\u0E01\u0E25\u0E31\u0E1A\u0E21\u0E32 \u0E2D\u0E32\u0E08\u0E40\u0E01\u0E34\u0E14\u0E02\u0E36\u0E49\u0E19\u0E40\u0E21\u0E37\u0E48\u0E2D API \u0E42\u0E2D\u0E40\u0E27\u0E2D\u0E23\u0E4C\u0E42\u0E2B\u0E25\u0E14\u0E2B\u0E23\u0E37\u0E2D\u0E04\u0E33\u0E02\u0E2D\u0E16\u0E39\u0E01\u0E01\u0E23\u0E2D\u0E07 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48",
-      "error.msg.iteration_limit": "Ava \u0E16\u0E36\u0E07\u0E02\u0E35\u0E14\u0E08\u0E33\u0E01\u0E31\u0E14\u0E04\u0E27\u0E32\u0E21\u0E1B\u0E25\u0E2D\u0E14\u0E20\u0E31\u0E22 {limit} \u0E23\u0E2D\u0E1A \u0E1B\u0E01\u0E15\u0E34\u0E2B\u0E21\u0E32\u0E22\u0E04\u0E27\u0E32\u0E21\u0E27\u0E48\u0E32\u0E07\u0E32\u0E19\u0E43\u0E2B\u0E0D\u0E48\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B\u0E2B\u0E23\u0E37\u0E2D\u0E42\u0E21\u0E40\u0E14\u0E25\u0E15\u0E34\u0E14\u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E25\u0E39\u0E1B",
-      "error.msg.iteration_warning": "[\u0E04\u0E33\u0E40\u0E15\u0E37\u0E2D\u0E19] \u0E04\u0E38\u0E13\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E2D\u0E35\u0E01 {remaining} \u0E23\u0E2D\u0E1A\u0E01\u0E48\u0E2D\u0E19\u0E16\u0E36\u0E07\u0E02\u0E35\u0E14\u0E08\u0E33\u0E01\u0E31\u0E14\u0E25\u0E39\u0E1B \u0E2A\u0E23\u0E38\u0E1B\u0E07\u0E32\u0E19\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19 \u2014 \u0E1A\u0E2D\u0E01\u0E27\u0E48\u0E32\u0E17\u0E33\u0E2D\u0E30\u0E44\u0E23\u0E44\u0E1B\u0E41\u0E25\u0E49\u0E27\u0E41\u0E25\u0E30\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E2D\u0E30\u0E44\u0E23 \u0E2D\u0E22\u0E48\u0E32\u0E40\u0E23\u0E34\u0E48\u0E21\u0E07\u0E32\u0E19\u0E2B\u0E25\u0E32\u0E22\u0E02\u0E31\u0E49\u0E19\u0E15\u0E2D\u0E19\u0E43\u0E2B\u0E21\u0E48",
-      "error.msg.image_stripped": "[\u0E21\u0E35\u0E01\u0E32\u0E23\u0E41\u0E0A\u0E23\u0E4C\u0E23\u0E39\u0E1B\u0E20\u0E32\u0E1E\u0E41\u0E15\u0E48\u0E42\u0E21\u0E40\u0E14\u0E25\u0E19\u0E35\u0E49\u0E44\u0E21\u0E48\u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A vision]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u0E2D\u0E19\u0E38\u0E0D\u0E32\u0E15",
-      "tool.always_allow": "\u0E2D\u0E19\u0E38\u0E0D\u0E32\u0E15\u0E40\u0E2A\u0E21\u0E2D",
-      "tool.allow_all": "\u0E2D\u0E19\u0E38\u0E0D\u0E32\u0E15\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14",
-      "tool.deny": "\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18",
-      "tool.allow_prompt": "\u0E2D\u0E19\u0E38\u0E0D\u0E32\u0E15 {tool}?",
-      "tool.arguments": "\u0E2D\u0E32\u0E23\u0E4C\u0E01\u0E34\u0E27\u0E40\u0E21\u0E19\u0E15\u0E4C",
-      "tool.output": "\u0E1C\u0E25\u0E25\u0E31\u0E1E\u0E18\u0E4C",
-      "tool.error": "\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14",
-      "tool.truncated": "... (\u0E16\u0E39\u0E01\u0E15\u0E31\u0E14)",
-      "tool.read": "\u0E2D\u0E48\u0E32\u0E19 {file}",
-      "tool.write": "\u0E40\u0E02\u0E35\u0E22\u0E19 {file}",
-      "tool.edit": "\u0E41\u0E01\u0E49\u0E44\u0E02 {file}",
-      "tool.find_files": "\u0E04\u0E49\u0E19\u0E2B\u0E32\u0E44\u0E1F\u0E25\u0E4C: {pattern}",
-      "tool.search": "\u0E04\u0E49\u0E19\u0E2B\u0E32: {pattern}",
-      "tool.run": "\u0E23\u0E31\u0E19: {command}",
-      "tool.list_dir": "\u0E41\u0E2A\u0E14\u0E07\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23 {path}",
-      "tool.web_search": "\u0E04\u0E49\u0E19\u0E2B\u0E32: {query}",
-      "tool.ask_user": "\u0E04\u0E33\u0E16\u0E32\u0E21\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\u0E1B\u0E23\u0E30\u0E27\u0E31\u0E15\u0E34\u0E41\u0E0A\u0E17",
-      "history.new_chat": "+ \u0E41\u0E0A\u0E17\u0E43\u0E2B\u0E21\u0E48",
-      "history.close": "\u0E1B\u0E34\u0E14",
-      "history.search": "\u0E04\u0E49\u0E19\u0E2B\u0E32\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32...",
-      "history.empty": "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E27\u0E49",
-      "history.no_match": "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E19",
-      "history.delete_confirm": "\u0E25\u0E1A?",
-      "history.rename_hint": "\u0E14\u0E31\u0E1A\u0E40\u0E1A\u0E34\u0E25\u0E04\u0E25\u0E34\u0E01\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E0A\u0E37\u0E48\u0E2D",
-      "history.pin": "\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14",
-      "history.unpin": "\u0E40\u0E25\u0E34\u0E01\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14",
-      "history.export_md": "\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E40\u0E1B\u0E47\u0E19 Markdown",
-      "history.pinned": "\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14\u0E41\u0E25\u0E49\u0E27",
-      "history.just_now": "\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E01\u0E35\u0E49",
-      "history.minutes_ago": "{n} \u0E19\u0E32\u0E17\u0E35\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27",
-      "history.hours_ago": "{n} \u0E0A\u0E31\u0E48\u0E27\u0E42\u0E21\u0E07\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27",
-      "history.days_ago": "{n} \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\u0E04\u0E33\u0E16\u0E32\u0E21",
-      "ask.fallback": "Ava \u0E21\u0E35\u0E04\u0E33\u0E16\u0E32\u0E21",
-      "ask.placeholder": "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13...",
-      "ask.submit": "\u0E2A\u0E48\u0E07",
-      "ask.skip": "\u0E02\u0E49\u0E32\u0E21",
-      "ask.skipped": "\u0E02\u0E49\u0E32\u0E21\u0E41\u0E25\u0E49\u0E27",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E41\u0E1C\u0E19",
-      "plan.prefix": "\u0E41\u0E1C\u0E19: {title}",
-      "plan.approved": "\u0E2D\u0E19\u0E38\u0E21\u0E31\u0E15\u0E34\u0E41\u0E25\u0E49\u0E27",
-      "plan.rejected": "\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E41\u0E25\u0E49\u0E27",
-      "plan.goal": "\u0E40\u0E1B\u0E49\u0E32\u0E2B\u0E21\u0E32\u0E22",
-      "plan.steps": "\u0E02\u0E31\u0E49\u0E19\u0E15\u0E2D\u0E19",
-      "plan.verification": "\u0E01\u0E32\u0E23\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A",
-      "plan.approaches": "\u0E41\u0E19\u0E27\u0E17\u0E32\u0E07",
-      "plan.approve": "\u0E2D\u0E19\u0E38\u0E21\u0E31\u0E15\u0E34",
-      "plan.reject": "\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E07\u0E32\u0E19\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49",
-      "todo.tasks": "\u0E07\u0E32\u0E19",
-      "todo.done": "{done}/{total} \u0E40\u0E2A\u0E23\u0E47\u0E08",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\u0E40\u0E02\u0E49\u0E32",
-      "status.out": "\u0E2D\u0E2D\u0E01",
-      "status.total": "\u0E23\u0E27\u0E21",
-      "status.tokens": "\u0E42\u0E17\u0E40\u0E04\u0E47\u0E19",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14\u0E1A\u0E23\u0E34\u0E1A\u0E17...",
-      "compression.result": "\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14\u0E1A\u0E23\u0E34\u0E1A\u0E17\u0E41\u0E25\u0E49\u0E27: ~{original} \u2192 ~{compressed} \u0E42\u0E17\u0E40\u0E04\u0E47\u0E19",
-      "compression.nothing": "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2D\u0E30\u0E44\u0E23\u0E43\u0E2B\u0E49\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14",
-      "compression.failed": "\u0E01\u0E32\u0E23\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14\u0E25\u0E49\u0E21\u0E40\u0E2B\u0E25\u0E27",
-      "compression.busy": "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14\u0E02\u0E13\u0E30\u0E17\u0E35\u0E48 Ava \u0E01\u0E33\u0E25\u0E31\u0E07\u0E17\u0E33\u0E07\u0E32\u0E19",
-      "compression.context_truncated": "\u0E1A\u0E23\u0E34\u0E1A\u0E17\u0E16\u0E39\u0E01\u0E15\u0E31\u0E14: \u0E25\u0E1A {count} \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23\u0E15\u0E48\u0E2D\u0E08\u0E32\u0E01\u0E17\u0E35\u0E48\u0E04\u0E49\u0E32\u0E07\u0E44\u0E27\u0E49",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\u0E41\u0E2A\u0E14\u0E07\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E17\u0E35\u0E48\u0E21\u0E35",
-      "cmd.model.desc": "\u0E41\u0E2A\u0E14\u0E07\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2B\u0E23\u0E37\u0E2D\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E42\u0E21\u0E40\u0E14\u0E25 (/model <provider:model-id>)",
-      "cmd.clear.desc": "\u0E25\u0E49\u0E32\u0E07\u0E1B\u0E23\u0E30\u0E27\u0E31\u0E15\u0E34\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32",
-      "cmd.provider.desc": "\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E2B\u0E23\u0E37\u0E2D\u0E41\u0E2A\u0E14\u0E07\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 (/provider add <name>)",
-      "cmd.history.desc": "\u0E41\u0E2A\u0E14\u0E07\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E27\u0E49",
-      "cmd.resume.desc": "\u0E01\u0E25\u0E31\u0E1A\u0E21\u0E32\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E15\u0E48\u0E2D (/resume <id-prefix>)",
-      "cmd.search.desc": "\u0E04\u0E49\u0E19\u0E2B\u0E32\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32 (/search <query>)",
-      "cmd.delete.desc": "\u0E25\u0E1A\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E27\u0E49 (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E0A\u0E37\u0E48\u0E2D\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32 (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\u0E40\u0E25\u0E34\u0E01\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32 (/unpin <id-prefix>)",
-      "cmd.export.desc": "\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\u0E2A\u0E48\u0E07\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07",
-      "cmd.compact.desc": "\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14\u0E1A\u0E23\u0E34\u0E1A\u0E17\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48",
-      "cmd.permission.desc": "\u0E14\u0E39\u0E2B\u0E23\u0E37\u0E2D\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E42\u0E2B\u0E21\u0E14\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\u0E41\u0E2A\u0E14\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E21\u0E37\u0E2D\u0E17\u0E35\u0E48\u0E21\u0E35",
-      "cmd.init.desc": "\u0E2A\u0E23\u0E49\u0E32\u0E07 .ava/instructions.md \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E1A\u0E23\u0E34\u0E1A\u0E17\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C",
-      "cmd.exit.desc": "\u0E2D\u0E2D\u0E01\u0E08\u0E32\u0E01 Ava",
-      "cmd.security.desc": "\u0E40\u0E23\u0E35\u0E22\u0E01\u0E43\u0E0A\u0E49\u0E01\u0E32\u0E23\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E04\u0E27\u0E32\u0E21\u0E1B\u0E25\u0E2D\u0E14\u0E20\u0E31\u0E22 (/security [\u0E1E\u0E37\u0E49\u0E19\u0E17\u0E35\u0E48\u0E40\u0E19\u0E49\u0E19])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\u0E44\u0E21\u0E48\u0E23\u0E39\u0E49\u0E08\u0E31\u0E01\u0E42\u0E21\u0E40\u0E14\u0E25: {model}",
-      "cmd.model.switched": "\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E40\u0E1B\u0E47\u0E19 {name} ({provider}) \u0E41\u0E25\u0E49\u0E27",
-      "cmd.model.active": "(\u0E01\u0E33\u0E25\u0E31\u0E07\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19)",
-      "cmd.clear.done": "\u0E25\u0E49\u0E32\u0E07\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E41\u0E25\u0E49\u0E27",
-      "cmd.provider.usage": "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49: /provider add <{providers}>",
-      "cmd.provider.enter_key": "\u0E1B\u0E49\u0E2D\u0E19 API key \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A {provider}: ",
-      "cmd.provider.cancelled": "\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E41\u0E25\u0E49\u0E27",
-      "cmd.provider.added": "\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 {provider} \u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08\u0E41\u0E25\u0E49\u0E27",
-      "cmd.provider.failed": "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E25\u0E07\u0E17\u0E30\u0E40\u0E1A\u0E35\u0E22\u0E19 {provider}: {error}",
-      "cmd.provider.title": "\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23\u0E17\u0E35\u0E48\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E44\u0E27\u0E49:",
-      "cmd.provider.configured": "\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E41\u0E25\u0E49\u0E27",
-      "cmd.provider.not_configured": "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32",
-      "cmd.provider.hint": "\u0E43\u0E0A\u0E49 /provider add <name> \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23",
-      "cmd.history.empty": "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E27\u0E49",
-      "cmd.history.title": "\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E27\u0E49:",
-      "cmd.history.more": "... \u0E41\u0E25\u0E30\u0E2D\u0E35\u0E01 {count}",
-      "cmd.history.hint": "\u0E43\u0E0A\u0E49 /resume <id-prefix> \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E42\u0E2B\u0E25\u0E14\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32",
-      "cmd.resume.usage": "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49: /resume <id-prefix>",
-      "cmd.resume.hint": "\u0E43\u0E0A\u0E49 /history \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E14\u0E39\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E21\u0E35",
-      "cmd.resume.not_found": '\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A "{prefix}"',
-      "cmd.resume.failed": "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E42\u0E2B\u0E25\u0E14\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32",
-      "cmd.resume.done": "\u0E01\u0E25\u0E31\u0E1A\u0E21\u0E32\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E15\u0E48\u0E2D: {title}",
-      "cmd.resume.count": "\u0E42\u0E2B\u0E25\u0E14 {count} \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E41\u0E25\u0E49\u0E27",
-      "cmd.search.usage": "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49: /search <query>",
-      "cmd.search.empty": '\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E17\u0E35\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A "{query}"',
-      "cmd.search.title": '\u0E1C\u0E25\u0E01\u0E32\u0E23\u0E04\u0E49\u0E19\u0E2B\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A "{query}":',
-      "cmd.delete.usage": "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49: /delete <id-prefix>",
-      "cmd.delete.confirm": '\u0E25\u0E1A "{title}" ({id})? (y/n) ',
-      "cmd.delete.done": "\u0E25\u0E1A\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32\u0E41\u0E25\u0E49\u0E27",
-      "cmd.delete.failed": "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E25\u0E1A\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32",
-      "cmd.rename.usage": "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E0A\u0E37\u0E48\u0E2D\u0E40\u0E1B\u0E47\u0E19: {title}",
-      "cmd.rename.failed": "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E0A\u0E37\u0E48\u0E2D\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32",
-      "cmd.pin.usage": "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49: /pin <id-prefix>",
-      "cmd.pin.done": "\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14\u0E41\u0E25\u0E49\u0E27: {title}",
-      "cmd.pin.failed": "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32",
-      "cmd.unpin.usage": "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49: /unpin <id-prefix>",
-      "cmd.unpin.done": "\u0E40\u0E25\u0E34\u0E01\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14\u0E41\u0E25\u0E49\u0E27: {title}",
-      "cmd.unpin.failed": "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E40\u0E25\u0E34\u0E01\u0E1B\u0E31\u0E01\u0E2B\u0E21\u0E38\u0E14\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32",
-      "cmd.export.usage": "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E1A\u0E17\u0E2A\u0E19\u0E17\u0E19\u0E32",
-      "cmd.export.done": "\u0E2A\u0E48\u0E07\u0E2D\u0E2D\u0E01\u0E44\u0E1B\u0E17\u0E35\u0E48 {filename}",
-      "cmd.retry.unavailable": "\u0E01\u0E32\u0E23\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19",
-      "cmd.compact.unavailable": "\u0E01\u0E32\u0E23\u0E1A\u0E35\u0E1A\u0E2D\u0E31\u0E14\u0E44\u0E21\u0E48\u0E1E\u0E23\u0E49\u0E2D\u0E21\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19",
-      "cmd.permission.title": "\u0E42\u0E2B\u0E21\u0E14\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C:",
-      "cmd.permission.strict": "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E01\u0E32\u0E23\u0E40\u0E02\u0E35\u0E22\u0E19\u0E41\u0E25\u0E30\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E40\u0E0A\u0E25\u0E25\u0E4C",
-      "cmd.permission.balanced": "\u0E2D\u0E19\u0E38\u0E21\u0E31\u0E15\u0E34\u0E01\u0E32\u0E23\u0E40\u0E02\u0E35\u0E22\u0E19\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34 \u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E40\u0E0A\u0E25\u0E25\u0E4C",
-      "cmd.permission.autonomous": "\u0E2D\u0E19\u0E38\u0E21\u0E31\u0E15\u0E34\u0E17\u0E38\u0E01\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34",
-      "cmd.permission.unknown": "\u0E42\u0E2B\u0E21\u0E14\u0E44\u0E21\u0E48\u0E23\u0E39\u0E49\u0E08\u0E31\u0E01 \u0E40\u0E25\u0E37\u0E2D\u0E01: {modes}",
-      "cmd.permission.set": "\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E42\u0E2B\u0E21\u0E14\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E40\u0E1B\u0E47\u0E19 {mode} \u0E41\u0E25\u0E49\u0E27",
-      "cmd.tools.title": "\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E21\u0E37\u0E2D\u0E17\u0E35\u0E48\u0E21\u0E35:",
-      "cmd.init.created": "\u0E2A\u0E23\u0E49\u0E32\u0E07 {path} \u0E41\u0E25\u0E49\u0E27",
-      "cmd.init.hint": "\u0E41\u0E01\u0E49\u0E44\u0E02\u0E44\u0E1F\u0E25\u0E4C\u0E19\u0E35\u0E49\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E1A\u0E17\u0E42\u0E1B\u0E23\u0E40\u0E08\u0E01\u0E15\u0E4C\u0E41\u0E01\u0E48 Ava",
-      "cmd.init.restart": "\u0E23\u0E35\u0E2A\u0E15\u0E32\u0E23\u0E4C\u0E17 Ava \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E2B\u0E49\u0E01\u0E32\u0E23\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E41\u0E1B\u0E25\u0E07\u0E21\u0E35\u0E1C\u0E25",
-      "cmd.init.exists": "{path} \u0E21\u0E35\u0E2D\u0E22\u0E39\u0E48\u0E41\u0E25\u0E49\u0E27",
-      "cmd.unknown": "\u0E44\u0E21\u0E48\u0E23\u0E39\u0E49\u0E08\u0E31\u0E01\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07: {input} \u0E1E\u0E34\u0E21\u0E1E\u0E4C /help \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E14\u0E39\u0E04\u0E33\u0E2A\u0E31\u0E48\u0E07\u0E17\u0E35\u0E48\u0E21\u0E35",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E04\u0E34\u0E14...",
-      "cli.thinking_label": "[\u0E01\u0E33\u0E25\u0E31\u0E07\u0E04\u0E34\u0E14] ",
-      "cli.thinking_words": "{count} \u0E04\u0E33",
-      "cli.tool_label": "[\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E21\u0E37\u0E2D] ",
-      "cli.tasks_label": "[\u0E07\u0E32\u0E19] ",
-      "cli.tokens_label": "[\u0E42\u0E17\u0E40\u0E04\u0E47\u0E19] ",
-      "cli.running": "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E23\u0E31\u0E19 {tool}...",
-      "cli.confirm_label": "[\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19] ",
-      "cli.allow_prompt": "\u0E2D\u0E19\u0E38\u0E0D\u0E32\u0E15\u0E44\u0E2B\u0E21? ",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18\u0E41\u0E25\u0E49\u0E27",
-      "cli.question_label": "[\u0E04\u0E33\u0E16\u0E32\u0E21] ",
-      "cli.question_fallback": "Ava \u0E21\u0E35\u0E04\u0E33\u0E16\u0E32\u0E21\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E04\u0E38\u0E13",
-      "cli.your_response": "\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13: ",
-      "cli.skipped": "\u0E02\u0E49\u0E32\u0E21\u0E41\u0E25\u0E49\u0E27",
-      "cli.user_response": "\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E1C\u0E39\u0E49\u0E43\u0E0A\u0E49: {response}",
-      "cli.write_to": "\u0E40\u0E02\u0E35\u0E22\u0E19\u0E44\u0E1B\u0E17\u0E35\u0E48 {path}",
-      "cli.edit_file": "\u0E41\u0E01\u0E49\u0E44\u0E02 {path}",
-      "cli.list_path": "\u0E41\u0E2A\u0E14\u0E07\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23 {path}",
-      "cli.search_query": '\u0E04\u0E49\u0E19\u0E2B\u0E32 "{query}"',
-      "cli.ok": "\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08",
-      "cli.fail": "\u0E25\u0E49\u0E21\u0E40\u0E2B\u0E25\u0E27",
-      "cli.more_lines": "... (\u0E2D\u0E35\u0E01 {count} \u0E1A\u0E23\u0E23\u0E17\u0E31\u0E14)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "\u0E22\u0E34\u0E19\u0E14\u0E35\u0E15\u0E49\u0E2D\u0E19\u0E23\u0E31\u0E1A\u0E2A\u0E39\u0E48 Ava | Supernova",
-      "setup.intro": "\u0E21\u0E32\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 LLM \u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13\u0E01\u0E31\u0E19",
-      "setup.choose": "\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E49\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23 (\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E25\u0E02): ",
-      "setup.invalid_choice": "\u0E15\u0E31\u0E27\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E2A\u0E15\u0E32\u0E23\u0E4C\u0E17\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48",
-      "setup.key_url": "\u0E23\u0E31\u0E1A API key \u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13\u0E17\u0E35\u0E48: {url}",
-      "setup.enter_key": "API Key \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A {provider}: ",
-      "setup.no_key": "\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E23\u0E30\u0E1A\u0E38 API key \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E2A\u0E15\u0E32\u0E23\u0E4C\u0E17\u0E41\u0E25\u0E49\u0E27\u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48",
-      "setup.complete": "\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E41\u0E25\u0E49\u0E27! \u0E42\u0E21\u0E40\u0E14\u0E25\u0E17\u0E35\u0E48\u0E43\u0E0A\u0E49\u0E07\u0E32\u0E19: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/tr.js
-var tr_exports = {};
-__export(tr_exports, {
-  trStrings: () => trStrings
-});
-var trStrings;
-var init_tr = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/tr.js"() {
-    trStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "Kodunuz hakk\u0131nda her \u015Feyi sorun.",
-      "welcome.cli_hint": "Mesaj\u0131n\u0131z\u0131 yaz\u0131n veya /help ile komutlar\u0131 g\xF6r\xFCn.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "Ne olu\u015Fturmak istiyorsunuz?",
-      "input.placeholder.plan": "Planlamak istedi\u011Finizi a\xE7\u0131klay\u0131n...",
-      "input.placeholder.chat": "Bir soru sorun veya sohbet ba\u015Flat\u0131n...",
-      "input.placeholder.disabled": "Ba\u015Flamak i\xE7in bir sa\u011Flay\u0131c\u0131 yap\u0131land\u0131r\u0131n...",
-      "input.placeholder.security": "Neyi taramak istedi\u011Finizi a\xE7\u0131klay\u0131n veya tam denetim i\xE7in Enter tu\u015Funa bas\u0131n...",
-      "input.mode.code": "Kod",
-      "input.mode.plan": "Plan",
-      "input.mode.chat": "Sohbet",
-      "input.mode.security": "G\xFCvenlik",
-      "input.send": "G\xF6nder (Enter)",
-      "input.send_aria": "Mesaj g\xF6nder",
-      "input.stop": "Durdur",
-      "input.stop_aria": "Ava'y\u0131 durdur",
-      "input.attach": "G\xF6rsel ekle",
-      "input.drop_image": "G\xF6rseli buraya b\u0131rak\u0131n",
-      "input.compressing": "S\u0131k\u0131\u015Ft\u0131r\u0131l\u0131yor...",
-      "input.compress_title": "Ba\u011Flam kullan\u0131m\u0131 \u2014 s\u0131k\u0131\u015Ft\u0131rmak i\xE7in t\u0131klay\u0131n",
-      "input.compress_title_warning": "Ba\u011Flam\u0131 s\u0131k\u0131\u015Ft\u0131rmak i\xE7in t\u0131klay\u0131n",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "Sohbet Ge\xE7mi\u015Fi",
-      "header.settings": "Ayarlar",
-      "header.new_chat": "Yeni Sohbet",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "Yap\u0131land\u0131r\u0131lm\u0131\u015F sa\u011Flay\u0131c\u0131 yok.",
-      "model.open_settings": "Ayarlar\u0131 A\xE7",
-      "model.vision": "vision",
-      "model.vision_title": "Bu model g\xF6rsel giri\u015Fini destekliyor",
-      "model.switched": "{model} modeline ge\xE7ildi",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava d\xFC\u015F\xFCn\xFCyor...",
-      "thinking.1": "Kodunuz analiz ediliyor...",
-      "thinking.2": "Yakla\u015F\u0131mlar de\u011Ferlendiriliyor...",
-      "thinking.3": "Yan\u0131t haz\u0131rlan\u0131yor...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "Bu kod taban\u0131n\u0131 a\xE7\u0131kla",
-      "suggestion.explain_prompt": "Bu projenin yap\u0131s\u0131 ve mimarisi hakk\u0131nda genel bir bak\u0131\u015F ver.",
-      "suggestion.bug": "Hata bul",
-      "suggestion.bug_prompt": "Mevcut dosyadaki hatalar\u0131 bulmama ve d\xFCzeltmeme yard\u0131m et.",
-      "suggestion.test": "Test yaz",
-      "suggestion.test_prompt": "Ana mod\xFCl i\xE7in kapsaml\u0131 testler yaz.",
-      "suggestion.refactor": "Kodu yeniden d\xFCzenle",
-      "suggestion.refactor_prompt": "Mevcut dosya i\xE7in yeniden d\xFCzenleme iyile\u015Ftirmeleri \xF6ner.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "Kimlik Do\u011Frulama",
-      "error.credits": "Faturaland\u0131rma",
-      "error.forbidden": "Eri\u015Fim Reddedildi",
-      "error.rate_limit": "H\u0131z S\u0131n\u0131r\u0131",
-      "error.model_not_found": "Model Hatas\u0131",
-      "error.bad_request": "Ge\xE7ersiz \u0130stek",
-      "error.server_error": "Sunucu Hatas\u0131",
-      "error.timeout": "Zaman A\u015F\u0131m\u0131",
-      "error.stream_stall": "Ak\u0131\u015F Durdu",
-      "error.network": "A\u011F Hatas\u0131",
-      "error.setup": "Kurulum Gerekli",
-      "error.busy": "Me\u015Fgul",
-      "error.iterations_exceeded": "Yineleme S\u0131n\u0131r\u0131",
-      "error.context_truncated": "Ba\u011Flam K\u0131rp\u0131ld\u0131",
-      "error.provider_error": "Sa\u011Flay\u0131c\u0131 Hatas\u0131",
-      "error.unknown": "Hata",
-      "error.continue": "Devam Et",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "{provider} i\xE7in ge\xE7ersiz istek. \u0130stek bi\xE7imi bu modelle uyumlu olmayabilir.",
-      "error.msg.auth": "{provider} i\xE7in ge\xE7ersiz API key. ~/.ava/config.json dosyas\u0131ndaki anahtar\u0131n\u0131z\u0131 kontrol edin",
-      "error.msg.credits": "{provider} i\xE7in yetersiz kredi. Hesap bakiyenizi y\xFCkleyin.",
-      "error.msg.forbidden": "{provider} taraf\u0131ndan eri\u015Fim reddedildi. API key'inizde gerekli izinler olmayabilir.",
-      "error.msg.model_not_found": "Model {provider} \xFCzerinde bulunamad\u0131. Model ID de\u011Fi\u015Fmi\u015F olabilir \u2014 mevcut modelleri g\xF6rmek i\xE7in /model komutunu \xE7al\u0131\u015Ft\u0131r\u0131n.",
-      "error.msg.rate_limit": "{provider} taraf\u0131ndan h\u0131z s\u0131n\u0131rland\u0131. \xC7ok fazla istek \u2014 biraz bekleyip tekrar deneyin.",
-      "error.msg.server_error": "{provider} sorun ya\u015F\u0131yor ({code}). Birka\xE7 dakika sonra tekrar deneyin.",
-      "error.msg.empty_response": "Model bo\u015F bir yan\u0131t d\xF6nd\xFCrd\xFC. Bu, API a\u015F\u0131r\u0131 y\xFCklendi\u011Finde veya istek filtrelendi\u011Finde olabilir. Tekrar deneyin.",
-      "error.msg.iteration_limit": "Ava {limit} yineleme g\xFCvenlik s\u0131n\u0131r\u0131na ula\u015Ft\u0131. Bu genellikle g\xF6revin \xE7ok b\xFCy\xFCk oldu\u011Fu veya modelin d\xF6ng\xFCye girdi\u011Fi anlam\u0131na gelir.",
-      "error.msg.iteration_warning": "[UYARI] D\xF6ng\xFC s\u0131n\u0131r\u0131na {remaining} yineleme kald\u0131. Mevcut g\xF6revinizi tamamlay\u0131n \u2014 yapt\u0131klar\u0131n\u0131z\u0131 ve kalanlar\u0131 \xF6zetleyin. Yeni \xE7ok ad\u0131ml\u0131 i\u015Fe ba\u015Flamay\u0131n.",
-      "error.msg.image_stripped": "[Bir g\xF6rsel payla\u015F\u0131ld\u0131 ancak bu model vision desteklemiyor]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u0130zin Ver",
-      "tool.always_allow": "Her Zaman \u0130zin Ver",
-      "tool.allow_all": "T\xFCm\xFCne \u0130zin Ver",
-      "tool.deny": "Reddet",
-      "tool.allow_prompt": "{tool} izni verilsin mi?",
-      "tool.arguments": "Arg\xFCmanlar",
-      "tool.output": "\xC7\u0131kt\u0131",
-      "tool.error": "Hata",
-      "tool.truncated": "... (k\u0131rp\u0131ld\u0131)",
-      "tool.read": "{file} oku",
-      "tool.write": "{file} yaz",
-      "tool.edit": "{file} d\xFCzenle",
-      "tool.find_files": "Dosya bul: {pattern}",
-      "tool.search": "Ara: {pattern}",
-      "tool.run": "\xC7al\u0131\u015Ft\u0131r: {command}",
-      "tool.list_dir": "{path} listele",
-      "tool.web_search": "Ara: {query}",
-      "tool.ask_user": "Kullan\u0131c\u0131ya soru",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "Sohbet Ge\xE7mi\u015Fi",
-      "history.new_chat": "+ Yeni Sohbet",
-      "history.close": "Kapat",
-      "history.search": "Sohbetlerde ara...",
-      "history.empty": "Hen\xFCz kay\u0131tl\u0131 sohbet yok.",
-      "history.no_match": "E\u015Fle\u015Fen sohbet bulunamad\u0131.",
-      "history.delete_confirm": "Silinsin mi?",
-      "history.rename_hint": "Yeniden adland\u0131rmak i\xE7in \xE7ift t\u0131klay\u0131n",
-      "history.pin": "Sabitle",
-      "history.unpin": "Sabitlemeyi Kald\u0131r",
-      "history.export_md": "Markdown olarak d\u0131\u015Fa aktar",
-      "history.pinned": "Sabitlenmi\u015F",
-      "history.just_now": "az \xF6nce",
-      "history.minutes_ago": "{n} dk \xF6nce",
-      "history.hours_ago": "{n} sa \xF6nce",
-      "history.days_ago": "{n} g\xFCn \xF6nce",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "Soru",
-      "ask.fallback": "Ava'n\u0131n bir sorusu var",
-      "ask.placeholder": "Yan\u0131t\u0131n\u0131z\u0131 yaz\u0131n...",
-      "ask.submit": "G\xF6nder",
-      "ask.skip": "Atla",
-      "ask.skipped": "Atland\u0131",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "Plan verileri mevcut de\u011Fil",
-      "plan.prefix": "Plan: {title}",
-      "plan.approved": "Onayland\u0131",
-      "plan.rejected": "Reddedildi",
-      "plan.goal": "Hedef",
-      "plan.steps": "Ad\u0131mlar",
-      "plan.verification": "Do\u011Frulama",
-      "plan.approaches": "Yakla\u015F\u0131mlar",
-      "plan.approve": "Onayla",
-      "plan.reject": "Reddet",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "G\xF6rev listesi mevcut de\u011Fil",
-      "todo.tasks": "G\xF6revler",
-      "todo.done": "{done}/{total} tamamland\u0131",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "gelen",
-      "status.out": "giden",
-      "status.total": "toplam",
-      "status.tokens": "token",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "Ba\u011Flam s\u0131k\u0131\u015Ft\u0131r\u0131l\u0131yor...",
-      "compression.result": "Ba\u011Flam s\u0131k\u0131\u015Ft\u0131r\u0131ld\u0131: ~{original} \u2192 ~{compressed} token",
-      "compression.nothing": "S\u0131k\u0131\u015Ft\u0131r\u0131lacak bir \u015Fey yok.",
-      "compression.failed": "S\u0131k\u0131\u015Ft\u0131rma ba\u015Far\u0131s\u0131z.",
-      "compression.busy": "Ava \xE7al\u0131\u015F\u0131rken s\u0131k\u0131\u015Ft\u0131r\u0131lamaz.",
-      "compression.context_truncated": "Ba\u011Flam k\u0131rp\u0131ld\u0131: {count} mesaj silindi.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "Kald\u0131\u011F\u0131n\u0131z yerden devam edin.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "Mevcut komutlar\u0131 g\xF6ster",
-      "cmd.model.desc": "Modelleri listele veya de\u011Fi\u015Ftir (/model <provider:model-id>)",
-      "cmd.clear.desc": "Sohbet ge\xE7mi\u015Fini temizle",
-      "cmd.provider.desc": "Sa\u011Flay\u0131c\u0131 ekle veya listele (/provider add <name>)",
-      "cmd.history.desc": "Kay\u0131tl\u0131 sohbetleri listele",
-      "cmd.resume.desc": "Kay\u0131tl\u0131 bir sohbeti devam ettir (/resume <id-prefix>)",
-      "cmd.search.desc": "Sohbetlerde ara (/search <query>)",
-      "cmd.delete.desc": "Kay\u0131tl\u0131 bir sohbeti sil (/delete <id-prefix>)",
-      "cmd.rename.desc": "Bir sohbeti yeniden adland\u0131r (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Bir sohbeti sabitle (/pin <id-prefix>)",
-      "cmd.unpin.desc": "Bir sohbetin sabitlemesini kald\u0131r (/unpin <id-prefix>)",
-      "cmd.export.desc": "Bir sohbeti d\u0131\u015Fa aktar (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Son mesaj\u0131 tekrar g\xF6nder",
-      "cmd.compact.desc": "Yer a\xE7mak i\xE7in sohbet ba\u011Flam\u0131n\u0131 s\u0131k\u0131\u015Ft\u0131r",
-      "cmd.permission.desc": "\u0130zin modunu g\xF6r\xFCnt\xFCle veya ayarla (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Mevcut ara\xE7lar\u0131 listele",
-      "cmd.init.desc": "Proje ba\u011Flam\u0131 i\xE7in .ava/instructions.md olu\u015Ftur",
-      "cmd.exit.desc": "Ava'dan \xE7\u0131k",
-      "cmd.security.desc": "G\xFCvenlik denetimi \xE7al\u0131\u015Ft\u0131r (/security [odak alan\u0131])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "Bilinmeyen model: {model}",
-      "cmd.model.switched": "{name} ({provider}) modeline ge\xE7ildi",
-      "cmd.model.active": "(aktif)",
-      "cmd.clear.done": "Sohbet temizlendi.",
-      "cmd.provider.usage": "Kullan\u0131m: /provider add <{providers}>",
-      "cmd.provider.enter_key": "{provider} i\xE7in API key girin: ",
-      "cmd.provider.cancelled": "\u0130ptal edildi.",
-      "cmd.provider.added": "Sa\u011Flay\u0131c\u0131 {provider} ba\u015Far\u0131yla eklendi.",
-      "cmd.provider.failed": "{provider} kaydedilemedi: {error}",
-      "cmd.provider.title": "Yap\u0131land\u0131r\u0131lm\u0131\u015F sa\u011Flay\u0131c\u0131lar:",
-      "cmd.provider.configured": "yap\u0131land\u0131r\u0131lm\u0131\u015F",
-      "cmd.provider.not_configured": "yap\u0131land\u0131r\u0131lmam\u0131\u015F",
-      "cmd.provider.hint": "Sa\u011Flay\u0131c\u0131 eklemek i\xE7in /provider add <name> kullan\u0131n.",
-      "cmd.history.empty": "Kay\u0131tl\u0131 sohbet yok.",
-      "cmd.history.title": "Kay\u0131tl\u0131 sohbetler:",
-      "cmd.history.more": "... ve {count} tane daha",
-      "cmd.history.hint": "Sohbet y\xFCklemek i\xE7in /resume <id-prefix> kullan\u0131n.",
-      "cmd.resume.usage": "Kullan\u0131m: /resume <id-prefix>",
-      "cmd.resume.hint": "Mevcut sohbetleri g\xF6rmek i\xE7in /history \xE7al\u0131\u015Ft\u0131r\u0131n.",
-      "cmd.resume.not_found": '"{prefix}" ile e\u015Fle\u015Fen sohbet bulunamad\u0131.',
-      "cmd.resume.failed": "Sohbet y\xFCklenemedi.",
-      "cmd.resume.done": "Devam ediliyor: {title}",
-      "cmd.resume.count": "{count} mesaj y\xFCklendi.",
-      "cmd.search.usage": "Kullan\u0131m: /search <query>",
-      "cmd.search.empty": '"{query}" ile e\u015Fle\u015Fen sohbet bulunamad\u0131.',
-      "cmd.search.title": '"{query}" i\xE7in arama sonu\xE7lar\u0131:',
-      "cmd.delete.usage": "Kullan\u0131m: /delete <id-prefix>",
-      "cmd.delete.confirm": '"{title}" ({id}) silinsin mi? (y/n) ',
-      "cmd.delete.done": "Sohbet silindi.",
-      "cmd.delete.failed": "Sohbet silinemedi.",
-      "cmd.rename.usage": "Kullan\u0131m: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "Yeniden adland\u0131r\u0131ld\u0131: {title}",
-      "cmd.rename.failed": "Sohbet yeniden adland\u0131r\u0131lamad\u0131.",
-      "cmd.pin.usage": "Kullan\u0131m: /pin <id-prefix>",
-      "cmd.pin.done": "Sabitlendi: {title}",
-      "cmd.pin.failed": "Sohbet sabitlenemedi.",
-      "cmd.unpin.usage": "Kullan\u0131m: /unpin <id-prefix>",
-      "cmd.unpin.done": "Sabitleme kald\u0131r\u0131ld\u0131: {title}",
-      "cmd.unpin.failed": "Sohbetin sabitlemesi kald\u0131r\u0131lamad\u0131.",
-      "cmd.export.usage": "Kullan\u0131m: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Sohbet d\u0131\u015Fa aktar\u0131lamad\u0131.",
-      "cmd.export.done": "{filename} dosyas\u0131na aktar\u0131ld\u0131",
-      "cmd.retry.unavailable": "Tekrar deneme mevcut de\u011Fil.",
-      "cmd.compact.unavailable": "S\u0131k\u0131\u015Ft\u0131rma mevcut de\u011Fil.",
-      "cmd.permission.title": "\u0130zin modu:",
-      "cmd.permission.strict": "yazma ve kabuk komutlar\u0131n\u0131 onayla",
-      "cmd.permission.balanced": "yazmay\u0131 otomatik onayla, kabuk komutlar\u0131n\u0131 onayla",
-      "cmd.permission.autonomous": "her \u015Feyi otomatik onayla",
-      "cmd.permission.unknown": "Bilinmeyen mod. Se\xE7in: {modes}",
-      "cmd.permission.set": "\u0130zin modu {mode} olarak ayarland\u0131.",
-      "cmd.tools.title": "Mevcut ara\xE7lar:",
-      "cmd.init.created": "{path} olu\u015Fturuldu",
-      "cmd.init.hint": "Ava'ya proje ba\u011Flam\u0131 vermek i\xE7in bu dosyay\u0131 d\xFCzenleyin.",
-      "cmd.init.restart": "De\u011Fi\u015Fikliklerin ge\xE7erli olmas\u0131 i\xE7in Ava'y\u0131 yeniden ba\u015Flat\u0131n.",
-      "cmd.init.exists": "{path} zaten mevcut.",
-      "cmd.unknown": "Bilinmeyen komut: {input}. Mevcut komutlar i\xE7in /help yaz\u0131n.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "D\xFC\u015F\xFCn\xFCyor...",
-      "cli.thinking_label": "[d\xFC\u015F\xFCnme] ",
-      "cli.thinking_words": "{count} kelime",
-      "cli.tool_label": "[ara\xE7] ",
-      "cli.tasks_label": "[g\xF6revler] ",
-      "cli.tokens_label": "[token] ",
-      "cli.running": "{tool} \xE7al\u0131\u015Ft\u0131r\u0131l\u0131yor...",
-      "cli.confirm_label": "[onay] ",
-      "cli.allow_prompt": "\u0130zin verilsin mi? ",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "Reddedildi.",
-      "cli.question_label": "[soru] ",
-      "cli.question_fallback": "Ava'n\u0131n size bir sorusu var",
-      "cli.your_response": "Yan\u0131t\u0131n\u0131z: ",
-      "cli.skipped": "Atland\u0131.",
-      "cli.user_response": "Kullan\u0131c\u0131 yan\u0131t\u0131: {response}",
-      "cli.write_to": "{path} dosyas\u0131na yaz",
-      "cli.edit_file": "{path} d\xFCzenle",
-      "cli.list_path": "{path} listele",
-      "cli.search_query": '"{query}" ara',
-      "cli.ok": "Tamam",
-      "cli.fail": "Ba\u015Far\u0131s\u0131z",
-      "cli.more_lines": "... ({count} sat\u0131r daha)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Ava | Supernova'ya ho\u015F geldiniz",
-      "setup.intro": "LLM sa\u011Flay\u0131c\u0131n\u0131z\u0131 kural\u0131m.",
-      "setup.choose": "Bir sa\u011Flay\u0131c\u0131 se\xE7in (numara): ",
-      "setup.invalid_choice": "Ge\xE7ersiz se\xE7im. Yeniden ba\u015Flat\u0131p tekrar deneyin.",
-      "setup.key_url": "API key'inizi buradan al\u0131n: {url}",
-      "setup.enter_key": "{provider} API Key: ",
-      "setup.no_key": "API key girilmedi. Yeniden ba\u015Flat\u0131p tekrar deneyin.",
-      "setup.complete": "Kurulum tamamland\u0131! Aktif model: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/uk.js
-var uk_exports = {};
-__export(uk_exports, {
-  ukStrings: () => ukStrings
-});
-var ukStrings;
-var init_uk = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/uk.js"() {
-    ukStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\u0417\u0430\u043F\u0438\u0442\u0430\u0439\u0442\u0435 \u0431\u0443\u0434\u044C-\u0449\u043E \u043F\u0440\u043E \u0432\u0430\u0448 \u043A\u043E\u0434.",
-      "welcome.cli_hint": "\u0412\u0432\u0435\u0434\u0456\u0442\u044C \u043F\u043E\u0432\u0456\u0434\u043E\u043C\u043B\u0435\u043D\u043D\u044F \u0430\u0431\u043E /help \u0434\u043B\u044F \u043F\u0435\u0440\u0435\u043B\u0456\u043A\u0443 \u043A\u043E\u043C\u0430\u043D\u0434.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\u0429\u043E \u0432\u0438 \u0445\u043E\u0447\u0435\u0442\u0435 \u0441\u0442\u0432\u043E\u0440\u0438\u0442\u0438?",
-      "input.placeholder.plan": "\u041E\u043F\u0438\u0448\u0456\u0442\u044C, \u0449\u043E \u0432\u0438 \u0445\u043E\u0447\u0435\u0442\u0435 \u0441\u043F\u043B\u0430\u043D\u0443\u0432\u0430\u0442\u0438...",
-      "input.placeholder.chat": "\u0417\u0430\u0434\u0430\u0439\u0442\u0435 \u043F\u0438\u0442\u0430\u043D\u043D\u044F \u0430\u0431\u043E \u043F\u043E\u0447\u043D\u0456\u0442\u044C \u043E\u0431\u0433\u043E\u0432\u043E\u0440\u0435\u043D\u043D\u044F...",
-      "input.placeholder.disabled": "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0439\u0442\u0435 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430, \u0449\u043E\u0431 \u043F\u043E\u0447\u0430\u0442\u0438...",
-      "input.placeholder.security": "\u041E\u043F\u0438\u0448\u0456\u0442\u044C, \u0449\u043E \u043F\u043E\u0442\u0440\u0456\u0431\u043D\u043E \u043F\u0435\u0440\u0435\u0432\u0456\u0440\u0438\u0442\u0438, \u0430\u0431\u043E \u043D\u0430\u0442\u0438\u0441\u043D\u0456\u0442\u044C Enter \u0434\u043B\u044F \u043F\u043E\u0432\u043D\u043E\u0433\u043E \u0430\u0443\u0434\u0438\u0442\u0443...",
-      "input.mode.code": "\u041A\u043E\u0434",
-      "input.mode.plan": "\u041F\u043B\u0430\u043D",
-      "input.mode.chat": "\u0427\u0430\u0442",
-      "input.mode.security": "\u0411\u0435\u0437\u043F\u0435\u043A\u0430",
-      "input.send": "\u041D\u0430\u0434\u0456\u0441\u043B\u0430\u0442\u0438 (Enter)",
-      "input.send_aria": "\u041D\u0430\u0434\u0456\u0441\u043B\u0430\u0442\u0438 \u043F\u043E\u0432\u0456\u0434\u043E\u043C\u043B\u0435\u043D\u043D\u044F",
-      "input.stop": "\u0417\u0443\u043F\u0438\u043D\u0438\u0442\u0438",
-      "input.stop_aria": "\u0417\u0443\u043F\u0438\u043D\u0438\u0442\u0438 Avu",
-      "input.attach": "\u041F\u0440\u0438\u043A\u0440\u0456\u043F\u0438\u0442\u0438 \u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u043D\u044F",
-      "input.drop_image": "\u041F\u0435\u0440\u0435\u0442\u044F\u0433\u043D\u0456\u0442\u044C \u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u043D\u044F \u0441\u044E\u0434\u0438",
-      "input.compressing": "\u0421\u0442\u0438\u0441\u043D\u0435\u043D\u043D\u044F...",
-      "input.compress_title": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0443 \u2014 \u043D\u0430\u0442\u0438\u0441\u043D\u0456\u0442\u044C, \u0449\u043E\u0431 \u0441\u0442\u0438\u0441\u043D\u0443\u0442\u0438",
-      "input.compress_title_warning": "\u041D\u0430\u0442\u0438\u0441\u043D\u0456\u0442\u044C, \u0449\u043E\u0431 \u0441\u0442\u0438\u0441\u043D\u0443\u0442\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\u0406\u0441\u0442\u043E\u0440\u0456\u044F \u0447\u0430\u0442\u0443",
-      "header.settings": "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F",
-      "header.new_chat": "\u041D\u043E\u0432\u0438\u0439 \u0447\u0430\u0442",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\u041D\u0435\u043C\u0430\u0454 \u043D\u0430\u043B\u0430\u0448\u0442\u043E\u0432\u0430\u043D\u0438\u0445 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0456\u0432.",
-      "model.open_settings": "\u0412\u0456\u0434\u043A\u0440\u0438\u0442\u0438 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F",
-      "model.vision": "\u0437\u0456\u0440",
-      "model.vision_title": "\u0426\u044F \u043C\u043E\u0434\u0435\u043B\u044C \u043F\u0456\u0434\u0442\u0440\u0438\u043C\u0443\u0454 \u0432\u0432\u0435\u0434\u0435\u043D\u043D\u044F \u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u044C",
-      "model.switched": "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043D\u0430 {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u0434\u0443\u043C\u0430\u0454...",
-      "thinking.1": "\u0410\u043D\u0430\u043B\u0456\u0437\u0443\u044E \u0432\u0430\u0448 \u043A\u043E\u0434...",
-      "thinking.2": "\u0420\u043E\u0437\u0433\u043B\u044F\u0434\u0430\u044E \u043F\u0456\u0434\u0445\u043E\u0434\u0438...",
-      "thinking.3": "\u0424\u043E\u0440\u043C\u0443\u044E \u0432\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u044C...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\u041F\u043E\u044F\u0441\u043D\u0438 \u0446\u0435\u0439 \u043F\u0440\u043E\u0454\u043A\u0442",
-      "suggestion.explain_prompt": "\u0414\u0430\u0439 \u0437\u0430\u0433\u0430\u043B\u044C\u043D\u0438\u0439 \u043E\u0433\u043B\u044F\u0434 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0438 \u0442\u0430 \u0430\u0440\u0445\u0456\u0442\u0435\u043A\u0442\u0443\u0440\u0438 \u0446\u044C\u043E\u0433\u043E \u043F\u0440\u043E\u0454\u043A\u0442\u0443.",
-      "suggestion.bug": "\u0417\u043D\u0430\u0439\u0434\u0438 \u043F\u043E\u043C\u0438\u043B\u043A\u0443",
-      "suggestion.bug_prompt": "\u0414\u043E\u043F\u043E\u043C\u043E\u0436\u0438 \u043C\u0435\u043D\u0456 \u0437\u043D\u0430\u0439\u0442\u0438 \u0442\u0430 \u0432\u0438\u043F\u0440\u0430\u0432\u0438\u0442\u0438 \u043F\u043E\u043C\u0438\u043B\u043A\u0438 \u0432 \u043F\u043E\u0442\u043E\u0447\u043D\u043E\u043C\u0443 \u0444\u0430\u0439\u043B\u0456.",
-      "suggestion.test": "\u041D\u0430\u043F\u0438\u0448\u0438 \u0442\u0435\u0441\u0442\u0438",
-      "suggestion.test_prompt": "\u041D\u0430\u043F\u0438\u0448\u0438 \u043A\u043E\u043C\u043F\u043B\u0435\u043A\u0441\u043D\u0456 \u0442\u0435\u0441\u0442\u0438 \u0434\u043B\u044F \u0433\u043E\u043B\u043E\u0432\u043D\u043E\u0433\u043E \u043C\u043E\u0434\u0443\u043B\u044F.",
-      "suggestion.refactor": "\u0420\u0435\u0444\u0430\u043A\u0442\u043E\u0440\u0438\u043D\u0433 \u043A\u043E\u0434\u0443",
-      "suggestion.refactor_prompt": "\u0417\u0430\u043F\u0440\u043E\u043F\u043E\u043D\u0443\u0439 \u043F\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u043D\u044F \u0440\u0435\u0444\u0430\u043A\u0442\u043E\u0440\u0438\u043D\u0433\u0443 \u0434\u043B\u044F \u043F\u043E\u0442\u043E\u0447\u043D\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0443.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\u0410\u0432\u0442\u0435\u043D\u0442\u0438\u0444\u0456\u043A\u0430\u0446\u0456\u044F",
-      "error.credits": "\u0411\u0456\u043B\u0456\u043D\u0433",
-      "error.forbidden": "\u0414\u043E\u0441\u0442\u0443\u043F \u0437\u0430\u0431\u043E\u0440\u043E\u043D\u0435\u043D\u043E",
-      "error.rate_limit": "\u041B\u0456\u043C\u0456\u0442 \u0437\u0430\u043F\u0438\u0442\u0456\u0432",
-      "error.model_not_found": "\u041F\u043E\u043C\u0438\u043B\u043A\u0430 \u043C\u043E\u0434\u0435\u043B\u0456",
-      "error.bad_request": "\u041D\u0435\u043A\u043E\u0440\u0435\u043A\u0442\u043D\u0438\u0439 \u0437\u0430\u043F\u0438\u0442",
-      "error.server_error": "\u041F\u043E\u043C\u0438\u043B\u043A\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0430",
-      "error.timeout": "\u0422\u0430\u0439\u043C-\u0430\u0443\u0442",
-      "error.stream_stall": "\u041F\u043E\u0442\u0456\u043A \u0437\u0443\u043F\u0438\u043D\u0438\u0432\u0441\u044F",
-      "error.network": "\u041F\u043E\u043C\u0438\u043B\u043A\u0430 \u043C\u0435\u0440\u0435\u0436\u0456",
-      "error.setup": "\u041F\u043E\u0442\u0440\u0456\u0431\u043D\u0435 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F",
-      "error.busy": "\u0417\u0430\u0439\u043D\u044F\u0442\u0430",
-      "error.iterations_exceeded": "\u041B\u0456\u043C\u0456\u0442 \u0456\u0442\u0435\u0440\u0430\u0446\u0456\u0439",
-      "error.context_truncated": "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043E\u0431\u0440\u0456\u0437\u0430\u043D\u043E",
-      "error.provider_error": "\u041F\u043E\u043C\u0438\u043B\u043A\u0430 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430",
-      "error.unknown": "\u041F\u043E\u043C\u0438\u043B\u043A\u0430",
-      "error.continue": "\u041F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u0438",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "\u041D\u0435\u043A\u043E\u0440\u0435\u043A\u0442\u043D\u0438\u0439 \u0437\u0430\u043F\u0438\u0442 \u0434\u043E {provider}. \u0424\u043E\u0440\u043C\u0430\u0442 \u0437\u0430\u043F\u0438\u0442\u0443 \u043C\u043E\u0436\u0435 \u0431\u0443\u0442\u0438 \u043D\u0435\u0441\u0443\u043C\u0456\u0441\u043D\u0438\u043C \u0456\u0437 \u0446\u0456\u0454\u044E \u043C\u043E\u0434\u0435\u043B\u043B\u044E.",
-      "error.msg.auth": "\u041D\u0435\u0432\u0456\u0440\u043D\u0438\u0439 API key \u0434\u043B\u044F {provider}. \u041F\u0435\u0440\u0435\u0432\u0456\u0440\u0442\u0435 \u043A\u043B\u044E\u0447 \u0443 ~/.ava/config.json",
-      "error.msg.credits": "\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043D\u044C\u043E \u043A\u043E\u0448\u0442\u0456\u0432 \u043D\u0430 \u0440\u0430\u0445\u0443\u043D\u043A\u0443 {provider}. \u041F\u043E\u043F\u043E\u0432\u043D\u0456\u0442\u044C \u0431\u0430\u043B\u0430\u043D\u0441.",
-      "error.msg.forbidden": "\u0414\u043E\u0441\u0442\u0443\u043F \u0437\u0430\u0431\u043E\u0440\u043E\u043D\u0435\u043D\u043E {provider}. \u0412\u0430\u0448 API key \u043C\u043E\u0436\u0435 \u043D\u0435 \u043C\u0430\u0442\u0438 \u043F\u043E\u0442\u0440\u0456\u0431\u043D\u0438\u0445 \u0434\u043E\u0437\u0432\u043E\u043B\u0456\u0432.",
-      "error.msg.model_not_found": "\u041C\u043E\u0434\u0435\u043B\u044C \u043D\u0435 \u0437\u043D\u0430\u0439\u0434\u0435\u043D\u043E \u0443 {provider}. ID \u043C\u043E\u0434\u0435\u043B\u0456 \u043C\u043E\u0433\u043B\u043E \u0437\u043C\u0456\u043D\u0438\u0442\u0438\u0441\u044F \u2014 \u0432\u0438\u043A\u043E\u043D\u0430\u0439\u0442\u0435 /model, \u0449\u043E\u0431 \u043F\u0435\u0440\u0435\u0433\u043B\u044F\u043D\u0443\u0442\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0456 \u043C\u043E\u0434\u0435\u043B\u0456.",
-      "error.msg.rate_limit": "\u041B\u0456\u043C\u0456\u0442 \u0437\u0430\u043F\u0438\u0442\u0456\u0432 {provider} \u043F\u0435\u0440\u0435\u0432\u0438\u0449\u0435\u043D\u043E. \u0417\u0430\u043D\u0430\u0434\u0442\u043E \u0431\u0430\u0433\u0430\u0442\u043E \u0437\u0430\u043F\u0438\u0442\u0456\u0432 \u2014 \u0437\u0430\u0447\u0435\u043A\u0430\u0439\u0442\u0435 \u0442\u0430 \u0441\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0437\u043D\u043E\u0432\u0443.",
-      "error.msg.server_error": "{provider} \u043C\u0430\u0454 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u0438 ({code}). \u0421\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0437\u043D\u043E\u0432\u0443 \u0447\u0435\u0440\u0435\u0437 \u043A\u0456\u043B\u044C\u043A\u0430 \u0445\u0432\u0438\u043B\u0438\u043D.",
-      "error.msg.empty_response": "\u041C\u043E\u0434\u0435\u043B\u044C \u043F\u043E\u0432\u0435\u0440\u043D\u0443\u043B\u0430 \u043F\u043E\u0440\u043E\u0436\u043D\u044E \u0432\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u044C. \u0426\u0435 \u043C\u043E\u0436\u0435 \u0441\u0442\u0430\u0442\u0438\u0441\u044F \u043F\u0440\u0438 \u043F\u0435\u0440\u0435\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u0456 API \u0430\u0431\u043E \u0444\u0456\u043B\u044C\u0442\u0440\u0430\u0446\u0456\u0457 \u0437\u0430\u043F\u0438\u0442\u0443. \u0421\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0437\u043D\u043E\u0432\u0443.",
-      "error.msg.iteration_limit": "Ava \u0434\u043E\u0441\u044F\u0433\u043B\u0430 \u043B\u0456\u043C\u0456\u0442\u0443 \u0431\u0435\u0437\u043F\u0435\u043A\u0438 \u0443 {limit} \u0456\u0442\u0435\u0440\u0430\u0446\u0456\u0439. \u0417\u0430\u0437\u0432\u0438\u0447\u0430\u0439 \u0446\u0435 \u043E\u0437\u043D\u0430\u0447\u0430\u0454, \u0449\u043E \u0437\u0430\u0432\u0434\u0430\u043D\u043D\u044F \u0437\u0430\u043D\u0430\u0434\u0442\u043E \u0432\u0435\u043B\u0438\u043A\u0435 \u0430\u0431\u043E \u043C\u043E\u0434\u0435\u043B\u044C \u0437\u0430\u0446\u0438\u043A\u043B\u0438\u043B\u0430\u0441\u044F.",
-      "error.msg.iteration_warning": "[\u0423\u0412\u0410\u0413\u0410] \u0417\u0430\u043B\u0438\u0448\u0438\u043B\u043E\u0441\u044F {remaining} \u0456\u0442\u0435\u0440\u0430\u0446\u0456\u0439 \u0434\u043E \u043B\u0456\u043C\u0456\u0442\u0443 \u0446\u0438\u043A\u043B\u0443. \u0417\u0430\u0432\u0435\u0440\u0448\u0456\u0442\u044C \u043F\u043E\u0442\u043E\u0447\u043D\u0435 \u0437\u0430\u0432\u0434\u0430\u043D\u043D\u044F \u2014 \u043F\u0456\u0434\u0441\u0443\u043C\u0443\u0439\u0442\u0435, \u0449\u043E \u0437\u0440\u043E\u0431\u043B\u0435\u043D\u043E \u0442\u0430 \u0449\u043E \u0437\u0430\u043B\u0438\u0448\u0438\u043B\u043E\u0441\u044C. \u041D\u0435 \u043F\u043E\u0447\u0438\u043D\u0430\u0439\u0442\u0435 \u043D\u043E\u0432\u0443 \u0431\u0430\u0433\u0430\u0442\u043E\u043A\u0440\u043E\u043A\u043E\u0432\u0443 \u0440\u043E\u0431\u043E\u0442\u0443.",
-      "error.msg.image_stripped": "[\u0417\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u043D\u044F \u0431\u0443\u043B\u043E \u043D\u0430\u0434\u0430\u043D\u043E, \u0430\u043B\u0435 \u0446\u044F \u043C\u043E\u0434\u0435\u043B\u044C \u043D\u0435 \u043F\u0456\u0434\u0442\u0440\u0438\u043C\u0443\u0454 \u0437\u0456\u0440]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u0414\u043E\u0437\u0432\u043E\u043B\u0438\u0442\u0438",
-      "tool.always_allow": "\u0417\u0430\u0432\u0436\u0434\u0438 \u0434\u043E\u0437\u0432\u043E\u043B\u044F\u0442\u0438",
-      "tool.allow_all": "\u0414\u043E\u0437\u0432\u043E\u043B\u0438\u0442\u0438 \u0432\u0441\u0435",
-      "tool.deny": "\u0412\u0456\u0434\u0445\u0438\u043B\u0438\u0442\u0438",
-      "tool.allow_prompt": "\u0414\u043E\u0437\u0432\u043E\u043B\u0438\u0442\u0438 {tool}?",
-      "tool.arguments": "\u0410\u0440\u0433\u0443\u043C\u0435\u043D\u0442\u0438",
-      "tool.output": "\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442",
-      "tool.error": "\u041F\u043E\u043C\u0438\u043B\u043A\u0430",
-      "tool.truncated": "... (\u043E\u0431\u0440\u0456\u0437\u0430\u043D\u043E)",
-      "tool.read": "\u0427\u0438\u0442\u0430\u043D\u043D\u044F {file}",
-      "tool.write": "\u0417\u0430\u043F\u0438\u0441 {file}",
-      "tool.edit": "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043D\u043D\u044F {file}",
-      "tool.find_files": "\u041F\u043E\u0448\u0443\u043A \u0444\u0430\u0439\u043B\u0456\u0432: {pattern}",
-      "tool.search": "\u041F\u043E\u0448\u0443\u043A: {pattern}",
-      "tool.run": "\u0412\u0438\u043A\u043E\u043D\u0430\u0442\u0438: {command}",
-      "tool.list_dir": "\u0421\u043F\u0438\u0441\u043E\u043A {path}",
-      "tool.web_search": "\u041F\u043E\u0448\u0443\u043A: {query}",
-      "tool.ask_user": "\u041F\u0438\u0442\u0430\u043D\u043D\u044F \u0434\u043E \u043A\u043E\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\u0406\u0441\u0442\u043E\u0440\u0456\u044F \u0447\u0430\u0442\u0443",
-      "history.new_chat": "+ \u041D\u043E\u0432\u0438\u0439 \u0447\u0430\u0442",
-      "history.close": "\u0417\u0430\u043A\u0440\u0438\u0442\u0438",
-      "history.search": "\u041F\u043E\u0448\u0443\u043A \u0440\u043E\u0437\u043C\u043E\u0432...",
-      "history.empty": "\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u0438\u0445 \u0440\u043E\u0437\u043C\u043E\u0432 \u0449\u0435 \u043D\u0435\u043C\u0430\u0454.",
-      "history.no_match": "\u041D\u0435\u043C\u0430\u0454 \u0432\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u043D\u0438\u0445 \u0440\u043E\u0437\u043C\u043E\u0432.",
-      "history.delete_confirm": "\u0412\u0438\u0434\u0430\u043B\u0438\u0442\u0438?",
-      "history.rename_hint": "\u0414\u0432\u0456\u0447\u0456 \u043A\u043B\u0430\u0446\u043D\u0456\u0442\u044C, \u0449\u043E\u0431 \u043F\u0435\u0440\u0435\u0439\u043C\u0435\u043D\u0443\u0432\u0430\u0442\u0438",
-      "history.pin": "\u0417\u0430\u043A\u0440\u0456\u043F\u0438\u0442\u0438",
-      "history.unpin": "\u0412\u0456\u0434\u043A\u0440\u0456\u043F\u0438\u0442\u0438",
-      "history.export_md": "\u0415\u043A\u0441\u043F\u043E\u0440\u0442\u0443\u0432\u0430\u0442\u0438 \u044F\u043A Markdown",
-      "history.pinned": "\u0417\u0430\u043A\u0440\u0456\u043F\u043B\u0435\u043D\u0456",
-      "history.just_now": "\u0449\u043E\u0439\u043D\u043E",
-      "history.minutes_ago": "{n} \u0445\u0432 \u0442\u043E\u043C\u0443",
-      "history.hours_ago": "{n} \u0433\u043E\u0434 \u0442\u043E\u043C\u0443",
-      "history.days_ago": "{n} \u0434\u043D \u0442\u043E\u043C\u0443",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\u041F\u0438\u0442\u0430\u043D\u043D\u044F",
-      "ask.fallback": "Ava \u043C\u0430\u0454 \u043F\u0438\u0442\u0430\u043D\u043D\u044F",
-      "ask.placeholder": "\u0412\u0432\u0435\u0434\u0456\u0442\u044C \u0432\u0430\u0448\u0443 \u0432\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u044C...",
-      "ask.submit": "\u041D\u0430\u0434\u0456\u0441\u043B\u0430\u0442\u0438",
-      "ask.skip": "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u0438",
-      "ask.skipped": "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043E",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\u0414\u0430\u043D\u0456 \u043F\u043B\u0430\u043D\u0443 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0456",
-      "plan.prefix": "\u041F\u043B\u0430\u043D: {title}",
-      "plan.approved": "\u0417\u0430\u0442\u0432\u0435\u0440\u0434\u0436\u0435\u043D\u043E",
-      "plan.rejected": "\u0412\u0456\u0434\u0445\u0438\u043B\u0435\u043D\u043E",
-      "plan.goal": "\u041C\u0435\u0442\u0430",
-      "plan.steps": "\u041A\u0440\u043E\u043A\u0438",
-      "plan.verification": "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430",
-      "plan.approaches": "\u041F\u0456\u0434\u0445\u043E\u0434\u0438",
-      "plan.approve": "\u0417\u0430\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0438",
-      "plan.reject": "\u0412\u0456\u0434\u0445\u0438\u043B\u0438\u0442\u0438",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\u0421\u043F\u0438\u0441\u043E\u043A \u0437\u0430\u0432\u0434\u0430\u043D\u044C \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439",
-      "todo.tasks": "\u0417\u0430\u0432\u0434\u0430\u043D\u043D\u044F",
-      "todo.done": "{done}/{total} \u0432\u0438\u043A\u043E\u043D\u0430\u043D\u043E",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\u0432\u0445\u0456\u0434",
-      "status.out": "\u0432\u0438\u0445\u0456\u0434",
-      "status.total": "\u0432\u0441\u044C\u043E\u0433\u043E",
-      "status.tokens": "\u0442\u043E\u043A\u0435\u043D\u0438",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u0421\u0442\u0438\u0441\u043D\u0435\u043D\u043D\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0443...",
-      "compression.result": "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0441\u0442\u0438\u0441\u043D\u0443\u0442\u043E: ~{original} \u2192 ~{compressed} \u0442\u043E\u043A\u0435\u043D\u0456\u0432",
-      "compression.nothing": "\u041D\u0435\u043C\u0430 \u0447\u043E\u0433\u043E \u0441\u0442\u0438\u0441\u043A\u0430\u0442\u0438.",
-      "compression.failed": "\u0421\u0442\u0438\u0441\u043D\u0435\u043D\u043D\u044F \u043D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C.",
-      "compression.busy": "\u041D\u0435\u043C\u043E\u0436\u043B\u0438\u0432\u043E \u0441\u0442\u0438\u0441\u043D\u0443\u0442\u0438, \u043F\u043E\u043A\u0438 Ava \u043F\u0440\u0430\u0446\u044E\u0454.",
-      "compression.context_truncated": "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043E\u0431\u0440\u0456\u0437\u0430\u043D\u043E: \u0432\u0456\u0434\u043A\u0438\u043D\u0443\u0442\u043E {count} \u043F\u043E\u0432\u0456\u0434\u043E\u043C\u043B\u0435\u043D\u044C.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\u041F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u0438 \u0437 \u0442\u043E\u0433\u043E \u043C\u0456\u0441\u0446\u044F, \u0434\u0435 \u0437\u0443\u043F\u0438\u043D\u0438\u043B\u0438\u0441\u044C.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0456 \u043A\u043E\u043C\u0430\u043D\u0434\u0438",
-      "cmd.model.desc": "\u041F\u0435\u0440\u0435\u043B\u0456\u043A \u0430\u0431\u043E \u0437\u043C\u0456\u043D\u0430 \u043C\u043E\u0434\u0435\u043B\u0435\u0439 (/model <provider:model-id>)",
-      "cmd.clear.desc": "\u041E\u0447\u0438\u0441\u0442\u0438\u0442\u0438 \u0456\u0441\u0442\u043E\u0440\u0456\u044E \u0440\u043E\u0437\u043C\u043E\u0432\u0438",
-      "cmd.provider.desc": "\u0414\u043E\u0434\u0430\u0442\u0438 \u0430\u0431\u043E \u043F\u0435\u0440\u0435\u0433\u043B\u044F\u043D\u0443\u0442\u0438 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0456\u0432 (/provider add <name>)",
-      "cmd.history.desc": "\u041F\u0435\u0440\u0435\u043B\u0456\u043A \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u0438\u0445 \u0440\u043E\u0437\u043C\u043E\u0432",
-      "cmd.resume.desc": "\u0412\u0456\u0434\u043D\u043E\u0432\u0438\u0442\u0438 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u0443 \u0440\u043E\u0437\u043C\u043E\u0432\u0443 (/resume <id-prefix>)",
-      "cmd.search.desc": "\u041F\u043E\u0448\u0443\u043A \u0440\u043E\u0437\u043C\u043E\u0432 (/search <query>)",
-      "cmd.delete.desc": "\u0412\u0438\u0434\u0430\u043B\u0438\u0442\u0438 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u0443 \u0440\u043E\u0437\u043C\u043E\u0432\u0443 (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u041F\u0435\u0440\u0435\u0439\u043C\u0435\u043D\u0443\u0432\u0430\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443 (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\u0417\u0430\u043A\u0440\u0456\u043F\u0438\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\u0412\u0456\u0434\u043A\u0440\u0456\u043F\u0438\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443 (/unpin <id-prefix>)",
-      "cmd.export.desc": "\u0415\u043A\u0441\u043F\u043E\u0440\u0442\u0443\u0432\u0430\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0438 \u043E\u0441\u0442\u0430\u043D\u043D\u0454 \u043F\u043E\u0432\u0456\u0434\u043E\u043C\u043B\u0435\u043D\u043D\u044F",
-      "cmd.compact.desc": "\u0421\u0442\u0438\u0441\u043D\u0443\u0442\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0440\u043E\u0437\u043C\u043E\u0432\u0438, \u0449\u043E\u0431 \u0437\u0432\u0456\u043B\u044C\u043D\u0438\u0442\u0438 \u043C\u0456\u0441\u0446\u0435",
-      "cmd.permission.desc": "\u041F\u0435\u0440\u0435\u0433\u043B\u044F\u043D\u0443\u0442\u0438 \u0430\u0431\u043E \u0432\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0438 \u0440\u0435\u0436\u0438\u043C \u0434\u043E\u0437\u0432\u043E\u043B\u0456\u0432 (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\u041F\u0435\u0440\u0435\u043B\u0456\u043A \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0445 \u0456\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u0456\u0432",
-      "cmd.init.desc": "\u0421\u0442\u0432\u043E\u0440\u0438\u0442\u0438 .ava/instructions.md \u0434\u043B\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0443 \u043F\u0440\u043E\u0454\u043A\u0442\u0443",
-      "cmd.exit.desc": "\u0412\u0438\u0439\u0442\u0438 \u0437 Ava",
-      "cmd.security.desc": "\u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0438 \u0430\u0443\u0434\u0438\u0442 \u0431\u0435\u0437\u043F\u0435\u043A\u0438 (/security [\u043E\u0431\u043B\u0430\u0441\u0442\u044C \u043F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0438])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\u041D\u0435\u0432\u0456\u0434\u043E\u043C\u0430 \u043C\u043E\u0434\u0435\u043B\u044C: {model}",
-      "cmd.model.switched": "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043D\u0430 {name} ({provider})",
-      "cmd.model.active": "(\u0430\u043A\u0442\u0438\u0432\u043D\u0430)",
-      "cmd.clear.done": "\u0420\u043E\u0437\u043C\u043E\u0432\u0443 \u043E\u0447\u0438\u0449\u0435\u043D\u043E.",
-      "cmd.provider.usage": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F: /provider add <{providers}>",
-      "cmd.provider.enter_key": "\u0412\u0432\u0435\u0434\u0456\u0442\u044C API key \u0434\u043B\u044F {provider}: ",
-      "cmd.provider.cancelled": "\u0421\u043A\u0430\u0441\u043E\u0432\u0430\u043D\u043E.",
-      "cmd.provider.added": "\u041F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440 {provider} \u0443\u0441\u043F\u0456\u0448\u043D\u043E \u0434\u043E\u0434\u0430\u043D\u043E.",
-      "cmd.provider.failed": "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0440\u0435\u0454\u0441\u0442\u0440\u0443\u0432\u0430\u0442\u0438 {provider}: {error}",
-      "cmd.provider.title": "\u041D\u0430\u043B\u0430\u0448\u0442\u043E\u0432\u0430\u043D\u0456 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0438:",
-      "cmd.provider.configured": "\u043D\u0430\u043B\u0430\u0448\u0442\u043E\u0432\u0430\u043D\u043E",
-      "cmd.provider.not_configured": "\u043D\u0435 \u043D\u0430\u043B\u0430\u0448\u0442\u043E\u0432\u0430\u043D\u043E",
-      "cmd.provider.hint": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u043E\u0432\u0443\u0439\u0442\u0435 /provider add <name>, \u0449\u043E\u0431 \u0434\u043E\u0434\u0430\u0442\u0438 \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430.",
-      "cmd.history.empty": "\u041D\u0435\u043C\u0430\u0454 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u0438\u0445 \u0440\u043E\u0437\u043C\u043E\u0432.",
-      "cmd.history.title": "\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u0456 \u0440\u043E\u0437\u043C\u043E\u0432\u0438:",
-      "cmd.history.more": "... \u0442\u0430 \u0449\u0435 {count}",
-      "cmd.history.hint": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u043E\u0432\u0443\u0439\u0442\u0435 /resume <id-prefix>, \u0449\u043E\u0431 \u0437\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0438\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443.",
-      "cmd.resume.usage": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F: /resume <id-prefix>",
-      "cmd.resume.hint": "\u0412\u0438\u043A\u043E\u043D\u0430\u0439\u0442\u0435 /history, \u0449\u043E\u0431 \u043F\u0435\u0440\u0435\u0433\u043B\u044F\u043D\u0443\u0442\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0456 \u0440\u043E\u0437\u043C\u043E\u0432\u0438.",
-      "cmd.resume.not_found": '\u041D\u0435 \u0437\u043D\u0430\u0439\u0434\u0435\u043D\u043E \u0440\u043E\u0437\u043C\u043E\u0432\u0438, \u0449\u043E \u0432\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u0430\u0454 "{prefix}".',
-      "cmd.resume.failed": "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0438\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443.",
-      "cmd.resume.done": "\u0412\u0456\u0434\u043D\u043E\u0432\u043B\u0435\u043D\u043E: {title}",
-      "cmd.resume.count": "\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043E {count} \u043F\u043E\u0432\u0456\u0434\u043E\u043C\u043B\u0435\u043D\u044C.",
-      "cmd.search.usage": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F: /search <query>",
-      "cmd.search.empty": '\u041D\u0435\u043C\u0430\u0454 \u0440\u043E\u0437\u043C\u043E\u0432, \u0449\u043E \u0432\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u0430\u044E\u0442\u044C "{query}".',
-      "cmd.search.title": '\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0438 \u043F\u043E\u0448\u0443\u043A\u0443 \u0434\u043B\u044F "{query}":',
-      "cmd.delete.usage": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F: /delete <id-prefix>",
-      "cmd.delete.confirm": '\u0412\u0438\u0434\u0430\u043B\u0438\u0442\u0438 "{title}" ({id})? (\u0442/\u043D) ',
-      "cmd.delete.done": "\u0420\u043E\u0437\u043C\u043E\u0432\u0443 \u0432\u0438\u0434\u0430\u043B\u0435\u043D\u043E.",
-      "cmd.delete.failed": "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u0432\u0438\u0434\u0430\u043B\u0438\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443.",
-      "cmd.rename.usage": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u041F\u0435\u0440\u0435\u0439\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u043E \u043D\u0430: {title}",
-      "cmd.rename.failed": "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0435\u0440\u0435\u0439\u043C\u0435\u043D\u0443\u0432\u0430\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443.",
-      "cmd.pin.usage": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F: /pin <id-prefix>",
-      "cmd.pin.done": "\u0417\u0430\u043A\u0440\u0456\u043F\u043B\u0435\u043D\u043E: {title}",
-      "cmd.pin.failed": "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043A\u0440\u0456\u043F\u0438\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443.",
-      "cmd.unpin.usage": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F: /unpin <id-prefix>",
-      "cmd.unpin.done": "\u0412\u0456\u0434\u043A\u0440\u0456\u043F\u043B\u0435\u043D\u043E: {title}",
-      "cmd.unpin.failed": "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u0432\u0456\u0434\u043A\u0440\u0456\u043F\u0438\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443.",
-      "cmd.export.usage": "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043D\u044F: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u0435\u043A\u0441\u043F\u043E\u0440\u0442\u0443\u0432\u0430\u0442\u0438 \u0440\u043E\u0437\u043C\u043E\u0432\u0443.",
-      "cmd.export.done": "\u0415\u043A\u0441\u043F\u043E\u0440\u0442\u043E\u0432\u0430\u043D\u043E \u0434\u043E {filename}",
-      "cmd.retry.unavailable": "\u041F\u043E\u0432\u0442\u043E\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439.",
-      "cmd.compact.unavailable": "\u0421\u0442\u0438\u0441\u043D\u0435\u043D\u043D\u044F \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0435.",
-      "cmd.permission.title": "\u0420\u0435\u0436\u0438\u043C \u0434\u043E\u0437\u0432\u043E\u043B\u0456\u0432:",
-      "cmd.permission.strict": "\u043F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0436\u0443\u0432\u0430\u0442\u0438 \u0437\u0430\u043F\u0438\u0441\u0438 \u0442\u0430 \u043A\u043E\u043C\u0430\u043D\u0434\u0438 \u043E\u0431\u043E\u043B\u043E\u043D\u043A\u0438",
-      "cmd.permission.balanced": "\u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u043E \u0434\u043E\u0437\u0432\u043E\u043B\u044F\u0442\u0438 \u0437\u0430\u043F\u0438\u0441\u0438, \u043F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0436\u0443\u0432\u0430\u0442\u0438 \u043A\u043E\u043C\u0430\u043D\u0434\u0438 \u043E\u0431\u043E\u043B\u043E\u043D\u043A\u0438",
-      "cmd.permission.autonomous": "\u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u043E \u0434\u043E\u0437\u0432\u043E\u043B\u044F\u0442\u0438 \u0432\u0441\u0435",
-      "cmd.permission.unknown": "\u041D\u0435\u0432\u0456\u0434\u043E\u043C\u0438\u0439 \u0440\u0435\u0436\u0438\u043C. \u041E\u0431\u0435\u0440\u0456\u0442\u044C: {modes}",
-      "cmd.permission.set": "\u0420\u0435\u0436\u0438\u043C \u0434\u043E\u0437\u0432\u043E\u043B\u0456\u0432 \u0432\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u043D\u0430 {mode}.",
-      "cmd.tools.title": "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0456 \u0456\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u0438:",
-      "cmd.init.created": "\u0421\u0442\u0432\u043E\u0440\u0435\u043D\u043E {path}",
-      "cmd.init.hint": "\u0412\u0456\u0434\u0440\u0435\u0434\u0430\u0433\u0443\u0439\u0442\u0435 \u0446\u0435\u0439 \u0444\u0430\u0439\u043B, \u0449\u043E\u0431 \u043D\u0430\u0434\u0430\u0442\u0438 Ava \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043F\u0440\u043E\u0454\u043A\u0442\u0443.",
-      "cmd.init.restart": "\u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C Ava, \u0449\u043E\u0431 \u0437\u043C\u0456\u043D\u0438 \u043D\u0430\u0431\u0440\u0430\u043B\u0438 \u0447\u0438\u043D\u043D\u043E\u0441\u0442\u0456.",
-      "cmd.init.exists": "{path} \u0432\u0436\u0435 \u0456\u0441\u043D\u0443\u0454.",
-      "cmd.unknown": "\u041D\u0435\u0432\u0456\u0434\u043E\u043C\u0430 \u043A\u043E\u043C\u0430\u043D\u0434\u0430: {input}. \u0412\u0432\u0435\u0434\u0456\u0442\u044C /help, \u0449\u043E\u0431 \u043F\u0435\u0440\u0435\u0433\u043B\u044F\u043D\u0443\u0442\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0456 \u043A\u043E\u043C\u0430\u043D\u0434\u0438.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u0414\u0443\u043C\u0430\u044E...",
-      "cli.thinking_label": "[\u0434\u0443\u043C\u0430\u0454] ",
-      "cli.thinking_words": "{count} \u0441\u043B\u0456\u0432",
-      "cli.tool_label": "[\u0456\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442] ",
-      "cli.tasks_label": "[\u0437\u0430\u0432\u0434\u0430\u043D\u043D\u044F] ",
-      "cli.tokens_label": "[\u0442\u043E\u043A\u0435\u043D\u0438] ",
-      "cli.running": "\u0412\u0438\u043A\u043E\u043D\u0443\u044E {tool}...",
-      "cli.confirm_label": "[\u043F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0436\u0435\u043D\u043D\u044F] ",
-      "cli.allow_prompt": "\u0414\u043E\u0437\u0432\u043E\u043B\u0438\u0442\u0438? ",
-      "cli.allow_yn": "(\u0442/\u043D) ",
-      "cli.denied": "\u0412\u0456\u0434\u0445\u0438\u043B\u0435\u043D\u043E.",
-      "cli.question_label": "[\u043F\u0438\u0442\u0430\u043D\u043D\u044F] ",
-      "cli.question_fallback": "Ava \u043C\u0430\u0454 \u0434\u043E \u0432\u0430\u0441 \u043F\u0438\u0442\u0430\u043D\u043D\u044F",
-      "cli.your_response": "\u0412\u0430\u0448\u0430 \u0432\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u044C: ",
-      "cli.skipped": "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043E.",
-      "cli.user_response": "\u0412\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u044C \u043A\u043E\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430: {response}",
-      "cli.write_to": "\u0437\u0430\u043F\u0438\u0441 \u0434\u043E {path}",
-      "cli.edit_file": "\u0440\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043D\u043D\u044F {path}",
-      "cli.list_path": "\u0441\u043F\u0438\u0441\u043E\u043A {path}",
-      "cli.search_query": '\u043F\u043E\u0448\u0443\u043A "{query}"',
-      "cli.ok": "\u041E\u041A",
-      "cli.fail": "\u041F\u041E\u041C\u0418\u041B\u041A\u0410",
-      "cli.more_lines": "... (\u0449\u0435 {count} \u0440\u044F\u0434\u043A\u0456\u0432)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "\u041B\u0430\u0441\u043A\u0430\u0432\u043E \u043F\u0440\u043E\u0441\u0438\u043C\u043E \u0434\u043E Ava | Supernova",
-      "setup.intro": "\u0414\u0430\u0432\u0430\u0439\u0442\u0435 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0454\u043C\u043E \u0432\u0430\u0448\u043E\u0433\u043E LLM-\u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430.",
-      "setup.choose": "\u041E\u0431\u0435\u0440\u0456\u0442\u044C \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430 (\u043D\u043E\u043C\u0435\u0440): ",
-      "setup.invalid_choice": "\u041D\u0435\u0432\u0456\u0440\u043D\u0438\u0439 \u0432\u0438\u0431\u0456\u0440. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C \u0456 \u0441\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0437\u043D\u043E\u0432\u0443.",
-      "setup.key_url": "\u041E\u0442\u0440\u0438\u043C\u0430\u0439\u0442\u0435 \u0441\u0432\u0456\u0439 API key \u0437\u0430 \u0430\u0434\u0440\u0435\u0441\u043E\u044E: {url}",
-      "setup.enter_key": "API key {provider}: ",
-      "setup.no_key": "API key \u043D\u0435 \u043D\u0430\u0434\u0430\u043D\u043E. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C \u0456 \u0441\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0437\u043D\u043E\u0432\u0443.",
-      "setup.complete": "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u043E! \u0410\u043A\u0442\u0438\u0432\u043D\u0430 \u043C\u043E\u0434\u0435\u043B\u044C: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/vi.js
-var vi_exports = {};
-__export(vi_exports, {
-  viStrings: () => viStrings
-});
-var viStrings;
-var init_vi = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/vi.js"() {
-    viStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "H\u1ECFi b\u1EA5t k\u1EF3 \u0111i\u1EC1u g\xEC v\u1EC1 m\xE3 ngu\u1ED3n c\u1EE7a b\u1EA1n.",
-      "welcome.cli_hint": "Nh\u1EADp tin nh\u1EAFn, ho\u1EB7c /help \u0111\u1EC3 xem danh s\xE1ch l\u1EC7nh.",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "B\u1EA1n mu\u1ED1n x\xE2y d\u1EF1ng g\xEC?",
-      "input.placeholder.plan": "M\xF4 t\u1EA3 nh\u1EEFng g\xEC b\u1EA1n mu\u1ED1n l\xEAn k\u1EBF ho\u1EA1ch...",
-      "input.placeholder.chat": "\u0110\u1EB7t c\xE2u h\u1ECFi ho\u1EB7c b\u1EAFt \u0111\u1EA7u th\u1EA3o lu\u1EADn...",
-      "input.placeholder.disabled": "H\xE3y c\u1EA5u h\xECnh nh\xE0 cung c\u1EA5p tr\u01B0\u1EDBc...",
-      "input.placeholder.security": "M\xF4 t\u1EA3 n\u1ED9i dung c\u1EA7n qu\xE9t, ho\u1EB7c nh\u1EA5n Enter \u0111\u1EC3 ki\u1EC3m tra to\xE0n b\u1ED9...",
-      "input.mode.code": "Code",
-      "input.mode.plan": "K\u1EBF ho\u1EA1ch",
-      "input.mode.chat": "Tr\xF2 chuy\u1EC7n",
-      "input.mode.security": "B\u1EA3o m\u1EADt",
-      "input.send": "G\u1EEDi (Enter)",
-      "input.send_aria": "G\u1EEDi tin nh\u1EAFn",
-      "input.stop": "D\u1EEBng",
-      "input.stop_aria": "D\u1EEBng Ava",
-      "input.attach": "\u0110\xEDnh k\xE8m h\xECnh \u1EA3nh",
-      "input.drop_image": "Th\u1EA3 h\xECnh \u1EA3nh v\xE0o \u0111\xE2y",
-      "input.compressing": "\u0110ang n\xE9n...",
-      "input.compress_title": "M\u1EE9c s\u1EED d\u1EE5ng ng\u1EEF c\u1EA3nh \u2014 nh\u1EA5p \u0111\u1EC3 n\xE9n",
-      "input.compress_title_warning": "Nh\u1EA5p \u0111\u1EC3 n\xE9n ng\u1EEF c\u1EA3nh",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "L\u1ECBch s\u1EED tr\xF2 chuy\u1EC7n",
-      "header.settings": "C\xE0i \u0111\u1EB7t",
-      "header.new_chat": "Cu\u1ED9c tr\xF2 chuy\u1EC7n m\u1EDBi",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "Ch\u01B0a c\u1EA5u h\xECnh nh\xE0 cung c\u1EA5p n\xE0o.",
-      "model.open_settings": "M\u1EDF c\xE0i \u0111\u1EB7t",
-      "model.vision": "th\u1ECB gi\xE1c",
-      "model.vision_title": "M\xF4 h\xECnh n\xE0y h\u1ED7 tr\u1EE3 \u0111\u1EA7u v\xE0o h\xECnh \u1EA3nh/th\u1ECB gi\xE1c",
-      "model.switched": "\u0110\xE3 chuy\u1EC3n sang {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u0111ang suy ngh\u0129...",
-      "thinking.1": "\u0110ang ph\xE2n t\xEDch m\xE3 ngu\u1ED3n c\u1EE7a b\u1EA1n...",
-      "thinking.2": "\u0110ang xem x\xE9t c\xE1c ph\u01B0\u01A1ng ph\xE1p...",
-      "thinking.3": "\u0110ang so\u1EA1n c\xE2u tr\u1EA3 l\u1EDDi...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "Gi\u1EA3i th\xEDch codebase",
-      "suggestion.explain_prompt": "Cho t\xF4i c\xE1i nh\xECn t\u1ED5ng quan v\u1EC1 c\u1EA5u tr\xFAc v\xE0 ki\u1EBFn tr\xFAc d\u1EF1 \xE1n.",
-      "suggestion.bug": "T\xECm l\u1ED7i",
-      "suggestion.bug_prompt": "Gi\xFAp t\xF4i t\xECm v\xE0 s\u1EEDa l\u1ED7i trong t\u1EC7p hi\u1EC7n t\u1EA1i.",
-      "suggestion.test": "Vi\u1EBFt ki\u1EC3m th\u1EED",
-      "suggestion.test_prompt": "Vi\u1EBFt ki\u1EC3m th\u1EED to\xE0n di\u1EC7n cho module ch\xEDnh.",
-      "suggestion.refactor": "T\xE1i c\u1EA5u tr\xFAc m\xE3",
-      "suggestion.refactor_prompt": "\u0110\u1EC1 xu\u1EA5t c\u1EA3i ti\u1EBFn t\xE1i c\u1EA5u tr\xFAc cho t\u1EC7p hi\u1EC7n t\u1EA1i.",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "X\xE1c th\u1EF1c",
-      "error.credits": "Thanh to\xE1n",
-      "error.forbidden": "T\u1EEB ch\u1ED1i truy c\u1EADp",
-      "error.rate_limit": "Gi\u1EDBi h\u1EA1n y\xEAu c\u1EA7u",
-      "error.model_not_found": "L\u1ED7i m\xF4 h\xECnh",
-      "error.bad_request": "Y\xEAu c\u1EA7u kh\xF4ng h\u1EE3p l\u1EC7",
-      "error.server_error": "L\u1ED7i m\xE1y ch\u1EE7",
-      "error.timeout": "H\u1EBFt th\u1EDDi gian",
-      "error.stream_stall": "Lu\u1ED3ng b\u1ECB treo",
-      "error.network": "L\u1ED7i m\u1EA1ng",
-      "error.setup": "C\u1EA7n c\xE0i \u0111\u1EB7t",
-      "error.busy": "\u0110ang b\u1EADn",
-      "error.iterations_exceeded": "V\u01B0\u1EE3t gi\u1EDBi h\u1EA1n l\u1EB7p",
-      "error.context_truncated": "Ng\u1EEF c\u1EA3nh b\u1ECB c\u1EAFt",
-      "error.provider_error": "L\u1ED7i nh\xE0 cung c\u1EA5p",
-      "error.unknown": "L\u1ED7i",
-      "error.continue": "Ti\u1EBFp t\u1EE5c",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "Y\xEAu c\u1EA7u kh\xF4ng h\u1EE3p l\u1EC7 t\u1EDBi {provider}. \u0110\u1ECBnh d\u1EA1ng y\xEAu c\u1EA7u c\xF3 th\u1EC3 kh\xF4ng t\u01B0\u01A1ng th\xEDch v\u1EDBi m\xF4 h\xECnh n\xE0y.",
-      "error.msg.auth": "API key c\u1EE7a {provider} kh\xF4ng h\u1EE3p l\u1EC7. Ki\u1EC3m tra kh\xF3a trong ~/.ava/config.json",
-      "error.msg.credits": "Kh\xF4ng \u0111\u1EE7 s\u1ED1 d\u01B0 cho {provider}. H\xE3y n\u1EA1p th\xEAm v\xE0o t\xE0i kho\u1EA3n.",
-      "error.msg.forbidden": "{provider} t\u1EEB ch\u1ED1i truy c\u1EADp. API key c\u1EE7a b\u1EA1n c\xF3 th\u1EC3 thi\u1EBFu quy\u1EC1n c\u1EA7n thi\u1EBFt.",
-      "error.msg.model_not_found": "Kh\xF4ng t\xECm th\u1EA5y m\xF4 h\xECnh tr\xEAn {provider}. ID m\xF4 h\xECnh c\xF3 th\u1EC3 \u0111\xE3 thay \u0111\u1ED5i \u2014 ch\u1EA1y /model \u0111\u1EC3 xem c\xE1c m\xF4 h\xECnh kh\u1EA3 d\u1EE5ng.",
-      "error.msg.rate_limit": "B\u1ECB gi\u1EDBi h\u1EA1n b\u1EDFi {provider}. Qu\xE1 nhi\u1EC1u y\xEAu c\u1EA7u \u2014 h\xE3y \u0111\u1EE3i m\u1ED9t l\xE1t r\u1ED3i th\u1EED l\u1EA1i.",
-      "error.msg.server_error": "{provider} \u0111ang g\u1EB7p s\u1EF1 c\u1ED1 ({code}). H\xE3y th\u1EED l\u1EA1i sau gi\xE2y l\xE1t.",
-      "error.msg.empty_response": "M\xF4 h\xECnh tr\u1EA3 v\u1EC1 ph\u1EA3n h\u1ED3i tr\u1ED1ng. \u0110i\u1EC1u n\xE0y c\xF3 th\u1EC3 x\u1EA3y ra khi API qu\xE1 t\u1EA3i ho\u1EB7c y\xEAu c\u1EA7u b\u1ECB l\u1ECDc. H\xE3y th\u1EED l\u1EA1i.",
-      "error.msg.iteration_limit": "Ava \u0111\xE3 \u0111\u1EA1t gi\u1EDBi h\u1EA1n an to\xE0n {limit} l\u1EA7n l\u1EB7p. \u0110i\u1EC1u n\xE0y th\u01B0\u1EDDng c\xF3 ngh\u0129a l\xE0 t\xE1c v\u1EE5 qu\xE1 l\u1EDBn ho\u1EB7c m\xF4 h\xECnh b\u1ECB m\u1EAFc v\xF2ng l\u1EB7p.",
-      "error.msg.iteration_warning": "[C\u1EA2NH B\xC1O] C\xF2n {remaining} l\u1EA7n l\u1EB7p tr\u01B0\u1EDBc khi \u0111\u1EA1t gi\u1EDBi h\u1EA1n. H\xE3y ho\xE0n t\u1EA5t t\xE1c v\u1EE5 hi\u1EC7n t\u1EA1i \u2014 t\xF3m t\u1EAFt nh\u1EEFng g\xEC \u0111\xE3 l\xE0m v\xE0 c\xF2n l\u1EA1i, \u0111\u1EEBng b\u1EAFt \u0111\u1EA7u c\xF4ng vi\u1EC7c nhi\u1EC1u b\u01B0\u1EDBc m\u1EDBi.",
-      "error.msg.image_stripped": "[M\u1ED9t h\xECnh \u1EA3nh \u0111\xE3 \u0111\u01B0\u1EE3c chia s\u1EBB nh\u01B0ng m\xF4 h\xECnh n\xE0y kh\xF4ng h\u1ED7 tr\u1EE3 th\u1ECB gi\xE1c]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "Cho ph\xE9p",
-      "tool.always_allow": "Lu\xF4n cho ph\xE9p",
-      "tool.allow_all": "Cho ph\xE9p t\u1EA5t c\u1EA3",
-      "tool.deny": "T\u1EEB ch\u1ED1i",
-      "tool.allow_prompt": "Cho ph\xE9p {tool}?",
-      "tool.arguments": "Tham s\u1ED1",
-      "tool.output": "\u0110\u1EA7u ra",
-      "tool.error": "L\u1ED7i",
-      "tool.truncated": "... (\u0111\xE3 c\u1EAFt ng\u1EAFn)",
-      "tool.read": "\u0110\u1ECDc {file}",
-      "tool.write": "Ghi {file}",
-      "tool.edit": "S\u1EEDa {file}",
-      "tool.find_files": "T\xECm t\u1EC7p: {pattern}",
-      "tool.search": "T\xECm ki\u1EBFm: {pattern}",
-      "tool.run": "Ch\u1EA1y: {command}",
-      "tool.list_dir": "Li\u1EC7t k\xEA {path}",
-      "tool.web_search": "T\xECm ki\u1EBFm: {query}",
-      "tool.ask_user": "H\u1ECFi ng\u01B0\u1EDDi d\xF9ng",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "L\u1ECBch s\u1EED tr\xF2 chuy\u1EC7n",
-      "history.new_chat": "+ Cu\u1ED9c tr\xF2 chuy\u1EC7n m\u1EDBi",
-      "history.close": "\u0110\xF3ng",
-      "history.search": "T\xECm ki\u1EBFm cu\u1ED9c tr\xF2 chuy\u1EC7n...",
-      "history.empty": "Ch\u01B0a c\xF3 cu\u1ED9c tr\xF2 chuy\u1EC7n n\xE0o \u0111\u01B0\u1EE3c l\u01B0u.",
-      "history.no_match": "Kh\xF4ng t\xECm th\u1EA5y cu\u1ED9c tr\xF2 chuy\u1EC7n ph\xF9 h\u1EE3p.",
-      "history.delete_confirm": "X\xF3a?",
-      "history.rename_hint": "Nh\u1EA5p \u0111\xFAp \u0111\u1EC3 \u0111\u1ED5i t\xEAn",
-      "history.pin": "Ghim",
-      "history.unpin": "B\u1ECF ghim",
-      "history.export_md": "Xu\u1EA5t d\u1EA1ng Markdown",
-      "history.pinned": "\u0110\xE3 ghim",
-      "history.just_now": "v\u1EEBa xong",
-      "history.minutes_ago": "{n} ph\xFAt tr\u01B0\u1EDBc",
-      "history.hours_ago": "{n} gi\u1EDD tr\u01B0\u1EDBc",
-      "history.days_ago": "{n} ng\xE0y tr\u01B0\u1EDBc",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "C\xE2u h\u1ECFi",
-      "ask.fallback": "Ava c\xF3 m\u1ED9t c\xE2u h\u1ECFi",
-      "ask.placeholder": "Nh\u1EADp ph\u1EA3n h\u1ED3i c\u1EE7a b\u1EA1n...",
-      "ask.submit": "G\u1EEDi",
-      "ask.skip": "B\u1ECF qua",
-      "ask.skipped": "\u0110\xE3 b\u1ECF qua",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "Kh\xF4ng c\xF3 d\u1EEF li\u1EC7u k\u1EBF ho\u1EA1ch",
-      "plan.prefix": "K\u1EBF ho\u1EA1ch: {title}",
-      "plan.approved": "\u0110\xE3 duy\u1EC7t",
-      "plan.rejected": "\u0110\xE3 t\u1EEB ch\u1ED1i",
-      "plan.goal": "M\u1EE5c ti\xEAu",
-      "plan.steps": "C\xE1c b\u01B0\u1EDBc",
-      "plan.verification": "X\xE1c minh",
-      "plan.approaches": "Ph\u01B0\u01A1ng ph\xE1p",
-      "plan.approve": "Duy\u1EC7t",
-      "plan.reject": "T\u1EEB ch\u1ED1i",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "Danh s\xE1ch t\xE1c v\u1EE5 kh\xF4ng kh\u1EA3 d\u1EE5ng",
-      "todo.tasks": "T\xE1c v\u1EE5",
-      "todo.done": "{done}/{total} ho\xE0n th\xE0nh",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "v\xE0o",
-      "status.out": "ra",
-      "status.total": "t\u1ED5ng",
-      "status.tokens": "tokens",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u0110ang n\xE9n ng\u1EEF c\u1EA3nh...",
-      "compression.result": "Ng\u1EEF c\u1EA3nh \u0111\xE3 n\xE9n: ~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "Kh\xF4ng c\xF3 g\xEC \u0111\u1EC3 n\xE9n.",
-      "compression.failed": "N\xE9n th\u1EA5t b\u1EA1i.",
-      "compression.busy": "Kh\xF4ng th\u1EC3 n\xE9n khi Ava \u0111ang ho\u1EA1t \u0111\u1ED9ng.",
-      "compression.context_truncated": "Ng\u1EEF c\u1EA3nh b\u1ECB c\u1EAFt: {count} tin nh\u1EAFn \u0111\xE3 b\u1ECB lo\u1EA1i b\u1ECF.",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "Ti\u1EBFp t\u1EE5c t\u1EEB n\u01A1i b\u1EA1n \u0111\xE3 d\u1EEBng l\u1EA1i.",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "Hi\u1EC3n th\u1ECB c\xE1c l\u1EC7nh kh\u1EA3 d\u1EE5ng",
-      "cmd.model.desc": "Li\u1EC7t k\xEA ho\u1EB7c chuy\u1EC3n m\xF4 h\xECnh (/model <provider:model-id>)",
-      "cmd.clear.desc": "X\xF3a l\u1ECBch s\u1EED h\u1ED9i tho\u1EA1i",
-      "cmd.provider.desc": "Th\xEAm ho\u1EB7c li\u1EC7t k\xEA nh\xE0 cung c\u1EA5p (/provider add <name>)",
-      "cmd.history.desc": "Li\u1EC7t k\xEA c\xE1c cu\u1ED9c tr\xF2 chuy\u1EC7n \u0111\xE3 l\u01B0u",
-      "cmd.resume.desc": "Ti\u1EBFp t\u1EE5c cu\u1ED9c tr\xF2 chuy\u1EC7n \u0111\xE3 l\u01B0u (/resume <id-prefix>)",
-      "cmd.search.desc": "T\xECm ki\u1EBFm cu\u1ED9c tr\xF2 chuy\u1EC7n (/search <query>)",
-      "cmd.delete.desc": "X\xF3a cu\u1ED9c tr\xF2 chuy\u1EC7n \u0111\xE3 l\u01B0u (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u0110\u1ED5i t\xEAn cu\u1ED9c tr\xF2 chuy\u1EC7n (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "Ghim cu\u1ED9c tr\xF2 chuy\u1EC7n (/pin <id-prefix>)",
-      "cmd.unpin.desc": "B\u1ECF ghim cu\u1ED9c tr\xF2 chuy\u1EC7n (/unpin <id-prefix>)",
-      "cmd.export.desc": "Xu\u1EA5t cu\u1ED9c tr\xF2 chuy\u1EC7n (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "Th\u1EED l\u1EA1i tin nh\u1EAFn cu\u1ED1i",
-      "cmd.compact.desc": "N\xE9n ng\u1EEF c\u1EA3nh h\u1ED9i tho\u1EA1i \u0111\u1EC3 gi\u1EA3i ph\xF3ng dung l\u01B0\u1EE3ng",
-      "cmd.permission.desc": "Xem ho\u1EB7c \u0111\u1EB7t ch\u1EBF \u0111\u1ED9 quy\u1EC1n (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "Li\u1EC7t k\xEA c\xE1c c\xF4ng c\u1EE5 kh\u1EA3 d\u1EE5ng",
-      "cmd.init.desc": "T\u1EA1o .ava/instructions.md cho ng\u1EEF c\u1EA3nh ri\xEAng c\u1EE7a d\u1EF1 \xE1n",
-      "cmd.exit.desc": "Tho\xE1t Ava",
-      "cmd.security.desc": "Ch\u1EA1y ki\u1EC3m tra b\u1EA3o m\u1EADt (/security [l\u0129nh v\u1EF1c t\u1EADp trung])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "M\xF4 h\xECnh kh\xF4ng x\xE1c \u0111\u1ECBnh: {model}",
-      "cmd.model.switched": "\u0110\xE3 chuy\u1EC3n sang {name} ({provider})",
-      "cmd.model.active": "(\u0111ang d\xF9ng)",
-      "cmd.clear.done": "\u0110\xE3 x\xF3a h\u1ED9i tho\u1EA1i.",
-      "cmd.provider.usage": "C\xE1ch d\xF9ng: /provider add <{providers}>",
-      "cmd.provider.enter_key": "Nh\u1EADp API key cho {provider}: ",
-      "cmd.provider.cancelled": "\u0110\xE3 h\u1EE7y.",
-      "cmd.provider.added": "\u0110\xE3 th\xEAm nh\xE0 cung c\u1EA5p {provider} th\xE0nh c\xF4ng.",
-      "cmd.provider.failed": "\u0110\u0103ng k\xFD {provider} th\u1EA5t b\u1EA1i: {error}",
-      "cmd.provider.title": "C\xE1c nh\xE0 cung c\u1EA5p \u0111\xE3 c\u1EA5u h\xECnh:",
-      "cmd.provider.configured": "\u0111\xE3 c\u1EA5u h\xECnh",
-      "cmd.provider.not_configured": "ch\u01B0a c\u1EA5u h\xECnh",
-      "cmd.provider.hint": "D\xF9ng /provider add <name> \u0111\u1EC3 th\xEAm nh\xE0 cung c\u1EA5p.",
-      "cmd.history.empty": "Kh\xF4ng c\xF3 cu\u1ED9c tr\xF2 chuy\u1EC7n n\xE0o \u0111\u01B0\u1EE3c l\u01B0u.",
-      "cmd.history.title": "C\xE1c cu\u1ED9c tr\xF2 chuy\u1EC7n \u0111\xE3 l\u01B0u:",
-      "cmd.history.more": "... v\xE0 {count} cu\u1ED9c tr\xF2 chuy\u1EC7n kh\xE1c",
-      "cmd.history.hint": "D\xF9ng /resume <id-prefix> \u0111\u1EC3 t\u1EA3i cu\u1ED9c tr\xF2 chuy\u1EC7n.",
-      "cmd.resume.usage": "C\xE1ch d\xF9ng: /resume <id-prefix>",
-      "cmd.resume.hint": "Ch\u1EA1y /history \u0111\u1EC3 xem c\xE1c cu\u1ED9c tr\xF2 chuy\u1EC7n kh\u1EA3 d\u1EE5ng.",
-      "cmd.resume.not_found": 'Kh\xF4ng t\xECm th\u1EA5y cu\u1ED9c tr\xF2 chuy\u1EC7n kh\u1EDBp v\u1EDBi "{prefix}".',
-      "cmd.resume.failed": "T\u1EA3i cu\u1ED9c tr\xF2 chuy\u1EC7n th\u1EA5t b\u1EA1i.",
-      "cmd.resume.done": "\u0110\xE3 ti\u1EBFp t\u1EE5c: {title}",
-      "cmd.resume.count": "\u0110\xE3 t\u1EA3i {count} tin nh\u1EAFn.",
-      "cmd.search.usage": "C\xE1ch d\xF9ng: /search <query>",
-      "cmd.search.empty": 'Kh\xF4ng t\xECm th\u1EA5y cu\u1ED9c tr\xF2 chuy\u1EC7n kh\u1EDBp v\u1EDBi "{query}".',
-      "cmd.search.title": 'K\u1EBFt qu\u1EA3 t\xECm ki\u1EBFm cho "{query}":',
-      "cmd.delete.usage": "C\xE1ch d\xF9ng: /delete <id-prefix>",
-      "cmd.delete.confirm": 'X\xF3a "{title}" ({id})? (y/n) ',
-      "cmd.delete.done": "\u0110\xE3 x\xF3a cu\u1ED9c tr\xF2 chuy\u1EC7n.",
-      "cmd.delete.failed": "X\xF3a cu\u1ED9c tr\xF2 chuy\u1EC7n th\u1EA5t b\u1EA1i.",
-      "cmd.rename.usage": "C\xE1ch d\xF9ng: /rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u0110\xE3 \u0111\u1ED5i t\xEAn th\xE0nh: {title}",
-      "cmd.rename.failed": "\u0110\u1ED5i t\xEAn cu\u1ED9c tr\xF2 chuy\u1EC7n th\u1EA5t b\u1EA1i.",
-      "cmd.pin.usage": "C\xE1ch d\xF9ng: /pin <id-prefix>",
-      "cmd.pin.done": "\u0110\xE3 ghim: {title}",
-      "cmd.pin.failed": "Ghim cu\u1ED9c tr\xF2 chuy\u1EC7n th\u1EA5t b\u1EA1i.",
-      "cmd.unpin.usage": "C\xE1ch d\xF9ng: /unpin <id-prefix>",
-      "cmd.unpin.done": "\u0110\xE3 b\u1ECF ghim: {title}",
-      "cmd.unpin.failed": "B\u1ECF ghim cu\u1ED9c tr\xF2 chuy\u1EC7n th\u1EA5t b\u1EA1i.",
-      "cmd.export.usage": "C\xE1ch d\xF9ng: /export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "Xu\u1EA5t cu\u1ED9c tr\xF2 chuy\u1EC7n th\u1EA5t b\u1EA1i.",
-      "cmd.export.done": "\u0110\xE3 xu\u1EA5t ra {filename}",
-      "cmd.retry.unavailable": "Kh\xF4ng th\u1EC3 th\u1EED l\u1EA1i.",
-      "cmd.compact.unavailable": "N\xE9n kh\xF4ng kh\u1EA3 d\u1EE5ng.",
-      "cmd.permission.title": "Ch\u1EBF \u0111\u1ED9 quy\u1EC1n:",
-      "cmd.permission.strict": "x\xE1c nh\u1EADn khi ghi v\xE0 ch\u1EA1y l\u1EC7nh shell",
-      "cmd.permission.balanced": "t\u1EF1 \u0111\u1ED9ng duy\u1EC7t ghi, x\xE1c nh\u1EADn l\u1EC7nh shell",
-      "cmd.permission.autonomous": "t\u1EF1 \u0111\u1ED9ng duy\u1EC7t m\u1ECDi thao t\xE1c",
-      "cmd.permission.unknown": "Ch\u1EBF \u0111\u1ED9 kh\xF4ng x\xE1c \u0111\u1ECBnh. Ch\u1ECDn: {modes}",
-      "cmd.permission.set": "Ch\u1EBF \u0111\u1ED9 quy\u1EC1n \u0111\xE3 \u0111\u1EB7t th\xE0nh {mode}.",
-      "cmd.tools.title": "C\xE1c c\xF4ng c\u1EE5 kh\u1EA3 d\u1EE5ng:",
-      "cmd.init.created": "\u0110\xE3 t\u1EA1o {path}",
-      "cmd.init.hint": "Ch\u1EC9nh s\u1EEDa t\u1EC7p n\xE0y \u0111\u1EC3 cung c\u1EA5p ng\u1EEF c\u1EA3nh ri\xEAng cho d\u1EF1 \xE1n cho Ava.",
-      "cmd.init.restart": "Kh\u1EDFi \u0111\u1ED9ng l\u1EA1i Ava \u0111\u1EC3 \xE1p d\u1EE5ng thay \u0111\u1ED5i.",
-      "cmd.init.exists": "{path} \u0111\xE3 t\u1ED3n t\u1EA1i.",
-      "cmd.unknown": "L\u1EC7nh kh\xF4ng x\xE1c \u0111\u1ECBnh: {input}. G\xF5 /help \u0111\u1EC3 xem c\xE1c l\u1EC7nh kh\u1EA3 d\u1EE5ng.",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u0110ang suy ngh\u0129...",
-      "cli.thinking_label": "[suy ngh\u0129] ",
-      "cli.thinking_words": "{count} t\u1EEB",
-      "cli.tool_label": "[c\xF4ng c\u1EE5] ",
-      "cli.tasks_label": "[t\xE1c v\u1EE5] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "\u0110ang ch\u1EA1y {tool}...",
-      "cli.confirm_label": "[x\xE1c nh\u1EADn] ",
-      "cli.allow_prompt": "Cho ph\xE9p? ",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\u0110\xE3 t\u1EEB ch\u1ED1i.",
-      "cli.question_label": "[c\xE2u h\u1ECFi] ",
-      "cli.question_fallback": "Ava c\xF3 m\u1ED9t c\xE2u h\u1ECFi cho b\u1EA1n",
-      "cli.your_response": "Ph\u1EA3n h\u1ED3i c\u1EE7a b\u1EA1n: ",
-      "cli.skipped": "\u0110\xE3 b\u1ECF qua.",
-      "cli.user_response": "Ph\u1EA3n h\u1ED3i ng\u01B0\u1EDDi d\xF9ng: {response}",
-      "cli.write_to": "ghi v\xE0o {path}",
-      "cli.edit_file": "s\u1EEDa {path}",
-      "cli.list_path": "li\u1EC7t k\xEA {path}",
-      "cli.search_query": 't\xECm "{query}"',
-      "cli.ok": "OK",
-      "cli.fail": "L\u1ED6I",
-      "cli.more_lines": "... ({count} d\xF2ng n\u1EEFa)",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "Ch\xE0o m\u1EEBng \u0111\u1EBFn v\u1EDBi Ava | Supernova",
-      "setup.intro": "H\xE3y c\xF9ng thi\u1EBFt l\u1EADp nh\xE0 cung c\u1EA5p LLM c\u1EE7a b\u1EA1n.",
-      "setup.choose": "Ch\u1ECDn nh\xE0 cung c\u1EA5p (nh\u1EADp s\u1ED1): ",
-      "setup.invalid_choice": "L\u1EF1a ch\u1ECDn kh\xF4ng h\u1EE3p l\u1EC7. Vui l\xF2ng kh\u1EDFi \u0111\u1ED9ng l\u1EA1i v\xE0 th\u1EED l\u1EA1i.",
-      "setup.key_url": "L\u1EA5y API key t\u1EA1i: {url}",
-      "setup.enter_key": "API Key {provider}: ",
-      "setup.no_key": "Ch\u01B0a nh\u1EADp API key. Vui l\xF2ng kh\u1EDFi \u0111\u1ED9ng l\u1EA1i v\xE0 th\u1EED l\u1EA1i.",
-      "setup.complete": "Thi\u1EBFt l\u1EADp ho\xE0n t\u1EA5t! M\xF4 h\xECnh \u0111ang d\xF9ng: {model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/zh-CN.js
-var zh_CN_exports = {};
-__export(zh_CN_exports, {
-  zhCNStrings: () => zhCNStrings
-});
-var zhCNStrings;
-var init_zh_CN = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/zh-CN.js"() {
-    zhCNStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\u5173\u4E8E\u4F60\u7684\u4EE3\u7801\uFF0C\u968F\u4FBF\u95EE\u3002",
-      "welcome.cli_hint": "\u8F93\u5165\u6D88\u606F\uFF0C\u6216\u8F93\u5165 /help \u67E5\u770B\u547D\u4EE4\u5217\u8868\u3002",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\u4F60\u60F3\u6784\u5EFA\u4EC0\u4E48\uFF1F",
-      "input.placeholder.plan": "\u63CF\u8FF0\u4F60\u60F3\u8981\u89C4\u5212\u7684\u5185\u5BB9...",
-      "input.placeholder.chat": "\u63D0\u4E00\u4E2A\u95EE\u9898\u6216\u5F00\u59CB\u8BA8\u8BBA...",
-      "input.placeholder.disabled": "\u8BF7\u5148\u914D\u7F6E\u670D\u52A1\u5546...",
-      "input.placeholder.security": "\u63CF\u8FF0\u8981\u626B\u63CF\u7684\u5185\u5BB9\uFF0C\u6216\u76F4\u63A5\u6309 Enter \u8FDB\u884C\u5B8C\u6574\u5BA1\u8BA1...",
-      "input.mode.code": "\u7F16\u7801",
-      "input.mode.plan": "\u89C4\u5212",
-      "input.mode.chat": "\u804A\u5929",
-      "input.mode.security": "\u5B89\u5168",
-      "input.send": "\u53D1\u9001 (Enter)",
-      "input.send_aria": "\u53D1\u9001\u6D88\u606F",
-      "input.stop": "\u505C\u6B62",
-      "input.stop_aria": "\u505C\u6B62 Ava",
-      "input.attach": "\u9644\u52A0\u56FE\u7247",
-      "input.drop_image": "\u5C06\u56FE\u7247\u62D6\u653E\u5230\u6B64\u5904",
-      "input.compressing": "\u538B\u7F29\u4E2D...",
-      "input.compress_title": "\u4E0A\u4E0B\u6587\u7528\u91CF \u2014 \u70B9\u51FB\u538B\u7F29",
-      "input.compress_title_warning": "\u70B9\u51FB\u538B\u7F29\u4E0A\u4E0B\u6587",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\u804A\u5929\u8BB0\u5F55",
-      "header.settings": "\u8BBE\u7F6E",
-      "header.new_chat": "\u65B0\u5BF9\u8BDD",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\u672A\u914D\u7F6E\u670D\u52A1\u5546\u3002",
-      "model.open_settings": "\u6253\u5F00\u8BBE\u7F6E",
-      "model.vision": "\u89C6\u89C9",
-      "model.vision_title": "\u8BE5\u6A21\u578B\u652F\u6301\u56FE\u7247/\u89C6\u89C9\u8F93\u5165",
-      "model.switched": "\u5DF2\u5207\u6362\u81F3 {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u6B63\u5728\u601D\u8003...",
-      "thinking.1": "\u6B63\u5728\u5206\u6790\u4F60\u7684\u4EE3\u7801...",
-      "thinking.2": "\u6B63\u5728\u8003\u8651\u65B9\u6848...",
-      "thinking.3": "\u6B63\u5728\u7EC4\u7EC7\u56DE\u590D...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\u89E3\u91CA\u8FD9\u4E2A\u4EE3\u7801\u5E93",
-      "suggestion.explain_prompt": "\u8BF7\u7ED9\u6211\u4E00\u4E2A\u5173\u4E8E\u9879\u76EE\u7ED3\u6784\u548C\u67B6\u6784\u7684\u6982\u89C8\u3002",
-      "suggestion.bug": "\u67E5\u627E Bug",
-      "suggestion.bug_prompt": "\u5E2E\u6211\u67E5\u627E\u5E76\u4FEE\u590D\u5F53\u524D\u6587\u4EF6\u4E2D\u7684 Bug\u3002",
-      "suggestion.test": "\u7F16\u5199\u6D4B\u8BD5",
-      "suggestion.test_prompt": "\u4E3A\u4E3B\u6A21\u5757\u7F16\u5199\u5168\u9762\u7684\u6D4B\u8BD5\u3002",
-      "suggestion.refactor": "\u91CD\u6784\u4EE3\u7801",
-      "suggestion.refactor_prompt": "\u4E3A\u5F53\u524D\u6587\u4EF6\u63D0\u4F9B\u91CD\u6784\u6539\u8FDB\u5EFA\u8BAE\u3002",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\u8EAB\u4EFD\u9A8C\u8BC1",
-      "error.credits": "\u8BA1\u8D39",
-      "error.forbidden": "\u62D2\u7EDD\u8BBF\u95EE",
-      "error.rate_limit": "\u8BF7\u6C42\u8FC7\u4E8E\u9891\u7E41",
-      "error.model_not_found": "\u6A21\u578B\u9519\u8BEF",
-      "error.bad_request": "\u8BF7\u6C42\u9519\u8BEF",
-      "error.server_error": "\u670D\u52A1\u5668\u9519\u8BEF",
-      "error.timeout": "\u8D85\u65F6",
-      "error.stream_stall": "\u6D41\u5F0F\u54CD\u5E94\u505C\u6EDE",
-      "error.network": "\u7F51\u7EDC\u9519\u8BEF",
-      "error.setup": "\u9700\u8981\u914D\u7F6E",
-      "error.busy": "\u5FD9\u788C\u4E2D",
-      "error.iterations_exceeded": "\u8FED\u4EE3\u6B21\u6570\u9650\u5236",
-      "error.context_truncated": "\u4E0A\u4E0B\u6587\u5DF2\u622A\u65AD",
-      "error.provider_error": "\u670D\u52A1\u5546\u9519\u8BEF",
-      "error.unknown": "\u9519\u8BEF",
-      "error.continue": "\u7EE7\u7EED",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "\u53D1\u9001\u81F3 {provider} \u7684\u8BF7\u6C42\u65E0\u6548\u3002\u8BF7\u6C42\u683C\u5F0F\u53EF\u80FD\u4E0E\u8BE5\u6A21\u578B\u4E0D\u517C\u5BB9\u3002",
-      "error.msg.auth": "{provider} \u7684 API key \u65E0\u6548\u3002\u8BF7\u68C0\u67E5 ~/.ava/config.json \u4E2D\u7684\u5BC6\u94A5\u3002",
-      "error.msg.credits": "{provider} \u4F59\u989D\u4E0D\u8DB3\u3002\u8BF7\u4E3A\u8D26\u6237\u5145\u503C\u3002",
-      "error.msg.forbidden": "{provider} \u62D2\u7EDD\u4E86\u8BBF\u95EE\u3002\u4F60\u7684 API key \u53EF\u80FD\u7F3A\u5C11\u6240\u9700\u6743\u9650\u3002",
-      "error.msg.model_not_found": "\u5728 {provider} \u4E0A\u672A\u627E\u5230\u8BE5\u6A21\u578B\u3002\u6A21\u578B ID \u53EF\u80FD\u5DF2\u53D8\u66F4 \u2014 \u8FD0\u884C /model \u67E5\u770B\u53EF\u7528\u6A21\u578B\u3002",
-      "error.msg.rate_limit": "\u88AB {provider} \u9650\u6D41\u3002\u8BF7\u6C42\u8FC7\u4E8E\u9891\u7E41 \u2014 \u8BF7\u7A0D\u7B49\u7247\u523B\u518D\u8BD5\u3002",
-      "error.msg.server_error": "{provider} \u9047\u5230\u95EE\u9898 ({code})\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002",
-      "error.msg.empty_response": "\u6A21\u578B\u8FD4\u56DE\u4E86\u7A7A\u54CD\u5E94\u3002\u8FD9\u53EF\u80FD\u53D1\u751F\u5728 API \u8FC7\u8F7D\u6216\u8BF7\u6C42\u88AB\u8FC7\u6EE4\u65F6\u3002\u8BF7\u91CD\u8BD5\u3002",
-      "error.msg.iteration_limit": "Ava \u8FBE\u5230\u4E86 {limit} \u6B21\u8FED\u4EE3\u5B89\u5168\u9650\u5236\u3002\u901A\u5E38\u8868\u793A\u4EFB\u52A1\u8FC7\u5927\u6216\u6A21\u578B\u9677\u5165\u4E86\u5FAA\u73AF\u3002",
-      "error.msg.iteration_warning": "[\u8B66\u544A] \u8DDD\u79BB\u5FAA\u73AF\u9650\u5236\u8FD8\u5269 {remaining} \u6B21\u8FED\u4EE3\u3002\u8BF7\u6536\u5C3E\u5F53\u524D\u4EFB\u52A1 \u2014 \u603B\u7ED3\u5DF2\u5B8C\u6210\u548C\u5F85\u5B8C\u6210\u7684\u5185\u5BB9\uFF0C\u4E0D\u8981\u518D\u5F00\u59CB\u65B0\u7684\u591A\u6B65\u9AA4\u5DE5\u4F5C\u3002",
-      "error.msg.image_stripped": "[\u5DF2\u5206\u4EAB\u4E00\u5F20\u56FE\u7247\uFF0C\u4F46\u8BE5\u6A21\u578B\u4E0D\u652F\u6301\u89C6\u89C9\u529F\u80FD]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u5141\u8BB8",
-      "tool.always_allow": "\u59CB\u7EC8\u5141\u8BB8",
-      "tool.allow_all": "\u5168\u90E8\u5141\u8BB8",
-      "tool.deny": "\u62D2\u7EDD",
-      "tool.allow_prompt": "\u5141\u8BB8 {tool}\uFF1F",
-      "tool.arguments": "\u53C2\u6570",
-      "tool.output": "\u8F93\u51FA",
-      "tool.error": "\u9519\u8BEF",
-      "tool.truncated": "...\uFF08\u5DF2\u622A\u65AD\uFF09",
-      "tool.read": "\u8BFB\u53D6 {file}",
-      "tool.write": "\u5199\u5165 {file}",
-      "tool.edit": "\u7F16\u8F91 {file}",
-      "tool.find_files": "\u67E5\u627E\u6587\u4EF6\uFF1A{pattern}",
-      "tool.search": "\u641C\u7D22\uFF1A{pattern}",
-      "tool.run": "\u8FD0\u884C\uFF1A{command}",
-      "tool.list_dir": "\u5217\u51FA {path}",
-      "tool.web_search": "\u641C\u7D22\uFF1A{query}",
-      "tool.ask_user": "\u5411\u7528\u6237\u63D0\u95EE",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\u804A\u5929\u8BB0\u5F55",
-      "history.new_chat": "+ \u65B0\u5BF9\u8BDD",
-      "history.close": "\u5173\u95ED",
-      "history.search": "\u641C\u7D22\u5BF9\u8BDD...",
-      "history.empty": "\u6682\u65E0\u5DF2\u4FDD\u5B58\u7684\u5BF9\u8BDD\u3002",
-      "history.no_match": "\u672A\u627E\u5230\u5339\u914D\u7684\u5BF9\u8BDD\u3002",
-      "history.delete_confirm": "\u786E\u8BA4\u5220\u9664\uFF1F",
-      "history.rename_hint": "\u53CC\u51FB\u91CD\u547D\u540D",
-      "history.pin": "\u7F6E\u9876",
-      "history.unpin": "\u53D6\u6D88\u7F6E\u9876",
-      "history.export_md": "\u5BFC\u51FA\u4E3A Markdown",
-      "history.pinned": "\u5DF2\u7F6E\u9876",
-      "history.just_now": "\u521A\u521A",
-      "history.minutes_ago": "{n}\u5206\u949F\u524D",
-      "history.hours_ago": "{n}\u5C0F\u65F6\u524D",
-      "history.days_ago": "{n}\u5929\u524D",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\u95EE\u9898",
-      "ask.fallback": "Ava \u6709\u4E00\u4E2A\u95EE\u9898",
-      "ask.placeholder": "\u8F93\u5165\u4F60\u7684\u56DE\u590D...",
-      "ask.submit": "\u63D0\u4EA4",
-      "ask.skip": "\u8DF3\u8FC7",
-      "ask.skipped": "\u5DF2\u8DF3\u8FC7",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\u8BA1\u5212\u6570\u636E\u4E0D\u53EF\u7528",
-      "plan.prefix": "\u8BA1\u5212\uFF1A{title}",
-      "plan.approved": "\u5DF2\u6279\u51C6",
-      "plan.rejected": "\u5DF2\u62D2\u7EDD",
-      "plan.goal": "\u76EE\u6807",
-      "plan.steps": "\u6B65\u9AA4",
-      "plan.verification": "\u9A8C\u8BC1",
-      "plan.approaches": "\u65B9\u6848",
-      "plan.approve": "\u6279\u51C6",
-      "plan.reject": "\u62D2\u7EDD",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\u4EFB\u52A1\u5217\u8868\u4E0D\u53EF\u7528",
-      "todo.tasks": "\u4EFB\u52A1",
-      "todo.done": "{done}/{total} \u5DF2\u5B8C\u6210",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\u8F93\u5165",
-      "status.out": "\u8F93\u51FA",
-      "status.total": "\u603B\u8BA1",
-      "status.tokens": "tokens",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u6B63\u5728\u538B\u7F29\u4E0A\u4E0B\u6587...",
-      "compression.result": "\u4E0A\u4E0B\u6587\u5DF2\u538B\u7F29\uFF1A~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "\u6CA1\u6709\u53EF\u538B\u7F29\u7684\u5185\u5BB9\u3002",
-      "compression.failed": "\u538B\u7F29\u5931\u8D25\u3002",
-      "compression.busy": "Ava \u5DE5\u4F5C\u65F6\u65E0\u6CD5\u538B\u7F29\u3002",
-      "compression.context_truncated": "\u4E0A\u4E0B\u6587\u5DF2\u622A\u65AD\uFF1A\u5DF2\u4E22\u5F03 {count} \u6761\u6D88\u606F\u3002",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\u4ECE\u4E0A\u6B21\u4E2D\u65AD\u5904\u7EE7\u7EED\u3002",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\u663E\u793A\u53EF\u7528\u547D\u4EE4",
-      "cmd.model.desc": "\u5217\u51FA\u6216\u5207\u6362\u6A21\u578B (/model <provider:model-id>)",
-      "cmd.clear.desc": "\u6E05\u9664\u5BF9\u8BDD\u5386\u53F2",
-      "cmd.provider.desc": "\u6DFB\u52A0\u6216\u5217\u51FA\u670D\u52A1\u5546 (/provider add <name>)",
-      "cmd.history.desc": "\u5217\u51FA\u5DF2\u4FDD\u5B58\u7684\u5BF9\u8BDD",
-      "cmd.resume.desc": "\u6062\u590D\u5DF2\u4FDD\u5B58\u7684\u5BF9\u8BDD (/resume <id-prefix>)",
-      "cmd.search.desc": "\u641C\u7D22\u5BF9\u8BDD (/search <query>)",
-      "cmd.delete.desc": "\u5220\u9664\u5DF2\u4FDD\u5B58\u7684\u5BF9\u8BDD (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u91CD\u547D\u540D\u5BF9\u8BDD (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\u7F6E\u9876\u5BF9\u8BDD (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\u53D6\u6D88\u7F6E\u9876\u5BF9\u8BDD (/unpin <id-prefix>)",
-      "cmd.export.desc": "\u5BFC\u51FA\u5BF9\u8BDD (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\u91CD\u8BD5\u4E0A\u4E00\u6761\u6D88\u606F",
-      "cmd.compact.desc": "\u538B\u7F29\u5BF9\u8BDD\u4E0A\u4E0B\u6587\u4EE5\u91CA\u653E\u7A7A\u95F4",
-      "cmd.permission.desc": "\u67E5\u770B\u6216\u8BBE\u7F6E\u6743\u9650\u6A21\u5F0F (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\u5217\u51FA\u53EF\u7528\u5DE5\u5177",
-      "cmd.init.desc": "\u521B\u5EFA .ava/instructions.md \u7528\u4E8E\u9879\u76EE\u4E13\u5C5E\u4E0A\u4E0B\u6587",
-      "cmd.exit.desc": "\u9000\u51FA Ava",
-      "cmd.security.desc": "\u8FD0\u884C\u5B89\u5168\u5BA1\u8BA1 (/security [\u5173\u6CE8\u9886\u57DF])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\u672A\u77E5\u6A21\u578B\uFF1A{model}",
-      "cmd.model.switched": "\u5DF2\u5207\u6362\u81F3 {name} ({provider})",
-      "cmd.model.active": "\uFF08\u5F53\u524D\uFF09",
-      "cmd.clear.done": "\u5BF9\u8BDD\u5DF2\u6E05\u9664\u3002",
-      "cmd.provider.usage": "\u7528\u6CD5\uFF1A/provider add <{providers}>",
-      "cmd.provider.enter_key": "\u8F93\u5165 {provider} \u7684 API key\uFF1A",
-      "cmd.provider.cancelled": "\u5DF2\u53D6\u6D88\u3002",
-      "cmd.provider.added": "\u670D\u52A1\u5546 {provider} \u6DFB\u52A0\u6210\u529F\u3002",
-      "cmd.provider.failed": "\u6CE8\u518C {provider} \u5931\u8D25\uFF1A{error}",
-      "cmd.provider.title": "\u5DF2\u914D\u7F6E\u7684\u670D\u52A1\u5546\uFF1A",
-      "cmd.provider.configured": "\u5DF2\u914D\u7F6E",
-      "cmd.provider.not_configured": "\u672A\u914D\u7F6E",
-      "cmd.provider.hint": "\u4F7F\u7528 /provider add <name> \u6DFB\u52A0\u670D\u52A1\u5546\u3002",
-      "cmd.history.empty": "\u6682\u65E0\u5DF2\u4FDD\u5B58\u7684\u5BF9\u8BDD\u3002",
-      "cmd.history.title": "\u5DF2\u4FDD\u5B58\u7684\u5BF9\u8BDD\uFF1A",
-      "cmd.history.more": "... \u8FD8\u6709 {count} \u6761",
-      "cmd.history.hint": "\u4F7F\u7528 /resume <id-prefix> \u52A0\u8F7D\u5BF9\u8BDD\u3002",
-      "cmd.resume.usage": "\u7528\u6CD5\uFF1A/resume <id-prefix>",
-      "cmd.resume.hint": "\u8FD0\u884C /history \u67E5\u770B\u53EF\u7528\u5BF9\u8BDD\u3002",
-      "cmd.resume.not_found": '\u672A\u627E\u5230\u5339\u914D "{prefix}" \u7684\u5BF9\u8BDD\u3002',
-      "cmd.resume.failed": "\u52A0\u8F7D\u5BF9\u8BDD\u5931\u8D25\u3002",
-      "cmd.resume.done": "\u5DF2\u6062\u590D\uFF1A{title}",
-      "cmd.resume.count": "\u5DF2\u52A0\u8F7D {count} \u6761\u6D88\u606F\u3002",
-      "cmd.search.usage": "\u7528\u6CD5\uFF1A/search <query>",
-      "cmd.search.empty": '\u672A\u627E\u5230\u5339\u914D "{query}" \u7684\u5BF9\u8BDD\u3002',
-      "cmd.search.title": '"{query}" \u7684\u641C\u7D22\u7ED3\u679C\uFF1A',
-      "cmd.delete.usage": "\u7528\u6CD5\uFF1A/delete <id-prefix>",
-      "cmd.delete.confirm": '\u5220\u9664 "{title}" ({id})\uFF1F(y/n) ',
-      "cmd.delete.done": "\u5BF9\u8BDD\u5DF2\u5220\u9664\u3002",
-      "cmd.delete.failed": "\u5220\u9664\u5BF9\u8BDD\u5931\u8D25\u3002",
-      "cmd.rename.usage": "\u7528\u6CD5\uFF1A/rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u5DF2\u91CD\u547D\u540D\u4E3A\uFF1A{title}",
-      "cmd.rename.failed": "\u91CD\u547D\u540D\u5BF9\u8BDD\u5931\u8D25\u3002",
-      "cmd.pin.usage": "\u7528\u6CD5\uFF1A/pin <id-prefix>",
-      "cmd.pin.done": "\u5DF2\u7F6E\u9876\uFF1A{title}",
-      "cmd.pin.failed": "\u7F6E\u9876\u5BF9\u8BDD\u5931\u8D25\u3002",
-      "cmd.unpin.usage": "\u7528\u6CD5\uFF1A/unpin <id-prefix>",
-      "cmd.unpin.done": "\u5DF2\u53D6\u6D88\u7F6E\u9876\uFF1A{title}",
-      "cmd.unpin.failed": "\u53D6\u6D88\u7F6E\u9876\u5BF9\u8BDD\u5931\u8D25\u3002",
-      "cmd.export.usage": "\u7528\u6CD5\uFF1A/export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\u5BFC\u51FA\u5BF9\u8BDD\u5931\u8D25\u3002",
-      "cmd.export.done": "\u5DF2\u5BFC\u51FA\u81F3 {filename}",
-      "cmd.retry.unavailable": "\u91CD\u8BD5\u4E0D\u53EF\u7528\u3002",
-      "cmd.compact.unavailable": "\u538B\u7F29\u4E0D\u53EF\u7528\u3002",
-      "cmd.permission.title": "\u6743\u9650\u6A21\u5F0F\uFF1A",
-      "cmd.permission.strict": "\u5199\u5165\u548C Shell \u547D\u4EE4\u9700\u786E\u8BA4",
-      "cmd.permission.balanced": "\u81EA\u52A8\u6279\u51C6\u5199\u5165\uFF0CShell \u547D\u4EE4\u9700\u786E\u8BA4",
-      "cmd.permission.autonomous": "\u81EA\u52A8\u6279\u51C6\u6240\u6709\u64CD\u4F5C",
-      "cmd.permission.unknown": "\u672A\u77E5\u6A21\u5F0F\u3002\u8BF7\u9009\u62E9\uFF1A{modes}",
-      "cmd.permission.set": "\u6743\u9650\u6A21\u5F0F\u5DF2\u8BBE\u4E3A {mode}\u3002",
-      "cmd.tools.title": "\u53EF\u7528\u5DE5\u5177\uFF1A",
-      "cmd.init.created": "\u5DF2\u521B\u5EFA {path}",
-      "cmd.init.hint": "\u7F16\u8F91\u6B64\u6587\u4EF6\u4E3A Ava \u63D0\u4F9B\u9879\u76EE\u4E13\u5C5E\u4E0A\u4E0B\u6587\u3002",
-      "cmd.init.restart": "\u91CD\u542F Ava \u4EE5\u4F7F\u66F4\u6539\u751F\u6548\u3002",
-      "cmd.init.exists": "{path} \u5DF2\u5B58\u5728\u3002",
-      "cmd.unknown": "\u672A\u77E5\u547D\u4EE4\uFF1A{input}\u3002\u8F93\u5165 /help \u67E5\u770B\u53EF\u7528\u547D\u4EE4\u3002",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u601D\u8003\u4E2D...",
-      "cli.thinking_label": "[\u601D\u8003] ",
-      "cli.thinking_words": "{count} \u4E2A\u8BCD",
-      "cli.tool_label": "[\u5DE5\u5177] ",
-      "cli.tasks_label": "[\u4EFB\u52A1] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "\u6B63\u5728\u8FD0\u884C {tool}...",
-      "cli.confirm_label": "[\u786E\u8BA4] ",
-      "cli.allow_prompt": "\u5141\u8BB8\uFF1F",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\u5DF2\u62D2\u7EDD\u3002",
-      "cli.question_label": "[\u63D0\u95EE] ",
-      "cli.question_fallback": "Ava \u6709\u4E00\u4E2A\u95EE\u9898",
-      "cli.your_response": "\u4F60\u7684\u56DE\u590D\uFF1A",
-      "cli.skipped": "\u5DF2\u8DF3\u8FC7\u3002",
-      "cli.user_response": "\u7528\u6237\u56DE\u590D\uFF1A{response}",
-      "cli.write_to": "\u5199\u5165 {path}",
-      "cli.edit_file": "\u7F16\u8F91 {path}",
-      "cli.list_path": "\u5217\u51FA {path}",
-      "cli.search_query": '\u641C\u7D22 "{query}"',
-      "cli.ok": "\u6210\u529F",
-      "cli.fail": "\u5931\u8D25",
-      "cli.more_lines": "...\uFF08\u8FD8\u6709 {count} \u884C\uFF09",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "\u6B22\u8FCE\u4F7F\u7528 Ava | Supernova",
-      "setup.intro": "\u8BA9\u6211\u4EEC\u6765\u914D\u7F6E\u4F60\u7684 LLM \u670D\u52A1\u5546\u3002",
-      "setup.choose": "\u9009\u62E9\u4E00\u4E2A\u670D\u52A1\u5546\uFF08\u8F93\u5165\u7F16\u53F7\uFF09\uFF1A",
-      "setup.invalid_choice": "\u65E0\u6548\u9009\u62E9\u3002\u8BF7\u91CD\u542F\u540E\u91CD\u8BD5\u3002",
-      "setup.key_url": "\u5728\u6B64\u83B7\u53D6\u4F60\u7684 API key\uFF1A{url}",
-      "setup.enter_key": "{provider} API Key\uFF1A",
-      "setup.no_key": "\u672A\u63D0\u4F9B API key\u3002\u8BF7\u91CD\u542F\u540E\u91CD\u8BD5\u3002",
-      "setup.complete": "\u914D\u7F6E\u5B8C\u6210\uFF01\u5F53\u524D\u6A21\u578B\uFF1A{model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/i18n/locales/zh-TW.js
-var zh_TW_exports = {};
-__export(zh_TW_exports, {
-  zhTWStrings: () => zhTWStrings
-});
-var zhTWStrings;
-var init_zh_TW = __esm({
-  "packages/ide/node_modules/@ava/core/dist/i18n/locales/zh-TW.js"() {
-    zhTWStrings = {
-      // ── Welcome / Branding ────────────────────────────────────────────────────
-      "welcome.title": "Ava | Supernova",
-      "welcome.subtitle": "\u95DC\u65BC\u4F60\u7684\u7A0B\u5F0F\u78BC\uFF0C\u96A8\u6642\u63D0\u554F\u3002",
-      "welcome.cli_hint": "\u8F38\u5165\u8A0A\u606F\uFF0C\u6216\u8F38\u5165 /help \u67E5\u770B\u6307\u4EE4\u5217\u8868\u3002",
-      // ── Input Area ────────────────────────────────────────────────────────────
-      "input.placeholder.code": "\u4F60\u60F3\u5EFA\u69CB\u4EC0\u9EBC\uFF1F",
-      "input.placeholder.plan": "\u63CF\u8FF0\u4F60\u60F3\u8981\u898F\u5283\u7684\u5167\u5BB9...",
-      "input.placeholder.chat": "\u63D0\u4E00\u500B\u554F\u984C\u6216\u958B\u59CB\u8A0E\u8AD6...",
-      "input.placeholder.disabled": "\u8ACB\u5148\u8A2D\u5B9A\u670D\u52D9\u4F9B\u61C9\u5546...",
-      "input.placeholder.security": "\u63CF\u8FF0\u8981\u6383\u63CF\u7684\u5167\u5BB9\uFF0C\u6216\u76F4\u63A5\u6309 Enter \u9032\u884C\u5B8C\u6574\u7A3D\u6838...",
-      "input.mode.code": "\u7A0B\u5F0F\u78BC",
-      "input.mode.plan": "\u898F\u5283",
-      "input.mode.chat": "\u804A\u5929",
-      "input.mode.security": "\u5B89\u5168",
-      "input.send": "\u50B3\u9001 (Enter)",
-      "input.send_aria": "\u50B3\u9001\u8A0A\u606F",
-      "input.stop": "\u505C\u6B62",
-      "input.stop_aria": "\u505C\u6B62 Ava",
-      "input.attach": "\u9644\u52A0\u5716\u7247",
-      "input.drop_image": "\u5C07\u5716\u7247\u62D6\u653E\u81F3\u6B64",
-      "input.compressing": "\u58D3\u7E2E\u4E2D...",
-      "input.compress_title": "\u4E0A\u4E0B\u6587\u7528\u91CF \u2014 \u9EDE\u64CA\u58D3\u7E2E",
-      "input.compress_title_warning": "\u9EDE\u64CA\u58D3\u7E2E\u4E0A\u4E0B\u6587",
-      // ── Header ────────────────────────────────────────────────────────────────
-      "header.history": "\u804A\u5929\u7D00\u9304",
-      "header.settings": "\u8A2D\u5B9A",
-      "header.new_chat": "\u65B0\u5C0D\u8A71",
-      // ── Model Selector ────────────────────────────────────────────────────────
-      "model.no_providers": "\u5C1A\u672A\u8A2D\u5B9A\u670D\u52D9\u4F9B\u61C9\u5546\u3002",
-      "model.open_settings": "\u958B\u555F\u8A2D\u5B9A",
-      "model.vision": "\u8996\u89BA",
-      "model.vision_title": "\u6B64\u6A21\u578B\u652F\u63F4\u5716\u7247/\u8996\u89BA\u8F38\u5165",
-      "model.switched": "\u5DF2\u5207\u63DB\u81F3 {model}",
-      // ── Thinking Indicator ────────────────────────────────────────────────────
-      "thinking.0": "Ava \u6B63\u5728\u601D\u8003...",
-      "thinking.1": "\u6B63\u5728\u5206\u6790\u4F60\u7684\u7A0B\u5F0F\u78BC...",
-      "thinking.2": "\u6B63\u5728\u8003\u616E\u65B9\u6848...",
-      "thinking.3": "\u6B63\u5728\u7D44\u7E54\u56DE\u8986...",
-      // ── Suggestions ───────────────────────────────────────────────────────────
-      "suggestion.explain": "\u89E3\u91CB\u9019\u500B\u7A0B\u5F0F\u78BC\u5EAB",
-      "suggestion.explain_prompt": "\u8ACB\u7D66\u6211\u4E00\u500B\u95DC\u65BC\u5C08\u6848\u7D50\u69CB\u8207\u67B6\u69CB\u7684\u6982\u89C0\u3002",
-      "suggestion.bug": "\u5C0B\u627E Bug",
-      "suggestion.bug_prompt": "\u5354\u52A9\u6211\u5C0B\u627E\u4E26\u4FEE\u6B63\u76EE\u524D\u6A94\u6848\u4E2D\u7684 Bug\u3002",
-      "suggestion.test": "\u64B0\u5BEB\u6E2C\u8A66",
-      "suggestion.test_prompt": "\u70BA\u4E3B\u8981\u6A21\u7D44\u64B0\u5BEB\u5B8C\u6574\u7684\u6E2C\u8A66\u3002",
-      "suggestion.refactor": "\u91CD\u69CB\u7A0B\u5F0F\u78BC",
-      "suggestion.refactor_prompt": "\u70BA\u76EE\u524D\u6A94\u6848\u63D0\u4F9B\u91CD\u69CB\u6539\u5584\u5EFA\u8B70\u3002",
-      // ── Error Labels ──────────────────────────────────────────────────────────
-      "error.auth": "\u8EAB\u5206\u9A57\u8B49",
-      "error.credits": "\u5E33\u55AE",
-      "error.forbidden": "\u62D2\u7D55\u5B58\u53D6",
-      "error.rate_limit": "\u8ACB\u6C42\u904E\u65BC\u983B\u7E41",
-      "error.model_not_found": "\u6A21\u578B\u932F\u8AA4",
-      "error.bad_request": "\u8ACB\u6C42\u932F\u8AA4",
-      "error.server_error": "\u4F3A\u670D\u5668\u932F\u8AA4",
-      "error.timeout": "\u903E\u6642",
-      "error.stream_stall": "\u4E32\u6D41\u56DE\u61C9\u505C\u6EEF",
-      "error.network": "\u7DB2\u8DEF\u932F\u8AA4",
-      "error.setup": "\u9700\u8981\u8A2D\u5B9A",
-      "error.busy": "\u5FD9\u788C\u4E2D",
-      "error.iterations_exceeded": "\u8FED\u4EE3\u6B21\u6578\u9650\u5236",
-      "error.context_truncated": "\u4E0A\u4E0B\u6587\u5DF2\u622A\u65B7",
-      "error.provider_error": "\u4F9B\u61C9\u5546\u932F\u8AA4",
-      "error.unknown": "\u932F\u8AA4",
-      "error.continue": "\u7E7C\u7E8C",
-      // ── Error Messages (with interpolation) ───────────────────────────────────
-      "error.msg.bad_request": "\u50B3\u9001\u81F3 {provider} \u7684\u8ACB\u6C42\u7121\u6548\u3002\u8ACB\u6C42\u683C\u5F0F\u53EF\u80FD\u8207\u6B64\u6A21\u578B\u4E0D\u76F8\u5BB9\u3002",
-      "error.msg.auth": "{provider} \u7684 API key \u7121\u6548\u3002\u8ACB\u6AA2\u67E5 ~/.ava/config.json \u4E2D\u7684\u91D1\u9470\u3002",
-      "error.msg.credits": "{provider} \u9918\u984D\u4E0D\u8DB3\u3002\u8ACB\u70BA\u5E33\u6236\u5132\u503C\u3002",
-      "error.msg.forbidden": "{provider} \u62D2\u7D55\u4E86\u5B58\u53D6\u3002\u4F60\u7684 API key \u53EF\u80FD\u7F3A\u5C11\u5FC5\u8981\u6B0A\u9650\u3002",
-      "error.msg.model_not_found": "\u5728 {provider} \u4E0A\u627E\u4E0D\u5230\u6B64\u6A21\u578B\u3002\u6A21\u578B ID \u53EF\u80FD\u5DF2\u8B8A\u66F4 \u2014 \u57F7\u884C /model \u67E5\u770B\u53EF\u7528\u6A21\u578B\u3002",
-      "error.msg.rate_limit": "\u88AB {provider} \u9650\u6D41\u3002\u8ACB\u6C42\u904E\u65BC\u983B\u7E41 \u2014 \u8ACB\u7A0D\u5019\u518D\u8A66\u3002",
-      "error.msg.server_error": "{provider} \u767C\u751F\u554F\u984C ({code})\u3002\u8ACB\u7A0D\u5F8C\u91CD\u8A66\u3002",
-      "error.msg.empty_response": "\u6A21\u578B\u50B3\u56DE\u4E86\u7A7A\u56DE\u61C9\u3002\u9019\u53EF\u80FD\u767C\u751F\u5728 API \u904E\u8F09\u6216\u8ACB\u6C42\u88AB\u904E\u6FFE\u6642\u3002\u8ACB\u91CD\u8A66\u3002",
-      "error.msg.iteration_limit": "Ava \u5DF2\u9054\u5230 {limit} \u6B21\u8FED\u4EE3\u5B89\u5168\u9650\u5236\u3002\u9019\u901A\u5E38\u8868\u793A\u4EFB\u52D9\u904E\u5927\u6216\u6A21\u578B\u9677\u5165\u4E86\u8FF4\u5708\u3002",
-      "error.msg.iteration_warning": "[\u8B66\u544A] \u8DDD\u96E2\u8FF4\u5708\u9650\u5236\u9084\u5269 {remaining} \u6B21\u8FED\u4EE3\u3002\u8ACB\u6536\u5C3E\u76EE\u524D\u7684\u4EFB\u52D9 \u2014 \u7E3D\u7D50\u5DF2\u5B8C\u6210\u8207\u5F85\u5B8C\u6210\u7684\u5167\u5BB9\uFF0C\u4E0D\u8981\u518D\u958B\u59CB\u65B0\u7684\u591A\u6B65\u9A5F\u5DE5\u4F5C\u3002",
-      "error.msg.image_stripped": "[\u5DF2\u5206\u4EAB\u4E00\u5F35\u5716\u7247\uFF0C\u4F46\u6B64\u6A21\u578B\u4E0D\u652F\u63F4\u8996\u89BA\u529F\u80FD]",
-      // ── Tool UI ───────────────────────────────────────────────────────────────
-      "tool.allow": "\u5141\u8A31",
-      "tool.always_allow": "\u4E00\u5F8B\u5141\u8A31",
-      "tool.allow_all": "\u5168\u90E8\u5141\u8A31",
-      "tool.deny": "\u62D2\u7D55",
-      "tool.allow_prompt": "\u5141\u8A31 {tool}\uFF1F",
-      "tool.arguments": "\u53C3\u6578",
-      "tool.output": "\u8F38\u51FA",
-      "tool.error": "\u932F\u8AA4",
-      "tool.truncated": "...\uFF08\u5DF2\u622A\u65B7\uFF09",
-      "tool.read": "\u8B80\u53D6 {file}",
-      "tool.write": "\u5BEB\u5165 {file}",
-      "tool.edit": "\u7DE8\u8F2F {file}",
-      "tool.find_files": "\u5C0B\u627E\u6A94\u6848\uFF1A{pattern}",
-      "tool.search": "\u641C\u5C0B\uFF1A{pattern}",
-      "tool.run": "\u57F7\u884C\uFF1A{command}",
-      "tool.list_dir": "\u5217\u51FA {path}",
-      "tool.web_search": "\u641C\u5C0B\uFF1A{query}",
-      "tool.ask_user": "\u5411\u4F7F\u7528\u8005\u63D0\u554F",
-      "tool.git": "Git {command}",
-      "tool.http": "{method} {url}",
-      // ── History Panel ─────────────────────────────────────────────────────────
-      "history.title": "\u804A\u5929\u7D00\u9304",
-      "history.new_chat": "+ \u65B0\u5C0D\u8A71",
-      "history.close": "\u95DC\u9589",
-      "history.search": "\u641C\u5C0B\u5C0D\u8A71...",
-      "history.empty": "\u5C1A\u7121\u5DF2\u5132\u5B58\u7684\u5C0D\u8A71\u3002",
-      "history.no_match": "\u627E\u4E0D\u5230\u7B26\u5408\u7684\u5C0D\u8A71\u3002",
-      "history.delete_confirm": "\u78BA\u8A8D\u522A\u9664\uFF1F",
-      "history.rename_hint": "\u96D9\u64CA\u91CD\u65B0\u547D\u540D",
-      "history.pin": "\u91D8\u9078",
-      "history.unpin": "\u53D6\u6D88\u91D8\u9078",
-      "history.export_md": "\u532F\u51FA\u70BA Markdown",
-      "history.pinned": "\u5DF2\u91D8\u9078",
-      "history.just_now": "\u525B\u525B",
-      "history.minutes_ago": "{n}\u5206\u9418\u524D",
-      "history.hours_ago": "{n}\u5C0F\u6642\u524D",
-      "history.days_ago": "{n}\u5929\u524D",
-      // ── Ask User Card ─────────────────────────────────────────────────────────
-      "ask.question": "\u554F\u984C",
-      "ask.fallback": "Ava \u6709\u4E00\u500B\u554F\u984C",
-      "ask.placeholder": "\u8F38\u5165\u4F60\u7684\u56DE\u8986...",
-      "ask.submit": "\u63D0\u4EA4",
-      "ask.skip": "\u8DF3\u904E",
-      "ask.skipped": "\u5DF2\u8DF3\u904E",
-      // ── Plan Card ─────────────────────────────────────────────────────────────
-      "plan.unavailable": "\u8A08\u756B\u8CC7\u6599\u4E0D\u53EF\u7528",
-      "plan.prefix": "\u8A08\u756B\uFF1A{title}",
-      "plan.approved": "\u5DF2\u6838\u51C6",
-      "plan.rejected": "\u5DF2\u62D2\u7D55",
-      "plan.goal": "\u76EE\u6A19",
-      "plan.steps": "\u6B65\u9A5F",
-      "plan.verification": "\u9A57\u8B49",
-      "plan.approaches": "\u65B9\u6848",
-      "plan.approve": "\u6838\u51C6",
-      "plan.reject": "\u62D2\u7D55",
-      // ── Todo Card ─────────────────────────────────────────────────────────────
-      "todo.unavailable": "\u4EFB\u52D9\u6E05\u55AE\u4E0D\u53EF\u7528",
-      "todo.tasks": "\u4EFB\u52D9",
-      "todo.done": "{done}/{total} \u5DF2\u5B8C\u6210",
-      // ── Status Bar ────────────────────────────────────────────────────────────
-      "status.in": "\u8F38\u5165",
-      "status.out": "\u8F38\u51FA",
-      "status.total": "\u7E3D\u8A08",
-      "status.tokens": "tokens",
-      // ── Compression ───────────────────────────────────────────────────────────
-      "compression.start": "\u6B63\u5728\u58D3\u7E2E\u4E0A\u4E0B\u6587...",
-      "compression.result": "\u4E0A\u4E0B\u6587\u5DF2\u58D3\u7E2E\uFF1A~{original} \u2192 ~{compressed} tokens",
-      "compression.nothing": "\u6C92\u6709\u53EF\u58D3\u7E2E\u7684\u5167\u5BB9\u3002",
-      "compression.failed": "\u58D3\u7E2E\u5931\u6557\u3002",
-      "compression.busy": "Ava \u5DE5\u4F5C\u6642\u7121\u6CD5\u58D3\u7E2E\u3002",
-      "compression.context_truncated": "\u4E0A\u4E0B\u6587\u5DF2\u622A\u65B7\uFF1A\u5DF2\u6368\u68C4 {count} \u5247\u8A0A\u606F\u3002",
-      // ── Continue ──────────────────────────────────────────────────────────────
-      "continue.prompt": "\u5F9E\u4E0A\u6B21\u4E2D\u65B7\u8655\u7E7C\u7E8C\u3002",
-      // ── CLI Command Descriptions ──────────────────────────────────────────────
-      "cmd.help.desc": "\u986F\u793A\u53EF\u7528\u6307\u4EE4",
-      "cmd.model.desc": "\u5217\u51FA\u6216\u5207\u63DB\u6A21\u578B (/model <provider:model-id>)",
-      "cmd.clear.desc": "\u6E05\u9664\u5C0D\u8A71\u6B77\u53F2",
-      "cmd.provider.desc": "\u65B0\u589E\u6216\u5217\u51FA\u4F9B\u61C9\u5546 (/provider add <name>)",
-      "cmd.history.desc": "\u5217\u51FA\u5DF2\u5132\u5B58\u7684\u5C0D\u8A71",
-      "cmd.resume.desc": "\u6062\u5FA9\u5DF2\u5132\u5B58\u7684\u5C0D\u8A71 (/resume <id-prefix>)",
-      "cmd.search.desc": "\u641C\u5C0B\u5C0D\u8A71 (/search <query>)",
-      "cmd.delete.desc": "\u522A\u9664\u5DF2\u5132\u5B58\u7684\u5C0D\u8A71 (/delete <id-prefix>)",
-      "cmd.rename.desc": "\u91CD\u65B0\u547D\u540D\u5C0D\u8A71 (/rename <id-prefix> <new title>)",
-      "cmd.pin.desc": "\u91D8\u9078\u5C0D\u8A71 (/pin <id-prefix>)",
-      "cmd.unpin.desc": "\u53D6\u6D88\u91D8\u9078\u5C0D\u8A71 (/unpin <id-prefix>)",
-      "cmd.export.desc": "\u532F\u51FA\u5C0D\u8A71 (/export <id-prefix> [markdown|json])",
-      "cmd.retry.desc": "\u91CD\u8A66\u4E0A\u4E00\u5247\u8A0A\u606F",
-      "cmd.compact.desc": "\u58D3\u7E2E\u5C0D\u8A71\u4E0A\u4E0B\u6587\u4EE5\u91CB\u653E\u7A7A\u9593",
-      "cmd.permission.desc": "\u67E5\u770B\u6216\u8A2D\u5B9A\u6B0A\u9650\u6A21\u5F0F (/permission <strict|balanced|autonomous>)",
-      "cmd.tools.desc": "\u5217\u51FA\u53EF\u7528\u5DE5\u5177",
-      "cmd.init.desc": "\u5EFA\u7ACB .ava/instructions.md \u7528\u65BC\u5C08\u6848\u5C08\u5C6C\u4E0A\u4E0B\u6587",
-      "cmd.exit.desc": "\u9000\u51FA Ava",
-      "cmd.security.desc": "\u57F7\u884C\u5B89\u5168\u7A3D\u6838 (/security [\u95DC\u6CE8\u9818\u57DF])",
-      // ── CLI Command Messages ──────────────────────────────────────────────────
-      "cmd.model.unknown": "\u672A\u77E5\u6A21\u578B\uFF1A{model}",
-      "cmd.model.switched": "\u5DF2\u5207\u63DB\u81F3 {name} ({provider})",
-      "cmd.model.active": "\uFF08\u76EE\u524D\uFF09",
-      "cmd.clear.done": "\u5C0D\u8A71\u5DF2\u6E05\u9664\u3002",
-      "cmd.provider.usage": "\u7528\u6CD5\uFF1A/provider add <{providers}>",
-      "cmd.provider.enter_key": "\u8F38\u5165 {provider} \u7684 API key\uFF1A",
-      "cmd.provider.cancelled": "\u5DF2\u53D6\u6D88\u3002",
-      "cmd.provider.added": "\u4F9B\u61C9\u5546 {provider} \u65B0\u589E\u6210\u529F\u3002",
-      "cmd.provider.failed": "\u8A3B\u518A {provider} \u5931\u6557\uFF1A{error}",
-      "cmd.provider.title": "\u5DF2\u8A2D\u5B9A\u7684\u4F9B\u61C9\u5546\uFF1A",
-      "cmd.provider.configured": "\u5DF2\u8A2D\u5B9A",
-      "cmd.provider.not_configured": "\u672A\u8A2D\u5B9A",
-      "cmd.provider.hint": "\u4F7F\u7528 /provider add <name> \u65B0\u589E\u4F9B\u61C9\u5546\u3002",
-      "cmd.history.empty": "\u5C1A\u7121\u5DF2\u5132\u5B58\u7684\u5C0D\u8A71\u3002",
-      "cmd.history.title": "\u5DF2\u5132\u5B58\u7684\u5C0D\u8A71\uFF1A",
-      "cmd.history.more": "... \u9084\u6709 {count} \u7B46",
-      "cmd.history.hint": "\u4F7F\u7528 /resume <id-prefix> \u8F09\u5165\u5C0D\u8A71\u3002",
-      "cmd.resume.usage": "\u7528\u6CD5\uFF1A/resume <id-prefix>",
-      "cmd.resume.hint": "\u57F7\u884C /history \u67E5\u770B\u53EF\u7528\u5C0D\u8A71\u3002",
-      "cmd.resume.not_found": '\u627E\u4E0D\u5230\u7B26\u5408 "{prefix}" \u7684\u5C0D\u8A71\u3002',
-      "cmd.resume.failed": "\u8F09\u5165\u5C0D\u8A71\u5931\u6557\u3002",
-      "cmd.resume.done": "\u5DF2\u6062\u5FA9\uFF1A{title}",
-      "cmd.resume.count": "\u5DF2\u8F09\u5165 {count} \u5247\u8A0A\u606F\u3002",
-      "cmd.search.usage": "\u7528\u6CD5\uFF1A/search <query>",
-      "cmd.search.empty": '\u627E\u4E0D\u5230\u7B26\u5408 "{query}" \u7684\u5C0D\u8A71\u3002',
-      "cmd.search.title": '"{query}" \u7684\u641C\u5C0B\u7D50\u679C\uFF1A',
-      "cmd.delete.usage": "\u7528\u6CD5\uFF1A/delete <id-prefix>",
-      "cmd.delete.confirm": '\u522A\u9664 "{title}" ({id})\uFF1F(y/n) ',
-      "cmd.delete.done": "\u5C0D\u8A71\u5DF2\u522A\u9664\u3002",
-      "cmd.delete.failed": "\u522A\u9664\u5C0D\u8A71\u5931\u6557\u3002",
-      "cmd.rename.usage": "\u7528\u6CD5\uFF1A/rename <id-prefix> <new title>",
-      "cmd.rename.done": "\u5DF2\u91CD\u65B0\u547D\u540D\u70BA\uFF1A{title}",
-      "cmd.rename.failed": "\u91CD\u65B0\u547D\u540D\u5C0D\u8A71\u5931\u6557\u3002",
-      "cmd.pin.usage": "\u7528\u6CD5\uFF1A/pin <id-prefix>",
-      "cmd.pin.done": "\u5DF2\u91D8\u9078\uFF1A{title}",
-      "cmd.pin.failed": "\u91D8\u9078\u5C0D\u8A71\u5931\u6557\u3002",
-      "cmd.unpin.usage": "\u7528\u6CD5\uFF1A/unpin <id-prefix>",
-      "cmd.unpin.done": "\u5DF2\u53D6\u6D88\u91D8\u9078\uFF1A{title}",
-      "cmd.unpin.failed": "\u53D6\u6D88\u91D8\u9078\u5C0D\u8A71\u5931\u6557\u3002",
-      "cmd.export.usage": "\u7528\u6CD5\uFF1A/export <id-prefix> [markdown|json]",
-      "cmd.export.failed": "\u532F\u51FA\u5C0D\u8A71\u5931\u6557\u3002",
-      "cmd.export.done": "\u5DF2\u532F\u51FA\u81F3 {filename}",
-      "cmd.retry.unavailable": "\u91CD\u8A66\u4E0D\u53EF\u7528\u3002",
-      "cmd.compact.unavailable": "\u58D3\u7E2E\u4E0D\u53EF\u7528\u3002",
-      "cmd.permission.title": "\u6B0A\u9650\u6A21\u5F0F\uFF1A",
-      "cmd.permission.strict": "\u5BEB\u5165\u8207 Shell \u6307\u4EE4\u9700\u78BA\u8A8D",
-      "cmd.permission.balanced": "\u81EA\u52D5\u6838\u51C6\u5BEB\u5165\uFF0CShell \u6307\u4EE4\u9700\u78BA\u8A8D",
-      "cmd.permission.autonomous": "\u81EA\u52D5\u6838\u51C6\u6240\u6709\u64CD\u4F5C",
-      "cmd.permission.unknown": "\u672A\u77E5\u6A21\u5F0F\u3002\u8ACB\u9078\u64C7\uFF1A{modes}",
-      "cmd.permission.set": "\u6B0A\u9650\u6A21\u5F0F\u5DF2\u8A2D\u70BA {mode}\u3002",
-      "cmd.tools.title": "\u53EF\u7528\u5DE5\u5177\uFF1A",
-      "cmd.init.created": "\u5DF2\u5EFA\u7ACB {path}",
-      "cmd.init.hint": "\u7DE8\u8F2F\u6B64\u6A94\u6848\u70BA Ava \u63D0\u4F9B\u5C08\u6848\u5C08\u5C6C\u4E0A\u4E0B\u6587\u3002",
-      "cmd.init.restart": "\u91CD\u65B0\u555F\u52D5 Ava \u4EE5\u4F7F\u8B8A\u66F4\u751F\u6548\u3002",
-      "cmd.init.exists": "{path} \u5DF2\u5B58\u5728\u3002",
-      "cmd.unknown": "\u672A\u77E5\u6307\u4EE4\uFF1A{input}\u3002\u8F38\u5165 /help \u67E5\u770B\u53EF\u7528\u6307\u4EE4\u3002",
-      // ── CLI Labels ────────────────────────────────────────────────────────────
-      "cli.thinking": "\u601D\u8003\u4E2D...",
-      "cli.thinking_label": "[\u601D\u8003] ",
-      "cli.thinking_words": "{count} \u500B\u5B57",
-      "cli.tool_label": "[\u5DE5\u5177] ",
-      "cli.tasks_label": "[\u4EFB\u52D9] ",
-      "cli.tokens_label": "[tokens] ",
-      "cli.running": "\u6B63\u5728\u57F7\u884C {tool}...",
-      "cli.confirm_label": "[\u78BA\u8A8D] ",
-      "cli.allow_prompt": "\u5141\u8A31\uFF1F",
-      "cli.allow_yn": "(y/n) ",
-      "cli.denied": "\u5DF2\u62D2\u7D55\u3002",
-      "cli.question_label": "[\u63D0\u554F] ",
-      "cli.question_fallback": "Ava \u6709\u4E00\u500B\u554F\u984C",
-      "cli.your_response": "\u4F60\u7684\u56DE\u8986\uFF1A",
-      "cli.skipped": "\u5DF2\u8DF3\u904E\u3002",
-      "cli.user_response": "\u4F7F\u7528\u8005\u56DE\u8986\uFF1A{response}",
-      "cli.write_to": "\u5BEB\u5165 {path}",
-      "cli.edit_file": "\u7DE8\u8F2F {path}",
-      "cli.list_path": "\u5217\u51FA {path}",
-      "cli.search_query": '\u641C\u5C0B "{query}"',
-      "cli.ok": "\u6210\u529F",
-      "cli.fail": "\u5931\u6557",
-      "cli.more_lines": "...\uFF08\u9084\u6709 {count} \u884C\uFF09",
-      // ── Setup Wizard ──────────────────────────────────────────────────────────
-      "setup.welcome": "\u6B61\u8FCE\u4F7F\u7528 Ava | Supernova",
-      "setup.intro": "\u8B93\u6211\u5011\u4F86\u8A2D\u5B9A\u4F60\u7684 LLM \u670D\u52D9\u4F9B\u61C9\u5546\u3002",
-      "setup.choose": "\u9078\u64C7\u4E00\u500B\u4F9B\u61C9\u5546\uFF08\u8F38\u5165\u7DE8\u865F\uFF09\uFF1A",
-      "setup.invalid_choice": "\u7121\u6548\u9078\u64C7\u3002\u8ACB\u91CD\u65B0\u555F\u52D5\u5F8C\u518D\u8A66\u3002",
-      "setup.key_url": "\u5728\u6B64\u53D6\u5F97\u4F60\u7684 API key\uFF1A{url}",
-      "setup.enter_key": "{provider} API Key\uFF1A",
-      "setup.no_key": "\u672A\u63D0\u4F9B API key\u3002\u8ACB\u91CD\u65B0\u555F\u52D5\u5F8C\u518D\u8A66\u3002",
-      "setup.complete": "\u8A2D\u5B9A\u5B8C\u6210\uFF01\u76EE\u524D\u6A21\u578B\uFF1A{model}"
-    };
-  }
-});
-
-// packages/ide/node_modules/@ava/core/dist/core/types.js
+// packages/core/src/core/types.ts
 function getTextContent(content) {
-  if (content === null)
-    return "";
-  if (typeof content === "string")
-    return content;
+  if (content === null) return "";
+  if (typeof content === "string") return content;
   return content.filter((p) => p.type === "text").map((p) => p.text).join("");
 }
 
-// packages/ide/node_modules/@ava/core/dist/core/constants.js
+// packages/core/src/core/constants.ts
 import { join } from "node:path";
 import { homedir } from "node:os";
 var APP_NAME = "ava";
@@ -5518,7 +27,7 @@ var ITERATION_WARNING_THRESHOLD = 10;
 var DEFAULT_TEMPERATURE = 0.7;
 var DEFAULT_MAX_TOKENS = 8192;
 
-// packages/ide/node_modules/@ava/core/dist/i18n/types.js
+// packages/core/src/i18n/types.ts
 var SUPPORTED_LOCALES = [
   "en",
   "zh-CN",
@@ -5564,34 +73,275 @@ var LANGUAGE_NAMES = {
   "id": "Bahasa Indonesia"
 };
 
-// packages/ide/node_modules/@ava/core/dist/i18n/index.js
-init_en();
+// packages/core/src/i18n/locales/en.ts
+var enStrings = {
+  // ── Welcome / Branding ────────────────────────────────────────────────────
+  "welcome.title": "Ava | Supernova",
+  "welcome.subtitle": "Ask anything about your code.",
+  "welcome.cli_hint": "Type your message, or /help for commands.",
+  // ── Input Area ────────────────────────────────────────────────────────────
+  "input.placeholder.code": "What do you want to build?",
+  "input.placeholder.plan": "Describe what you want to plan...",
+  "input.placeholder.chat": "Ask a question or start a discussion...",
+  "input.placeholder.disabled": "Configure a provider to start...",
+  "input.placeholder.security": "Describe what to scan, or just hit Enter for a full audit...",
+  "input.mode.code": "Code",
+  "input.mode.plan": "Plan",
+  "input.mode.chat": "Chat",
+  "input.mode.security": "Security",
+  "input.send": "Send (Enter)",
+  "input.send_aria": "Send message",
+  "input.stop": "Stop",
+  "input.stop_aria": "Stop Ava",
+  "input.attach": "Attach image",
+  "input.drop_image": "Drop image here",
+  "input.compressing": "Compressing...",
+  "input.compress_title": "Context usage \u2014 click to compress",
+  "input.compress_title_warning": "Click to compress context",
+  // ── Header ────────────────────────────────────────────────────────────────
+  "header.history": "Chat History",
+  "header.settings": "Settings",
+  "header.new_chat": "New Chat",
+  // ── Model Selector ────────────────────────────────────────────────────────
+  "model.no_providers": "No providers configured.",
+  "model.open_settings": "Open Settings",
+  "model.vision": "vision",
+  "model.vision_title": "This model supports image/vision input",
+  "model.switched": "Switched to {model}",
+  // ── Thinking Indicator ────────────────────────────────────────────────────
+  "thinking.0": "Ava is thinking...",
+  "thinking.1": "Analyzing your code...",
+  "thinking.2": "Considering approaches...",
+  "thinking.3": "Crafting a response...",
+  // ── Suggestions ───────────────────────────────────────────────────────────
+  "suggestion.explain": "Explain this codebase",
+  "suggestion.explain_prompt": "Give me a high-level overview of this project structure and architecture.",
+  "suggestion.bug": "Find a bug",
+  "suggestion.bug_prompt": "Help me find and fix bugs in the current file.",
+  "suggestion.test": "Write tests",
+  "suggestion.test_prompt": "Write comprehensive tests for the main module.",
+  "suggestion.refactor": "Refactor code",
+  "suggestion.refactor_prompt": "Suggest refactoring improvements for the current file.",
+  // ── Error Labels ──────────────────────────────────────────────────────────
+  "error.auth": "Authentication",
+  "error.credits": "Billing",
+  "error.forbidden": "Access Denied",
+  "error.rate_limit": "Rate Limited",
+  "error.model_not_found": "Model Error",
+  "error.bad_request": "Bad Request",
+  "error.server_error": "Server Error",
+  "error.timeout": "Timeout",
+  "error.stream_stall": "Stream Stalled",
+  "error.network": "Network Error",
+  "error.setup": "Setup Required",
+  "error.busy": "Busy",
+  "error.iterations_exceeded": "Iteration Limit",
+  "error.context_truncated": "Context Truncated",
+  "error.provider_error": "Provider Error",
+  "error.unknown": "Error",
+  "error.continue": "Continue",
+  // ── Error Messages (with interpolation) ───────────────────────────────────
+  "error.msg.bad_request": "Bad request to {provider}. The request format may be incompatible with this model.",
+  "error.msg.auth": "Invalid API key for {provider}. Check your key in ~/.ava/config.json",
+  "error.msg.credits": "Insufficient credits for {provider}. Top up your account balance.",
+  "error.msg.forbidden": "Access denied by {provider}. Your API key may lack the required permissions.",
+  "error.msg.model_not_found": "Model not found on {provider}. The model ID may have changed \u2014 run /model to see available models.",
+  "error.msg.rate_limit": "Rate limited by {provider}. Too many requests \u2014 wait a moment and try again.",
+  "error.msg.server_error": "{provider} is experiencing issues ({code}). Try again in a few moments.",
+  "error.msg.empty_response": "The model returned an empty response. This can happen when the API is overloaded or the request was filtered. Try again.",
+  "error.msg.iteration_limit": "Ava reached the {limit}-iteration safety limit. This usually means the task is very large or the model got stuck in a loop.",
+  "error.msg.iteration_warning": "[WARNING] You have {remaining} iterations remaining before the loop limit. Wrap up your current task \u2014 summarize what you've done and what's left. Don't start new multi-step work.",
+  "error.msg.image_stripped": "[An image was shared but this model does not support vision]",
+  // ── Tool UI ───────────────────────────────────────────────────────────────
+  "tool.allow": "Allow",
+  "tool.always_allow": "Always Allow",
+  "tool.allow_all": "Allow All",
+  "tool.deny": "Deny",
+  "tool.allow_prompt": "Allow {tool}?",
+  "tool.arguments": "Arguments",
+  "tool.output": "Output",
+  "tool.error": "Error",
+  "tool.truncated": "... (truncated)",
+  "tool.read": "Read {file}",
+  "tool.write": "Write {file}",
+  "tool.edit": "Edit {file}",
+  "tool.find_files": "Find files: {pattern}",
+  "tool.search": "Search: {pattern}",
+  "tool.run": "Run: {command}",
+  "tool.list_dir": "List {path}",
+  "tool.web_search": "Search: {query}",
+  "tool.ask_user": "Question for user",
+  "tool.git": "Git {command}",
+  "tool.http": "{method} {url}",
+  // ── History Panel ─────────────────────────────────────────────────────────
+  "history.title": "Chat History",
+  "history.new_chat": "+ New Chat",
+  "history.close": "Close",
+  "history.search": "Search conversations...",
+  "history.empty": "No saved conversations yet.",
+  "history.no_match": "No matching conversations.",
+  "history.delete_confirm": "Delete?",
+  "history.rename_hint": "Double-click to rename",
+  "history.pin": "Pin",
+  "history.unpin": "Unpin",
+  "history.export_md": "Export as Markdown",
+  "history.pinned": "Pinned",
+  "history.just_now": "just now",
+  "history.minutes_ago": "{n}m ago",
+  "history.hours_ago": "{n}h ago",
+  "history.days_ago": "{n}d ago",
+  // ── Ask User Card ─────────────────────────────────────────────────────────
+  "ask.question": "Question",
+  "ask.fallback": "Ava has a question",
+  "ask.placeholder": "Type your response...",
+  "ask.submit": "Submit",
+  "ask.skip": "Skip",
+  "ask.skipped": "Skipped",
+  // ── Plan Card ─────────────────────────────────────────────────────────────
+  "plan.unavailable": "Plan data unavailable",
+  "plan.prefix": "Plan: {title}",
+  "plan.approved": "Approved",
+  "plan.rejected": "Rejected",
+  "plan.goal": "Goal",
+  "plan.steps": "Steps",
+  "plan.verification": "Verification",
+  "plan.approaches": "Approaches",
+  "plan.approve": "Approve",
+  "plan.reject": "Reject",
+  // ── Todo Card ─────────────────────────────────────────────────────────────
+  "todo.unavailable": "Task list unavailable",
+  "todo.tasks": "Tasks",
+  "todo.done": "{done}/{total} done",
+  // ── Status Bar ────────────────────────────────────────────────────────────
+  "status.in": "in",
+  "status.out": "out",
+  "status.total": "total",
+  "status.tokens": "tokens",
+  // ── Compression ───────────────────────────────────────────────────────────
+  "compression.start": "Compressing context...",
+  "compression.result": "Context compressed: ~{original} \u2192 ~{compressed} tokens",
+  "compression.nothing": "Nothing to compress.",
+  "compression.failed": "Compression failed.",
+  "compression.busy": "Cannot compress while Ava is working.",
+  "compression.context_truncated": "Context truncated: {count} messages dropped.",
+  // ── Continue ──────────────────────────────────────────────────────────────
+  "continue.prompt": "Continue where you left off.",
+  // ── CLI Command Descriptions ──────────────────────────────────────────────
+  "cmd.help.desc": "Show available commands",
+  "cmd.model.desc": "List or switch models (/model <provider:model-id>)",
+  "cmd.clear.desc": "Clear conversation history",
+  "cmd.provider.desc": "Add or list providers (/provider add <name>)",
+  "cmd.history.desc": "List saved conversations",
+  "cmd.resume.desc": "Resume a saved conversation (/resume <id-prefix>)",
+  "cmd.search.desc": "Search conversations (/search <query>)",
+  "cmd.delete.desc": "Delete a saved conversation (/delete <id-prefix>)",
+  "cmd.rename.desc": "Rename a conversation (/rename <id-prefix> <new title>)",
+  "cmd.pin.desc": "Pin a conversation (/pin <id-prefix>)",
+  "cmd.unpin.desc": "Unpin a conversation (/unpin <id-prefix>)",
+  "cmd.export.desc": "Export a conversation (/export <id-prefix> [markdown|json])",
+  "cmd.retry.desc": "Retry the last message",
+  "cmd.compact.desc": "Compress conversation context to free up space",
+  "cmd.permission.desc": "View or set permission mode (/permission <strict|balanced|autonomous>)",
+  "cmd.tools.desc": "List available tools",
+  "cmd.init.desc": "Create .ava/instructions.md for project-specific context",
+  "cmd.exit.desc": "Exit Ava",
+  "cmd.security.desc": "Run a security audit (/security [focus area])",
+  // ── CLI Command Messages ──────────────────────────────────────────────────
+  "cmd.model.unknown": "Unknown model: {model}",
+  "cmd.model.switched": "Switched to {name} ({provider})",
+  "cmd.model.active": "(active)",
+  "cmd.clear.done": "Conversation cleared.",
+  "cmd.provider.usage": "Usage: /provider add <{providers}>",
+  "cmd.provider.enter_key": "Enter API key for {provider}: ",
+  "cmd.provider.cancelled": "Cancelled.",
+  "cmd.provider.added": "Provider {provider} added successfully.",
+  "cmd.provider.failed": "Failed to register {provider}: {error}",
+  "cmd.provider.title": "Configured providers:",
+  "cmd.provider.configured": "configured",
+  "cmd.provider.not_configured": "not configured",
+  "cmd.provider.hint": "Use /provider add <name> to add a provider.",
+  "cmd.history.empty": "No saved conversations.",
+  "cmd.history.title": "Saved conversations:",
+  "cmd.history.more": "... and {count} more",
+  "cmd.history.hint": "Use /resume <id-prefix> to load a conversation.",
+  "cmd.resume.usage": "Usage: /resume <id-prefix>",
+  "cmd.resume.hint": "Run /history to see available conversations.",
+  "cmd.resume.not_found": 'No conversation found matching "{prefix}".',
+  "cmd.resume.failed": "Failed to load conversation.",
+  "cmd.resume.done": "Resumed: {title}",
+  "cmd.resume.count": "{count} messages loaded.",
+  "cmd.search.usage": "Usage: /search <query>",
+  "cmd.search.empty": 'No conversations matching "{query}".',
+  "cmd.search.title": 'Search results for "{query}":',
+  "cmd.delete.usage": "Usage: /delete <id-prefix>",
+  "cmd.delete.confirm": 'Delete "{title}" ({id})? (y/n) ',
+  "cmd.delete.done": "Conversation deleted.",
+  "cmd.delete.failed": "Failed to delete conversation.",
+  "cmd.rename.usage": "Usage: /rename <id-prefix> <new title>",
+  "cmd.rename.done": "Renamed to: {title}",
+  "cmd.rename.failed": "Failed to rename conversation.",
+  "cmd.pin.usage": "Usage: /pin <id-prefix>",
+  "cmd.pin.done": "Pinned: {title}",
+  "cmd.pin.failed": "Failed to pin conversation.",
+  "cmd.unpin.usage": "Usage: /unpin <id-prefix>",
+  "cmd.unpin.done": "Unpinned: {title}",
+  "cmd.unpin.failed": "Failed to unpin conversation.",
+  "cmd.export.usage": "Usage: /export <id-prefix> [markdown|json]",
+  "cmd.export.failed": "Failed to export conversation.",
+  "cmd.export.done": "Exported to {filename}",
+  "cmd.retry.unavailable": "Retry not available.",
+  "cmd.compact.unavailable": "Compression not available.",
+  "cmd.permission.title": "Permission mode:",
+  "cmd.permission.strict": "confirm writes and shell commands",
+  "cmd.permission.balanced": "auto-approve writes, confirm shell commands",
+  "cmd.permission.autonomous": "auto-approve everything",
+  "cmd.permission.unknown": "Unknown mode. Choose: {modes}",
+  "cmd.permission.set": "Permission mode set to {mode}.",
+  "cmd.tools.title": "Available tools:",
+  "cmd.init.created": "Created {path}",
+  "cmd.init.hint": "Edit this file to give Ava project-specific context.",
+  "cmd.init.restart": "Restart Ava for changes to take effect.",
+  "cmd.init.exists": "{path} already exists.",
+  "cmd.unknown": "Unknown command: {input}. Type /help for available commands.",
+  // ── CLI Labels ────────────────────────────────────────────────────────────
+  "cli.thinking": "Thinking...",
+  "cli.thinking_label": "[thinking] ",
+  "cli.thinking_words": "{count} words",
+  "cli.tool_label": "[tool] ",
+  "cli.tasks_label": "[tasks] ",
+  "cli.tokens_label": "[tokens] ",
+  "cli.running": "Running {tool}...",
+  "cli.confirm_label": "[confirm] ",
+  "cli.allow_prompt": "Allow? ",
+  "cli.allow_yn": "(y/n) ",
+  "cli.denied": "Denied.",
+  "cli.question_label": "[question] ",
+  "cli.question_fallback": "Ava has a question for you",
+  "cli.your_response": "Your response: ",
+  "cli.skipped": "Skipped.",
+  "cli.user_response": "User response: {response}",
+  "cli.write_to": "write to {path}",
+  "cli.edit_file": "edit {path}",
+  "cli.list_path": "list {path}",
+  "cli.search_query": 'search "{query}"',
+  "cli.ok": "OK",
+  "cli.fail": "FAIL",
+  "cli.more_lines": "... ({count} more lines)",
+  // ── Setup Wizard ──────────────────────────────────────────────────────────
+  "setup.welcome": "Welcome to Ava | Supernova",
+  "setup.intro": "Let's set up your LLM provider.",
+  "setup.choose": "Choose a provider (number): ",
+  "setup.invalid_choice": "Invalid choice. Please restart and try again.",
+  "setup.key_url": "Get your API key at: {url}",
+  "setup.enter_key": "{provider} API Key: ",
+  "setup.no_key": "No API key provided. Please restart and try again.",
+  "setup.complete": "Setup complete! Active model: {model}"
+};
 
-// import("./locales/**/*.js") in packages/ide/node_modules/@ava/core/dist/i18n/index.js
-var globImport_locales_js = __glob({
-  "./locales/ar.js": () => Promise.resolve().then(() => (init_ar(), ar_exports)),
-  "./locales/de.js": () => Promise.resolve().then(() => (init_de(), de_exports)),
-  "./locales/en.js": () => Promise.resolve().then(() => (init_en(), en_exports)),
-  "./locales/es.js": () => Promise.resolve().then(() => (init_es(), es_exports)),
-  "./locales/fr.js": () => Promise.resolve().then(() => (init_fr(), fr_exports)),
-  "./locales/hi.js": () => Promise.resolve().then(() => (init_hi(), hi_exports)),
-  "./locales/id.js": () => Promise.resolve().then(() => (init_id(), id_exports)),
-  "./locales/it.js": () => Promise.resolve().then(() => (init_it(), it_exports)),
-  "./locales/ja.js": () => Promise.resolve().then(() => (init_ja(), ja_exports)),
-  "./locales/ko.js": () => Promise.resolve().then(() => (init_ko(), ko_exports)),
-  "./locales/nl.js": () => Promise.resolve().then(() => (init_nl(), nl_exports)),
-  "./locales/pl.js": () => Promise.resolve().then(() => (init_pl(), pl_exports)),
-  "./locales/pt.js": () => Promise.resolve().then(() => (init_pt(), pt_exports)),
-  "./locales/ru.js": () => Promise.resolve().then(() => (init_ru(), ru_exports)),
-  "./locales/th.js": () => Promise.resolve().then(() => (init_th(), th_exports)),
-  "./locales/tr.js": () => Promise.resolve().then(() => (init_tr(), tr_exports)),
-  "./locales/uk.js": () => Promise.resolve().then(() => (init_uk(), uk_exports)),
-  "./locales/vi.js": () => Promise.resolve().then(() => (init_vi(), vi_exports)),
-  "./locales/zh-CN.js": () => Promise.resolve().then(() => (init_zh_CN(), zh_CN_exports)),
-  "./locales/zh-TW.js": () => Promise.resolve().then(() => (init_zh_TW(), zh_TW_exports))
-});
+// import("./locales/**/*.js") in packages/core/src/i18n/index.ts
+var globImport_locales_js = __glob({});
 
-// packages/ide/node_modules/@ava/core/dist/i18n/index.js
+// packages/core/src/i18n/index.ts
 var currentLocale = "en";
 var translations = {
   en: enStrings
@@ -5627,8 +377,7 @@ function getLanguageName(locale) {
 }
 function t(key, params) {
   const str = translations[currentLocale]?.[key] ?? translations["en"]?.[key] ?? key;
-  if (!params)
-    return str;
+  if (!params) return str;
   return str.replace(/\{(\w+)\}/g, (_2, k2) => {
     const val = params[k2];
     return val !== void 0 ? String(val) : `{${k2}}`;
@@ -5681,7 +430,7 @@ function resolveLocaleCode(code) {
   return "en";
 }
 
-// packages/ide/node_modules/@ava/core/dist/core/logger.js
+// packages/core/src/core/logger.ts
 var LOG_LEVELS = {
   debug: 0,
   info: 1,
@@ -5697,24 +446,89 @@ function shouldLog(level) {
 }
 var logger = {
   debug(message, ...args) {
-    if (shouldLog("debug"))
-      console.debug(`[DEBUG] ${message}`, ...args);
+    if (shouldLog("debug")) console.debug(`[DEBUG] ${message}`, ...args);
   },
   info(message, ...args) {
-    if (shouldLog("info"))
-      console.info(`[INFO] ${message}`, ...args);
+    if (shouldLog("info")) console.info(`[INFO] ${message}`, ...args);
   },
   warn(message, ...args) {
-    if (shouldLog("warn"))
-      console.warn(`[WARN] ${message}`, ...args);
+    if (shouldLog("warn")) console.warn(`[WARN] ${message}`, ...args);
   },
   error(message, ...args) {
-    if (shouldLog("error"))
-      console.error(`[ERROR] ${message}`, ...args);
+    if (shouldLog("error")) console.error(`[ERROR] ${message}`, ...args);
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/agent/agent.js
+// packages/core/src/agent/text-tool-parser.ts
+var TOOL_CALL_REGEX = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+var _callCounter = 0;
+function buildToolPrompt(schemas) {
+  if (schemas.length === 0) return "";
+  const toolDescriptions = schemas.map((schema) => {
+    const fn = schema.function;
+    const params = fn.parameters;
+    const required = new Set(params.required ?? []);
+    const paramLines = Object.entries(params.properties).map(([name, def]) => {
+      const p = def;
+      const type = p.type ?? "string";
+      const desc = p.description ?? "";
+      const req = required.has(name) ? " (required)" : " (optional)";
+      const enumValues = p.enum ? ` \u2014 one of: ${p.enum.join(", ")}` : "";
+      return `    - ${name}: ${type}${req} \u2014 ${desc}${enumValues}`;
+    });
+    return `### ${fn.name}
+${fn.description}
+Parameters:
+${paramLines.join("\n")}`;
+  });
+  return `## Available Tools
+
+You have access to the following tools. To use a tool, output a <tool_call> block with the tool name and arguments as JSON:
+
+<tool_call>
+{"name": "tool_name", "arguments": {"param1": "value1", "param2": "value2"}}
+</tool_call>
+
+You can make multiple tool calls in a single response. Each must be in its own <tool_call> block.
+After each tool call, you will receive the result. Use the results to continue your work.
+Always explain what you're doing before and after tool calls.
+
+${toolDescriptions.join("\n\n")}`;
+}
+function parseToolCalls(text) {
+  const toolCalls = [];
+  let match;
+  TOOL_CALL_REGEX.lastIndex = 0;
+  while ((match = TOOL_CALL_REGEX.exec(text)) !== null) {
+    const jsonStr = match[1].trim();
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const name = parsed.name;
+      const args = parsed.arguments ?? {};
+      if (typeof name === "string" && name.length > 0) {
+        toolCalls.push({
+          id: `text_tc_${++_callCounter}`,
+          type: "function",
+          function: {
+            name,
+            arguments: typeof args === "string" ? args : JSON.stringify(args)
+          }
+        });
+      }
+    } catch {
+    }
+  }
+  const cleanText = text.replace(TOOL_CALL_REGEX, "").trim();
+  return { toolCalls, cleanText };
+}
+function formatToolResult(toolName, result, success) {
+  const status = success ? "success" : "error";
+  return `<tool_result name="${toolName}" status="${status}">
+${result}
+</tool_result>`;
+}
+
+// packages/core/src/agent/agent.ts
 var Agent = class _Agent {
   provider;
   model;
@@ -5730,8 +544,25 @@ var Agent = class _Agent {
     };
   }
   async run(messages, onEvent, signal) {
-    const toolSchemas = this.model.supportsToolCalls ? this.toolRegistry.getSchemas() : [];
-    logger.debug(`[agent] Starting run: model=${this.model.id} supportsToolCalls=${this.model.supportsToolCalls} toolSchemas=${toolSchemas.length}`);
+    const useNativeTools = this.model.supportsToolCalls !== false;
+    const allSchemas = this.toolRegistry.getSchemas();
+    const toolSchemas = useNativeTools ? allSchemas : [];
+    logger.debug(`[agent] Starting run: model=${this.model.id} supportsToolCalls=${useNativeTools} toolSchemas=${toolSchemas.length}`);
+    if (!useNativeTools && allSchemas.length > 0) {
+      const toolPrompt = buildToolPrompt(allSchemas);
+      const firstMsg = messages[0];
+      if (firstMsg?.role === "system") {
+        messages = [
+          { ...firstMsg, content: firstMsg.content + "\n\n" + toolPrompt },
+          ...messages.slice(1)
+        ];
+      } else {
+        messages = [
+          { role: "system", content: toolPrompt },
+          ...messages
+        ];
+      }
+    }
     const runContext = { ...this.toolContext, signal };
     let iterations = 0;
     let warningInjected = false;
@@ -5768,10 +599,14 @@ var Agent = class _Agent {
       if (dropped > 0) {
         onEvent({
           type: "error",
-          error: Object.assign(new Error(`Context window full \u2014 ${dropped} older messages were compressed away. Consider starting a new chat for best results.`), { code: "context_compressed" })
+          error: Object.assign(
+            new Error(`Context window full \u2014 ${dropped} older messages were compressed away. Consider starting a new chat for best results.`),
+            { code: "context_compressed" }
+          )
         });
       }
-      const sanitizedMessages = messages.map((m) => {
+      const filteredMessages = !useNativeTools ? messages.filter((m) => m.role !== "tool") : messages;
+      const sanitizedMessages = filteredMessages.map((m) => {
         let msg = m;
         if (!this.model.supportsVision && Array.isArray(msg.content)) {
           const textParts = msg.content.filter((p) => p.type === "text");
@@ -5780,6 +615,10 @@ var Agent = class _Agent {
           } else if (textParts.length < msg.content.length) {
             msg = { ...msg, content: textParts.map((p) => p.text).join("\n") };
           }
+        }
+        if (!useNativeTools && msg.role === "assistant" && msg.tool_calls) {
+          const { tool_calls: _tc, ...rest } = msg;
+          msg = rest;
         }
         if (msg.role === "assistant" && "reasoning_content" in msg) {
           const aMsg = msg;
@@ -5808,6 +647,17 @@ var Agent = class _Agent {
       } catch (error) {
         onEvent({ type: "error", error: error instanceof Error ? error : new Error(String(error)) });
         return messages;
+      }
+      if (!useNativeTools && assistantMessage.content) {
+        const { toolCalls: parsedCalls, cleanText } = parseToolCalls(assistantMessage.content);
+        if (parsedCalls.length > 0) {
+          logger.debug(`[agent] Parsed ${parsedCalls.length} tool calls from text output`);
+          assistantMessage = {
+            ...assistantMessage,
+            content: cleanText || null,
+            tool_calls: parsedCalls
+          };
+        }
       }
       messages = [...messages, assistantMessage];
       if (promptTokens > 0 && promptTokens > this.model.contextWindow * 0.65) {
@@ -5855,7 +705,7 @@ var Agent = class _Agent {
             }
           }
         }
-        messages = await this.executeToolCall(toolCall, runContext, onEvent, messages);
+        messages = await this.executeToolCall(toolCall, runContext, onEvent, messages, useNativeTools);
       }
       if (autoCalls.length > 0) {
         if (signal?.aborted) {
@@ -5878,21 +728,23 @@ var Agent = class _Agent {
         for (const tc of autoCalls) {
           onEvent({ type: "tool_call_start", toolCall: tc });
         }
-        const results = await Promise.allSettled(autoCalls.map(async (tc) => {
-          let parsedArgs;
-          try {
-            parsedArgs = JSON.parse(tc.function.arguments);
-          } catch {
-            parsedArgs = {};
-          }
-          const ctx = {
-            ...runContext,
-            onOutput: (data) => {
-              onEvent({ type: "tool_call_partial", toolCallId: tc.id, data });
+        const results = await Promise.allSettled(
+          autoCalls.map(async (tc) => {
+            let parsedArgs;
+            try {
+              parsedArgs = JSON.parse(tc.function.arguments);
+            } catch {
+              parsedArgs = {};
             }
-          };
-          return this.toolRegistry.execute(tc.function.name, parsedArgs, ctx);
-        }));
+            const ctx = {
+              ...runContext,
+              onOutput: (data) => {
+                onEvent({ type: "tool_call_partial", toolCallId: tc.id, data });
+              }
+            };
+            return this.toolRegistry.execute(tc.function.name, parsedArgs, ctx);
+          })
+        );
         for (let i = 0; i < autoCalls.length; i++) {
           const toolCall = autoCalls[i];
           const settled = results[i];
@@ -5904,14 +756,24 @@ var Agent = class _Agent {
             success: result.success,
             metadata: result.metadata
           });
-          messages = [
-            ...messages,
-            {
-              role: "tool",
-              tool_call_id: toolCall.id,
-              content: result.output
-            }
-          ];
+          if (useNativeTools) {
+            messages = [
+              ...messages,
+              {
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: result.output
+              }
+            ];
+          } else {
+            messages = [
+              ...messages,
+              {
+                role: "user",
+                content: formatToolResult(toolCall.function.name, result.output, result.success)
+              }
+            ];
+          }
           if (result.metadata?.base64_image) {
             messages = [
               ...messages,
@@ -5929,7 +791,9 @@ var Agent = class _Agent {
         }
       }
     }
-    const iterError = new Error(t("error.msg.iteration_limit", { limit: String(MAX_TOOL_CALL_ITERATIONS) }));
+    const iterError = new Error(
+      t("error.msg.iteration_limit", { limit: String(MAX_TOOL_CALL_ITERATIONS) })
+    );
     iterError.code = "iterations_exceeded";
     onEvent({ type: "error", error: iterError });
     return messages;
@@ -5946,8 +810,7 @@ var Agent = class _Agent {
           usage = chunk.usage;
         }
         const delta = chunk.choices[0]?.delta;
-        if (!delta)
-          continue;
+        if (!delta) continue;
         const thinking = delta.reasoning_content ?? delta.reasoning;
         if (thinking) {
           reasoningContent += thinking;
@@ -5970,12 +833,9 @@ var Agent = class _Agent {
               });
             }
             const acc = toolCallsAccumulator.get(tcDelta.index);
-            if (tcDelta.id)
-              acc.id = tcDelta.id;
-            if (tcDelta.function?.name)
-              acc.function.name += tcDelta.function.name;
-            if (tcDelta.function?.arguments)
-              acc.function.arguments += tcDelta.function.arguments;
+            if (tcDelta.id) acc.id = tcDelta.id;
+            if (tcDelta.function?.name) acc.function.name += tcDelta.function.name;
+            if (tcDelta.function?.arguments) acc.function.arguments += tcDelta.function.arguments;
           }
         }
       }
@@ -6009,7 +869,7 @@ var Agent = class _Agent {
     return { message, promptTokens: usage?.prompt_tokens ?? 0 };
   }
   // ── Single tool call execution (used by sequential confirmation phase) ──
-  async executeToolCall(toolCall, runContext, onEvent, messages) {
+  async executeToolCall(toolCall, runContext, onEvent, messages, useNativeTools = true) {
     onEvent({ type: "tool_call_start", toolCall });
     let parsedArgs;
     try {
@@ -6023,7 +883,11 @@ var Agent = class _Agent {
         onEvent({ type: "tool_call_partial", toolCallId: toolCall.id, data });
       }
     };
-    const result = await this.toolRegistry.execute(toolCall.function.name, parsedArgs, toolRunContext);
+    const result = await this.toolRegistry.execute(
+      toolCall.function.name,
+      parsedArgs,
+      toolRunContext
+    );
     onEvent({
       type: "tool_call_end",
       toolCall,
@@ -6031,14 +895,24 @@ var Agent = class _Agent {
       success: result.success,
       metadata: result.metadata
     });
-    messages = [
-      ...messages,
-      {
-        role: "tool",
-        tool_call_id: toolCall.id,
-        content: result.output
-      }
-    ];
+    if (useNativeTools) {
+      messages = [
+        ...messages,
+        {
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: result.output
+        }
+      ];
+    } else {
+      messages = [
+        ...messages,
+        {
+          role: "user",
+          content: formatToolResult(toolCall.function.name, result.output, result.success)
+        }
+      ];
+    }
     if (result.metadata?.base64_image) {
       messages = [
         ...messages,
@@ -6101,18 +975,20 @@ Be concise but thorough. Use bullet points. Do NOT include pleasantries or meta-
 TRANSCRIPT:
 ${transcript}`;
     try {
-      const response = await this.provider.createCompletion({
-        model: this.model.id,
-        messages: [
-          { role: "system", content: "You are a precise conversation summarizer." },
-          { role: "user", content: compressionPrompt }
-        ],
-        max_tokens: 1500,
-        temperature: 0.2
-      }, signal);
+      const response = await this.provider.createCompletion(
+        {
+          model: this.model.id,
+          messages: [
+            { role: "system", content: "You are a precise conversation summarizer." },
+            { role: "user", content: compressionPrompt }
+          ],
+          max_tokens: 1500,
+          temperature: 0.2
+        },
+        signal
+      );
       const summary = response.choices?.[0]?.message?.content || "";
-      if (!summary)
-        throw new Error("Empty compression response");
+      if (!summary) throw new Error("Empty compression response");
       const summaryMessage = {
         role: "user",
         content: `[Context Summary \u2014 earlier conversation compressed]
@@ -6147,10 +1023,8 @@ ${summary}`
       tokens += _Agent.estimateTextTokens(content);
     } else {
       for (const part of content) {
-        if (part.type === "text")
-          tokens += _Agent.estimateTextTokens(part.text);
-        else if (part.type === "image_url")
-          tokens += 85;
+        if (part.type === "text") tokens += _Agent.estimateTextTokens(part.text);
+        else if (part.type === "image_url") tokens += 85;
       }
     }
     const toolCalls = msg.tool_calls;
@@ -6168,8 +1042,7 @@ ${summary}`
   // ── Truncation ──────────────────────────────────────────────────────────
   truncateMessages(messages, maxTokens) {
     const total = messages.reduce((sum, m) => sum + this.estimateMessageTokens(m), 0);
-    if (total <= maxTokens)
-      return messages;
+    if (total <= maxTokens) return messages;
     const systemMsg = messages[0]?.role === "system" ? messages[0] : null;
     const rest = systemMsg ? messages.slice(1) : [...messages];
     const systemTokens = systemMsg ? this.estimateMessageTokens(systemMsg) : 0;
@@ -6178,8 +1051,7 @@ ${summary}`
     let used = 0;
     for (let i = rest.length - 1; i >= 0; i--) {
       const msgTokens = this.estimateMessageTokens(rest[i]);
-      if (used + msgTokens > budget)
-        break;
+      if (used + msgTokens > budget) break;
       kept.unshift(rest[i]);
       used += msgTokens;
     }
@@ -6196,8 +1068,7 @@ ${summary}`
     while (start < messages.length && messages[start].role === "tool") {
       start++;
     }
-    if (start === messages.length)
-      return [];
+    if (start === messages.length) return [];
     const trimmed = start > 0 ? messages.slice(start) : messages;
     const first = trimmed[0];
     if (first.role === "assistant") {
@@ -6219,7 +1090,7 @@ ${summary}`
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/agent/conversation.js
+// packages/core/src/agent/conversation.ts
 import { randomUUID } from "node:crypto";
 var Conversation = class {
   messages = [];
@@ -6252,8 +1123,7 @@ var Conversation = class {
   }
   truncateToFit(maxTokens) {
     const estimatedTokens = this.estimateTokenCount();
-    if (estimatedTokens <= maxTokens)
-      return false;
+    if (estimatedTokens <= maxTokens) return false;
     const systemMsg = this.messages[0]?.role === "system" ? this.messages[0] : null;
     const rest = systemMsg ? this.messages.slice(1) : [...this.messages];
     const systemTokens = systemMsg ? this.estimateMessageTokens(systemMsg) : 0;
@@ -6262,8 +1132,7 @@ var Conversation = class {
     let used = 0;
     for (let i = rest.length - 1; i >= 0; i--) {
       const msgTokens = this.estimateMessageTokens(rest[i]);
-      if (used + msgTokens > budget)
-        break;
+      if (used + msgTokens > budget) break;
       kept.unshift(rest[i]);
       used += msgTokens;
     }
@@ -6275,21 +1144,17 @@ var Conversation = class {
   }
   estimateMessageTokens(message) {
     const { content } = message;
-    if (content === null)
-      return 4;
-    if (typeof content === "string")
-      return Math.ceil(content.length / 4) + 4;
+    if (content === null) return 4;
+    if (typeof content === "string") return Math.ceil(content.length / 4) + 4;
     return content.reduce((sum, part) => {
-      if (part.type === "text")
-        return sum + Math.ceil(part.text.length / 4);
-      if (part.type === "image_url")
-        return sum + 85;
+      if (part.type === "text") return sum + Math.ceil(part.text.length / 4);
+      if (part.type === "image_url") return sum + 85;
       return sum;
     }, 0) + 4;
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/agent/system-prompt.js
+// packages/core/src/agent/system-prompt.ts
 function buildSystemPrompt(opts) {
   const permDesc = getPermissionDescription(opts.permissionMode ?? "strict");
   let prompt = `You are **Ava** \u2014 ${APP_DISPLAY_NAME} v${APP_VERSION}.
@@ -6376,7 +1241,7 @@ You can see and analyze images. When the user shares an image (screenshot, photo
 ` : ""}
 ## Your Tools
 
-You have twenty-one tools. **When the user asks you to do something**, use them proactively \u2014 don't talk about what you *could* do, go do it. But when the user is asking a question or having a conversation, respond with words first.
+You have twenty-four tools. **When the user asks you to do something**, use them proactively \u2014 don't talk about what you *could* do, go do it. But when the user is asking a question or having a conversation, respond with words first.
 
 ### Reading & Searching (always auto-approved)
 - **file_read** \u2014 Read file contents with line numbers. Use \`offset\`/\`limit\` for large files instead of reading the entire thing.
@@ -6394,6 +1259,7 @@ You have twenty-one tools. **When the user asks you to do something**, use them 
 - **screenshot** \u2014 Capture a screenshot of the user's screen for visual analysis (requires screenshot-desktop). Returns base64 PNG image data that vision-capable models can analyze.
 - **database_query** \u2014 Run read-only SQL queries against PostgreSQL, SQLite, or MySQL. Only SELECT/SHOW/DESCRIBE/EXPLAIN/PRAGMA allowed. Returns formatted text table.
 - **browser** \u2014 Automate browser interactions using Playwright (headless Chromium). Navigate to pages, click elements, fill forms, capture screenshots, extract text, and run JavaScript.
+- **docs_lookup** \u2014 Search your own documentation to help users. Use when someone asks about your features, setup, configuration, models, tools, troubleshooting, or anything about how Ava works. You can search by query or request a specific topic. This makes you self-aware of your own capabilities \u2014 use it instead of guessing.
 
 ### Writing & Editing (${opts.permissionMode === "balanced" || opts.permissionMode === "autonomous" ? "auto-approved" : "requires user approval"})
 - **file_edit** \u2014 Replace an exact string match in a file. Preferred over file_write for existing files \u2014 it's precise and safe.
@@ -6424,6 +1290,9 @@ You have twenty-one tools. **When the user asks you to do something**, use them 
 ### Memory (${opts.permissionMode === "balanced" || opts.permissionMode === "autonomous" ? "auto-approved" : "requires user approval"})
 - **memory_save** \u2014 Save information to persistent memory that survives across conversations. Two scopes: \`global\` (all projects) and \`project\` (current project only). Modes: \`append\` (add to existing) or \`replace\` (overwrite). Use this proactively when you learn something worth remembering.
 - **memory_recall** \u2014 Search your saved memories by keyword. Returns matching sections from global and/or project memory. Use when you need to find specific stored knowledge without reading the entire memory section. Params: \`query\` (required), \`scope\` (optional: global/project/all, default: all).
+
+### Support (requires user approval)
+- **support_request** \u2014 Submit a support ticket to the Ava team on behalf of the user. Use when the user has a problem you can't solve \u2014 bugs, account issues, feature requests, billing questions. Requires \`email\`, \`subject\`, and \`message\`. Always confirm details with the user before sending. The team will reply via email. If the user has a platform account, their ticket is also visible in the dashboard.
 
 ### Safety (requires user approval)
 - **rollback** \u2014 Restore, discard, or check the status of a git checkpoint. Before making file changes, a checkpoint is automatically created via git stash. If something goes wrong, use this to undo all changes back to the checkpoint.
@@ -6872,6 +1741,21 @@ ${opts.memory}`;
 
 You have persistent memory that survives across conversations. Use the \`memory_save\` tool to remember important things for future sessions. No memories saved yet \u2014 start building your knowledge as you work with the user.`;
   }
+  prompt += `
+
+## Quick Reference (Your Features)
+
+When users ask what you can do, how to configure you, or need help with your features, **call your \`docs_lookup\` tool** \u2014 you already have it. It searches your own built-in documentation and returns accurate answers. This is always better than guessing or saying you don't know.
+
+**How to use it:** Call the tool with \`{ "query": "..." }\` to search, or \`{ "topic": "..." }\` to get a specific section. Example: \`docs_lookup({ query: "how to add an API key" })\` or \`docs_lookup({ topic: "models" })\`.
+
+**Quick summary (call docs_lookup for details):**
+
+**Your 24 tools:** file_read, file_write, file_edit, glob, grep, bash, list_directory, git_status, git_diff, web_search, http_request, browser, screenshot, database_query, project_index, find_symbol, rollback, memory_save, memory_recall, support_request, present_plan, todo_write, ask_user, docs_lookup.
+
+**Your modes:** Code (full agent, 24 tools), Plan (read-only analysis), Chat (no tools), Security (OWASP audit).
+
+**docs_lookup topics:** getting-started, models, tools, modes, permissions, memory, configuration, project-context, cli-commands, languages, keyboard-shortcuts, troubleshooting, platform-account, dashboard, history, security-audit.`;
   return prompt;
 }
 function getSecurityModePrefix(userText) {
@@ -6970,7 +1854,7 @@ function getPermissionDescription(mode) {
   }
 }
 
-// packages/ide/node_modules/@ava/core/dist/core/errors.js
+// packages/core/src/core/errors.ts
 var AvaError = class extends Error {
   code;
   constructor(message, code, options) {
@@ -6980,9 +1864,6 @@ var AvaError = class extends Error {
   }
 };
 var ProviderError = class extends AvaError {
-  provider;
-  statusCode;
-  responseBody;
   constructor(message, provider, statusCode, responseBody) {
     super(message, "PROVIDER_ERROR");
     this.provider = provider;
@@ -7017,21 +1898,32 @@ var ProviderError = class extends AvaError {
         return t("error.msg.rate_limit", { provider: this.provider });
       case 500:
       case 502:
-      case 503:
-        return t("error.msg.server_error", { provider: this.provider, code: String(this.statusCode) });
+      case 503: {
+        let detail = "";
+        if (this.responseBody) {
+          try {
+            const raw = typeof this.responseBody === "string" ? this.responseBody : "";
+            const body = raw ? JSON.parse(raw) : this.responseBody;
+            detail = body?.error?.message || body?.error || body?.message || "";
+            if (typeof detail !== "string") detail = JSON.stringify(detail);
+          } catch {
+            detail = typeof this.responseBody === "string" ? this.responseBody.slice(0, 200) : "";
+          }
+        }
+        const base = t("error.msg.server_error", { provider: this.provider, code: String(this.statusCode) });
+        return detail ? `${base} (${detail})` : base;
+      }
       default:
         return this.message;
     }
   }
   /** Whether this error is transient and worth retrying. */
   get retryable() {
-    if (!this.statusCode)
-      return true;
+    if (!this.statusCode) return true;
     return [429, 500, 502, 503].includes(this.statusCode);
   }
 };
 var ToolExecutionError = class extends AvaError {
-  toolName;
   constructor(message, toolName) {
     super(message, "TOOL_EXECUTION_ERROR");
     this.toolName = toolName;
@@ -7045,7 +1937,6 @@ var ConfigError = class extends AvaError {
   }
 };
 var StreamError = class extends ProviderError {
-  partialContent;
   constructor(message, provider, partialContent) {
     super(message, provider);
     this.partialContent = partialContent;
@@ -7054,7 +1945,7 @@ var StreamError = class extends ProviderError {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/providers/base-provider.js
+// packages/core/src/providers/base-provider.ts
 var BaseProvider = class _BaseProvider {
   apiKey;
   configBaseUrl;
@@ -7102,21 +1993,28 @@ var BaseProvider = class _BaseProvider {
         response = await fetch(url, { ...init, signal: controller.signal });
       } catch (err) {
         clearTimeout(timeoutId);
-        if (err instanceof DOMException && err.name === "AbortError") {
-          throw new ProviderError(`${this.displayName} request timed out after ${_BaseProvider.FETCH_TIMEOUT_MS / 1e3}s`, this.name);
+        const isTimeout = err instanceof DOMException && err.name === "AbortError";
+        const msg = isTimeout ? `${this.displayName} request timed out after ${_BaseProvider.FETCH_TIMEOUT_MS / 1e3}s` : `${this.displayName} network error: ${err instanceof Error ? err.message : String(err)}`;
+        lastError = new ProviderError(msg, this.name);
+        if (attempt < _BaseProvider.MAX_RETRIES) {
+          const delay2 = _BaseProvider.BASE_DELAY_MS * Math.pow(2, attempt);
+          await new Promise((r) => setTimeout(r, delay2));
+          continue;
         }
-        throw new ProviderError(`${this.displayName} network error: ${err instanceof Error ? err.message : String(err)}`, this.name);
+        throw lastError;
       } finally {
         clearTimeout(timeoutId);
       }
-      if (response.ok)
-        return response;
+      if (response.ok) return response;
       const errorBody = await response.text();
-      lastError = new ProviderError(`${this.displayName} API error: ${response.status} ${response.statusText}`, this.name, response.status, errorBody);
-      if (!_BaseProvider.RETRYABLE_STATUS_CODES.has(response.status))
-        throw lastError;
-      if (attempt === _BaseProvider.MAX_RETRIES)
-        break;
+      lastError = new ProviderError(
+        `${this.displayName} API error: ${response.status} ${response.statusText}`,
+        this.name,
+        response.status,
+        errorBody
+      );
+      if (!_BaseProvider.RETRYABLE_STATUS_CODES.has(response.status)) throw lastError;
+      if (attempt === _BaseProvider.MAX_RETRIES) break;
       const delay = _BaseProvider.BASE_DELAY_MS * Math.pow(2, attempt);
       await new Promise((r) => setTimeout(r, delay));
     }
@@ -7164,57 +2062,63 @@ var BaseProvider = class _BaseProvider {
       }
       let timeoutId;
       const timeoutPromise = new Promise((_2, reject) => {
-        timeoutId = setTimeout(() => reject(new ProviderError(`${this.displayName} stream stalled \u2014 no data received for ${_BaseProvider.STREAM_READ_TIMEOUT_MS / 1e3}s`, this.name)), _BaseProvider.STREAM_READ_TIMEOUT_MS);
+        timeoutId = setTimeout(
+          () => reject(new ProviderError(
+            `${this.displayName} stream stalled \u2014 no data received for ${_BaseProvider.STREAM_READ_TIMEOUT_MS / 1e3}s`,
+            this.name
+          )),
+          _BaseProvider.STREAM_READ_TIMEOUT_MS
+        );
       });
-      const readPromise = reader.read().then((result) => {
-        clearTimeout(timeoutId);
-        return result;
-      }, (err) => {
-        clearTimeout(timeoutId);
-        throw err;
-      });
+      const readPromise = reader.read().then(
+        (result) => {
+          clearTimeout(timeoutId);
+          return result;
+        },
+        (err) => {
+          clearTimeout(timeoutId);
+          throw err;
+        }
+      );
       return Promise.race([readPromise, timeoutPromise]);
     };
     const processLine = (line) => {
       const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data: "))
-        return null;
+      if (!trimmed || !trimmed.startsWith("data: ")) return null;
       const data = trimmed.slice(6);
-      if (data === "[DONE]")
-        return "done";
+      if (data === "[DONE]") return "done";
       try {
         const parsed = JSON.parse(data);
         if (parsed.error) {
           const errMsg = parsed.error.message || parsed.error.type || JSON.stringify(parsed.error);
-          throw new ProviderError(`${this.displayName} stream error: ${errMsg}`, this.name, parsed.error.code);
+          throw new ProviderError(
+            `${this.displayName} stream error: ${errMsg}`,
+            this.name,
+            parsed.error.code
+          );
         }
         return this.normalizeStreamChunk(parsed);
       } catch (err) {
-        if (err instanceof ProviderError)
-          throw err;
+        if (err instanceof ProviderError) throw err;
         return null;
       }
     };
     try {
       while (true) {
         const { done, value } = await readWithTimeout();
-        if (done)
-          break;
+        if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           const result = processLine(line);
-          if (result === "done")
-            return;
-          if (result)
-            yield result;
+          if (result === "done") return;
+          if (result) yield result;
         }
       }
       if (buffer.trim()) {
         const result = processLine(buffer);
-        if (result && result !== "done")
-          yield result;
+        if (result && result !== "done") yield result;
       }
     } finally {
       try {
@@ -7226,7 +2130,7 @@ var BaseProvider = class _BaseProvider {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/providers/deepseek/models.js
+// packages/core/src/providers/deepseek/models.ts
 var DEEPSEEK_MODELS = [
   {
     id: "deepseek-chat",
@@ -7251,7 +2155,7 @@ var DEEPSEEK_MODELS = [
   }
 ];
 
-// packages/ide/node_modules/@ava/core/dist/providers/deepseek/index.js
+// packages/core/src/providers/deepseek/index.ts
 var DeepSeekProvider = class extends BaseProvider {
   name = "deepseek";
   displayName = "DeepSeek";
@@ -7263,7 +2167,7 @@ var DeepSeekProvider = class extends BaseProvider {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/providers/kimi/models.js
+// packages/core/src/providers/kimi/models.ts
 var KIMI_MODELS = [
   {
     id: "kimi-k2.5",
@@ -7289,7 +2193,7 @@ var KIMI_MODELS = [
   }
 ];
 
-// packages/ide/node_modules/@ava/core/dist/providers/kimi/index.js
+// packages/core/src/providers/kimi/index.ts
 var KimiProvider = class extends BaseProvider {
   name = "kimi";
   displayName = "Kimi (Moonshot AI)";
@@ -7301,7 +2205,7 @@ var KimiProvider = class extends BaseProvider {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/providers/qwen/models.js
+// packages/core/src/providers/qwen/models.ts
 var QWEN_MODELS = [
   {
     id: "qwen3.5-plus",
@@ -7327,7 +2231,7 @@ var QWEN_MODELS = [
   }
 ];
 
-// packages/ide/node_modules/@ava/core/dist/providers/qwen/index.js
+// packages/core/src/providers/qwen/index.ts
 var QwenProvider = class extends BaseProvider {
   name = "qwen";
   displayName = "Qwen (Alibaba Cloud)";
@@ -7339,8 +2243,28 @@ var QwenProvider = class extends BaseProvider {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/providers/zhipu/models.js
+// packages/core/src/providers/zhipu/models.ts
 var ZHIPU_MODELS = [
+  {
+    id: "glm-4.7-flash",
+    name: "GLM-4.7 Flash (Free)",
+    provider: "zhipu",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  },
+  {
+    id: "glm-4.5-flash",
+    name: "GLM-4.5 Flash (Free)",
+    provider: "zhipu",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  },
   {
     id: "glm-5",
     name: "GLM-5",
@@ -7364,20 +2288,10 @@ var ZHIPU_MODELS = [
     supportsThinking: true,
     supportsVision: true,
     pricing: { inputPerMillion: 0.6, outputPerMillion: 2.2 }
-  },
-  {
-    id: "glm-4-flash",
-    name: "GLM-4 Flash (Free)",
-    provider: "zhipu",
-    contextWindow: 128e3,
-    maxOutputTokens: 4096,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
   }
 ];
 
-// packages/ide/node_modules/@ava/core/dist/providers/zhipu/index.js
+// packages/core/src/providers/zhipu/index.ts
 var ZhipuProvider = class extends BaseProvider {
   name = "zhipu";
   displayName = "Zhipu AI";
@@ -7416,21 +2330,33 @@ var ZhipuProvider = class extends BaseProvider {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/providers/mistral/models.js
+// packages/core/src/providers/mistral/models.ts
 var MISTRAL_MODELS = [
   {
     id: "mistral-large-latest",
-    name: "Mistral Large 3",
+    name: "Mistral Large",
     provider: "mistral",
-    contextWindow: 256e3,
+    contextWindow: 262e3,
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
-    pricing: { inputPerMillion: 0.5, outputPerMillion: 1.5 }
+    supportsVision: true,
+    pricing: { inputPerMillion: 2, outputPerMillion: 6 }
+  },
+  {
+    id: "mistral-medium-latest",
+    name: "Mistral Medium",
+    provider: "mistral",
+    contextWindow: 131e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
   },
   {
     id: "codestral-latest",
-    name: "Codestral 25.08",
+    name: "Codestral",
     provider: "mistral",
     contextWindow: 256e3,
     maxOutputTokens: 8192,
@@ -7439,28 +2365,40 @@ var MISTRAL_MODELS = [
     pricing: { inputPerMillion: 0.3, outputPerMillion: 0.9 }
   },
   {
-    id: "devstral-2-25-12",
-    name: "Devstral 2",
+    id: "devstral-latest",
+    name: "Devstral",
     provider: "mistral",
-    contextWindow: 256e3,
+    contextWindow: 262e3,
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
     pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
   },
   {
-    id: "mistral-small-latest",
-    name: "Mistral Small 3.2",
+    id: "devstral-small-latest",
+    name: "Devstral Small",
     provider: "mistral",
-    contextWindow: 128e3,
+    contextWindow: 262e3,
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
+  },
+  {
+    id: "mistral-small-latest",
+    name: "Mistral Small",
+    provider: "mistral",
+    contextWindow: 131e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsVision: true,
     pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
   }
 ];
 
-// packages/ide/node_modules/@ava/core/dist/providers/mistral/index.js
+// packages/core/src/providers/mistral/index.ts
 var MistralProvider = class extends BaseProvider {
   name = "mistral";
   displayName = "Mistral AI";
@@ -7480,7 +2418,7 @@ var MistralProvider = class extends BaseProvider {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/providers/anthropic/models.js
+// packages/core/src/providers/anthropic/models.ts
 var ANTHROPIC_MODELS = [
   {
     id: "claude-opus-4-6",
@@ -7517,7 +2455,7 @@ var ANTHROPIC_MODELS = [
   }
 ];
 
-// packages/ide/node_modules/@ava/core/dist/providers/anthropic/index.js
+// packages/core/src/providers/anthropic/index.ts
 var ANTHROPIC_VERSION = "2023-06-01";
 var AnthropicProvider = class extends BaseProvider {
   name = "anthropic";
@@ -7544,7 +2482,7 @@ var AnthropicProvider = class extends BaseProvider {
     const url = this.getCompletionUrl();
     const headers = this.getAuthHeaders();
     logger.debug(`[anthropic] POST ${url} | model=${request2.model}`);
-    const response = await this.fetchWithRetryPublic(url, {
+    const response = await this.fetchWithRetry(url, {
       method: "POST",
       headers,
       body: JSON.stringify(anthropicBody),
@@ -7559,7 +2497,7 @@ var AnthropicProvider = class extends BaseProvider {
     const url = this.getCompletionUrl();
     const headers = this.getAuthHeaders();
     logger.debug(`[anthropic] POST ${url} (stream) | model=${request2.model}`);
-    const response = await this.fetchWithRetryPublic(url, {
+    const response = await this.fetchWithRetry(url, {
       method: "POST",
       headers,
       body: JSON.stringify(anthropicBody),
@@ -7575,20 +2513,16 @@ var AnthropicProvider = class extends BaseProvider {
     let outputTokens = 0;
     try {
       while (true) {
-        if (signal?.aborted)
-          break;
+        if (signal?.aborted) break;
         const { done, value } = await reader.read();
-        if (done)
-          break;
+        if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
         for (const line of lines) {
-          if (!line.startsWith("data: "))
-            continue;
+          if (!line.startsWith("data: ")) continue;
           const jsonStr = line.slice(6).trim();
-          if (!jsonStr || jsonStr === "[DONE]")
-            continue;
+          if (!jsonStr || jsonStr === "[DONE]") continue;
           let event;
           try {
             event = JSON.parse(jsonStr);
@@ -7602,8 +2536,7 @@ var AnthropicProvider = class extends BaseProvider {
             outputTokens = event.usage.output_tokens || 0;
           }
           const chunk = this.convertStreamEvent(event, request2.model, inputTokens, outputTokens);
-          if (chunk)
-            yield chunk;
+          if (chunk) yield chunk;
         }
       }
     } finally {
@@ -7654,8 +2587,7 @@ var AnthropicProvider = class extends BaseProvider {
         messages.push({ role: msg.role, content: msg.content });
       } else if (Array.isArray(msg.content)) {
         const parts = msg.content.map((part) => {
-          if (part.type === "text")
-            return { type: "text", text: part.text };
+          if (part.type === "text") return { type: "text", text: part.text };
           if (part.type === "image_url") {
             const url = part.image_url.url;
             if (url.startsWith("data:")) {
@@ -7679,12 +2611,9 @@ var AnthropicProvider = class extends BaseProvider {
       input_schema: t2.function.parameters || { type: "object", properties: {} }
     }));
     let toolChoice;
-    if (request2.tool_choice === "auto")
-      toolChoice = { type: "auto" };
-    else if (request2.tool_choice === "none")
-      toolChoice = { type: "none" };
-    else if (request2.tool_choice === "required")
-      toolChoice = { type: "any" };
+    if (request2.tool_choice === "auto") toolChoice = { type: "auto" };
+    else if (request2.tool_choice === "none") toolChoice = { type: "none" };
+    else if (request2.tool_choice === "required") toolChoice = { type: "any" };
     return {
       model: request2.model,
       messages,
@@ -7705,8 +2634,7 @@ var AnthropicProvider = class extends BaseProvider {
     const toolCalls = [];
     if (Array.isArray(content)) {
       for (const block of content) {
-        if (block.type === "text")
-          textContent += block.text || "";
+        if (block.type === "text") textContent += block.text || "";
         if (block.type === "tool_use") {
           toolCalls.push({
             id: block.id,
@@ -7831,40 +2759,6 @@ var AnthropicProvider = class extends BaseProvider {
     }
     return null;
   }
-  // ── Expose base class fetchWithRetry ───────────────────────────────────
-  async fetchWithRetryPublic(url, init) {
-    let lastError;
-    for (let attempt = 0; attempt <= 3; attempt++) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6e4);
-      const originalSignal = init.signal;
-      if (originalSignal) {
-        originalSignal.addEventListener("abort", () => controller.abort());
-      }
-      try {
-        const response = await fetch(url, { ...init, signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (response.ok)
-          return response;
-        const errorBody = await response.text();
-        lastError = new ProviderError(`Anthropic API error: ${response.status} ${response.statusText}`, this.name, response.status, errorBody);
-        if (![429, 500, 502, 503].includes(response.status))
-          throw lastError;
-        if (attempt === 3)
-          break;
-        await new Promise((r) => setTimeout(r, 1e3 * Math.pow(2, attempt)));
-      } catch (err) {
-        clearTimeout(timeoutId);
-        if (err instanceof ProviderError)
-          throw err;
-        if (err instanceof DOMException && err.name === "AbortError") {
-          throw new ProviderError("Anthropic request timed out after 60s", this.name);
-        }
-        throw new ProviderError(`Anthropic network error: ${err instanceof Error ? err.message : String(err)}`, this.name);
-      }
-    }
-    throw lastError;
-  }
 };
 function safeParse(str) {
   try {
@@ -7874,7 +2768,7 @@ function safeParse(str) {
   }
 }
 
-// packages/ide/node_modules/@ava/core/dist/providers/provider-registry.js
+// packages/core/src/providers/provider-registry.ts
 var BUILT_IN_PROVIDERS = {
   deepseek: (config) => new DeepSeekProvider(config),
   kimi: (config) => new KimiProvider(config),
@@ -7902,17 +2796,14 @@ var ProviderRegistry = class {
     const [providerName, modelId] = qualifiedId.includes(":") ? qualifiedId.split(":", 2) : [void 0, qualifiedId];
     if (providerName) {
       const provider = this.providers.get(providerName);
-      if (!provider)
-        return void 0;
+      if (!provider) return void 0;
       const model = provider.listModels().find((m) => m.id === modelId);
-      if (!model)
-        return void 0;
+      if (!model) return void 0;
       return { provider, model };
     }
     for (const [, provider] of this.providers) {
       const model = provider.listModels().find((m) => m.id === modelId);
-      if (model)
-        return { provider, model };
+      if (model) return { provider, model };
     }
     return void 0;
   }
@@ -7925,8 +2816,9 @@ var ProviderRegistry = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/providers/platform/models.js
+// packages/core/src/providers/platform/models.ts
 var PLATFORM_MODELS = [
+  // DeepSeek
   {
     id: "deepseek-chat",
     name: "DeepSeek V3.2",
@@ -7935,19 +2827,20 @@ var PLATFORM_MODELS = [
     maxOutputTokens: 8192,
     supportsToolCalls: true,
     supportsStreaming: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+    pricing: { inputPerMillion: 0.28, outputPerMillion: 0.42 }
   },
   {
     id: "deepseek-reasoner",
-    name: "DeepSeek R1",
+    name: "DeepSeek V3.2 Reasoner",
     provider: "platform",
     contextWindow: 128e3,
     maxOutputTokens: 64e3,
     supportsToolCalls: true,
     supportsStreaming: true,
     supportsThinking: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+    pricing: { inputPerMillion: 0.28, outputPerMillion: 0.42 }
   },
+  // Kimi / Moonshot
   {
     id: "kimi-k2.5",
     name: "Kimi K2.5",
@@ -7958,9 +2851,128 @@ var PLATFORM_MODELS = [
     supportsStreaming: true,
     supportsThinking: true,
     supportsVision: true,
+    pricing: { inputPerMillion: 0.6, outputPerMillion: 3 }
+  },
+  {
+    id: "moonshot-v1-128k",
+    name: "Moonshot V1 128K",
+    provider: "platform",
+    contextWindow: 128e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 2, outputPerMillion: 5 }
+  },
+  // Qwen
+  {
+    id: "qwen3.5-plus",
+    name: "Qwen 3.5 Plus",
+    provider: "platform",
+    contextWindow: 256e3,
+    maxOutputTokens: 16384,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsThinking: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 0.4, outputPerMillion: 2.4 }
+  },
+  {
+    id: "qwen-turbo-latest",
+    name: "Qwen Turbo",
+    provider: "platform",
+    contextWindow: 1e6,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.05, outputPerMillion: 0.2 }
+  },
+  // Zhipu / GLM
+  {
+    id: "glm-5",
+    name: "GLM-5",
+    provider: "platform",
+    contextWindow: 2e5,
+    maxOutputTokens: 128e3,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsThinking: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 1, outputPerMillion: 3.2 }
+  },
+  {
+    id: "glm-4.7",
+    name: "GLM-4.7",
+    provider: "platform",
+    contextWindow: 2e5,
+    maxOutputTokens: 128e3,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    supportsThinking: true,
+    supportsVision: true,
+    pricing: { inputPerMillion: 0.6, outputPerMillion: 2.2 }
+  },
+  {
+    id: "glm-4.7-flash",
+    name: "GLM-4.7 Flash (Free)",
+    provider: "platform",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
     pricing: { inputPerMillion: 0, outputPerMillion: 0 }
   },
-  // Claude models — available to admin/pro/ultra tiers via platform proxy
+  {
+    id: "glm-4.5-flash",
+    name: "GLM-4.5 Flash (Free)",
+    provider: "platform",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  },
+  // Mistral
+  {
+    id: "mistral-large-latest",
+    name: "Mistral Large 3",
+    provider: "platform",
+    contextWindow: 256e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.5, outputPerMillion: 1.5 }
+  },
+  {
+    id: "codestral-latest",
+    name: "Codestral 25.08",
+    provider: "platform",
+    contextWindow: 256e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.3, outputPerMillion: 0.9 }
+  },
+  {
+    id: "devstral-2-25-12",
+    name: "Devstral 2",
+    provider: "platform",
+    contextWindow: 256e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.4, outputPerMillion: 2 }
+  },
+  {
+    id: "mistral-small-latest",
+    name: "Mistral Small 3.2",
+    provider: "platform",
+    contextWindow: 128e3,
+    maxOutputTokens: 8192,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3 }
+  },
+  // Claude — available to admin/pro/ultra tiers via platform proxy
   {
     id: "claude-opus-4-6",
     name: "Claude Opus 4.6",
@@ -7996,7 +3008,7 @@ var PLATFORM_MODELS = [
   }
 ];
 
-// packages/ide/node_modules/@ava/core/dist/providers/platform/index.js
+// packages/core/src/providers/platform/index.ts
 var PlatformProvider = class extends BaseProvider {
   name = "platform";
   displayName = "Ava Platform";
@@ -8011,7 +3023,7 @@ var PlatformProvider = class extends BaseProvider {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/file-read.js
+// packages/core/src/tools/file-read.ts
 import { readFile } from "node:fs/promises";
 import { resolve, isAbsolute } from "node:path";
 var FileReadTool = class {
@@ -8069,7 +3081,7 @@ var FileReadTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/file-write.js
+// packages/core/src/tools/file-write.ts
 import { writeFile, mkdir } from "node:fs/promises";
 import { resolve as resolve2, isAbsolute as isAbsolute2, dirname } from "node:path";
 var FileWriteTool = class {
@@ -8115,7 +3127,7 @@ var FileWriteTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/file-edit.js
+// packages/core/src/tools/file-edit.ts
 import { readFile as readFile2, writeFile as writeFile2 } from "node:fs/promises";
 import { resolve as resolve3, isAbsolute as isAbsolute3 } from "node:path";
 var FileEditTool = class {
@@ -11168,7 +6180,7 @@ var Ui = Object.assign(ts, { stream: Bt, iterate: Ut });
 var Ze = Object.assign(Je, { glob: Je, globSync: ts, sync: Ui, globStream: Qe, stream: Ii, globStreamSync: Bt, streamSync: ji, globIterate: es, iterate: Bi, globIterateSync: Ut, iterateSync: zi, Glob: I, hasMagic: le, escape: tt, unescape: W });
 Ze.glob = Ze;
 
-// packages/ide/node_modules/@ava/core/dist/tools/glob.js
+// packages/core/src/tools/glob.ts
 import { resolve as resolve4, isAbsolute as isAbsolute4 } from "node:path";
 var GlobTool = class {
   name = "glob";
@@ -11224,7 +6236,7 @@ var GlobTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/grep.js
+// packages/core/src/tools/grep.ts
 import { readFile as readFile3 } from "node:fs/promises";
 import { resolve as resolve5, isAbsolute as isAbsolute5 } from "node:path";
 var MAX_RESULTS = 200;
@@ -11320,7 +6332,7 @@ var GrepTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/bash.js
+// packages/core/src/tools/bash.ts
 import { exec, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 var DEFAULT_TIMEOUT_MS = 12e4;
@@ -11328,8 +6340,7 @@ var MAX_OUTPUT_LENGTH = 3e4;
 var BACKGROUND_WARMUP_MS = 5e3;
 var resolvedShell;
 function getShell() {
-  if (resolvedShell)
-    return resolvedShell;
+  if (resolvedShell) return resolvedShell;
   if (process.platform !== "win32") {
     resolvedShell = "/bin/bash";
     return resolvedShell;
@@ -11402,43 +6413,45 @@ var BashTool = class {
     const timeout = Math.min(args.timeout ?? DEFAULT_TIMEOUT_MS, 6e5);
     return new Promise((resolvePromise) => {
       const shell = getShell();
-      const child = exec(command, {
-        cwd: context.cwd,
-        timeout,
-        maxBuffer: 1024 * 1024 * 10,
-        shell
-      }, (error, stdout, stderr) => {
-        child.stdout?.removeAllListeners("data");
-        child.stderr?.removeAllListeners("data");
-        let output = "";
-        if (stdout)
-          output += stdout;
-        if (stderr)
-          output += (output ? "\n" : "") + stderr;
-        if (error && error.killed) {
-          output += `
+      const child = exec(
+        command,
+        {
+          cwd: context.cwd,
+          timeout,
+          maxBuffer: 1024 * 1024 * 10,
+          shell
+        },
+        (error, stdout, stderr) => {
+          child.stdout?.removeAllListeners("data");
+          child.stderr?.removeAllListeners("data");
+          let output = "";
+          if (stdout) output += stdout;
+          if (stderr) output += (output ? "\n" : "") + stderr;
+          if (error && error.killed) {
+            output += `
 Command timed out after ${timeout}ms`;
-        }
-        if (error && !output) {
-          const errCode = error.code;
-          if (errCode === "ENOENT") {
-            output = `Shell not found: "${shell}". Install Git Bash or ensure bash is in your PATH.`;
-          } else {
-            output = `Command failed (exit code ${errCode ?? "unknown"})`;
           }
-        }
-        if (output.length > MAX_OUTPUT_LENGTH) {
-          output = output.slice(0, MAX_OUTPUT_LENGTH) + "\n... (output truncated)";
-        }
-        resolvePromise({
-          success: !error,
-          output: output || "(no output)",
-          metadata: {
-            exitCode: error ? error.code : 0,
-            killed: error?.killed ?? false
+          if (error && !output) {
+            const errCode = error.code;
+            if (errCode === "ENOENT") {
+              output = `Shell not found: "${shell}". Install Git Bash or ensure bash is in your PATH.`;
+            } else {
+              output = `Command failed (exit code ${errCode ?? "unknown"})`;
+            }
           }
-        });
-      });
+          if (output.length > MAX_OUTPUT_LENGTH) {
+            output = output.slice(0, MAX_OUTPUT_LENGTH) + "\n... (output truncated)";
+          }
+          resolvePromise({
+            success: !error,
+            output: output || "(no output)",
+            metadata: {
+              exitCode: error ? error.code : 0,
+              killed: error?.killed ?? false
+            }
+          });
+        }
+      );
       if (context.onOutput) {
         const onOutput = context.onOutput;
         child.stdout?.on("data", (chunk) => onOutput(chunk.toString()));
@@ -11498,8 +6511,7 @@ Command timed out after ${timeout}ms`;
         }
       });
       setTimeout(() => {
-        if (exited)
-          return;
+        if (exited) return;
         child.unref();
         child.stdout?.removeAllListeners("data");
         child.stderr?.removeAllListeners("data");
@@ -11529,7 +6541,7 @@ Command timed out after ${timeout}ms`;
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/present-plan.js
+// packages/core/src/tools/present-plan.ts
 var PresentPlanTool = class {
   name = "present_plan";
   description = "Present a structured plan for the user to review and approve";
@@ -11607,7 +6619,7 @@ var PresentPlanTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/todo-write.js
+// packages/core/src/tools/todo-write.ts
 var TodoWriteTool = class {
   name = "todo_write";
   description = "Create or update a visual task list for tracking progress";
@@ -11661,15 +6673,13 @@ ${lines.join("\n")}`
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/list-directory.js
+// packages/core/src/tools/list-directory.ts
 import { readdir, stat } from "node:fs/promises";
 import { resolve as resolve6, isAbsolute as isAbsolute6, join as join2 } from "node:path";
 var MAX_ENTRIES = 200;
 function formatSize(bytes) {
-  if (bytes < 1024)
-    return `${bytes} B`;
-  if (bytes < 1024 * 1024)
-    return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 var ListDirectoryTool = class {
@@ -11746,7 +6756,7 @@ var ListDirectoryTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/web-search.js
+// packages/core/src/tools/web-search.ts
 import { request } from "node:https";
 var DUCKDUCKGO_URL = "https://lite.duckduckgo.com/lite/";
 var REQUEST_TIMEOUT = 1e4;
@@ -11754,20 +6764,24 @@ var DEFAULT_MAX_RESULTS = 5;
 function fetchDuckDuckGo(query) {
   return new Promise((resolve8, reject) => {
     const postData = `q=${encodeURIComponent(query)}`;
-    const req = request(DUCKDUCKGO_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Content-Length": Buffer.byteLength(postData),
-        "User-Agent": "Ava-Supernova/1.0"
+    const req = request(
+      DUCKDUCKGO_URL,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Length": Buffer.byteLength(postData),
+          "User-Agent": "Ava-Supernova/1.0"
+        },
+        timeout: REQUEST_TIMEOUT
       },
-      timeout: REQUEST_TIMEOUT
-    }, (res) => {
-      const chunks = [];
-      res.on("data", (chunk) => chunks.push(chunk));
-      res.on("end", () => resolve8(Buffer.concat(chunks).toString("utf-8")));
-      res.on("error", reject);
-    });
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => resolve8(Buffer.concat(chunks).toString("utf-8")));
+        res.on("error", reject);
+      }
+    );
     req.on("error", reject);
     req.on("timeout", () => {
       req.destroy();
@@ -11808,8 +6822,7 @@ function parseResults(html, maxResults) {
     while ((match = broadPattern.exec(html)) !== null && results.length < maxResults) {
       const url = match[1].trim();
       const title = match[2].replace(/<[^>]*>/g, "").trim();
-      if (url.includes("duckduckgo.com") || !title || seen.has(url))
-        continue;
+      if (url.includes("duckduckgo.com") || !title || seen.has(url)) continue;
       seen.add(url);
       results.push({ title, url, snippet: "" });
     }
@@ -11878,7 +6891,7 @@ ${formatted.join("\n\n")}`,
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/ask-user.js
+// packages/core/src/tools/ask-user.ts
 var AskUserTool = class {
   name = "ask_user";
   description = "Ask the user a question and wait for their response";
@@ -11906,7 +6919,7 @@ var AskUserTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/git.js
+// packages/core/src/tools/git.ts
 import { execFile } from "node:child_process";
 var SHELL_METACHARACTERS = /[;&|`$(){}!<>\\]/;
 var MAX_OUTPUT_LENGTH2 = 3e4;
@@ -11954,42 +6967,45 @@ var GitStatusTool = class {
     const gitArgs = [command, ...extraArgs ? extraArgs.split(/\s+/).filter(Boolean) : []];
     const fullCommand = `git ${gitArgs.join(" ")}`;
     return new Promise((resolve8) => {
-      execFile("git", gitArgs, {
-        cwd: context.cwd,
-        timeout: GIT_TIMEOUT_MS,
-        maxBuffer: 1024 * 1024 * 10
-      }, (error, stdout, stderr) => {
-        let output = "";
-        if (stdout)
-          output += stdout;
-        if (stderr)
-          output += (output ? "\n" : "") + stderr;
-        if (error && error.killed) {
-          output += `
+      execFile(
+        "git",
+        gitArgs,
+        {
+          cwd: context.cwd,
+          timeout: GIT_TIMEOUT_MS,
+          maxBuffer: 1024 * 1024 * 10
+        },
+        (error, stdout, stderr) => {
+          let output = "";
+          if (stdout) output += stdout;
+          if (stderr) output += (output ? "\n" : "") + stderr;
+          if (error && error.killed) {
+            output += `
 Command timed out after ${GIT_TIMEOUT_MS}ms`;
-        }
-        if (error && !output) {
-          const errCode = error.code;
-          if (errCode === "ENOENT") {
-            output = "Git not found. Ensure git is installed and in your PATH.";
-          } else {
-            output = `git ${command} failed (exit code ${errCode ?? "unknown"})`;
           }
+          if (error && !output) {
+            const errCode = error.code;
+            if (errCode === "ENOENT") {
+              output = "Git not found. Ensure git is installed and in your PATH.";
+            } else {
+              output = `git ${command} failed (exit code ${errCode ?? "unknown"})`;
+            }
+          }
+          if (output.length > MAX_OUTPUT_LENGTH2) {
+            output = output.slice(0, MAX_OUTPUT_LENGTH2) + "\n... (output truncated)";
+          }
+          resolve8({
+            success: !error,
+            output: output || "(no output)",
+            metadata: { command: fullCommand }
+          });
         }
-        if (output.length > MAX_OUTPUT_LENGTH2) {
-          output = output.slice(0, MAX_OUTPUT_LENGTH2) + "\n... (output truncated)";
-        }
-        resolve8({
-          success: !error,
-          output: output || "(no output)",
-          metadata: { command: fullCommand }
-        });
-      });
+      );
     });
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/http-request.js
+// packages/core/src/tools/http-request.ts
 import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 var DEFAULT_TIMEOUT = 15e3;
@@ -11998,22 +7014,15 @@ var MAX_BODY_LENGTH = 3e4;
 var MAX_REDIRECTS = 5;
 var ALLOWED_METHODS = /* @__PURE__ */ new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 function isPrivateHost(hostname) {
-  if (hostname === "localhost" || hostname === "[::1]")
-    return true;
+  if (hostname === "localhost" || hostname === "[::1]") return true;
   const parts = hostname.split(".").map(Number);
   if (parts.length === 4 && parts.every((n7) => !isNaN(n7))) {
-    if (parts[0] === 127)
-      return true;
-    if (parts[0] === 10)
-      return true;
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
-      return true;
-    if (parts[0] === 192 && parts[1] === 168)
-      return true;
-    if (parts[0] === 169 && parts[1] === 254)
-      return true;
-    if (parts[0] === 0)
-      return true;
+    if (parts[0] === 127) return true;
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 0) return true;
   }
   return false;
 }
@@ -12041,57 +7050,61 @@ function doRequest(opts) {
     if (opts.body && !reqHeaders["Content-Type"] && !reqHeaders["content-type"]) {
       reqHeaders["Content-Type"] = "application/json";
     }
-    const req = reqFn(opts.url, {
-      method: opts.method,
-      headers: reqHeaders,
-      timeout: opts.timeout ?? DEFAULT_TIMEOUT
-    }, (res) => {
-      const isRedirect = res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location;
-      if (isRedirect) {
-        const redirectCount = opts.redirectCount ?? 0;
-        if (redirectCount >= MAX_REDIRECTS) {
-          resolve8({
-            status: res.statusCode,
-            statusText: `Too many redirects (${MAX_REDIRECTS})`,
-            headers: {},
-            allHeaders: {},
-            body: `Redirect limit exceeded. Last location: ${res.headers.location}`
-          });
+    const req = reqFn(
+      opts.url,
+      {
+        method: opts.method,
+        headers: reqHeaders,
+        timeout: opts.timeout ?? DEFAULT_TIMEOUT
+      },
+      (res) => {
+        const isRedirect = res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location;
+        if (isRedirect) {
+          const redirectCount = opts.redirectCount ?? 0;
+          if (redirectCount >= MAX_REDIRECTS) {
+            resolve8({
+              status: res.statusCode,
+              statusText: `Too many redirects (${MAX_REDIRECTS})`,
+              headers: {},
+              allHeaders: {},
+              body: `Redirect limit exceeded. Last location: ${res.headers.location}`
+            });
+            return;
+          }
+          const redirectUrl = new URL(res.headers.location, opts.url).href;
+          doRequest({ ...opts, url: redirectUrl, redirectCount: redirectCount + 1 }).then(resolve8).catch(reject);
           return;
         }
-        const redirectUrl = new URL(res.headers.location, opts.url).href;
-        doRequest({ ...opts, url: redirectUrl, redirectCount: redirectCount + 1 }).then(resolve8).catch(reject);
-        return;
-      }
-      const chunks = [];
-      res.on("data", (chunk) => chunks.push(chunk));
-      res.on("end", () => {
-        const rawHeaders = res.headers;
-        const filteredHeaders = {};
-        const allHeaders = {};
-        for (const [key, value] of Object.entries(rawHeaders)) {
-          if (value) {
-            const strValue = Array.isArray(value) ? value.join(", ") : value;
-            allHeaders[key] = strValue;
-            if (INTERESTING_HEADERS.has(key.toLowerCase())) {
-              filteredHeaders[key] = strValue;
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const rawHeaders = res.headers;
+          const filteredHeaders = {};
+          const allHeaders = {};
+          for (const [key, value] of Object.entries(rawHeaders)) {
+            if (value) {
+              const strValue = Array.isArray(value) ? value.join(", ") : value;
+              allHeaders[key] = strValue;
+              if (INTERESTING_HEADERS.has(key.toLowerCase())) {
+                filteredHeaders[key] = strValue;
+              }
             }
           }
-        }
-        let body = Buffer.concat(chunks).toString("utf-8");
-        if (body.length > MAX_BODY_LENGTH) {
-          body = body.slice(0, MAX_BODY_LENGTH) + "\n... (body truncated)";
-        }
-        resolve8({
-          status: res.statusCode ?? 0,
-          statusText: res.statusMessage ?? "",
-          headers: filteredHeaders,
-          allHeaders,
-          body
+          let body = Buffer.concat(chunks).toString("utf-8");
+          if (body.length > MAX_BODY_LENGTH) {
+            body = body.slice(0, MAX_BODY_LENGTH) + "\n... (body truncated)";
+          }
+          resolve8({
+            status: res.statusCode ?? 0,
+            statusText: res.statusMessage ?? "",
+            headers: filteredHeaders,
+            allHeaders,
+            body
+          });
         });
-      });
-      res.on("error", reject);
-    });
+        res.on("error", reject);
+      }
+    );
     req.on("error", reject);
     req.on("timeout", () => {
       req.destroy();
@@ -12258,8 +7271,7 @@ var HttpRequestTool = class {
       if (assertions.length > 0) {
         lines.push("");
         lines.push("ASSERTIONS FAILED:");
-        for (const a of assertions)
-          lines.push(`  - ${a}`);
+        for (const a of assertions) lines.push(`  - ${a}`);
       }
       return {
         success: isSuccess,
@@ -12282,14 +7294,13 @@ function resolveJsonPath(obj, path) {
   const parts = path.replace(/\[(\d+)\]/g, ".$1").split(".");
   let current = obj;
   for (const part of parts) {
-    if (current == null || typeof current !== "object")
-      return void 0;
+    if (current == null || typeof current !== "object") return void 0;
     current = current[part];
   }
   return current;
 }
 
-// packages/ide/node_modules/@ava/core/dist/tools/git-diff.js
+// packages/core/src/tools/git-diff.ts
 import { execFile as execFile2 } from "node:child_process";
 var SHELL_METACHARACTERS2 = /[;&|`$(){}!<>\\]/;
 var MAX_OUTPUT_LENGTH3 = 3e4;
@@ -12368,8 +7379,7 @@ var GitDiffTool = class {
         diffArgs.push(`${target}...HEAD`);
         break;
     }
-    if (statOnly)
-      diffArgs.push("--stat");
+    if (statOnly) diffArgs.push("--stat");
     if (pathFilter) {
       diffArgs.push("--");
       diffArgs.push(pathFilter);
@@ -12400,31 +7410,34 @@ ${statusOutput.output.trim()}
   }
   runGit(args, cwd) {
     return new Promise((resolve8) => {
-      execFile2("git", args, { cwd, timeout: GIT_TIMEOUT_MS2, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-        let output = "";
-        if (stdout)
-          output += stdout;
-        if (stderr)
-          output += (output ? "\n" : "") + stderr;
-        if (error && error.killed) {
-          output += `
+      execFile2(
+        "git",
+        args,
+        { cwd, timeout: GIT_TIMEOUT_MS2, maxBuffer: 1024 * 1024 * 10 },
+        (error, stdout, stderr) => {
+          let output = "";
+          if (stdout) output += stdout;
+          if (stderr) output += (output ? "\n" : "") + stderr;
+          if (error && error.killed) {
+            output += `
 Command timed out after ${GIT_TIMEOUT_MS2}ms`;
-        }
-        if (error && !output) {
-          const errCode = error.code;
-          if (errCode === "ENOENT") {
-            output = "Git not found. Ensure git is installed and in your PATH.";
-          } else {
-            output = `git ${args[0]} failed (exit code ${errCode ?? "unknown"})`;
           }
+          if (error && !output) {
+            const errCode = error.code;
+            if (errCode === "ENOENT") {
+              output = "Git not found. Ensure git is installed and in your PATH.";
+            } else {
+              output = `git ${args[0]} failed (exit code ${errCode ?? "unknown"})`;
+            }
+          }
+          resolve8({ success: !error, output: output || "(no output)" });
         }
-        resolve8({ success: !error, output: output || "(no output)" });
-      });
+      );
     });
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/screenshot.js
+// packages/core/src/tools/screenshot.ts
 var MAX_DELAY_MS = 5e3;
 var ScreenshotTool = class {
   name = "screenshot";
@@ -12486,7 +7499,7 @@ var ScreenshotTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/database-query.js
+// packages/core/src/tools/database-query.ts
 import { createRequire } from "node:module";
 var MAX_OUTPUT_LENGTH4 = 3e4;
 var MAX_ROWS = 100;
@@ -12497,29 +7510,22 @@ var WRITE_KEYWORDS = /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|R
 function isReadOnlyQuery(query) {
   const stripped = query.trim().replace(/\/\*[\s\S]*?\*\//g, "").trim();
   const firstWord = stripped.split(/\s+/)[0]?.toUpperCase();
-  if (!firstWord || !ALLOWED_PREFIXES.has(firstWord))
-    return false;
-  if (WRITE_KEYWORDS.test(stripped))
-    return false;
+  if (!firstWord || !ALLOWED_PREFIXES.has(firstWord)) return false;
+  if (WRITE_KEYWORDS.test(stripped)) return false;
   return true;
 }
 function resolveConnectionString(provided) {
-  if (provided)
-    return provided;
+  if (provided) return provided;
   return process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.MYSQL_URL || process.env.SQLITE_PATH;
 }
 function detectDbType(connStr) {
-  if (connStr.startsWith("postgres://") || connStr.startsWith("postgresql://"))
-    return "postgres";
-  if (connStr.startsWith("mysql://"))
-    return "mysql";
-  if (connStr.startsWith("sqlite://") || connStr.startsWith("sqlite:") || connStr.endsWith(".sqlite") || connStr.endsWith(".sqlite3") || connStr.endsWith(".db"))
-    return "sqlite";
+  if (connStr.startsWith("postgres://") || connStr.startsWith("postgresql://")) return "postgres";
+  if (connStr.startsWith("mysql://")) return "mysql";
+  if (connStr.startsWith("sqlite://") || connStr.startsWith("sqlite:") || connStr.endsWith(".sqlite") || connStr.endsWith(".sqlite3") || connStr.endsWith(".db")) return "sqlite";
   return null;
 }
 function formatTable(columns, rows) {
-  if (columns.length === 0)
-    return "(no columns)";
+  if (columns.length === 0) return "(no columns)";
   const truncatedRows = rows.slice(0, MAX_ROWS);
   const widths = columns.map((col, i) => {
     const values = truncatedRows.map((r) => String(r[i] ?? "NULL"));
@@ -12527,17 +7533,18 @@ function formatTable(columns, rows) {
   });
   const header = columns.map((c, i) => c.padEnd(widths[i])).join(" | ");
   const separator = widths.map((w) => "-".repeat(w)).join("-+-");
-  const dataRows = truncatedRows.map((row) => row.map((v2, i) => {
-    const s = String(v2 ?? "NULL");
-    return (s.length > 50 ? s.slice(0, 47) + "..." : s).padEnd(widths[i]);
-  }).join(" | "));
+  const dataRows = truncatedRows.map(
+    (row) => row.map((v2, i) => {
+      const s = String(v2 ?? "NULL");
+      return (s.length > 50 ? s.slice(0, 47) + "..." : s).padEnd(widths[i]);
+    }).join(" | ")
+  );
   let output = `${header}
 ${separator}
 ${dataRows.join("\n")}`;
   output += `
 (${rows.length} row${rows.length === 1 ? "" : "s"})`;
-  if (rows.length > MAX_ROWS)
-    output += ` \u2014 showing first ${MAX_ROWS}`;
+  if (rows.length > MAX_ROWS) output += ` \u2014 showing first ${MAX_ROWS}`;
   return output;
 }
 async function queryPostgres(connStr, query) {
@@ -12577,8 +7584,7 @@ function querySqlite(dbPath, query, cwd) {
     db.pragma("query_only = ON");
     const stmt = db.prepare(query);
     const result = stmt.all();
-    if (!result || result.length === 0)
-      return { columns: [], rows: [] };
+    if (!result || result.length === 0) return { columns: [], rows: [] };
     return {
       columns: Object.keys(result[0]),
       rows: result.map((r) => Object.values(r))
@@ -12687,28 +7693,21 @@ var DatabaseQueryTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/browser.js
+// packages/core/src/tools/browser.ts
 var NAVIGATION_TIMEOUT_MS = 3e4;
 var ACTION_TIMEOUT_MS = 1e4;
 var MAX_EXTRACT_LENGTH = 2e4;
 var ALLOWED_ACTIONS = /* @__PURE__ */ new Set(["navigate", "click", "fill", "screenshot", "extract", "evaluate", "close"]);
 function isPrivateHost2(hostname) {
-  if (hostname === "localhost" || hostname === "[::1]")
-    return false;
+  if (hostname === "localhost" || hostname === "[::1]") return false;
   const parts = hostname.split(".").map(Number);
   if (parts.length === 4 && parts.every((n7) => !isNaN(n7))) {
-    if (parts[0] === 127)
-      return false;
-    if (parts[0] === 10)
-      return true;
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
-      return true;
-    if (parts[0] === 192 && parts[1] === 168)
-      return true;
-    if (parts[0] === 169 && parts[1] === 254)
-      return true;
-    if (parts[0] === 0)
-      return true;
+    if (parts[0] === 127) return false;
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 0) return true;
   }
   return false;
 }
@@ -12795,13 +7794,14 @@ var BrowserTool = class {
     }
   }
   async ensureBrowser() {
-    if (this.browser && this.page)
-      return;
+    if (this.browser && this.page) return;
     let playwright;
     try {
       playwright = await import("playwright");
     } catch {
-      throw new Error("playwright is not installed. Install it with:\n  npm install playwright\n  npx playwright install chromium\n\nPlaywright is an optional dependency for the browser tool.");
+      throw new Error(
+        "playwright is not installed. Install it with:\n  npm install playwright\n  npx playwright install chromium\n\nPlaywright is an optional dependency for the browser tool."
+      );
     }
     const chromium = playwright.default?.chromium || playwright.chromium;
     this.browser = await chromium.launch({ headless: true });
@@ -12945,7 +7945,7 @@ ${text}`,
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/memory-save.js
+// packages/core/src/tools/memory-save.ts
 var MemorySaveTool = class {
   name = "memory_save";
   description = "Save information to persistent memory that survives across conversations";
@@ -13019,7 +8019,7 @@ ${content}`;
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/memory-recall.js
+// packages/core/src/tools/memory-recall.ts
 var MemoryRecallTool = class {
   name = "memory_recall";
   description = "Search persistent memory for specific information";
@@ -13077,6 +8077,12 @@ ${matches.join("\n\n")}`);
       }
     }
     if (results.length === 0) {
+      const semanticResults = await memoryManager.loadRelevantMemories(query, 5);
+      if (semanticResults.length > 0) {
+        const items = semanticResults.map((m) => `- **${m.key}** (${m.scope}, ${Math.round(m.similarity * 100)}% match): ${m.content}`).join("\n");
+        return { success: true, output: `### Semantic Matches
+${items}` };
+      }
       return { success: true, output: `No memories matching "${query}" found.` };
     }
     return { success: true, output: results.join("\n\n") };
@@ -13087,8 +8093,7 @@ ${matches.join("\n\n")}`);
     const matches = [];
     for (const section of sections) {
       const trimmed = section.trim();
-      if (!trimmed)
-        continue;
+      if (!trimmed) continue;
       if (trimmed.toLowerCase().includes(lowerQuery)) {
         matches.push(trimmed);
       }
@@ -13100,7 +8105,7 @@ ${matches.join("\n\n")}`);
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/rollback.js
+// packages/core/src/tools/rollback.ts
 var ALLOWED_ACTIONS2 = /* @__PURE__ */ new Set(["restore", "discard", "status"]);
 var RollbackTool = class {
   name = "rollback";
@@ -13168,7 +8173,7 @@ var RollbackTool = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/project-index.js
+// packages/core/src/tools/project-index.ts
 var ALLOWED_ACTIONS3 = /* @__PURE__ */ new Set(["scan", "refresh", "show"]);
 var ProjectIndexTool = class {
   name = "project_index";
@@ -13255,7 +8260,7 @@ ${summary}`
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/find-symbol.js
+// packages/core/src/tools/find-symbol.ts
 var ALLOWED_ACTIONS4 = /* @__PURE__ */ new Set(["definition", "references", "file"]);
 var FindSymbolTool = class {
   name = "find_symbol";
@@ -13396,7 +8401,954 @@ ${lines.join("\n")}${truncated}`,
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/tools/tool-registry.js
+// packages/core/src/docs/ava-docs.ts
+var AVA_DOCS = [
+  // ── Getting Started ──────────────────────────────────────────────────────
+  {
+    topic: "getting-started",
+    keywords: ["setup", "install", "start", "begin", "first", "new", "onboarding", "quickstart", "getting started"],
+    title: "Getting Started",
+    content: `# Getting Started with Ava | Supernova
+
+## Installation
+
+### VS Code Extension
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X)
+3. Search "Ava Supernova"
+4. Click Install
+5. Open Ava with Ctrl+Shift+A
+
+### CLI
+\`\`\`bash
+npm install -g @ava/cli
+ava
+\`\`\`
+
+### IDE (Desktop App)
+Download the installer from the Ava Supernova GitHub releases page.
+
+## First-Time Setup
+1. **Add an API key** \u2014 Go to Settings (or Dashboard) and add at least one provider API key. Or connect a platform account (sk-ava-...) for managed access.
+2. **Select a model** \u2014 Choose from the model dropdown. DeepSeek V3 is recommended for best price/performance.
+3. **Start chatting** \u2014 Type a message and press Enter. Ava is ready to help!
+
+## Platform Account vs BYOK (Bring Your Own Key)
+- **Platform account**: Connect with an sk-ava- key for managed API access, cloud sync, usage tracking, and billing through ava-supernova.com
+- **BYOK**: Add your own API keys directly from each provider. No account needed \u2014 fully open-source and free to use.`
+  },
+  // ── Models ────────────────────────────────────────────────────────────────
+  {
+    topic: "models",
+    keywords: ["model", "provider", "claude", "deepseek", "kimi", "glm", "qwen", "mistral", "anthropic", "moonshot", "zhipu", "alibaba", "ollama", "local", "lm studio", "pricing", "cost", "token", "vision"],
+    title: "Supported Models",
+    content: `# Supported Models
+
+All models work on every plan. Use the managed service or bring your own API keys.
+
+## Provider: Anthropic
+| Model | Highlights | Cost / 1M tokens |
+|-------|-----------|-------------------|
+| Claude Opus 4.6 | Most capable, vision, 200K context | $15.00 in / $75.00 out |
+| Claude Sonnet 4.6 | Best balance of speed and capability | $3.00 in / $15.00 out |
+| Claude Haiku 4.5 | Fast and affordable, vision | $0.80 in / $4.00 out |
+
+## Provider: DeepSeek
+| Model | Highlights | Cost / 1M tokens |
+|-------|-----------|-------------------|
+| DeepSeek V3 | Best price/performance ratio | $0.14 in / $0.28 out |
+| DeepSeek R1 | Extended thinking, reasoning | $0.14 in / $2.19 out |
+
+## Provider: Moonshot AI (Kimi)
+| Model | Highlights | Cost / 1M tokens |
+|-------|-----------|-------------------|
+| Kimi K2.5 | Best multi-step tool calling (76.8% SWE-Bench) | $0.60 in / $2.00 out |
+| Moonshot V1 128K | Long context | $2.00 in / $5.00 out |
+
+## Provider: Zhipu AI (GLM)
+| Model | Highlights | Cost / 1M tokens |
+|-------|-----------|-------------------|
+| GLM-5 | Best tool-call reliability, vision (77.8% SWE-Bench) | $0.70 in / $0.70 out |
+| GLM-4.7 | Fast, affordable coding | $0.25 in / $0.25 out |
+| GLM-4 Flash | Free tier available | Free |
+
+## Provider: Alibaba (Qwen)
+| Model | Highlights | Cost / 1M tokens |
+|-------|-----------|-------------------|
+| Qwen 3.5 Plus | Vision, thinking, 256K context | $0.40 in / $1.20 out |
+| Qwen Turbo | Fast, up to 1M context | $0.05 in / $0.20 out |
+
+## Provider: Mistral AI
+| Model | Highlights | Cost / 1M tokens |
+|-------|-----------|-------------------|
+| Mistral Large 3 | Flagship general-purpose | $2.00 in / $6.00 out |
+| Codestral | Code-focused, 256K context | $0.30 in / $0.90 out |
+| Devstral 2 | Agentic coding specialist | $0.10 in / $0.30 out |
+
+## Local Models (Ollama / LM Studio)
+You can connect any locally hosted model by adding a custom \`baseUrl\` in your provider settings:
+\`\`\`json
+{
+  "providers": {
+    "deepseek": {
+      "apiKey": "sk-...",
+      "baseUrl": "http://localhost:11434/v1"
+    }
+  }
+}
+\`\`\`
+This works with Ollama, LM Studio, vLLM, or any OpenAI-compatible API endpoint.
+
+## Switching Models
+- **CLI**: Use \`/model\` to list models, \`/model <id>\` to switch
+- **Extension/IDE**: Use the model dropdown in the chat header
+
+## Recommendations
+- **Best overall value**: DeepSeek V3 \u2014 extremely capable at a fraction of frontier pricing
+- **Best tool calling**: Kimi K2.5 or GLM-5 \u2014 most reliable for multi-step agentic tasks
+- **Best reasoning**: DeepSeek R1 or Claude Opus 4.6 \u2014 for complex problem solving
+- **Best for free**: GLM-4 Flash \u2014 free tier from Zhipu AI
+- **Best code completion**: Codestral or Devstral 2 \u2014 Mistral's code-focused models`
+  },
+  // ── Tools ─────────────────────────────────────────────────────────────────
+  {
+    topic: "tools",
+    keywords: ["tool", "file_read", "file_write", "file_edit", "glob", "grep", "bash", "web_search", "browser", "screenshot", "database", "git", "memory_save", "memory_recall", "present_plan", "todo_write", "ask_user", "rollback", "http_request", "project_index", "find_symbol", "list_directory", "docs_lookup", "support_request", "support"],
+    title: "Built-in Tools",
+    content: `# Built-in Tools (24)
+
+Ava has 24 built-in tools organized by category. Tool availability depends on the current mode and permission settings.
+
+## Reading & Searching (always auto-approved)
+| Tool | Description |
+|------|-------------|
+| file_read | Read file contents with line numbers. Use offset/limit for large files. |
+| glob | Find files by pattern (e.g. \`**/*.ts\`, \`src/**/index.*\`). |
+| grep | Search file contents with regex. Use file_pattern to narrow scope. |
+| list_directory | List directory contents with file types and sizes. |
+| git_status | Read-only git commands (status, diff, log, branch, show). |
+| git_diff | Show structured git diffs (staged, unstaged, all, branch comparison). |
+| project_index | Scan and show project structure index \u2014 frameworks, languages, entry points. |
+| find_symbol | Find where functions, classes, types are defined or referenced. |
+
+## Research (always auto-approved)
+| Tool | Description |
+|------|-------------|
+| web_search | Search the web via DuckDuckGo. No API key required. |
+| http_request | Make HTTP requests (GET, POST, PUT, DELETE) with auth, assertions, timing. |
+| browser | Automate browser interactions using Playwright (navigate, click, fill, screenshot). |
+| screenshot | Capture a screenshot of the user's screen for visual analysis. |
+| database_query | Run read-only SQL queries against PostgreSQL, SQLite, or MySQL. |
+| docs_lookup | **This is your tool.** Search your own documentation to answer user questions about features, setup, configuration, and troubleshooting. When a user asks "how do I\u2026" or "what is\u2026" about you, call \`docs_lookup\` with a query or topic. |
+
+## Writing & Editing (permission mode dependent)
+| Tool | Description |
+|------|-------------|
+| file_write | Create new files or overwrite entirely. Use for new files only. |
+| file_edit | Replace an exact string match in a file. Preferred for existing files. |
+
+## Shell Commands (permission mode dependent)
+| Tool | Description |
+|------|-------------|
+| bash | Execute shell commands with configurable timeout. Use background: true for dev servers. |
+
+## Memory
+| Tool | Description |
+|------|-------------|
+| memory_save | Save information to persistent memory (global or project scope). |
+| memory_recall | Search saved memories by keyword. |
+
+## Collaboration (always requires approval)
+| Tool | Description |
+|------|-------------|
+| present_plan | Present a structured plan with steps for user approval. |
+| ask_user | Ask the user a question and wait for their response. |
+
+## Task Tracking (always auto-approved)
+| Tool | Description |
+|------|-------------|
+| todo_write | Create and update a visual task list to track progress. |
+
+## Support
+| Tool | Description |
+|------|-------------|
+| support_request | Submit a support ticket to the Ava team. Use when the user has an issue you can't resolve \u2014 bugs, account problems, feature requests, billing questions. Requires email, subject, and message. The team replies via email. |
+
+## Safety
+| Tool | Description |
+|------|-------------|
+| rollback | Restore, discard, or check the status of a git checkpoint. |
+
+## Risk Levels
+- **safe** \u2014 Read-only operations. Always auto-approved.
+- **write** \u2014 Modify files in the workspace. Requires approval in Strict mode.
+- **dangerous** \u2014 Arbitrary system commands. Requires approval in Strict and Balanced modes.`
+  },
+  // ── Modes ─────────────────────────────────────────────────────────────────
+  {
+    topic: "modes",
+    keywords: ["mode", "code", "plan", "chat", "security", "audit", "owasp", "read-only"],
+    title: "Modes",
+    content: `# Modes
+
+Ava has four modes that control what tools are available and how she behaves.
+
+## Code Mode (default)
+Full agent with all 24 tools. Ava reads, writes, searches, and executes across your codebase. This is the primary working mode.
+
+## Plan Mode
+Read-only analysis. Ava reads your code and creates plans without modifying anything. Use this when you want Ava to analyze and propose changes before committing to them.
+
+## Chat Mode
+Conversation only. No tools available \u2014 just discussion about code, architecture, ideas, or anything else. Use this for brainstorming, Q&A, or when you just want to talk.
+
+## Security Mode
+AI-powered OWASP-aligned security audit. Ava scans your project for vulnerabilities using read-only tools and produces a structured report with severity ratings, locations, and remediation guidance. Categories include: injection, auth, secrets, XSS, CSRF, misconfigurations, dependencies, crypto, SSRF, deserialization, and logging.
+
+## Switching Modes
+- **Extension/IDE**: Use the mode bar at the bottom of the chat input area (Code | Plan | Chat | Security)
+- **CLI**: Modes are selected at startup or via commands`
+  },
+  // ── Permissions ──────────────────────────────────────────────────────────
+  {
+    topic: "permissions",
+    keywords: ["permission", "strict", "balanced", "autonomous", "approve", "confirm", "safety", "auto-approve", "deny", "allow"],
+    title: "Permission Modes",
+    content: `# Permission Modes
+
+Permission modes control when Ava asks for your approval before running tools.
+
+## Strict (default)
+| Tool Type | Behavior |
+|-----------|----------|
+| File reads & searches | Auto-approved |
+| File writes & edits | Requires confirmation |
+| Shell commands (bash) | Requires confirmation |
+
+Best for: New users, sensitive projects, learning what Ava does.
+
+## Balanced
+| Tool Type | Behavior |
+|-----------|----------|
+| File reads & searches | Auto-approved |
+| File writes & edits | Auto-approved |
+| Shell commands (bash) | Requires confirmation |
+
+Best for: Day-to-day development. Ava can freely edit files but you approve shell commands.
+
+## Autonomous
+| Tool Type | Behavior |
+|-----------|----------|
+| File reads & searches | Auto-approved |
+| File writes & edits | Auto-approved |
+| Shell commands (bash) | Auto-approved |
+
+Best for: Experienced users who trust Ava to work independently. Be careful with destructive operations.
+
+## Always-Confirm Tools
+Regardless of permission mode, these always require user approval:
+- **present_plan** \u2014 Plans are a collaboration checkpoint
+- **ask_user** \u2014 Questions need your input by definition
+
+## Per-Session Overrides
+During a session, you can grant:
+- **Always Allow** \u2014 Auto-approve a specific tool for the rest of the session
+- **Allow All** \u2014 Auto-approve all tools for the rest of the session
+
+## Changing Permission Mode
+- **Extension**: Dashboard > Settings > Permission Mode
+- **IDE**: Dashboard > Settings > Permission Mode
+- **CLI**: \`/permission <mode>\``
+  },
+  // ── Memory ───────────────────────────────────────────────────────────────
+  {
+    topic: "memory",
+    keywords: ["memory", "remember", "forget", "persistent", "memory_save", "memory_recall", "global", "project", "cloud sync", "session"],
+    title: "Memory System",
+    content: `# Memory System
+
+Ava has persistent memory that survives across sessions. She remembers what matters and uses it to provide better, personalized assistance.
+
+## Memory Scopes
+
+### Global Memory
+- Applies to all projects
+- Stored at \`~/.ava/memory.md\`
+- Good for: your preferences, coding style, tools you like, general patterns
+
+### Project Memory
+- Specific to the current project
+- Stored at \`.ava/memory.md\` in the project root
+- Good for: project architecture, conventions, key decisions, team patterns
+
+## How It Works
+1. **Automatic**: When you tell Ava something important, she saves it via \`memory_save\`
+2. **Session start**: Memories are loaded into Ava's context at the start of each conversation
+3. **Search**: Use \`memory_recall\` mid-conversation to search specific stored knowledge
+4. **Manual editing**: You can directly edit the memory files, or use the Memory page in the Dashboard
+
+## What Ava Remembers
+- User preferences and workflow patterns
+- Project conventions and architecture decisions
+- Solutions to recurring problems
+- Corrections and feedback you give her
+- Key technical decisions and their rationale
+
+## What Ava Doesn't Remember
+- Session-specific details (what you're working on right now)
+- Things already in \`.ava/instructions.md\`
+- Obvious info from package.json or config files
+
+## Cloud Sync (Platform Accounts)
+With a platform account (sk-ava- key), memories sync to the cloud:
+- Access your memories from any machine
+- View and manage memories in the web dashboard at ava-supernova.com
+- Semantic search via vector embeddings for intelligent recall
+- Local file is always the source of truth \u2014 cloud is backup + cross-device sync
+
+## Managing Memory
+- **Dashboard**: Memory page shows all entries, with edit/delete controls
+- **CLI**: Edit \`~/.ava/memory.md\` or \`.ava/memory.md\` directly
+- **In conversation**: Ask Ava to "forget X" or "remember Y"`
+  },
+  // ── Configuration ────────────────────────────────────────────────────────
+  {
+    topic: "configuration",
+    keywords: ["config", "settings", "configure", "api key", "apikey", "temperature", "max tokens", "language", "preferences", "baseUrl", "base url", "provider key", "dashboard"],
+    title: "Configuration",
+    content: `# Configuration
+
+## Extension Settings
+Open Settings (Ctrl+,) and search \`ava-supernova\`, or use the Dashboard.
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Active Model | The model Ava uses for responses | (none) |
+| Providers > API Key | Your API key for each provider | (empty) |
+| Temperature | Sampling temperature (0-2). Lower = more precise, higher = more creative | 0.7 |
+| Language | UI and response language | Auto-detect |
+| Permission Mode | Tool approval behavior | Strict |
+| Max Tokens | Maximum output tokens per response | 8192 |
+| Auto Memory | Automatically save important details | Enabled |
+| Stream Responses | Show tokens as they arrive | Enabled |
+
+## CLI Configuration
+Stored at \`~/.ava/config.json\`:
+\`\`\`json
+{
+  "activeModel": "deepseek:deepseek-chat",
+  "providers": {
+    "anthropic": { "apiKey": "sk-ant-..." },
+    "deepseek": { "apiKey": "sk-..." },
+    "kimi": { "apiKey": "sk-..." },
+    "glm": { "apiKey": "..." },
+    "qwen": { "apiKey": "sk-..." },
+    "mistral": { "apiKey": "..." }
+  },
+  "preferences": {
+    "temperature": 0.7,
+    "maxTokens": 8192,
+    "language": "auto"
+  }
+}
+\`\`\`
+
+## IDE Configuration
+Open the Dashboard (Ctrl+Shift+D) to configure providers, preferences, and your account.
+
+## Adding API Keys
+1. Sign up at the provider's website (links in Settings)
+2. Generate an API key
+3. Paste it in the Dashboard > Settings > API Providers section
+4. The key is stored securely in your system's secret storage
+
+## Supported Providers
+| Provider | Key format | Signup URL |
+|----------|-----------|------------|
+| Anthropic (Claude) | sk-ant-... | console.anthropic.com |
+| DeepSeek | sk-... | platform.deepseek.com |
+| Kimi (Moonshot) | sk-... | platform.moonshot.cn |
+| GLM (Zhipu AI) | (varies) | open.bigmodel.cn |
+| Qwen (Alibaba) | sk-... | dashscope.console.aliyun.com |
+| Mistral AI | (varies) | console.mistral.ai |
+
+## Custom Provider (Ollama / LM Studio)
+Add a \`baseUrl\` to connect to any locally hosted model:
+\`\`\`json
+{
+  "providers": {
+    "deepseek": {
+      "apiKey": "sk-...",
+      "baseUrl": "http://localhost:11434/v1"
+    }
+  }
+}
+\`\`\``
+  },
+  // ── Project Context ──────────────────────────────────────────────────────
+  {
+    topic: "project-context",
+    keywords: ["project", "instructions", "context", ".ava", "instructions.md", "project instructions", "init", "custom instructions"],
+    title: "Project Context",
+    content: `# Project Context
+
+## .ava/instructions.md
+Create this file in your project root to give Ava persistent knowledge about your codebase. It's loaded into Ava's system prompt every session.
+
+### What to Include
+- Project architecture overview
+- Coding conventions and style preferences
+- Key file locations and patterns
+- Build and test commands
+- Anything you'd tell a new team member
+
+### Example
+\`\`\`markdown
+# My Project
+
+## Architecture
+- React frontend with TypeScript
+- Express API with Prisma ORM
+- PostgreSQL database
+
+## Conventions
+- Use functional components with hooks
+- API routes in src/routes/, controllers in src/controllers/
+- Tests co-located with source files (*.test.ts)
+
+## Commands
+- \`npm run dev\` \u2014 Start dev server (port 3000)
+- \`npm test\` \u2014 Run Jest tests
+- \`npm run build\` \u2014 Production build
+\`\`\`
+
+### Creating the File
+- **CLI**: Run \`/init\` to generate a starter file
+- **Manual**: Create \`.ava/instructions.md\` in your project root
+
+## Project History
+Conversation history is scoped per project \u2014 each project gets its own history. When you switch workspaces, Ava loads the appropriate history and project context.
+
+## Project Index
+Use \`project_index scan\` to build a structural map of your codebase. This gives Ava a bird's-eye view of frameworks, languages, entry points, test setup, and directory structure. Much faster than exploring manually.`
+  },
+  // ── CLI Commands ─────────────────────────────────────────────────────────
+  {
+    topic: "cli-commands",
+    keywords: ["command", "cli", "slash", "help", "model", "clear", "provider", "permission", "history", "resume", "search", "delete", "rename", "pin", "export", "init", "exit", "quit", "tools", "retry"],
+    title: "CLI Commands",
+    content: `# CLI Commands
+
+## General
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| /help | /h | Show all available commands |
+| /model | /m | List available models |
+| /model <id> | | Switch to a different model |
+| /clear | /c | Clear conversation history |
+| /provider | /p | List configured providers |
+| /provider add <name> | | Add a provider API key |
+| /permission | /perm | View or set permission mode |
+| /tools | | List available tools |
+| /retry | /r | Retry the last message |
+| /init | | Create .ava/instructions.md |
+| /exit | /quit, /q | Exit Ava |
+
+## History
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| /history | /ls | List saved conversations |
+| /resume <id> | | Resume a saved conversation |
+| /search <query> | /s | Search conversations |
+| /delete <id> | /rm | Delete a conversation |
+| /rename <id> <title> | | Rename a conversation |
+| /pin <id> | | Pin a conversation |
+| /unpin <id> | | Unpin a conversation |
+| /export <id> | | Export as Markdown or JSON |`
+  },
+  // ── Languages ────────────────────────────────────────────────────────────
+  {
+    topic: "languages",
+    keywords: ["language", "i18n", "locale", "translation", "chinese", "japanese", "korean", "spanish", "french", "german", "russian", "arabic", "hindi", "multilingual"],
+    title: "Language Support",
+    content: `# Language Support
+
+Ava supports 20 languages for both the UI and model responses.
+
+## Supported Languages
+English, Chinese (Simplified), Chinese (Traditional), Japanese, Korean, Spanish, Portuguese, French, German, Russian, Arabic, Hindi, Vietnamese, Thai, Turkish, Italian, Polish, Ukrainian, Dutch, Indonesian
+
+## How It Works
+- **Auto-detect** (default) \u2014 Ava uses your VS Code / IDE language setting
+- The AI model responds in your preferred language
+- Code, file paths, and technical terms always stay in English
+- You can override the language in Settings / Dashboard
+
+## Changing Language
+- **Extension**: Dashboard > Settings > Language
+- **IDE**: Dashboard > Settings > Language
+- **CLI**: Set in \`~/.ava/config.json\` under \`preferences.language\``
+  },
+  // ── Keyboard Shortcuts ───────────────────────────────────────────────────
+  {
+    topic: "keyboard-shortcuts",
+    keywords: ["keyboard", "shortcut", "hotkey", "keybinding", "ctrl", "shift", "enter", "send"],
+    title: "Keyboard Shortcuts",
+    content: `# Keyboard Shortcuts
+
+## VS Code Extension
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+Shift+A | Open Ava Chat |
+| Enter | Send message |
+| Shift+Enter | New line in message |
+
+## IDE
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+Shift+A | Open Ava Chat |
+| Ctrl+Shift+D | Open Dashboard |
+| Ctrl+Shift+H | Session History |
+| Ctrl+Shift+N | New Chat |
+| Enter | Send message |
+| Shift+Enter | New line in message |
+
+On macOS, use Cmd instead of Ctrl.`
+  },
+  // ── Troubleshooting ──────────────────────────────────────────────────────
+  {
+    topic: "troubleshooting",
+    keywords: ["error", "problem", "issue", "fix", "not working", "broken", "fail", "crash", "timeout", "api error", "rate limit", "401", "403", "429", "500", "connection", "slow", "stuck", "hang", "debug", "troubleshoot"],
+    title: "Troubleshooting",
+    content: `# Troubleshooting
+
+## Common Issues
+
+### "No models available" or empty model list
+- **Cause**: No API keys configured
+- **Fix**: Add at least one provider API key in Dashboard > Settings, or connect a platform account
+
+### API key not working (401 Unauthorized)
+- **Cause**: Invalid, expired, or incorrectly formatted API key
+- **Fix**: Verify the key at the provider's dashboard. Regenerate if needed. Make sure you're using the right key format (e.g., sk-ant- for Anthropic, sk- for DeepSeek)
+
+### Rate limit errors (429 Too Many Requests)
+- **Cause**: You've exceeded the provider's rate limit
+- **Fix**: Wait a moment and retry. Consider switching to a different provider/model temporarily. Check your provider's rate limits and usage dashboard.
+
+### Timeout errors
+- **Cause**: The model is taking too long to respond, or network issues
+- **Fix**: Try a faster model (e.g., Qwen Turbo, GLM-4 Flash). Check your internet connection. For bash commands, increase the timeout parameter.
+
+### Tool denied / not approved
+- **Cause**: Permission mode requires approval for this tool type
+- **Fix**: Approve the tool when prompted, or switch to a more permissive permission mode (Balanced or Autonomous) in Settings
+
+### Memory not persisting
+- **Cause**: Memory system not initialized, or file permissions issue
+- **Fix**: Check that \`~/.ava/\` directory exists and is writable. For project memory, ensure \`.ava/\` is writable in your project root.
+
+### Extension not loading
+- **Cause**: VS Code version too old, or conflicting extension
+- **Fix**: Requires VS Code 1.85.0 or later. Try disabling other AI extensions temporarily.
+
+### bash tool keeps timing out
+- **Cause**: Using default 2-minute timeout for long-running commands
+- **Fix**: For dev servers, use \`background: true\`. For long builds, set a higher \`timeout\` value (max 600000ms / 10 minutes).
+
+### Context too large / out of context
+- **Cause**: Conversation has grown too long for the model's context window
+- **Fix**: Start a new chat (/clear or New Chat button). Context compression happens automatically, but very long sessions may still exceed limits.
+
+## Getting Help
+- **Ask Ava to contact support**: Say "I need help with..." or "submit a support ticket" and Ava will use the \`support_request\` tool to send a ticket to the team. You'll get a reply via email.
+- **Dashboard**: Visit ava-supernova.com/dashboard/support to view and track your tickets
+- **Website**: Visit ava-supernova.com/support for the contact form
+- **GitHub Issues**: Report bugs at github.com/AugmentedValueAcceleration/ava-supernova/issues
+- **In-app**: Ask Ava about any feature \u2014 she can look up her own documentation`
+  },
+  // ── Platform Account ─────────────────────────────────────────────────────
+  {
+    topic: "platform-account",
+    keywords: ["account", "platform", "sk-ava", "sign up", "register", "login", "billing", "plan", "pro", "ultra", "free", "tier", "subscription", "upgrade", "tokens", "usage", "limit", "quota"],
+    title: "Platform Account & Billing",
+    content: `# Platform Account & Billing
+
+## Plans
+
+### Free Tier
+- Bring your own API keys \u2014 no account needed
+- All 23 tools, all modes, all features
+- Local memory and history
+- Full open-source experience
+
+### Platform Account (sk-ava- key)
+Connect a platform account for additional benefits:
+- **Managed API access** \u2014 Use models without your own API keys
+- **Cloud sync** \u2014 Memory and settings sync across machines
+- **Usage dashboard** \u2014 Track token usage and costs
+- **Semantic memory search** \u2014 Vector embeddings for intelligent recall
+
+### Pro Plan
+- Higher token limits
+- Priority API access
+- All platform features
+
+### Ultra Plan
+- Maximum token limits
+- Priority support
+- All platform features
+
+## Connecting an Account
+1. Sign up at ava-supernova.com
+2. Go to Dashboard > API Keys
+3. Copy your sk-ava-... key
+4. In Ava, go to Dashboard and paste the key in the Connect Account field
+
+## Managing Your Account
+- **Usage**: Dashboard > Usage \u2014 see token consumption by period and provider
+- **Billing**: Dashboard > Billing \u2014 manage subscription, view invoices
+- **Connections**: Dashboard > Connections \u2014 link GitHub, email, Slack, Discord`
+  },
+  // ── Dashboard ────────────────────────────────────────────────────────────
+  {
+    topic: "dashboard",
+    keywords: ["dashboard", "overview", "usage", "connections", "billing", "settings", "sidebar", "navigation", "ui", "panel"],
+    title: "Dashboard",
+    content: `# Dashboard
+
+The Dashboard is your control center for Ava. It has 6 pages accessible from the sidebar navigation.
+
+## Pages
+
+### Overview
+Quick summary of your account status, active model, usage statistics, and quick actions.
+
+### Usage
+Detailed token usage breakdown by period (7 days, 30 days, all time) and by provider/model. Available with platform accounts.
+
+### Memory
+View, edit, and delete your saved memories. Shows both global and project-scoped entries.
+
+### Connections
+Connect external services for enhanced capabilities:
+- **GitHub** \u2014 Repository access
+- **Email** \u2014 Email integration
+- **Slack** \u2014 Team communication
+- **Discord** \u2014 Community integration
+
+### Billing
+Manage your subscription plan, view invoices, and purchase token top-ups. Options: Pro plan, Ultra plan, or token packs (Starter, Standard, Pro Pack).
+
+### Settings
+Configure providers, preferences, and API keys:
+- API provider keys (Anthropic, DeepSeek, Kimi, GLM, Qwen, Mistral)
+- Language, permission mode, temperature, max tokens
+- Auto memory, stream responses
+
+## Access
+- **Extension**: Command palette > "Ava: Open Dashboard", or the dashboard icon in the sidebar
+- **IDE**: Ctrl+Shift+D, or the Dashboard tab in the Ava panel
+
+## Platform vs BYOK
+- **Platform accounts** see all 6 pages
+- **BYOK users** (own API keys, no platform account) see Settings with provider key management`
+  },
+  // ── Session History ──────────────────────────────────────────────────────
+  {
+    topic: "history",
+    keywords: ["history", "session", "conversation", "resume", "load", "replay", "pin", "export", "import", "delete", "rename", "past", "previous"],
+    title: "Session History",
+    content: `# Session History
+
+Ava saves your conversations so you can resume them later.
+
+## Features
+- **Auto-save**: Conversations are saved automatically as you chat
+- **Per-project**: History is scoped to each project/workspace
+- **Search**: Find past conversations by text query
+- **Pin**: Pin important conversations so they stay at the top
+- **Rename**: Give conversations meaningful titles
+- **Export**: Export as Markdown or JSON for sharing or archiving
+- **Import**: Import previously exported conversations
+
+## CLI History Commands
+| Command | Description |
+|---------|-------------|
+| /history | List saved conversations |
+| /resume <id> | Resume a conversation |
+| /search <query> | Search conversations |
+| /delete <id> | Delete a conversation |
+| /rename <id> <title> | Rename a conversation |
+| /pin <id> | Pin a conversation |
+| /export <id> | Export as Markdown or JSON |
+
+## IDE / Extension
+- **IDE**: Ctrl+Shift+H or the History tab in the Ava panel
+- **Extension**: History is accessible from the chat sidebar
+
+## Session Replay
+Load any past conversation to review the full message history, including tool calls and their results. This is read-only \u2014 it doesn't affect your active session.`
+  },
+  // ── Security Audit ───────────────────────────────────────────────────────
+  {
+    topic: "security-audit",
+    keywords: ["security", "audit", "vulnerability", "owasp", "scan", "injection", "xss", "csrf", "sql", "secrets", "credentials", "cve"],
+    title: "Security Audit Mode",
+    content: `# Security Audit Mode
+
+Ava's Security Mode performs an AI-powered OWASP-aligned security audit of your project.
+
+## How to Use
+1. Switch to Security Mode (mode bar at bottom of chat)
+2. Type your request (e.g., "scan this project" or "check the auth module")
+3. Ava systematically scans your codebase using read-only tools
+4. Results are presented as a structured report
+
+## What It Scans
+- **Injection attacks**: SQL, NoSQL, command, template, path traversal
+- **Authentication & Authorization**: Hardcoded credentials, broken access control, JWT issues
+- **Secrets & Data Exposure**: API keys in source, .env files in git, sensitive data in logs
+- **XSS**: Reflected, stored, DOM-based, dangerouslySetInnerHTML
+- **CSRF**: Missing tokens, SameSite misconfiguration
+- **Security Misconfiguration**: Debug mode, permissive CORS, missing security headers
+- **Insecure Dependencies**: Known CVEs, outdated packages
+- **Cryptography Issues**: Weak hashing, insecure random, hardcoded keys
+- **SSRF**: Unvalidated URLs in fetch/http calls
+- **Insecure Deserialization**: eval(), Function(), dynamic require()
+- **Logging**: Sensitive data in logs, missing audit logging
+
+## Finding Format
+Each finding includes:
+- **Severity**: CRITICAL / HIGH / MEDIUM / LOW / INFO
+- **File**: Exact file path and line number
+- **Category**: OWASP category
+- **Description**: What the issue is and why it matters
+- **Code**: The vulnerable code snippet
+- **Fix**: Specific remediation with corrected code
+
+## Important
+- Security Mode is **read-only** \u2014 Ava won't modify files unless you explicitly ask
+- Use todo_write tracking to monitor scan progress
+- Findings are grouped by severity (CRITICAL first)
+- A summary with total findings and risk rating is provided at the end`
+  }
+];
+
+// packages/core/src/tools/docs-lookup.ts
+var DocsLookupTool = class {
+  name = "docs_lookup";
+  description = "Search Ava's documentation to help users with features, setup, and troubleshooting";
+  riskLevel = "safe";
+  requiresConfirmation = false;
+  schema = {
+    name: "docs_lookup",
+    description: `Search Ava's own documentation to answer user questions about features, setup, configuration, troubleshooting, models, tools, modes, permissions, memory, keyboard shortcuts, billing, and more. Use this when a user asks "how do I...", "what is...", "how does... work", or needs help with any Ava feature. Returns the relevant documentation section(s).`,
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: 'What to search for. Can be a topic name (e.g. "models", "memory", "permissions") or a natural question (e.g. "how do I add an API key", "what models are available").'
+        },
+        topic: {
+          type: "string",
+          enum: [
+            "getting-started",
+            "models",
+            "tools",
+            "modes",
+            "permissions",
+            "memory",
+            "configuration",
+            "project-context",
+            "cli-commands",
+            "languages",
+            "keyboard-shortcuts",
+            "troubleshooting",
+            "platform-account",
+            "dashboard",
+            "history",
+            "security-audit"
+          ],
+          description: "Optional: directly select a specific topic. If provided, returns that topic's full documentation."
+        }
+      },
+      required: []
+    }
+  };
+  async execute(args, _context) {
+    const query = args.query?.trim().toLowerCase();
+    const topic = args.topic?.trim().toLowerCase();
+    if (topic) {
+      const section = AVA_DOCS.find((s) => s.topic === topic);
+      if (section) {
+        return { success: true, output: section.content };
+      }
+      return {
+        success: false,
+        output: `Topic "${topic}" not found. Available topics: ${AVA_DOCS.map((s) => s.topic).join(", ")}`
+      };
+    }
+    if (!query) {
+      const list = AVA_DOCS.map((s) => `- **${s.topic}** \u2014 ${s.title}`).join("\n");
+      return {
+        success: true,
+        output: `# Available Documentation Topics
+
+${list}
+
+Use \`topic\` to get a specific section, or \`query\` to search across all docs.`
+      };
+    }
+    const scored = AVA_DOCS.map((section) => ({
+      section,
+      score: this.scoreSection(section, query)
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    const matches = scored.filter((s) => s.score > 0);
+    if (matches.length === 0) {
+      return {
+        success: true,
+        output: `No documentation found matching "${query}". Available topics: ${AVA_DOCS.map((s) => s.topic).join(", ")}`
+      };
+    }
+    const topMatches = matches.slice(0, 3);
+    if (topMatches.length > 1 && topMatches[0].score > topMatches[1].score * 2) {
+      return { success: true, output: topMatches[0].section.content };
+    }
+    const output = topMatches.map((m) => m.section.content).join("\n\n---\n\n");
+    return { success: true, output };
+  }
+  /** Score how relevant a section is to the query. Higher = better match. */
+  scoreSection(section, query) {
+    let score = 0;
+    const words = query.split(/\s+/).filter((w) => w.length > 1);
+    if (section.topic === query || section.topic.replace(/-/g, " ") === query) {
+      score += 100;
+    }
+    for (const keyword of section.keywords) {
+      if (query.includes(keyword)) {
+        score += 20;
+      }
+      for (const word of words) {
+        if (keyword.includes(word)) {
+          score += 5;
+        }
+      }
+    }
+    const lowerTitle = section.title.toLowerCase();
+    if (lowerTitle.includes(query)) {
+      score += 30;
+    }
+    for (const word of words) {
+      if (lowerTitle.includes(word)) {
+        score += 8;
+      }
+    }
+    const lowerContent = section.content.toLowerCase();
+    for (const word of words) {
+      if (word.length > 2 && lowerContent.includes(word)) {
+        score += 2;
+      }
+    }
+    return score;
+  }
+};
+
+// packages/core/src/tools/support-request.ts
+var SupportRequestTool = class {
+  name = "support_request";
+  description = "Submit a support ticket to the Ava team on behalf of the user";
+  riskLevel = "write";
+  requiresConfirmation = true;
+  schema = {
+    name: "support_request",
+    description: "Submit a support ticket to the Ava team. Use this when the user needs help with something you cannot resolve \u2014 bugs, account issues, feature requests, billing questions, or any problem that requires human support. You MUST confirm the details with the user before sending. The user's email is required so the team can reply. If the user has a platform account, their email may already be available in shared state.",
+    parameters: {
+      type: "object",
+      properties: {
+        email: {
+          type: "string",
+          description: "The user's email address for receiving replies. Ask the user if not known."
+        },
+        name: {
+          type: "string",
+          description: "The user's name (optional)."
+        },
+        subject: {
+          type: "string",
+          description: "A short summary of the issue (max 500 chars). Be clear and specific."
+        },
+        message: {
+          type: "string",
+          description: "Detailed description of the issue, including relevant context like error messages, steps to reproduce, environment info, etc. (max 10,000 chars)."
+        }
+      },
+      required: ["email", "subject", "message"]
+    }
+  };
+  async execute(args, context) {
+    const email = args.email?.trim();
+    const name = args.name?.trim() || void 0;
+    const subject = args.subject?.trim();
+    const message = args.message?.trim();
+    if (!email || !email.includes("@")) {
+      return { success: false, output: "A valid email address is required." };
+    }
+    if (!subject) {
+      return { success: false, output: "Subject is required." };
+    }
+    if (!message) {
+      return { success: false, output: "Message is required." };
+    }
+    if (subject.length > 500) {
+      return { success: false, output: "Subject must be 500 characters or fewer." };
+    }
+    if (message.length > 1e4) {
+      return { success: false, output: "Message must be 10,000 characters or fewer." };
+    }
+    const apiBase = context.sharedState?.platformApiBase || "https://ava-supernova.com";
+    const platformKey = context.sharedState?.platformKey;
+    try {
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      if (platformKey) {
+        headers["Authorization"] = `Bearer ${platformKey}`;
+      }
+      const response = await fetch(`${apiBase}/api/support`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          email,
+          name,
+          subject,
+          message,
+          source: "tool"
+        })
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.error || `HTTP ${response.status}`;
+        return { success: false, output: `Failed to submit support ticket: ${errorMsg}` };
+      }
+      const ticket = await response.json();
+      const ticketId = ticket.id?.slice(0, 8) || "unknown";
+      return {
+        success: true,
+        output: `Support ticket submitted successfully (ID: ${ticketId}).
+
+The Ava team will review your request and reply to ${email}. You can also track your ticket at ${apiBase}/dashboard/support.`
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { success: false, output: `Failed to submit support ticket: ${msg}` };
+    }
+  }
+};
+
+// packages/core/src/tools/tool-registry.ts
 var CONFIRMATION_MATRIX = {
   strict: /* @__PURE__ */ new Set(["write", "dangerous"]),
   balanced: /* @__PURE__ */ new Set(["dangerous"]),
@@ -13438,7 +9390,9 @@ var ToolRegistry = class {
       new MemoryRecallTool(),
       new RollbackTool(),
       new ProjectIndexTool(),
-      new FindSymbolTool()
+      new FindSymbolTool(),
+      new DocsLookupTool(),
+      new SupportRequestTool()
     ];
     for (const tool of builtins) {
       this.tools.set(tool.name, tool);
@@ -13457,8 +9411,7 @@ var ToolRegistry = class {
     }));
   }
   needsConfirmation(tool) {
-    if (tool.name === "present_plan" || tool.name === "ask_user")
-      return true;
+    if (tool.name === "present_plan" || tool.name === "ask_user") return true;
     return CONFIRMATION_MATRIX[this.permissionMode].has(tool.riskLevel);
   }
   async execute(name, args, context) {
@@ -13501,7 +9454,7 @@ var ToolRegistry = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/memory/memory-manager.js
+// packages/core/src/memory/memory-manager.ts
 import { readFile as readFile4, writeFile as writeFile3, rename, mkdir as mkdir2, unlink } from "node:fs/promises";
 import { join as join3 } from "node:path";
 var MEMORY_FILENAME = "memory.md";
@@ -13517,8 +9470,7 @@ var MemoryManager = class {
   /** Read global memory (~/.ava/memory.md). Falls back to platform if local is empty. */
   async loadGlobalMemory() {
     const local = await this.readSafe(this.globalPath);
-    if (local)
-      return local;
+    if (local) return local;
     if (this.sync) {
       try {
         const remote = await this.sync.pull("global");
@@ -13534,11 +9486,9 @@ var MemoryManager = class {
   }
   /** Read project memory (<projectRoot>/.ava/memory.md). Falls back to platform if local is empty. */
   async loadProjectMemory() {
-    if (!this.projectPath)
-      return null;
+    if (!this.projectPath) return null;
     const local = await this.readSafe(this.projectPath);
-    if (local)
-      return local;
+    if (local) return local;
     if (this.sync) {
       try {
         const remote = await this.sync.pull("project");
@@ -13555,10 +9505,11 @@ var MemoryManager = class {
     return null;
   }
   /** Load both memories, formatted for system prompt injection. Empty string if no memories. */
-  async loadAll() {
-    const [global, project] = await Promise.all([
+  async loadAll(context) {
+    const [global, project, episodic] = await Promise.all([
       this.loadGlobalMemory(),
-      this.loadProjectMemory()
+      this.loadProjectMemory(),
+      context ? this.loadRelevantMemories(context) : Promise.resolve([])
     ]);
     const sections = [];
     if (global?.trim()) {
@@ -13569,7 +9520,24 @@ ${global.trim()}`);
       sections.push(`### Project Memory
 ${project.trim()}`);
     }
+    if (episodic.length > 0) {
+      const items = episodic.map((m) => `- **${m.key}** (${m.scope}, ${Math.round(m.similarity * 100)}% match): ${m.content}`).join("\n");
+      sections.push(`### Relevant Memories
+${items}`);
+    }
     return sections.join("\n\n");
+  }
+  /**
+   * Semantic search for memories relevant to the current context.
+   * Requires platform sync with embeddings. Returns empty if unavailable.
+   */
+  async loadRelevantMemories(context, limit = 5) {
+    if (!this.sync) return [];
+    try {
+      return await this.sync.semanticSearch(context, { threshold: 0.65, limit });
+    } catch {
+      return [];
+    }
   }
   /** Overwrite global memory with new content. Syncs to platform if available. */
   async saveGlobalMemory(content) {
@@ -13629,14 +9597,13 @@ ${entry}` : entry;
   }
   /** Fire-and-forget push to platform. Never throws. */
   syncPush(scope, key, content) {
-    if (!this.sync)
-      return;
+    if (!this.sync) return;
     this.sync.push(scope, key, content).catch(() => {
     });
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/memory/platform-sync.js
+// packages/core/src/memory/platform-sync.ts
 var PlatformMemorySync = class {
   apiBase;
   platformKey;
@@ -13655,8 +9622,7 @@ var PlatformMemorySync = class {
     const res = await fetch(`${this.apiBase}/memories?${params}`, {
       headers: this.headers()
     });
-    if (!res.ok)
-      return [];
+    if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   }
@@ -13683,6 +9649,27 @@ var PlatformMemorySync = class {
       });
     }
   }
+  /** Semantic search across memories using vector similarity. */
+  async semanticSearch(query, opts) {
+    try {
+      const res = await fetch(`${this.apiBase}/memories/search`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          query,
+          scope: opts?.scope || null,
+          project_id: opts?.scope === "project" ? this.projectId : null,
+          threshold: opts?.threshold ?? 0.7,
+          limit: opts?.limit ?? 10
+        })
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
   /** Delete a memory by ID. */
   async delete(id) {
     await fetch(`${this.apiBase}/memories/${id}`, {
@@ -13698,7 +9685,7 @@ var PlatformMemorySync = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/checkpoint/checkpoint-manager.js
+// packages/core/src/checkpoint/checkpoint-manager.ts
 import { execFile as execFile3 } from "node:child_process";
 var GIT_TIMEOUT_MS3 = 15e3;
 var CheckpointManager = class {
@@ -13721,11 +9708,9 @@ var CheckpointManager = class {
    * Returns the stash message if successful, null if nothing to stash.
    */
   async createCheckpoint() {
-    if (!await this.isGitRepo())
-      return null;
+    if (!await this.isGitRepo()) return null;
     const status = await this.git(["status", "--porcelain"]);
-    if (!status.trim())
-      return null;
+    if (!status.trim()) return null;
     const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
     const message = `ava-checkpoint-${timestamp}`;
     try {
@@ -13741,8 +9726,7 @@ var CheckpointManager = class {
    * Returns true if successful.
    */
   async restoreCheckpoint() {
-    if (!this.activeCheckpoint)
-      return false;
+    if (!this.activeCheckpoint) return false;
     try {
       await this.git(["stash", "pop"]);
       this.activeCheckpoint = null;
@@ -13753,8 +9737,7 @@ var CheckpointManager = class {
   }
   /** Discard the active checkpoint without restoring (git stash drop). */
   async discardCheckpoint() {
-    if (!this.activeCheckpoint)
-      return;
+    if (!this.activeCheckpoint) return;
     try {
       await this.git(["stash", "drop"]);
     } catch {
@@ -13771,8 +9754,7 @@ var CheckpointManager = class {
   }
   /** Get a summary of stashed changes for status display. */
   async getStashInfo() {
-    if (!this.activeCheckpoint)
-      return "No active checkpoint.";
+    if (!this.activeCheckpoint) return "No active checkpoint.";
     try {
       const list = await this.git(["stash", "list", "--oneline"]);
       const lines = list.trim().split("\n");
@@ -13785,18 +9767,23 @@ var CheckpointManager = class {
   // ── Helper ──────────────────────────────────────────────────────────────
   git(args) {
     return new Promise((resolve8, reject) => {
-      execFile3("git", args, { cwd: this.cwd, timeout: GIT_TIMEOUT_MS3, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(stderr || stdout || error.message));
-        } else {
-          resolve8(stdout);
+      execFile3(
+        "git",
+        args,
+        { cwd: this.cwd, timeout: GIT_TIMEOUT_MS3, maxBuffer: 1024 * 1024 },
+        (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr || stdout || error.message));
+          } else {
+            resolve8(stdout);
+          }
         }
-      });
+      );
     });
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/indexer/project-indexer.js
+// packages/core/src/indexer/project-indexer.ts
 import { readdir as readdir2, stat as stat2, readFile as readFile5, writeFile as writeFile4, mkdir as mkdir3 } from "node:fs/promises";
 import { join as join4, relative, extname, basename } from "node:path";
 var MAX_DEPTH = 4;
@@ -13948,13 +9935,12 @@ var FRAMEWORK_RULES = [
   { name: "electron", type: "cli", deps: ["electron"] }
 ];
 var ProjectIndexer = class {
-  projectRoot;
-  index = null;
-  indexPath;
   constructor(projectRoot) {
     this.projectRoot = projectRoot;
     this.indexPath = join4(projectRoot, ".ava", INDEX_FILENAME);
   }
+  index = null;
+  indexPath;
   /** Full scan — builds index from scratch. */
   async scan() {
     const allFiles = [];
@@ -14000,15 +9986,13 @@ var ProjectIndexer = class {
   }
   /** Check if the cached index is stale (>1 hour old). */
   isStale() {
-    if (!this.index)
-      return true;
+    if (!this.index) return true;
     const age = Date.now() - new Date(this.index.scannedAt).getTime();
     return age > STALE_MS;
   }
   /** Generate a compressed summary string for system prompt injection. */
   summarize() {
-    if (!this.index)
-      return "(No project index \u2014 run project_index scan)";
+    if (!this.index) return "(No project index \u2014 run project_index scan)";
     const idx = this.index;
     const lines = [];
     const projectName = basename(idx.root);
@@ -14018,10 +10002,8 @@ var ProjectIndexer = class {
     lines.push(`Framework: ${frameworkLabel}`);
     const langSummary = idx.languages.slice(0, 5).map((l) => `${l.language} (${l.files} files)`).join(", ");
     lines.push(`Languages: ${langSummary}`);
-    if (idx.packageManager)
-      lines.push(`Package manager: ${idx.packageManager}`);
-    if (idx.buildTools.length)
-      lines.push(`Build: ${idx.buildTools.join(", ")}`);
+    if (idx.packageManager) lines.push(`Package manager: ${idx.packageManager}`);
+    if (idx.buildTools.length) lines.push(`Build: ${idx.buildTools.join(", ")}`);
     if (idx.testInfo.framework) {
       const testLoc = idx.testInfo.configFile || idx.testInfo.testDirs.join(", ");
       lines.push(`Tests: ${idx.testInfo.framework} (${testLoc})`);
@@ -14055,10 +10037,8 @@ var ProjectIndexer = class {
       return node;
     }
     for (const entry of entries) {
-      if (IGNORE_DIRS.has(entry) || IGNORE_FILES.has(entry))
-        continue;
-      if (entry.startsWith(".") && entry !== ".github")
-        continue;
+      if (IGNORE_DIRS.has(entry) || IGNORE_FILES.has(entry)) continue;
+      if (entry.startsWith(".") && entry !== ".github") continue;
       const fullPath = join4(dir, entry);
       let info;
       try {
@@ -14081,8 +10061,7 @@ var ProjectIndexer = class {
       }
     }
     node.children.sort((a, b) => {
-      if (a.type !== b.type)
-        return a.type === "dir" ? -1 : 1;
+      if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
     return node;
@@ -14109,12 +10088,9 @@ var ProjectIndexer = class {
     if (await this.fileExists(join4(this.projectRoot, "pyproject.toml")) || await this.fileExists(join4(this.projectRoot, "setup.py"))) {
       const pyproj = await this.readTextSafe(join4(this.projectRoot, "pyproject.toml"));
       if (pyproj) {
-        if (pyproj.includes("django"))
-          return { name: "django", version: null, type: "backend" };
-        if (pyproj.includes("flask"))
-          return { name: "flask", version: null, type: "backend" };
-        if (pyproj.includes("fastapi"))
-          return { name: "fastapi", version: null, type: "backend" };
+        if (pyproj.includes("django")) return { name: "django", version: null, type: "backend" };
+        if (pyproj.includes("flask")) return { name: "flask", version: null, type: "backend" };
+        if (pyproj.includes("fastapi")) return { name: "fastapi", version: null, type: "backend" };
       }
       return { name: "python", version: null, type: "library" };
     }
@@ -14126,10 +10102,8 @@ var ProjectIndexer = class {
     }
     if (pkgJson) {
       const raw = pkgJson;
-      if (raw.bin)
-        return { name: null, version: null, type: "cli" };
-      if (raw.main || raw.exports)
-        return { name: null, version: null, type: "library" };
+      if (raw.bin) return { name: null, version: null, type: "cli" };
+      if (raw.main || raw.exports) return { name: null, version: null, type: "library" };
     }
     return fallback;
   }
@@ -14138,8 +10112,7 @@ var ProjectIndexer = class {
     for (const file of allFiles) {
       const ext = extname(file).toLowerCase();
       const lang = EXTENSION_TO_LANGUAGE[ext];
-      if (!lang)
-        continue;
+      if (!lang) continue;
       const entry = counts.get(lang) ?? { files: 0, extensions: /* @__PURE__ */ new Set() };
       entry.files++;
       entry.extensions.add(ext);
@@ -14155,12 +10128,9 @@ var ProjectIndexer = class {
     const entries = [];
     const pkgJson = await this.readJson(join4(this.projectRoot, "package.json"));
     if (pkgJson) {
-      if (pkgJson.main)
-        entries.push(pkgJson.main);
-      if (typeof pkgJson.bin === "string")
-        entries.push(pkgJson.bin);
-      else if (pkgJson.bin)
-        entries.push(...Object.values(pkgJson.bin));
+      if (pkgJson.main) entries.push(pkgJson.main);
+      if (typeof pkgJson.bin === "string") entries.push(pkgJson.bin);
+      else if (pkgJson.bin) entries.push(...Object.values(pkgJson.bin));
     }
     const candidates = [
       "src/index.ts",
@@ -14181,8 +10151,7 @@ var ProjectIndexer = class {
     ];
     for (const candidate of candidates) {
       if (await this.fileExists(join4(this.projectRoot, candidate))) {
-        if (!entries.includes(candidate))
-          entries.push(candidate);
+        if (!entries.includes(candidate)) entries.push(candidate);
       }
     }
     const pkgsDir = join4(this.projectRoot, "packages");
@@ -14297,33 +10266,27 @@ var ProjectIndexer = class {
     ];
     for (const [file, tool] of checks) {
       if (await this.fileExists(join4(this.projectRoot, file))) {
-        if (!tools.includes(tool))
-          tools.push(tool);
+        if (!tools.includes(tool)) tools.push(tool);
       }
     }
-    const pkg = await this.readJson(join4(this.projectRoot, "package.json"));
+    const pkg = await this.readJson(
+      join4(this.projectRoot, "package.json")
+    );
     if (pkg?.devDependencies) {
-      if ("esbuild" in pkg.devDependencies && !tools.includes("esbuild"))
-        tools.push("esbuild");
-      if ("swc" in pkg.devDependencies || "@swc/core" in pkg.devDependencies)
-        tools.push("swc");
+      if ("esbuild" in pkg.devDependencies && !tools.includes("esbuild")) tools.push("esbuild");
+      if ("swc" in pkg.devDependencies || "@swc/core" in pkg.devDependencies) tools.push("swc");
     }
     return tools;
   }
   async detectPackageManager() {
-    if (await this.fileExists(join4(this.projectRoot, "pnpm-lock.yaml")))
-      return "pnpm";
-    if (await this.fileExists(join4(this.projectRoot, "bun.lockb")))
-      return "bun";
-    if (await this.fileExists(join4(this.projectRoot, "yarn.lock")))
-      return "yarn";
-    if (await this.fileExists(join4(this.projectRoot, "package-lock.json")))
-      return "npm";
+    if (await this.fileExists(join4(this.projectRoot, "pnpm-lock.yaml"))) return "pnpm";
+    if (await this.fileExists(join4(this.projectRoot, "bun.lockb"))) return "bun";
+    if (await this.fileExists(join4(this.projectRoot, "yarn.lock"))) return "yarn";
+    if (await this.fileExists(join4(this.projectRoot, "package-lock.json"))) return "npm";
     const pkg = await this.readJson(join4(this.projectRoot, "package.json"));
     if (pkg?.packageManager) {
       const match = pkg.packageManager.match(/^(pnpm|yarn|npm|bun)/);
-      if (match)
-        return match[1];
+      if (match) return match[1];
     }
     return null;
   }
@@ -14372,8 +10335,7 @@ var ProjectIndexer = class {
   }
   // ── Private: formatting ────────────────────────────────────────────────────
   formatTree(node, lines, indent, depth, maxDepth) {
-    if (depth > maxDepth)
-      return;
+    if (depth > maxDepth) return;
     if (node.type === "dir" && node.children?.length) {
       const countLabel = node.fileCount ? ` (${node.fileCount} files)` : "";
       lines.push(`${indent}${node.name}/${countLabel}`);
@@ -14418,7 +10380,7 @@ var ProjectIndexer = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/indexer/symbol-indexer.js
+// packages/core/src/indexer/symbol-indexer.ts
 import { readFile as readFile6, writeFile as writeFile5, mkdir as mkdir4, readdir as readdir3, stat as stat3 } from "node:fs/promises";
 import { join as join5, relative as relative2, extname as extname2 } from "node:path";
 var INDEX_FILENAME2 = "symbols.json";
@@ -14464,20 +10426,21 @@ var IGNORE_DIRS2 = /* @__PURE__ */ new Set([
   ".ava"
 ]);
 var SymbolIndexer = class {
-  projectRoot;
-  index = null;
-  indexPath;
   constructor(projectRoot) {
     this.projectRoot = projectRoot;
     this.indexPath = join5(projectRoot, ".ava", INDEX_FILENAME2);
   }
+  index = null;
+  indexPath;
   /** Full scan — extract symbols from all source files. */
   async scan(files) {
     const sourceFiles = files ?? await this.collectSourceFiles();
     const allSymbols = [];
     for (let i = 0; i < sourceFiles.length; i += BATCH_SIZE) {
       const batch = sourceFiles.slice(i, i + BATCH_SIZE);
-      const results = await Promise.all(batch.map((file) => this.extractSymbolsFromFile(file)));
+      const results = await Promise.all(
+        batch.map((file) => this.extractSymbolsFromFile(file))
+      );
       for (const symbols of results) {
         allSymbols.push(...symbols);
       }
@@ -14506,35 +10469,32 @@ var SymbolIndexer = class {
   }
   /** Find symbols by name (case-insensitive substring match). */
   findByName(query) {
-    if (!this.index)
-      return [];
+    if (!this.index) return [];
     const lower = query.toLowerCase();
     return this.index.symbols.filter((s) => s.name.toLowerCase().includes(lower)).sort((a, b) => {
       const aExact = a.name.toLowerCase() === lower ? 0 : 1;
       const bExact = b.name.toLowerCase() === lower ? 0 : 1;
-      if (aExact !== bExact)
-        return aExact - bExact;
-      if (a.exported !== b.exported)
-        return a.exported ? -1 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      if (a.exported !== b.exported) return a.exported ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
   }
   /** Find all symbols defined in a specific file. */
   findInFile(filePath) {
-    if (!this.index)
-      return [];
+    if (!this.index) return [];
     const normalized = this.normalizePath(filePath);
     return this.index.symbols.filter((s) => s.file === normalized);
   }
   /** Find where a symbol name appears across indexed source files. */
   async findReferences(symbolName) {
-    if (!this.index)
-      return [];
+    if (!this.index) return [];
     const files = [...new Set(this.index.symbols.map((s) => s.file))];
     const refs = [];
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
-      const results = await Promise.all(batch.map((file) => this.searchFileForSymbol(file, symbolName)));
+      const results = await Promise.all(
+        batch.map((file) => this.searchFileForSymbol(file, symbolName))
+      );
       for (const fileRefs of results) {
         refs.push(...fileRefs);
       }
@@ -14544,8 +10504,7 @@ var SymbolIndexer = class {
   }
   /** Get a quick stats summary. */
   summarize() {
-    if (!this.index)
-      return "No symbol index available.";
+    if (!this.index) return "No symbol index available.";
     const total = this.index.symbols.length;
     const exported = this.index.symbols.filter((s) => s.exported).length;
     const byKind = /* @__PURE__ */ new Map();
@@ -14572,10 +10531,8 @@ var SymbolIndexer = class {
       return files;
     }
     for (const entry of entries) {
-      if (IGNORE_DIRS2.has(entry))
-        continue;
-      if (entry.startsWith(".") && entry !== ".github")
-        continue;
+      if (IGNORE_DIRS2.has(entry)) continue;
+      if (entry.startsWith(".") && entry !== ".github") continue;
       const fullPath = join5(root, entry);
       let info;
       try {
@@ -14606,8 +10563,7 @@ var SymbolIndexer = class {
     }
     const ext = extname2(relPath).toLowerCase();
     const language = SOURCE_EXTENSIONS[ext];
-    if (!language)
-      return [];
+    if (!language) return [];
     switch (language) {
       case "typescript":
       case "javascript":
@@ -14645,8 +10601,7 @@ var SymbolIndexer = class {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
-      if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*") || !trimmed)
-        continue;
+      if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*") || !trimmed) continue;
       const isExported = trimmed.startsWith("export ");
       const src = isExported ? trimmed.replace(/^export\s+(default\s+)?/, "") : trimmed;
       const funcMatch = src.match(/^(?:async\s+)?function\s+(\w+)/);
@@ -14689,8 +10644,7 @@ var SymbolIndexer = class {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
-      if (trimmed.startsWith("#") || !trimmed)
-        continue;
+      if (trimmed.startsWith("#") || !trimmed) continue;
       const classMatch = trimmed.match(/^class\s+(\w+)/);
       if (classMatch) {
         const exported = !classMatch[1].startsWith("_");
@@ -14721,8 +10675,7 @@ var SymbolIndexer = class {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
-      if (trimmed.startsWith("//") || !trimmed)
-        continue;
+      if (trimmed.startsWith("//") || !trimmed) continue;
       const funcMatch = trimmed.match(/^func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(/);
       if (funcMatch) {
         const exported = funcMatch[1][0] === funcMatch[1][0].toUpperCase() && /[A-Z]/.test(funcMatch[1][0]);
@@ -14756,8 +10709,7 @@ var SymbolIndexer = class {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
-      if (trimmed.startsWith("//") || !trimmed)
-        continue;
+      if (trimmed.startsWith("//") || !trimmed) continue;
       const isPub = trimmed.startsWith("pub ");
       const src = isPub ? trimmed.replace(/^pub\s+(\(crate\)\s+)?/, "") : trimmed;
       const fnMatch = src.match(/^(?:async\s+)?fn\s+(\w+)/);
@@ -14798,16 +10750,19 @@ var SymbolIndexer = class {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
-      if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*") || !trimmed)
-        continue;
-      const classMatch = trimmed.match(/(?:public|private|protected)?\s*(?:static\s+)?(?:abstract\s+)?(?:final\s+)?(class|interface|enum)\s+(\w+)/);
+      if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*") || !trimmed) continue;
+      const classMatch = trimmed.match(
+        /(?:public|private|protected)?\s*(?:static\s+)?(?:abstract\s+)?(?:final\s+)?(class|interface|enum)\s+(\w+)/
+      );
       if (classMatch) {
         const exported = !trimmed.includes("private");
         const kind = classMatch[1];
         symbols.push({ name: classMatch[2], kind, file, line: i + 1, exported, language });
         continue;
       }
-      const methodMatch = trimmed.match(/(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:abstract\s+)?(?:synchronized\s+)?(?:\w+(?:<[^>]+>)?)\s+(\w+)\s*\(/);
+      const methodMatch = trimmed.match(
+        /(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:abstract\s+)?(?:synchronized\s+)?(?:\w+(?:<[^>]+>)?)\s+(\w+)\s*\(/
+      );
       if (methodMatch && !["if", "for", "while", "switch", "catch", "new"].includes(methodMatch[1])) {
         const exported = !trimmed.includes("private");
         symbols.push({ name: methodMatch[1], kind: "method", file, line: i + 1, exported, language });
@@ -14823,8 +10778,7 @@ var SymbolIndexer = class {
     const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
-      if (trimmed.startsWith("#") || !trimmed)
-        continue;
+      if (trimmed.startsWith("#") || !trimmed) continue;
       const classMatch = trimmed.match(/^class\s+(\w+)/);
       if (classMatch) {
         symbols.push({ name: classMatch[1], kind: "class", file, line: i + 1, exported: true, language: "ruby" });
@@ -14847,8 +10801,7 @@ var SymbolIndexer = class {
     const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
-      if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*") || !trimmed)
-        continue;
+      if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*") || !trimmed) continue;
       const classMatch = trimmed.match(/(?:abstract\s+)?(?:final\s+)?class\s+(\w+)/);
       if (classMatch) {
         symbols.push({ name: classMatch[1], kind: "class", file, line: i + 1, exported: true, language: "php" });
@@ -14872,8 +10825,7 @@ var SymbolIndexer = class {
     const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
-      if (trimmed.startsWith("//") || !trimmed)
-        continue;
+      if (trimmed.startsWith("//") || !trimmed) continue;
       const isPub = trimmed.startsWith("public ") || trimmed.startsWith("open ");
       const src = trimmed.replace(/^(?:public|private|internal|open|fileprivate)\s+/, "");
       const classMatch = src.match(/^(?:final\s+)?class\s+(\w+)/);
@@ -14908,8 +10860,7 @@ var SymbolIndexer = class {
     const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
-      if (trimmed.startsWith("//") || !trimmed)
-        continue;
+      if (trimmed.startsWith("//") || !trimmed) continue;
       const classMatch = trimmed.match(/^(?:abstract\s+)?class\s+(\w+)/);
       if (classMatch) {
         symbols.push({ name: classMatch[1], kind: "class", file, line: i + 1, exported: !classMatch[1].startsWith("_"), language: "dart" });
@@ -14964,12 +10915,12 @@ var SymbolIndexer = class {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/config/config.js
+// packages/core/src/config/config.ts
 import { readFile as readFile7, writeFile as writeFile6, rename as rename2, mkdir as mkdir5, readdir as readdir4, unlink as unlink2 } from "node:fs/promises";
 import { existsSync as existsSync2 } from "node:fs";
 import { dirname as dirname2, join as join6 } from "node:path";
 
-// packages/ide/node_modules/@ava/core/dist/config/schema.js
+// packages/core/src/config/schema.ts
 var DEFAULT_CONFIG = {
   activeModel: "",
   providers: {},
@@ -14980,7 +10931,7 @@ var DEFAULT_CONFIG = {
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/config/config.js
+// packages/core/src/config/config.ts
 async function atomicWriteFile(filePath, data) {
   const tmpPath = join6(dirname2(filePath), `.${Date.now()}.tmp`);
   await writeFile6(tmpPath, data, "utf-8");
@@ -15029,25 +10980,23 @@ function validateConfig(raw) {
       }
     }
     if (Array.isArray(providers.generic)) {
-      config.providers.generic = providers.generic.filter((g) => typeof g === "object" && g !== null && typeof g.name === "string" && typeof g.baseUrl === "string" && Array.isArray(g.models));
+      config.providers.generic = providers.generic.filter(
+        (g) => typeof g === "object" && g !== null && typeof g.name === "string" && typeof g.baseUrl === "string" && Array.isArray(g.models)
+      );
     }
   }
   if (typeof obj.preferences === "object" && obj.preferences !== null) {
     const prefs = obj.preferences;
-    if (typeof prefs.temperature === "number")
-      config.preferences.temperature = prefs.temperature;
-    if (typeof prefs.maxTokens === "number")
-      config.preferences.maxTokens = prefs.maxTokens;
-    if (typeof prefs.markdownRendering === "boolean")
-      config.preferences.markdownRendering = prefs.markdownRendering;
+    if (typeof prefs.temperature === "number") config.preferences.temperature = prefs.temperature;
+    if (typeof prefs.maxTokens === "number") config.preferences.maxTokens = prefs.maxTokens;
+    if (typeof prefs.markdownRendering === "boolean") config.preferences.markdownRendering = prefs.markdownRendering;
   }
   return config;
 }
 var ConfigManager = class {
   config = null;
   async load() {
-    if (this.config)
-      return this.config;
+    if (this.config) return this.config;
     cleanOrphanedTempFiles(AVA_HOME).catch(() => {
     });
     if (!existsSync2(CONFIG_PATH)) {
@@ -15060,14 +11009,12 @@ var ConfigManager = class {
       this.config = validateConfig(parsed);
       return this.config;
     } catch (error) {
-      if (error instanceof ConfigError)
-        throw error;
+      if (error instanceof ConfigError) throw error;
       throw new ConfigError(`Failed to read config: ${error}`);
     }
   }
   async save() {
-    if (!this.config)
-      throw new ConfigError("No config loaded");
+    if (!this.config) throw new ConfigError("No config loaded");
     await mkdir5(AVA_HOME, { recursive: true });
     await atomicWriteFile(CONFIG_PATH, JSON.stringify(this.config, null, 2));
   }
@@ -15082,12 +11029,14 @@ var ConfigManager = class {
   }
   async needsSetup() {
     const config = await this.load();
-    const hasProvider = Object.values(config.providers).some((v2) => v2 && typeof v2 === "object" && "apiKey" in v2);
+    const hasProvider = Object.values(config.providers).some(
+      (v2) => v2 && typeof v2 === "object" && "apiKey" in v2
+    );
     return !config.activeModel || !hasProvider && !config.platformKey;
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/config/project.js
+// packages/core/src/config/project.ts
 import { existsSync as existsSync3 } from "node:fs";
 import { readFile as readFile8, mkdir as mkdir6, writeFile as writeFile7 } from "node:fs/promises";
 import { join as join7, dirname as dirname3, resolve as resolve7 } from "node:path";
@@ -15101,8 +11050,7 @@ function detectProjectRoot(startDir) {
       }
     }
     const parent = dirname3(dir);
-    if (parent === dir)
-      break;
+    if (parent === dir) break;
     dir = parent;
   }
   return null;
@@ -15152,7 +11100,7 @@ async function scaffoldProjectInstructions(projectRoot) {
   return instructionsPath;
 }
 
-// packages/ide/node_modules/@ava/core/dist/history/storage.js
+// packages/core/src/history/storage.ts
 import { readFile as readFile9, writeFile as writeFile8, rename as rename3, readdir as readdir5, mkdir as mkdir7, unlink as unlink3 } from "node:fs/promises";
 import { join as join8 } from "node:path";
 var MAX_HISTORY = 100;
@@ -15192,8 +11140,7 @@ var HistoryStorage = class {
     try {
       const raw = await readFile9(path, "utf-8");
       const parsed = JSON.parse(raw);
-      if (!this.isValidRecord(parsed))
-        return null;
+      if (!this.isValidRecord(parsed)) return null;
       return parsed;
     } catch {
       return null;
@@ -15204,13 +11151,11 @@ var HistoryStorage = class {
     const files = await readdir5(HISTORY_DIR);
     const summaries = [];
     for (const file of files) {
-      if (!file.endsWith(".json"))
-        continue;
+      if (!file.endsWith(".json")) continue;
       try {
         const raw = await readFile9(join8(HISTORY_DIR, file), "utf-8");
         const record = JSON.parse(raw);
-        if (!this.isValidRecord(record))
-          continue;
+        if (!this.isValidRecord(record)) continue;
         summaries.push({
           id: record.id,
           title: record.title,
@@ -15236,19 +11181,17 @@ var HistoryStorage = class {
   async prune(maxHistory = MAX_HISTORY) {
     const all = await this.list();
     const unpinned = all.filter((entry) => !entry.pinned);
-    if (unpinned.length <= maxHistory)
-      return 0;
+    if (unpinned.length <= maxHistory) return 0;
     const toDelete = unpinned.slice(maxHistory);
     let deleted = 0;
     for (const entry of toDelete) {
-      if (await this.delete(entry.id))
-        deleted++;
+      if (await this.delete(entry.id)) deleted++;
     }
     return deleted;
   }
 };
 
-// packages/ide/node_modules/@ava/core/dist/history/history-manager.js
+// packages/core/src/history/history-manager.ts
 var HistoryManager = class {
   storage;
   projectPath;
@@ -15261,8 +11204,7 @@ var HistoryManager = class {
   }
   async saveConversation(conversation) {
     const messages = conversation.getMessages();
-    if (messages.length <= 1)
-      return;
+    if (messages.length <= 1) return;
     const firstUserMsg = messages.find((m) => m.role === "user");
     const title = firstUserMsg ? getTextContent(firstUserMsg.content).slice(0, 80) || "Untitled" : "Untitled";
     const existing = await this.storage.load(conversation.id);
@@ -15285,8 +11227,7 @@ var HistoryManager = class {
   }
   async listConversations(filterByProject = true) {
     const all = await this.storage.list();
-    if (!filterByProject || !this.projectPath)
-      return all;
+    if (!filterByProject || !this.projectPath) return all;
     return all.filter((c) => c.projectPath === this.projectPath);
   }
   async searchConversations(query, filterByProject = true) {
@@ -15302,21 +11243,18 @@ var HistoryManager = class {
         continue;
       }
       const record = await this.storage.load(entry.id);
-      if (!record)
-        continue;
+      if (!record) continue;
       const hasMatch = record.messages.some((m) => {
         const text = getTextContent(m.content);
         return text.toLowerCase().includes(lowerQuery);
       });
-      if (hasMatch)
-        results.push(entry);
+      if (hasMatch) results.push(entry);
     }
     return results;
   }
   async renameConversation(id, newTitle) {
     const record = await this.storage.load(id);
-    if (!record)
-      return false;
+    if (!record) return false;
     record.title = newTitle;
     record.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
     await this.storage.save(record);
@@ -15324,16 +11262,14 @@ var HistoryManager = class {
   }
   async pinConversation(id, pinned) {
     const record = await this.storage.load(id);
-    if (!record)
-      return false;
+    if (!record) return false;
     record.pinned = pinned;
     await this.storage.save(record);
     return true;
   }
   async exportConversation(id, format) {
     const record = await this.storage.load(id);
-    if (!record)
-      return null;
+    if (!record) return null;
     if (format === "json") {
       return JSON.stringify(record, null, 2);
     }
@@ -15346,10 +11282,8 @@ var HistoryManager = class {
     lines.push("---");
     lines.push("");
     for (const msg of record.messages) {
-      if (msg.role === "system")
-        continue;
-      if (msg.role === "tool")
-        continue;
+      if (msg.role === "system") continue;
+      if (msg.role === "tool") continue;
       const roleLabel = msg.role === "user" ? "## User" : "## Ava";
       lines.push(roleLabel);
       lines.push("");

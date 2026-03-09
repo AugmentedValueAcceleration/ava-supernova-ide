@@ -725,9 +725,21 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
   const [isDragOver, setIsDragOver] = React.useState(false);
   const messagesRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10 MB
   const MAX_ATTACHMENTS = 5;
+
+  // Auto-focus textarea when streaming ends (so user can keep typing)
+  const wasStreamingRef = React.useRef(false);
+  React.useEffect(() => {
+    if (state.isStreaming) {
+      wasStreamingRef.current = true;
+    } else if (wasStreamingRef.current) {
+      wasStreamingRef.current = false;
+      textareaRef.current?.focus();
+    }
+  }, [state.isStreaming]);
 
   // Auto-scroll to bottom on new messages
   const justLoadedRef = React.useRef(false);
@@ -1072,6 +1084,7 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
         {/* Text input + buttons row */}
         <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', width: '100%' }}>
           <textarea
+            ref={textareaRef}
             style={{ ...styles.textarea, ...(isDragOver ? { borderColor: 'var(--theia-focusBorder, #A855F7)' } : {}) }}
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -1083,6 +1096,7 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
             placeholder={isDragOver ? 'Drop image here...' : 'Ask Ava something... (Ctrl+V to paste image)'}
             rows={1}
             disabled={state.isStreaming}
+            autoFocus
           />
           <input
             ref={fileInputRef}
