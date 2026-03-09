@@ -33,6 +33,23 @@ nodeConfig.config.plugins = [
         entryOnly: true,
         test: /electron-main\.js$/,
     }),
+    // Tell Theia where to find bundled plugins (vscode.git, TypeScript, etc.).
+    // Without this, the plugin deployer has no plugins to load — no SCM, no
+    // language features, nothing. In packaged Electron: process.resourcesPath
+    // points to the resources/ folder. In dev: fall back to ../../plugins.
+    new webpack.BannerPlugin({
+        banner: [
+            'if (!process.env.THEIA_DEFAULT_PLUGINS) {',
+            '  var __p = require("path");',
+            '  process.env.THEIA_DEFAULT_PLUGINS = "local-dir:" + __p.resolve(',
+            '    process.resourcesPath || __p.resolve(__dirname, "..", ".."), "plugins"',
+            '  );',
+            '}',
+        ].join('\n'),
+        raw: true,
+        entryOnly: true,
+        test: /main\.js$/,
+    }),
     // Force webpack to bundle drivelist instead of externalizing it.
     // The NativeWebpackPlugin handles the .node binding via node-loader, but
     // require('drivelist') gets externalized in production builds. This plugin
