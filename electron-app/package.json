@@ -1,6 +1,6 @@
 {
   "name": "ava-ide-electron",
-  "version": "0.3.19",
+  "version": "0.3.20",
   "description": "Ava | Supernova — Desktop Application",
   "license": "Apache-2.0",
   "main": "lib/backend/electron-main.js",

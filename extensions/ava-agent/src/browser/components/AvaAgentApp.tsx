@@ -770,7 +770,7 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
     } else {
       el.scrollTop = el.scrollHeight;
     }
-  }, [state.messages, state.isStreaming]);
+  }, [state.messages, state.isStreaming, state.view]);
 
   const addImageFile = React.useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return;
