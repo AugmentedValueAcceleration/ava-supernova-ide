@@ -4,6 +4,7 @@ import { FrontendApplicationStateService } from '@theia/core/lib/browser/fronten
 import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
 import { MenuModelRegistry } from '@theia/core/lib/common';
+import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
 import { AvaOnboardingDialogFactory, type AvaOnboardingDialogFactory as AvaOnboardingDialogFactoryType } from './ava-onboarding-types';
 
 const ONBOARDING_KEY = 'ava.onboarding.v1';
@@ -16,6 +17,7 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
   @inject(MenuModelRegistry) protected readonly menuRegistry: MenuModelRegistry;
   @inject(FrontendApplicationStateService) protected readonly stateService: FrontendApplicationStateService;
   @inject(PreferenceService) protected readonly preferenceService: PreferenceService;
+  @inject(TerminalService) protected readonly terminalService: TerminalService;
 
   async onStart(app: FrontendApplication): Promise<void> {
     this.applyBranding();
@@ -25,6 +27,16 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
     // restores it from the previous session, but we want it closed by default.
     this.stateService.reachedState('ready').then(async () => {
       app.shell.bottomPanel.hide();
+
+      // Close restored terminal sessions — Theia's layout persistence
+      // re-creates terminals from the previous session, cluttering the
+      // bottom panel with stale cmd.exe tabs. We want a clean start.
+      try {
+        const terminals = this.terminalService.all;
+        for (const t of terminals) {
+          t.close();
+        }
+      } catch { /* TerminalService may not be ready */ }
 
       // The welcome page checkbox sets workbench.startupEditor to 'none',
       // but Theia's layout persistence restores the tab anyway. Close it
