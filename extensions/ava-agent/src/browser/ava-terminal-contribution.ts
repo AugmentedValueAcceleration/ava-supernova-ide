@@ -28,11 +28,11 @@ export class AvaTerminalContribution implements FrontendApplicationContribution 
   }
 
   async onStart(app: FrontendApplication): Promise<void> {
-    // Wait for app to be fully ready (after branding cleans up stale terminals)
-    // then open a default Terminal + Ava CLI terminal — matching VS Code UX.
+    // Wait for app to be fully ready, then wait for branding to clean up stale
+    // terminals (it runs on the same 'ready' event). Use 1.5s delay to ensure
+    // branding cleanup has completed before we create fresh terminals.
     this.stateService.reachedState('ready').then(async () => {
-      // Small delay to ensure branding has closed stale terminals first
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       try {
         // 1. Open a regular interactive terminal (like VS Code's default)
@@ -44,8 +44,7 @@ export class AvaTerminalContribution implements FrontendApplicationContribution 
         // 2. Open the Ava CLI pseudo-terminal for tool output
         await this.getOrCreateTerminal();
 
-        // Show the bottom panel with Terminal tab active
-        app.shell.bottomPanel.show();
+        // Activate the user terminal (this also reveals the bottom panel)
         userTerminal.activate();
       } catch { /* Terminal service may not be ready */ }
     });
