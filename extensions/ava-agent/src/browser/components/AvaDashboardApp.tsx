@@ -16,6 +16,8 @@ export interface AvaDashboardAppProps {
   onSaveMemory?: (scope: 'global' | 'project', content: string) => Promise<void>;
   onClearMemory?: (scope: 'global' | 'project') => Promise<void>;
   onCheckForUpdates?: () => Promise<{ version: string } | null>;
+  onDownloadUpdate?: () => Promise<boolean>;
+  onInstallUpdate?: () => Promise<void>;
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -454,7 +456,7 @@ function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConn
   onDisconnect: () => void;
   onConnect: () => void;
   onCheckForUpdates?: () => void;
-  updateStatus?: 'idle' | 'checking' | 'up-to-date' | 'available' | 'error';
+  updateStatus?: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error';
 }) {
   const visibleItems = mode === 'byok'
     ? NAV_ITEMS.filter(item => !item.platformOnly)
@@ -1540,7 +1542,7 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
     !hasAccess ? 'connect' : hasPlatform ? 'overview' : 'settings',
   );
   const [updateAvailable, setUpdateAvailable] = React.useState<string | null>(null);
-  const [updateStatus, setUpdateStatus] = React.useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
+  const [updateStatus, setUpdateStatus] = React.useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error'>('idle');
 
   const doCheckForUpdates = React.useCallback(() => {
     if (!props.onCheckForUpdates) return;
@@ -1642,25 +1644,58 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
             <span style={{ fontSize: '12px', color: 'var(--theia-foreground, #e0e0e0)' }}>
               Update available: <strong>v{updateAvailable}</strong>
             </span>
-            <a
-              href={`https://github.com/AugmentedValueAcceleration/ava-supernova-ide/releases/download/v${updateAvailable}/Ava.Supernova.Setup.${updateAvailable}.exe`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => {
-                e.preventDefault();
-                window.open(
-                  `https://github.com/AugmentedValueAcceleration/ava-supernova-ide/releases/download/v${updateAvailable}/Ava.Supernova.Setup.${updateAvailable}.exe`,
-                  '_blank'
-                );
+            <button
+              onClick={() => {
+                if (!props.onDownloadUpdate) return;
+                setUpdateStatus('downloading');
+                props.onDownloadUpdate().then(ok => {
+                  if (ok) {
+                    setUpdateStatus('ready');
+                  } else {
+                    setUpdateStatus('error');
+                    setTimeout(() => setUpdateStatus('available'), 5000);
+                  }
+                }).catch(() => {
+                  setUpdateStatus('error');
+                  setTimeout(() => setUpdateStatus('available'), 5000);
+                });
               }}
               style={{
                 padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
-                background: 'var(--ava-accent, #A855F7)', color: '#fff', textDecoration: 'none',
+                background: 'var(--ava-accent, #A855F7)', color: '#fff', border: 'none',
                 cursor: 'pointer',
               }}
             >
-              Download
-            </a>
+              Download &amp; Install
+            </button>
+          </div>
+        ) : updateStatus === 'downloading' ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 12px', marginBottom: '12px', borderRadius: '6px',
+            background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)',
+          }}>
+            <span style={{ fontSize: '12px', opacity: 0.8 }}>Downloading update...</span>
+          </div>
+        ) : updateStatus === 'ready' ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 12px', marginBottom: '12px', borderRadius: '6px',
+            background: 'rgba(34, 197, 94, 0.12)', border: '1px solid rgba(34, 197, 94, 0.3)',
+          }}>
+            <span style={{ fontSize: '12px', color: 'rgba(34, 197, 94, 0.9)' }}>
+              Update downloaded. Ready to install.
+            </span>
+            <button
+              onClick={() => { props.onInstallUpdate?.(); }}
+              style={{
+                padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
+                background: '#22C55E', color: '#fff', border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Install &amp; Restart
+            </button>
           </div>
         ) : updateStatus === 'checking' ? (
           <div style={{

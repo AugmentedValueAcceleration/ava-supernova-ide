@@ -556,10 +556,25 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       if (!res.ok) return null;
       const data = await res.json() as { tag_name?: string };
       const remoteVersion = data.tag_name?.replace(/^v/, '') || '';
-      const { join } = require('path');
-      const pkgPath = join(__dirname, '..', '..', 'package.json');
+
+      // Read version from package.json at runtime using fs (not require,
+      // which is __webpack_require__ in the bundle and can't resolve runtime paths)
+      const fs = require('fs');
+      const path = require('path');
       let currentVersion = '0.0.0';
-      try { currentVersion = require(pkgPath).version || '0.0.0'; } catch { /* fallback */ }
+      const candidates = [
+        path.join(__dirname, '..', '..', 'package.json'),             // webpack output dir
+        process.resourcesPath && path.join(process.resourcesPath, 'app.asar', 'package.json'),  // packaged
+        process.resourcesPath && path.join(process.resourcesPath, 'app', 'package.json'),       // unpacked
+      ].filter(Boolean) as string[];
+      for (const p of candidates) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+          if (pkg.version) { currentVersion = pkg.version; break; }
+        } catch { /* try next */ }
+      }
+      console.log(`[ava-update] current=${currentVersion} remote=${remoteVersion}`);
+
       if (remoteVersion && remoteVersion !== currentVersion && this.isNewer(remoteVersion, currentVersion)) {
         return { version: remoteVersion };
       }
@@ -571,12 +586,65 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   }
 
   async downloadUpdate(): Promise<boolean> {
-    return false;
+    try {
+      const res = await fetch(
+        'https://api.github.com/repos/AugmentedValueAcceleration/ava-supernova-ide/releases/latest',
+        { headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ava-supernova-ide' } },
+      );
+      if (!res.ok) return false;
+      const data = await res.json() as { assets?: { name: string; browser_download_url: string }[] };
+      const asset = data.assets?.find(a => a.name.endsWith('.exe'));
+      if (!asset) return false;
+
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const tempDir = path.join(os.tmpdir(), 'ava-supernova-update');
+      fs.mkdirSync(tempDir, { recursive: true });
+      const installerPath = path.join(tempDir, asset.name);
+
+      // Download the installer
+      console.log(`[ava-update] Downloading ${asset.browser_download_url}...`);
+      const dlRes = await fetch(asset.browser_download_url, { redirect: 'follow' });
+      if (!dlRes.ok) return false;
+      const buffer = Buffer.from(await dlRes.arrayBuffer());
+      fs.writeFileSync(installerPath, buffer);
+      console.log(`[ava-update] Downloaded to ${installerPath} (${(buffer.length / 1048576).toFixed(1)} MB)`);
+
+      // Store path for installUpdate
+      this._pendingInstallerPath = installerPath;
+      return true;
+    } catch (err: any) {
+      console.error('[ava-update] Download failed:', err.message);
+      return false;
+    }
   }
 
   async installUpdate(): Promise<void> {
-    // Handled by frontend opening the download URL
+    if (!this._pendingInstallerPath) return;
+    try {
+      const { spawn } = require('child_process');
+      // Launch NSIS installer silently and quit the app
+      spawn(this._pendingInstallerPath, ['/S'], {
+        detached: true,
+        stdio: 'ignore',
+      }).unref();
+
+      // Quit the app so the installer can replace files
+      setTimeout(() => {
+        try {
+          const { app } = require('electron');
+          app.quit();
+        } catch {
+          process.exit(0);
+        }
+      }, 500);
+    } catch (err: any) {
+      console.error('[ava-update] Install failed:', err.message);
+    }
   }
+
+  private _pendingInstallerPath?: string;
 
   private isNewer(remote: string, current: string): boolean {
     const r = remote.split('.').map(Number);
