@@ -51,6 +51,10 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
           welcomeWidget.close();
         }
       }
+
+      // ── VS Code-style bottom panel ──
+      // Make bottom panel tabs non-draggable and uppercase terminal labels
+      this.setupBottomPanelTabs(app);
     });
 
     const completed = await this.storageService.getData<boolean>(ONBOARDING_KEY, false);
@@ -103,6 +107,58 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         }
       }
     } catch { /* Not critical — fail silently */ }
+  }
+
+  /** Make bottom panel tabs behave like VS Code: uppercase, non-draggable, clean labels */
+  private setupBottomPanelTabs(app: FrontendApplication): void {
+    const bottomPanel = app.shell.bottomPanel;
+
+    // Prevent tab dragging by intercepting drag start on the bottom panel tab bar
+    const tabBarNode = bottomPanel.node.querySelector('.lm-TabBar');
+    if (tabBarNode) {
+      tabBarNode.addEventListener('mousedown', (e: Event) => {
+        const me = e as MouseEvent;
+        const target = me.target as HTMLElement;
+        if (target?.closest('.lm-TabBar-tabLabel') || target?.closest('.lm-TabBar-tab')) {
+          // Allow click (tab selection) but prevent drag by stopping propagation
+          // only when a drag would start (i.e., on the label/tab itself, not close buttons)
+          const tab = target.closest('.lm-TabBar-tab');
+          if (tab) {
+            // Mark so our move handler can cancel drag
+            (tabBarNode as any).__avaMouseDown = true;
+          }
+        }
+      }, true);
+
+      tabBarNode.addEventListener('mousemove', (e: Event) => {
+        if ((tabBarNode as any).__avaMouseDown) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+
+      document.addEventListener('mouseup', () => {
+        (tabBarNode as any).__avaMouseDown = false;
+      }, true);
+    }
+
+    // Rename terminal tabs that show paths to just "Terminal"
+    // and uppercase all bottom panel tab labels to match VS Code
+    const renameBottomTabs = () => {
+      const tabs = bottomPanel.node.querySelectorAll('.lm-TabBar-tab .lm-TabBar-tabLabel');
+      tabs.forEach(label => {
+        const text = label.textContent || '';
+        // Terminal tabs often show shell path like "C:\Windows\System32\cmd.exe" or "powershell"
+        if (text.includes('\\') || text.includes('/') || /^(cmd|powershell|bash|sh|zsh|pwsh)/i.test(text)) {
+          label.textContent = 'Terminal';
+        }
+      });
+    };
+
+    // Run immediately and observe for changes (new terminals, tab additions)
+    renameBottomTabs();
+    const observer = new MutationObserver(renameBottomTabs);
+    observer.observe(bottomPanel.node, { childList: true, subtree: true, characterData: true });
   }
 
   private applyBranding(): void {
@@ -245,35 +301,47 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         box-shadow: inset -3px 0 8px -3px rgba(168, 85, 247, 0.4);
       }
 
-      /* ── Bottom panel (Terminal, Output, Problems, etc.) ── */
+      /* ── Bottom panel (VS Code-style: uppercase, static tabs) ── */
 
       /* Bottom panel tab bar background */
       body.theia-dark #theia-bottom-content-panel .lm-TabBar {
         background: #08080e !important;
+        border-bottom: 1px solid rgba(168, 85, 247, 0.08) !important;
       }
 
       /* Bottom panel tab — inactive */
       body.theia-dark #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab {
-        background: #08080e !important;
+        background: transparent !important;
         color: #5c5c80 !important;
-        border-right: 1px solid rgba(168, 85, 247, 0.06) !important;
+        border-right: none !important;
         border-top: none !important;
         border-bottom: 2px solid transparent !important;
-        transition: background 0.15s, color 0.15s;
+        transition: color 0.15s;
         padding: 4px 12px !important;
+        text-transform: uppercase !important;
+        font-size: 11px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.5px !important;
+        cursor: pointer !important;
+        user-select: none !important;
       }
 
       /* Bottom panel tab — active */
       body.theia-dark #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab.lm-mod-current {
-        background: #0d0d14 !important;
+        background: transparent !important;
         color: #e0e0f0 !important;
         border-bottom: 2px solid #A855F7 !important;
       }
 
       /* Bottom panel tab — hover */
       body.theia-dark #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab:not(.lm-mod-current):hover {
-        background: rgba(168, 85, 247, 0.06) !important;
+        background: transparent !important;
         color: #9898b8 !important;
+      }
+
+      /* Prevent tab dragging cursor */
+      body.theia-dark #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab .lm-TabBar-tabLabel {
+        cursor: pointer !important;
       }
 
       /* Bottom panel content area */
@@ -448,35 +516,47 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         box-shadow: inset -3px 0 8px -3px rgba(14, 165, 233, 0.2);
       }
 
-      /* ── Bottom panel (Terminal, Output, Problems, etc.) ── */
+      /* ── Bottom panel (VS Code-style: uppercase, static tabs) ── */
 
       /* Bottom panel tab bar background */
       body.theia-light #theia-bottom-content-panel .lm-TabBar {
         background: #f1f0ed !important;
+        border-bottom: 1px solid rgba(14, 165, 233, 0.08) !important;
       }
 
       /* Bottom panel tab — inactive */
       body.theia-light #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab {
-        background: #f1f0ed !important;
+        background: transparent !important;
         color: #8890a0 !important;
-        border-right: 1px solid rgba(14, 165, 233, 0.06) !important;
+        border-right: none !important;
         border-top: none !important;
         border-bottom: 2px solid transparent !important;
-        transition: background 0.15s, color 0.15s;
+        transition: color 0.15s;
         padding: 4px 12px !important;
+        text-transform: uppercase !important;
+        font-size: 11px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.5px !important;
+        cursor: pointer !important;
+        user-select: none !important;
       }
 
       /* Bottom panel tab — active */
       body.theia-light #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab.lm-mod-current {
-        background: #fdfcfa !important;
+        background: transparent !important;
         color: #1a1a2e !important;
         border-bottom: 2px solid #0EA5E9 !important;
       }
 
       /* Bottom panel tab — hover */
       body.theia-light #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab:not(.lm-mod-current):hover {
-        background: rgba(14, 165, 233, 0.05) !important;
+        background: transparent !important;
         color: #505868 !important;
+      }
+
+      /* Prevent tab dragging cursor */
+      body.theia-light #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab .lm-TabBar-tabLabel {
+        cursor: pointer !important;
       }
 
       /* Bottom panel content area */
@@ -532,6 +612,21 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
       /* ══════════════════════════════════════════════════════
          COMMON — Both themes
          ══════════════════════════════════════════════════════ */
+
+      /* ── Bottom panel — VS Code-style common rules ── */
+
+      /* Hide close buttons on bottom panel tabs (VS Code doesn't show them) */
+      #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab .lm-TabBar-tabCloseIcon {
+        display: none !important;
+      }
+
+      /* Hide tab icon (keeps it text-only like VS Code) */
+      #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab .lm-TabBar-tabIcon::before {
+        display: none !important;
+      }
+      #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab .lm-TabBar-tabIcon {
+        display: none !important;
+      }
 
       /* Custom scrollbar */
       .ava-agent-widget ::-webkit-scrollbar,
