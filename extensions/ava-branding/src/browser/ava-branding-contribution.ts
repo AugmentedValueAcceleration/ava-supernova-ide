@@ -209,6 +209,91 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
         box-shadow: inset -3px 0 8px -3px rgba(168, 85, 247, 0.4);
       }
 
+      /* ── Bottom panel (Terminal, Output, Problems, etc.) ── */
+
+      /* Bottom panel tab bar background */
+      body.theia-dark #theia-bottom-content-panel .lm-TabBar {
+        background: #08080e !important;
+      }
+
+      /* Bottom panel tab — inactive */
+      body.theia-dark #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab {
+        background: #08080e !important;
+        color: #5c5c80 !important;
+        border-right: 1px solid rgba(168, 85, 247, 0.06) !important;
+        border-top: none !important;
+        border-bottom: 2px solid transparent !important;
+        transition: background 0.15s, color 0.15s;
+        padding: 4px 12px !important;
+      }
+
+      /* Bottom panel tab — active */
+      body.theia-dark #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab.lm-mod-current {
+        background: #0d0d14 !important;
+        color: #e0e0f0 !important;
+        border-bottom: 2px solid #A855F7 !important;
+      }
+
+      /* Bottom panel tab — hover */
+      body.theia-dark #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab:not(.lm-mod-current):hover {
+        background: rgba(168, 85, 247, 0.06) !important;
+        color: #9898b8 !important;
+      }
+
+      /* Bottom panel content area */
+      body.theia-dark #theia-bottom-content-panel .lm-BoxPanel,
+      body.theia-dark #theia-bottom-content-panel .theia-output-widget,
+      body.theia-dark #theia-bottom-content-panel .p-Widget {
+        background: #0a0a12 !important;
+      }
+
+      /* Terminal widget — slightly darker than editor for depth */
+      body.theia-dark .terminal-wrapper,
+      body.theia-dark .xterm {
+        background-color: #0a0a12 !important;
+      }
+
+      body.theia-dark .xterm-viewport {
+        background-color: #0a0a12 !important;
+      }
+
+      /* Terminal instance tabs (the powershell/bash tabs on the right) */
+      body.theia-dark .theia-terminal-side-bar {
+        background: #08080e !important;
+      }
+
+      body.theia-dark .theia-terminal-side-bar .lm-TabBar-tab {
+        background: transparent !important;
+        color: #5c5c80 !important;
+        border-left: 2px solid transparent !important;
+        transition: background 0.15s, color 0.15s;
+      }
+
+      body.theia-dark .theia-terminal-side-bar .lm-TabBar-tab.lm-mod-current {
+        background: rgba(168, 85, 247, 0.08) !important;
+        color: #c8c8e0 !important;
+        border-left: 2px solid #A855F7 !important;
+      }
+
+      body.theia-dark .theia-terminal-side-bar .lm-TabBar-tab:not(.lm-mod-current):hover {
+        background: rgba(168, 85, 247, 0.04) !important;
+        color: #9898b8 !important;
+      }
+
+      /* Panel toolbar (right side icons: +, split, trash, etc.) */
+      body.theia-dark .lm-TabBar-toolbar {
+        background: transparent !important;
+      }
+
+      body.theia-dark .lm-TabBar-toolbar .item > div {
+        color: #5c5c80 !important;
+        transition: color 0.15s;
+      }
+
+      body.theia-dark .lm-TabBar-toolbar .item > div:hover {
+        color: #A855F7 !important;
+      }
+
       /* ══════════════════════════════════════════════════════
          LIGHT THEME — Clean White & Electric Blue
          ══════════════════════════════════════════════════════ */
@@ -325,6 +410,87 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
       body.theia-light .lm-TabBar.theia-app-right .lm-TabBar-tab.lm-mod-current {
         border-right-color: #0EA5E9 !important;
         box-shadow: inset -3px 0 8px -3px rgba(14, 165, 233, 0.2);
+      }
+
+      /* ── Bottom panel (Terminal, Output, Problems, etc.) ── */
+
+      /* Bottom panel tab bar background */
+      body.theia-light #theia-bottom-content-panel .lm-TabBar {
+        background: #f1f0ed !important;
+      }
+
+      /* Bottom panel tab — inactive */
+      body.theia-light #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab {
+        background: #f1f0ed !important;
+        color: #8890a0 !important;
+        border-right: 1px solid rgba(14, 165, 233, 0.06) !important;
+        border-top: none !important;
+        border-bottom: 2px solid transparent !important;
+        transition: background 0.15s, color 0.15s;
+        padding: 4px 12px !important;
+      }
+
+      /* Bottom panel tab — active */
+      body.theia-light #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab.lm-mod-current {
+        background: #fdfcfa !important;
+        color: #1a1a2e !important;
+        border-bottom: 2px solid #0EA5E9 !important;
+      }
+
+      /* Bottom panel tab — hover */
+      body.theia-light #theia-bottom-content-panel .lm-TabBar .lm-TabBar-tab:not(.lm-mod-current):hover {
+        background: rgba(14, 165, 233, 0.05) !important;
+        color: #505868 !important;
+      }
+
+      /* Bottom panel content area */
+      body.theia-light #theia-bottom-content-panel .lm-BoxPanel,
+      body.theia-light #theia-bottom-content-panel .theia-output-widget,
+      body.theia-light #theia-bottom-content-panel .p-Widget {
+        background: #f6f5f2 !important;
+      }
+
+      /* Terminal widget */
+      body.theia-light .terminal-wrapper,
+      body.theia-light .xterm {
+        background-color: #f6f5f2 !important;
+      }
+
+      body.theia-light .xterm-viewport {
+        background-color: #f6f5f2 !important;
+      }
+
+      /* Terminal instance tabs */
+      body.theia-light .theia-terminal-side-bar {
+        background: #f1f0ed !important;
+      }
+
+      body.theia-light .theia-terminal-side-bar .lm-TabBar-tab {
+        background: transparent !important;
+        color: #8890a0 !important;
+        border-left: 2px solid transparent !important;
+        transition: background 0.15s, color 0.15s;
+      }
+
+      body.theia-light .theia-terminal-side-bar .lm-TabBar-tab.lm-mod-current {
+        background: rgba(14, 165, 233, 0.06) !important;
+        color: #1a1a2e !important;
+        border-left: 2px solid #0EA5E9 !important;
+      }
+
+      body.theia-light .theia-terminal-side-bar .lm-TabBar-tab:not(.lm-mod-current):hover {
+        background: rgba(14, 165, 233, 0.03) !important;
+        color: #505868 !important;
+      }
+
+      /* Panel toolbar icons */
+      body.theia-light .lm-TabBar-toolbar .item > div {
+        color: #8890a0 !important;
+        transition: color 0.15s;
+      }
+
+      body.theia-light .lm-TabBar-toolbar .item > div:hover {
+        color: #0EA5E9 !important;
       }
 
       /* ══════════════════════════════════════════════════════

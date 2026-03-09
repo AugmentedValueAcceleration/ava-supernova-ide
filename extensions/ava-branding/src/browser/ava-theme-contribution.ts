@@ -71,8 +71,29 @@ const AVA_DARK_CSS = `
   --theia-scrollbarSlider-activeBackground: rgba(168, 85, 247, 0.4);
 
   /* Terminal */
-  --theia-terminal-background: #0d0d14;
+  --theia-terminal-background: #0a0a12;
   --theia-terminal-foreground: #c8c8e0;
+  --theia-terminal-selectionBackground: rgba(168, 85, 247, 0.30);
+  --theia-terminalCursor-foreground: #A855F7;
+  --theia-terminalCursor-background: #0a0a12;
+
+  /* Terminal ANSI palette — purple-tinted for Ava Dark */
+  --theia-terminal-ansiBlack: #1a1a2e;
+  --theia-terminal-ansiRed: #F87171;
+  --theia-terminal-ansiGreen: #4ADE80;
+  --theia-terminal-ansiYellow: #FACC15;
+  --theia-terminal-ansiBlue: #818CF8;
+  --theia-terminal-ansiMagenta: #C084FC;
+  --theia-terminal-ansiCyan: #22D3EE;
+  --theia-terminal-ansiWhite: #c8c8e0;
+  --theia-terminal-ansiBrightBlack: #5c5c80;
+  --theia-terminal-ansiBrightRed: #FCA5A5;
+  --theia-terminal-ansiBrightGreen: #86EFAC;
+  --theia-terminal-ansiBrightYellow: #FDE68A;
+  --theia-terminal-ansiBrightBlue: #A5B4FC;
+  --theia-terminal-ansiBrightMagenta: #D8B4FE;
+  --theia-terminal-ansiBrightCyan: #67E8F9;
+  --theia-terminal-ansiBrightWhite: #f0f0ff;
 
   /* Badges */
   --theia-badge-background: #A855F7;
@@ -147,8 +168,29 @@ const AVA_LIGHT_CSS = `
   --theia-scrollbarSlider-activeBackground: rgba(14, 165, 233, 0.30);
 
   /* Terminal */
-  --theia-terminal-background: #fdfcfa;
+  --theia-terminal-background: #f6f5f2;
   --theia-terminal-foreground: #1a1a2e;
+  --theia-terminal-selectionBackground: rgba(14, 165, 233, 0.20);
+  --theia-terminalCursor-foreground: #0EA5E9;
+  --theia-terminalCursor-background: #f6f5f2;
+
+  /* Terminal ANSI palette — clean & readable for Ava Light */
+  --theia-terminal-ansiBlack: #1a1a2e;
+  --theia-terminal-ansiRed: #DC2626;
+  --theia-terminal-ansiGreen: #16A34A;
+  --theia-terminal-ansiYellow: #CA8A04;
+  --theia-terminal-ansiBlue: #4F46E5;
+  --theia-terminal-ansiMagenta: #9333EA;
+  --theia-terminal-ansiCyan: #0891B2;
+  --theia-terminal-ansiWhite: #4a4e5c;
+  --theia-terminal-ansiBrightBlack: #8890a0;
+  --theia-terminal-ansiBrightRed: #EF4444;
+  --theia-terminal-ansiBrightGreen: #22C55E;
+  --theia-terminal-ansiBrightYellow: #EAB308;
+  --theia-terminal-ansiBrightBlue: #6366F1;
+  --theia-terminal-ansiBrightMagenta: #A855F7;
+  --theia-terminal-ansiBrightCyan: #06B6D4;
+  --theia-terminal-ansiBrightWhite: #1a1a2e;
 
   /* Badges — electric blue */
   --theia-badge-background: #0EA5E9;
