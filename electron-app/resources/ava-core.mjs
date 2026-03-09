@@ -459,6 +459,75 @@ var logger = {
   }
 };
 
+// packages/core/src/agent/text-tool-parser.ts
+var TOOL_CALL_REGEX = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+var _callCounter = 0;
+function buildToolPrompt(schemas) {
+  if (schemas.length === 0) return "";
+  const toolDescriptions = schemas.map((schema) => {
+    const fn = schema.function;
+    const params = fn.parameters;
+    const required = new Set(params.required ?? []);
+    const paramLines = Object.entries(params.properties).map(([name, def]) => {
+      const p = def;
+      const type = p.type ?? "string";
+      const desc = p.description ?? "";
+      const req = required.has(name) ? " (required)" : " (optional)";
+      const enumValues = p.enum ? ` \u2014 one of: ${p.enum.join(", ")}` : "";
+      return `    - ${name}: ${type}${req} \u2014 ${desc}${enumValues}`;
+    });
+    return `### ${fn.name}
+${fn.description}
+Parameters:
+${paramLines.join("\n")}`;
+  });
+  return `## Available Tools
+
+You have access to the following tools. To use a tool, output a <tool_call> block with the tool name and arguments as JSON:
+
+<tool_call>
+{"name": "tool_name", "arguments": {"param1": "value1", "param2": "value2"}}
+</tool_call>
+
+You can make multiple tool calls in a single response. Each must be in its own <tool_call> block.
+After each tool call, you will receive the result. Use the results to continue your work.
+Always explain what you're doing before and after tool calls.
+
+${toolDescriptions.join("\n\n")}`;
+}
+function parseToolCalls(text) {
+  const toolCalls = [];
+  let match;
+  TOOL_CALL_REGEX.lastIndex = 0;
+  while ((match = TOOL_CALL_REGEX.exec(text)) !== null) {
+    const jsonStr = match[1].trim();
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const name = parsed.name;
+      const args = parsed.arguments ?? {};
+      if (typeof name === "string" && name.length > 0) {
+        toolCalls.push({
+          id: `text_tc_${++_callCounter}`,
+          type: "function",
+          function: {
+            name,
+            arguments: typeof args === "string" ? args : JSON.stringify(args)
+          }
+        });
+      }
+    } catch {
+    }
+  }
+  const cleanText = text.replace(TOOL_CALL_REGEX, "").trim();
+  return { toolCalls, cleanText };
+}
+function formatToolResult(toolName, result, success) {
+  const status = success ? "success" : "error";
+  return `<tool_result name="${toolName}" status="${status}">
+${result}
+</tool_result>`;
+}
+
 // packages/core/src/agent/agent.ts
 var Agent = class _Agent {
   provider;
@@ -475,8 +544,25 @@ var Agent = class _Agent {
     };
   }
   async run(messages, onEvent, signal) {
-    const toolSchemas = this.model.supportsToolCalls ? this.toolRegistry.getSchemas() : [];
-    logger.debug(`[agent] Starting run: model=${this.model.id} supportsToolCalls=${this.model.supportsToolCalls} toolSchemas=${toolSchemas.length}`);
+    const useNativeTools = this.model.supportsToolCalls !== false;
+    const allSchemas = this.toolRegistry.getSchemas();
+    const toolSchemas = useNativeTools ? allSchemas : [];
+    logger.debug(`[agent] Starting run: model=${this.model.id} supportsToolCalls=${useNativeTools} toolSchemas=${toolSchemas.length}`);
+    if (!useNativeTools && allSchemas.length > 0) {
+      const toolPrompt = buildToolPrompt(allSchemas);
+      const firstMsg = messages[0];
+      if (firstMsg?.role === "system") {
+        messages = [
+          { ...firstMsg, content: firstMsg.content + "\n\n" + toolPrompt },
+          ...messages.slice(1)
+        ];
+      } else {
+        messages = [
+          { role: "system", content: toolPrompt },
+          ...messages
+        ];
+      }
+    }
     const runContext = { ...this.toolContext, signal };
     let iterations = 0;
     let warningInjected = false;
@@ -519,7 +605,8 @@ var Agent = class _Agent {
           )
         });
       }
-      const sanitizedMessages = messages.map((m) => {
+      const filteredMessages = !useNativeTools ? messages.filter((m) => m.role !== "tool") : messages;
+      const sanitizedMessages = filteredMessages.map((m) => {
         let msg = m;
         if (!this.model.supportsVision && Array.isArray(msg.content)) {
           const textParts = msg.content.filter((p) => p.type === "text");
@@ -528,6 +615,10 @@ var Agent = class _Agent {
           } else if (textParts.length < msg.content.length) {
             msg = { ...msg, content: textParts.map((p) => p.text).join("\n") };
           }
+        }
+        if (!useNativeTools && msg.role === "assistant" && msg.tool_calls) {
+          const { tool_calls: _tc, ...rest } = msg;
+          msg = rest;
         }
         if (msg.role === "assistant" && "reasoning_content" in msg) {
           const aMsg = msg;
@@ -556,6 +647,17 @@ var Agent = class _Agent {
       } catch (error) {
         onEvent({ type: "error", error: error instanceof Error ? error : new Error(String(error)) });
         return messages;
+      }
+      if (!useNativeTools && assistantMessage.content) {
+        const { toolCalls: parsedCalls, cleanText } = parseToolCalls(assistantMessage.content);
+        if (parsedCalls.length > 0) {
+          logger.debug(`[agent] Parsed ${parsedCalls.length} tool calls from text output`);
+          assistantMessage = {
+            ...assistantMessage,
+            content: cleanText || null,
+            tool_calls: parsedCalls
+          };
+        }
       }
       messages = [...messages, assistantMessage];
       if (promptTokens > 0 && promptTokens > this.model.contextWindow * 0.65) {
@@ -603,7 +705,7 @@ var Agent = class _Agent {
             }
           }
         }
-        messages = await this.executeToolCall(toolCall, runContext, onEvent, messages);
+        messages = await this.executeToolCall(toolCall, runContext, onEvent, messages, useNativeTools);
       }
       if (autoCalls.length > 0) {
         if (signal?.aborted) {
@@ -654,14 +756,24 @@ var Agent = class _Agent {
             success: result.success,
             metadata: result.metadata
           });
-          messages = [
-            ...messages,
-            {
-              role: "tool",
-              tool_call_id: toolCall.id,
-              content: result.output
-            }
-          ];
+          if (useNativeTools) {
+            messages = [
+              ...messages,
+              {
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: result.output
+              }
+            ];
+          } else {
+            messages = [
+              ...messages,
+              {
+                role: "user",
+                content: formatToolResult(toolCall.function.name, result.output, result.success)
+              }
+            ];
+          }
           if (result.metadata?.base64_image) {
             messages = [
               ...messages,
@@ -757,7 +869,7 @@ var Agent = class _Agent {
     return { message, promptTokens: usage?.prompt_tokens ?? 0 };
   }
   // ── Single tool call execution (used by sequential confirmation phase) ──
-  async executeToolCall(toolCall, runContext, onEvent, messages) {
+  async executeToolCall(toolCall, runContext, onEvent, messages, useNativeTools = true) {
     onEvent({ type: "tool_call_start", toolCall });
     let parsedArgs;
     try {
@@ -783,14 +895,24 @@ var Agent = class _Agent {
       success: result.success,
       metadata: result.metadata
     });
-    messages = [
-      ...messages,
-      {
-        role: "tool",
-        tool_call_id: toolCall.id,
-        content: result.output
-      }
-    ];
+    if (useNativeTools) {
+      messages = [
+        ...messages,
+        {
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: result.output
+        }
+      ];
+    } else {
+      messages = [
+        ...messages,
+        {
+          role: "user",
+          content: formatToolResult(toolCall.function.name, result.output, result.success)
+        }
+      ];
+    }
     if (result.metadata?.base64_image) {
       messages = [
         ...messages,
@@ -2125,6 +2247,26 @@ var QwenProvider = class extends BaseProvider {
 // packages/core/src/providers/zhipu/models.ts
 var ZHIPU_MODELS = [
   {
+    id: "glm-4.7-flash",
+    name: "GLM-4.7 Flash (Free)",
+    provider: "zhipu",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  },
+  {
+    id: "glm-4.5-flash",
+    name: "GLM-4.5 Flash (Free)",
+    provider: "zhipu",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  },
+  {
     id: "glm-5",
     name: "GLM-5",
     provider: "zhipu",
@@ -2147,16 +2289,6 @@ var ZHIPU_MODELS = [
     supportsThinking: true,
     supportsVision: true,
     pricing: { inputPerMillion: 0.6, outputPerMillion: 2.2 }
-  },
-  {
-    id: "glm-4-flash",
-    name: "GLM-4 Flash (Free)",
-    provider: "zhipu",
-    contextWindow: 128e3,
-    maxOutputTokens: 4096,
-    supportsToolCalls: true,
-    supportsStreaming: true,
-    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
   }
 ];
 
@@ -2351,7 +2483,7 @@ var AnthropicProvider = class extends BaseProvider {
     const url = this.getCompletionUrl();
     const headers = this.getAuthHeaders();
     logger.debug(`[anthropic] POST ${url} | model=${request2.model}`);
-    const response = await this.fetchWithRetryPublic(url, {
+    const response = await this.fetchWithRetry(url, {
       method: "POST",
       headers,
       body: JSON.stringify(anthropicBody),
@@ -2366,7 +2498,7 @@ var AnthropicProvider = class extends BaseProvider {
     const url = this.getCompletionUrl();
     const headers = this.getAuthHeaders();
     logger.debug(`[anthropic] POST ${url} (stream) | model=${request2.model}`);
-    const response = await this.fetchWithRetryPublic(url, {
+    const response = await this.fetchWithRetry(url, {
       method: "POST",
       headers,
       body: JSON.stringify(anthropicBody),
@@ -2628,44 +2760,6 @@ var AnthropicProvider = class extends BaseProvider {
     }
     return null;
   }
-  // ── Expose base class fetchWithRetry ───────────────────────────────────
-  async fetchWithRetryPublic(url, init) {
-    let lastError;
-    for (let attempt = 0; attempt <= 3; attempt++) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6e4);
-      const originalSignal = init.signal;
-      if (originalSignal) {
-        originalSignal.addEventListener("abort", () => controller.abort());
-      }
-      try {
-        const response = await fetch(url, { ...init, signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (response.ok) return response;
-        const errorBody = await response.text();
-        lastError = new ProviderError(
-          `Anthropic API error: ${response.status} ${response.statusText}`,
-          this.name,
-          response.status,
-          errorBody
-        );
-        if (![429, 500, 502, 503].includes(response.status)) throw lastError;
-        if (attempt === 3) break;
-        await new Promise((r) => setTimeout(r, 1e3 * Math.pow(2, attempt)));
-      } catch (err) {
-        clearTimeout(timeoutId);
-        if (err instanceof ProviderError) throw err;
-        if (err instanceof DOMException && err.name === "AbortError") {
-          throw new ProviderError("Anthropic request timed out after 60s", this.name);
-        }
-        throw new ProviderError(
-          `Anthropic network error: ${err instanceof Error ? err.message : String(err)}`,
-          this.name
-        );
-      }
-    }
-    throw lastError;
-  }
 };
 function safeParse(str) {
   try {
@@ -2819,8 +2913,18 @@ var PLATFORM_MODELS = [
     pricing: { inputPerMillion: 0.6, outputPerMillion: 2.2 }
   },
   {
-    id: "glm-4-flash",
-    name: "GLM-4 Flash (Free)",
+    id: "glm-4.7-flash",
+    name: "GLM-4.7 Flash (Free)",
+    provider: "platform",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  },
+  {
+    id: "glm-4.5-flash",
+    name: "GLM-4.5 Flash (Free)",
     provider: "platform",
     contextWindow: 128e3,
     maxOutputTokens: 4096,

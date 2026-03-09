@@ -1439,10 +1439,11 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     if (!resolved) {
       const allModels = this.providerRegistry.listAllModels();
       if (allModels.length > 0) {
-        const first = allModels[0];
-        resolved = this.providerRegistry.resolveModel(`${first.provider}:${first.id}`) ?? undefined;
+        // Prefer a free model as default for new users
+        const pick = allModels.find((m: any) => m.pricing?.inputPerMillion === 0) || allModels[0];
+        resolved = this.providerRegistry.resolveModel(`${pick.provider}:${pick.id}`) ?? undefined;
         if (resolved) {
-          await this.configManager!.set('activeModel', `${first.provider}:${first.id}`);
+          await this.configManager!.set('activeModel', `${pick.provider}:${pick.id}`);
           await this.configManager!.save();
         }
       }
