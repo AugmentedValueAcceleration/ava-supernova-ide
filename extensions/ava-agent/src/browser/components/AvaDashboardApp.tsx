@@ -15,6 +15,7 @@ export interface AvaDashboardAppProps {
   onGetMemory?: () => Promise<{ global: string | null; project: string | null }>;
   onSaveMemory?: (scope: 'global' | 'project', content: string) => Promise<void>;
   onClearMemory?: (scope: 'global' | 'project') => Promise<void>;
+  onGetCurrentVersion?: () => Promise<string>;
   onCheckForUpdates?: () => Promise<{ version: string } | null>;
   onDownloadUpdate?: () => Promise<boolean>;
   onInstallUpdate?: () => Promise<void>;
@@ -448,7 +449,7 @@ function FullWidthBar() {
 
 // ── NavSidebar ──────────────────────────────────────────────────────────────
 
-function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConnect, onCheckForUpdates, updateStatus }: {
+function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConnect, onCheckForUpdates, updateStatus, version }: {
   currentPage: DashboardPage;
   onNavigate: (page: DashboardPage) => void;
   mode: 'platform' | 'byok';
@@ -457,6 +458,7 @@ function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConn
   onConnect: () => void;
   onCheckForUpdates?: () => void;
   updateStatus?: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error';
+  version?: string;
 }) {
   const visibleItems = mode === 'byok'
     ? NAV_ITEMS.filter(item => !item.platformOnly)
@@ -467,6 +469,7 @@ function NavSidebar({ currentPage, onNavigate, mode, email, onDisconnect, onConn
       <div style={s.sidebarLogo}>
         <span style={s.logoText}>Ava</span>
         <span style={s.logoSub}>Supernova</span>
+        {version && <span style={{ fontSize: '9px', opacity: 0.4, marginTop: '2px' }}>v{version}</span>}
       </div>
 
       <div style={s.navList}>
@@ -1541,8 +1544,14 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
   const [page, setPage] = React.useState<DashboardPage | 'connect'>(
     !hasAccess ? 'connect' : hasPlatform ? 'overview' : 'settings',
   );
+  const [currentVersion, setCurrentVersion] = React.useState<string>('');
   const [updateAvailable, setUpdateAvailable] = React.useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = React.useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error'>('idle');
+
+  // Fetch current version on mount
+  React.useEffect(() => {
+    props.onGetCurrentVersion?.().then(v => setCurrentVersion(v)).catch(() => {});
+  }, []);
 
   const doCheckForUpdates = React.useCallback(() => {
     if (!props.onCheckForUpdates) return;
@@ -1632,6 +1641,7 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
         onConnect={() => setPage('connect')}
         onCheckForUpdates={doCheckForUpdates}
         updateStatus={updateStatus}
+        version={currentVersion}
       />
       <div style={s.main}>
         {/* Update status bar */}

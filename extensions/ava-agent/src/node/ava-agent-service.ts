@@ -547,6 +547,27 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
 
   // ── Auto-update ────────────────────────────────────────────────────────────
 
+  private readCurrentVersion(): string {
+    const fs = require('fs');
+    const path = require('path');
+    const candidates = [
+      path.join(__dirname, '..', '..', 'package.json'),
+      process.resourcesPath && path.join(process.resourcesPath, 'app.asar', 'package.json'),
+      process.resourcesPath && path.join(process.resourcesPath, 'app', 'package.json'),
+    ].filter(Boolean) as string[];
+    for (const p of candidates) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (pkg.version) return pkg.version;
+      } catch { /* try next */ }
+    }
+    return '0.0.0';
+  }
+
+  async getCurrentVersion(): Promise<string> {
+    return this.readCurrentVersion();
+  }
+
   async checkForUpdates(): Promise<{ version: string } | null> {
     try {
       const res = await fetch(
@@ -557,22 +578,7 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       const data = await res.json() as { tag_name?: string };
       const remoteVersion = data.tag_name?.replace(/^v/, '') || '';
 
-      // Read version from package.json at runtime using fs (not require,
-      // which is __webpack_require__ in the bundle and can't resolve runtime paths)
-      const fs = require('fs');
-      const path = require('path');
-      let currentVersion = '0.0.0';
-      const candidates = [
-        path.join(__dirname, '..', '..', 'package.json'),             // webpack output dir
-        process.resourcesPath && path.join(process.resourcesPath, 'app.asar', 'package.json'),  // packaged
-        process.resourcesPath && path.join(process.resourcesPath, 'app', 'package.json'),       // unpacked
-      ].filter(Boolean) as string[];
-      for (const p of candidates) {
-        try {
-          const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
-          if (pkg.version) { currentVersion = pkg.version; break; }
-        } catch { /* try next */ }
-      }
+      const currentVersion = this.readCurrentVersion();
       console.log(`[ava-update] current=${currentVersion} remote=${remoteVersion}`);
 
       if (remoteVersion && remoteVersion !== currentVersion && this.isNewer(remoteVersion, currentVersion)) {
@@ -621,24 +627,32 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
   }
 
   async installUpdate(): Promise<void> {
-    if (!this._pendingInstallerPath) return;
+    if (!this._pendingInstallerPath) {
+      console.error('[ava-update] No pending installer path');
+      return;
+    }
     try {
       const { spawn } = require('child_process');
-      // Launch NSIS installer silently and quit the app
-      spawn(this._pendingInstallerPath, ['/S'], {
+      const installerPath = this._pendingInstallerPath;
+      console.log(`[ava-update] Launching installer: ${installerPath}`);
+
+      // Launch NSIS installer in detached mode. It will wait for the app to
+      // release file locks before replacing files. Using /S for silent install.
+      const child = spawn(installerPath, ['/S'], {
         detached: true,
         stdio: 'ignore',
-      }).unref();
+        windowsHide: true,
+      });
+      child.unref();
 
-      // Quit the app so the installer can replace files
+      // Give the installer a moment to start, then force-quit the app so it
+      // can replace files. process.exit() is the only reliable way to quit
+      // from a Theia backend extension (require('electron').app is not
+      // accessible from this process).
       setTimeout(() => {
-        try {
-          const { app } = require('electron');
-          app.quit();
-        } catch {
-          process.exit(0);
-        }
-      }, 500);
+        console.log('[ava-update] Exiting for installer...');
+        process.exit(0);
+      }, 1000);
     } catch (err: any) {
       console.error('[ava-update] Install failed:', err.message);
     }

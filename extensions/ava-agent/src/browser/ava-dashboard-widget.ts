@@ -64,6 +64,7 @@ export class AvaDashboardWidget extends ReactWidget {
       onGetMemory: () => this.service.getMemory(),
       onSaveMemory: (scope: 'global' | 'project', content: string) => this.service.saveMemory(scope, content),
       onClearMemory: (scope: 'global' | 'project') => this.service.clearMemory(scope),
+      onGetCurrentVersion: () => this.service.getCurrentVersion(),
       onCheckForUpdates: () => this.service.checkForUpdates(),
       onDownloadUpdate: () => this.service.downloadUpdate(),
       onInstallUpdate: () => this.service.installUpdate(),

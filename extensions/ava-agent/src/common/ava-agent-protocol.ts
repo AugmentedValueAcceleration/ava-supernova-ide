@@ -349,6 +349,9 @@ export interface IAvaAgentService {
 
   // ── Auto-update ──────────────────────────────────────────────────────────
 
+  /** Return the currently running IDE version. */
+  getCurrentVersion(): Promise<string>;
+
   /** Check for available updates. */
   checkForUpdates(): Promise<{ version: string } | null>;
 
