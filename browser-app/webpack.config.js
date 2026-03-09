@@ -15,6 +15,13 @@ configs[0].module.rules.push({
     loader: require.resolve('@theia/application-manager/lib/expose-loader')
 }); */
 
+// @vscode/windows-ca-certs is a native addon — mark as external so webpack
+// doesn't try to bundle it. Node.js will require() it at runtime.
+nodeConfig.config.externals = {
+    ...nodeConfig.config.externals,
+    '@vscode/windows-ca-certs': 'commonjs @vscode/windows-ca-certs',
+};
+
 module.exports = [
     ...configs,
     nodeConfig.config
