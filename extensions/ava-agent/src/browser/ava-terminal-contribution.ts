@@ -1,5 +1,6 @@
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
-import { FrontendApplicationContribution } from '@theia/core/lib/browser';
+import { FrontendApplicationContribution, FrontendApplication } from '@theia/core/lib/browser';
+import { FrontendApplicationStateService } from '@theia/core/lib/browser/frontend-application-state';
 import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
 import { TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
@@ -12,6 +13,7 @@ export class AvaTerminalContribution implements FrontendApplicationContribution 
   @inject(AvaAgentClient) protected readonly client: AvaAgentClient;
   @inject(TerminalService) protected readonly terminalService: TerminalService;
   @inject(PreferenceService) protected readonly preferenceService: PreferenceService;
+  @inject(FrontendApplicationStateService) protected readonly stateService: FrontendApplicationStateService;
 
   private avaTerminal: TerminalWidget | undefined;
 
@@ -25,9 +27,28 @@ export class AvaTerminalContribution implements FrontendApplicationContribution 
     this.client.onToolCallEnd(info => this.handleToolCallEnd(info));
   }
 
-  async onStart(): Promise<void> {
-    // Terminal is created on-demand when Ava runs a bash command,
-    // or the user can open one via the command palette.
+  async onStart(app: FrontendApplication): Promise<void> {
+    // Wait for app to be fully ready (after branding cleans up stale terminals)
+    // then open a default Terminal + Ava CLI terminal — matching VS Code UX.
+    this.stateService.reachedState('ready').then(async () => {
+      // Small delay to ensure branding has closed stale terminals first
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      try {
+        // 1. Open a regular interactive terminal (like VS Code's default)
+        const userTerminal = await this.terminalService.newTerminal({
+          title: 'Terminal',
+        });
+        await userTerminal.start();
+
+        // 2. Open the Ava CLI pseudo-terminal for tool output
+        await this.getOrCreateTerminal();
+
+        // Show the bottom panel with Terminal tab active
+        app.shell.bottomPanel.show();
+        userTerminal.activate();
+      } catch { /* Terminal service may not be ready */ }
+    });
   }
 
   private async getOrCreateTerminal(): Promise<TerminalWidget> {
