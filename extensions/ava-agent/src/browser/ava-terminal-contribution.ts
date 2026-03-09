@@ -29,25 +29,36 @@ export class AvaTerminalContribution implements FrontendApplicationContribution 
 
   async onStart(app: FrontendApplication): Promise<void> {
     // Wait for app to be fully ready, then wait for branding to clean up stale
-    // terminals (it runs on the same 'ready' event). Use 1.5s delay to ensure
+    // terminals (it runs on the same 'ready' event). Use 2s delay to ensure
     // branding cleanup has completed before we create fresh terminals.
     this.stateService.reachedState('ready').then(async () => {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      try {
-        // 1. Open a regular interactive terminal (like VS Code's default)
-        const userTerminal = await this.terminalService.newTerminal({
-          title: 'Terminal',
-        });
-        await userTerminal.start();
-
-        // 2. Open the Ava CLI pseudo-terminal for tool output
-        await this.getOrCreateTerminal();
-
-        // Activate the user terminal (this also reveals the bottom panel)
-        userTerminal.activate();
-      } catch { /* Terminal service may not be ready */ }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      this.openDefaultTerminals(app);
     });
+  }
+
+  private async openDefaultTerminals(app: FrontendApplication): Promise<void> {
+    try {
+      console.log('[Ava] Opening default terminals...');
+
+      // 1. Open a regular interactive terminal (like VS Code's default)
+      const userTerminal = await this.terminalService.newTerminal({
+        title: 'Terminal',
+      });
+      console.log('[Ava] User terminal created, starting...');
+      await userTerminal.start();
+      console.log('[Ava] User terminal started');
+
+      // 2. Open the Ava CLI pseudo-terminal for tool output
+      await this.getOrCreateTerminal();
+      console.log('[Ava] Ava terminal created');
+
+      // Activate the user terminal (this also reveals the bottom panel)
+      userTerminal.activate();
+      console.log('[Ava] Terminals ready');
+    } catch (err) {
+      console.error('[Ava] Failed to open default terminals:', err);
+    }
   }
 
   private async getOrCreateTerminal(): Promise<TerminalWidget> {
