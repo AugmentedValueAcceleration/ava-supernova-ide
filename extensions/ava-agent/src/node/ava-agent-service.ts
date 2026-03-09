@@ -169,13 +169,28 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
     this.memoryManager = new core.MemoryManager({ globalDir: core.AVA_HOME, projectRoot, sync: memSync });
 
-    // Resolve active model
-    const activeModelId = config.activeModel || '';
-    const resolved = this.providerRegistry.resolveModel(activeModelId);
+    // Resolve active model or auto-select first available
+    let resolved = config.activeModel
+      ? this.providerRegistry.resolveModel(config.activeModel)
+      : undefined;
+
+    if (!resolved) {
+      const allModels = this.providerRegistry.listAllModels();
+      if (allModels.length > 0) {
+        // Prefer a free model as default for new users
+        const pick = allModels.find((m: any) => m.pricing?.inputPerMillion === 0) || allModels[0];
+        resolved = this.providerRegistry.resolveModel(`${pick.provider}:${pick.id}`) ?? undefined;
+        if (resolved) {
+          await this.configManager!.set('activeModel', `${pick.provider}:${pick.id}`);
+          await this.configManager!.save();
+        }
+      }
+    }
+
     if (resolved) {
       await this.setupAgent(core, resolved.provider, resolved.model);
-    } else if (activeModelId) {
-      console.warn(`[ava-agent] Failed to resolve model "${activeModelId}" — check provider registration`);
+    } else if (config.activeModel) {
+      console.warn(`[ava-agent] Failed to resolve model "${config.activeModel}" — check provider registration`);
     }
 
     // Auto-restore last conversation for this project (non-blocking)
