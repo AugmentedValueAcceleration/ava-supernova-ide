@@ -29,15 +29,13 @@ export class AvaDashboardContribution
     });
   }
 
-  async onStart(app: FrontendApplication): Promise<void> {
-    // Open dashboard in right sidebar on every launch.
-    // initializeLayout only runs when no saved layout exists;
-    // this ensures the panel appears even with a previously-saved layout.
-    await this.openView({ activate: false, reveal: false });
+  async onStart(_app: FrontendApplication): Promise<void> {
+    // Dashboard starts collapsed. User can toggle with Ctrl+Shift+D.
   }
 
-  async initializeLayout(app: FrontendApplication): Promise<void> {
-    await this.openView({ activate: false, reveal: true });
+  async initializeLayout(_app: FrontendApplication): Promise<void> {
+    // Register the widget in the right sidebar but keep it collapsed.
+    await this.openView({ activate: false, reveal: false });
   }
 
   registerCommands(commands: CommandRegistry): void {

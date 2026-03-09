@@ -26,16 +26,8 @@ export class AvaTerminalContribution implements FrontendApplicationContribution 
   }
 
   async onStart(): Promise<void> {
-    // Open a real interactive terminal in the bottom panel on startup (like VS Code)
-    setTimeout(async () => {
-      try {
-        const terminal = await this.terminalService.newTerminal({});
-        await terminal.start();
-        this.terminalService.open(terminal);
-      } catch {
-        // Terminal will be available via command palette as fallback
-      }
-    }, 1500);
+    // Terminal is created on-demand when Ava runs a bash command,
+    // or the user can open one via the command palette.
   }
 
   private async getOrCreateTerminal(): Promise<TerminalWidget> {
