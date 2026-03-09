@@ -1,5 +1,7 @@
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution, FrontendApplication } from '@theia/core/lib/browser';
+import { FrontendApplicationStateService } from '@theia/core/lib/browser/frontend-application-state';
+import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
 import { MenuModelRegistry } from '@theia/core/lib/common';
 import { AvaOnboardingDialogFactory, type AvaOnboardingDialogFactory as AvaOnboardingDialogFactoryType } from './ava-onboarding-types';
@@ -12,10 +14,32 @@ export class AvaBrandingContribution implements FrontendApplicationContribution 
   @inject(StorageService) protected readonly storageService: StorageService;
   @inject(AvaOnboardingDialogFactory) protected readonly createOnboardingDialog: AvaOnboardingDialogFactoryType;
   @inject(MenuModelRegistry) protected readonly menuRegistry: MenuModelRegistry;
+  @inject(FrontendApplicationStateService) protected readonly stateService: FrontendApplicationStateService;
+  @inject(PreferenceService) protected readonly preferenceService: PreferenceService;
 
   async onStart(app: FrontendApplication): Promise<void> {
     this.applyBranding();
     this.hideEditorLayoutMenu();
+
+    // Collapse the bottom panel on startup — Theia's layout persistence
+    // restores it from the previous session, but we want it closed by default.
+    this.stateService.reachedState('ready').then(async () => {
+      app.shell.bottomPanel.hide();
+
+      // The welcome page checkbox sets workbench.startupEditor to 'none',
+      // but Theia's layout persistence restores the tab anyway. Close it
+      // explicitly if the user opted out.
+      await this.preferenceService.ready;
+      const startupEditor = this.preferenceService.get<string>('workbench.startupEditor', 'welcomePage');
+      if (startupEditor === 'none') {
+        const welcomeWidget = app.shell.getWidgets('main').find(
+          w => w.id === 'getting.started.widget'
+        );
+        if (welcomeWidget) {
+          welcomeWidget.close();
+        }
+      }
+    });
 
     const completed = await this.storageService.getData<boolean>(ONBOARDING_KEY, false);
     if (!completed) {
