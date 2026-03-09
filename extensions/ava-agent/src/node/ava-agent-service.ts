@@ -651,25 +651,22 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       const installerPath = this._pendingInstallerPath;
       console.log(`[ava-update] Launching installer: ${installerPath}`);
 
-      // Launch NSIS installer in detached mode. It will wait for the app to
-      // release file locks before replacing files. Using /S for silent install.
+      // Launch NSIS installer in detached mode with /S for silent install.
+      // The installer waits for file locks to be released, so the frontend
+      // must close the Electron window (triggering app.quit()) after this
+      // RPC call returns. We do NOT call process.exit() here because that
+      // only kills the backend process — the Electron main process would
+      // still hold file locks, preventing the installer from replacing files.
       const child = spawn(installerPath, ['/S'], {
         detached: true,
         stdio: 'ignore',
         windowsHide: true,
       });
       child.unref();
-
-      // Give the installer a moment to start, then force-quit the app so it
-      // can replace files. process.exit() is the only reliable way to quit
-      // from a Theia backend extension (require('electron').app is not
-      // accessible from this process).
-      setTimeout(() => {
-        console.log('[ava-update] Exiting for installer...');
-        process.exit(0);
-      }, 1000);
+      console.log('[ava-update] Installer launched. Frontend should close the app now.');
     } catch (err: any) {
       console.error('[ava-update] Install failed:', err.message);
+      throw err;
     }
   }
 

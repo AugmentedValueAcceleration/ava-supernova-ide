@@ -1697,7 +1697,14 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
               Update downloaded. Ready to install.
             </span>
             <button
-              onClick={() => { props.onInstallUpdate?.(); }}
+              onClick={() => {
+                props.onInstallUpdate?.().then(() => {
+                  // Close the Electron window so file locks are released
+                  // and the NSIS installer can replace the app files.
+                  // Electron's app.quit() fires when the last window closes.
+                  setTimeout(() => window.close(), 500);
+                }).catch(() => {});
+              }}
               style={{
                 padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
                 background: '#22C55E', color: '#fff', border: 'none',
