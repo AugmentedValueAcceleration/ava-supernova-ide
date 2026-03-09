@@ -1045,6 +1045,7 @@ function BillingPage({ account }: { account: AvaAccountInfo }) {
             href="https://ava-supernova.com/dashboard/billing"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => { e.preventDefault(); window.open('https://ava-supernova.com/dashboard/billing', '_blank'); }}
             style={{ ...s.btnSecondary, display: 'inline-block', textDecoration: 'none' }}
           >
             Manage Subscription &rarr;
@@ -1643,6 +1644,15 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
             </span>
             <a
               href={`https://github.com/AugmentedValueAcceleration/ava-supernova-ide/releases/download/v${updateAvailable}/Ava.Supernova.Setup.${updateAvailable}.exe`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                e.preventDefault();
+                window.open(
+                  `https://github.com/AugmentedValueAcceleration/ava-supernova-ide/releases/download/v${updateAvailable}/Ava.Supernova.Setup.${updateAvailable}.exe`,
+                  '_blank'
+                );
+              }}
               style={{
                 padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
                 background: 'var(--ava-accent, #A855F7)', color: '#fff', textDecoration: 'none',
