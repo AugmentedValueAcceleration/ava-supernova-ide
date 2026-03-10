@@ -37,25 +37,21 @@ export class AvaTerminalContribution implements FrontendApplicationContribution 
     });
   }
 
-  private async openDefaultTerminals(app: FrontendApplication): Promise<void> {
+  private async openDefaultTerminals(_app: FrontendApplication): Promise<void> {
     try {
-      console.log('[Ava] Opening default terminals...');
-
       // 1. Open a regular interactive terminal (like VS Code's default)
       const userTerminal = await this.terminalService.newTerminal({
         title: 'Terminal',
       });
-      console.log('[Ava] User terminal created, starting...');
       await userTerminal.start();
-      console.log('[Ava] User terminal started');
+      this.terminalService.open(userTerminal, { mode: 'reveal' });
 
       // 2. Open the Ava CLI pseudo-terminal for tool output
-      await this.getOrCreateTerminal();
-      console.log('[Ava] Ava terminal created');
+      const avaTerminal = await this.getOrCreateTerminal();
+      this.terminalService.open(avaTerminal, { mode: 'reveal' });
 
-      // Activate the user terminal (this also reveals the bottom panel)
-      userTerminal.activate();
-      console.log('[Ava] Terminals ready');
+      // Activate the user terminal so it's the selected tab
+      this.terminalService.open(userTerminal, { mode: 'activate' });
     } catch (err) {
       console.error('[Ava] Failed to open default terminals:', err);
     }
