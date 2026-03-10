@@ -2295,6 +2295,16 @@ var ZHIPU_MODELS = [
     pricing: { inputPerMillion: 1, outputPerMillion: 3.2 }
   },
   {
+    id: "glm-4.7-flash",
+    name: "GLM-4.7 Flash",
+    provider: "zhipu",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0.07, outputPerMillion: 0.4 }
+  },
+  {
     id: "glm-4.5-flash",
     name: "GLM-4.5 Flash (Free)",
     provider: "zhipu",
@@ -2761,6 +2771,16 @@ function safeParse(str) {
 // packages/core/src/providers/ava-free/models.ts
 var AVA_FREE_MODELS = [
   {
+    id: "glm-4.7-flash",
+    name: "GLM-4.7 Flash (Free)",
+    provider: "ava-free",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  },
+  {
     id: "glm-4.5-flash",
     name: "GLM-4.5 Flash (Free)",
     provider: "ava-free",
@@ -2773,6 +2793,7 @@ var AVA_FREE_MODELS = [
 ];
 
 // packages/core/src/providers/ava-free/index.ts
+var ALLOWED_FREE_MODELS = /* @__PURE__ */ new Set(["glm-4.5-flash", "glm-4.7-flash"]);
 var AvaFreeProvider = class extends BaseProvider {
   name = "ava-free";
   displayName = "Ava Free";
@@ -2792,7 +2813,8 @@ var AvaFreeProvider = class extends BaseProvider {
     return AVA_FREE_MODELS;
   }
   transformRequest(request2) {
-    return { ...request2, model: "glm-4.5-flash" };
+    const model = ALLOWED_FREE_MODELS.has(request2.model) ? request2.model : "glm-4.7-flash";
+    return { ...request2, model };
   }
   // Zhipu sometimes returns tool_call arguments as objects instead of strings
   normalizeResponse(raw) {
