@@ -18,6 +18,7 @@ export interface AvaModelInfo {
   name: string;         // e.g. "DeepSeek V3"
   provider: string;     // e.g. "deepseek"
   supportsVision?: boolean;
+  available: boolean;   // true if provider is configured (user has API key)
 }
 
 export interface AvaInitState {

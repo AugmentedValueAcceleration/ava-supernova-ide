@@ -566,6 +566,12 @@ function ModelSelector({ models, activeModel, onSwitch }: {
 
   const activeModelName = models.find(m => m.id === activeModel)?.name ?? 'Select model';
 
+  // Sort: available first, then alphabetical by provider
+  const sorted = [...models].sort((a, b) => {
+    if (a.available !== b.available) return a.available ? -1 : 1;
+    return a.provider.localeCompare(b.provider);
+  });
+
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
@@ -595,21 +601,23 @@ function ModelSelector({ models, activeModel, onSwitch }: {
           position: 'absolute',
           top: 'calc(100% + 4px)',
           right: 0,
-          minWidth: '180px',
+          minWidth: '220px',
+          maxHeight: '400px',
+          overflowY: 'auto',
           background: 'var(--theia-input-background)',
           border: '1px solid var(--theia-input-border)',
           borderRadius: '6px',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
           zIndex: 1000,
-          overflow: 'hidden',
         }}>
           <div style={{ padding: '6px 10px', fontSize: '10px', opacity: 0.4, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
             Models
           </div>
-          {models.map(m => (
+          {sorted.map(m => (
             <button
               key={m.id}
-              onClick={() => { onSwitch(m.id); setOpen(false); }}
+              onClick={() => { if (m.available) { onSwitch(m.id); setOpen(false); } }}
+              title={m.available ? m.name : `Add ${m.provider} API key to unlock`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -617,24 +625,25 @@ function ModelSelector({ models, activeModel, onSwitch }: {
                 width: '100%',
                 padding: '6px 10px',
                 border: 'none',
-                background: m.id === activeModel ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                background: m.available && m.id === activeModel ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
                 color: 'var(--theia-input-foreground)',
                 fontSize: '12px',
-                cursor: 'pointer',
+                cursor: m.available ? 'pointer' : 'default',
                 textAlign: 'left',
+                opacity: m.available ? 1 : 0.35,
               }}
               onMouseEnter={e => {
-                if (m.id !== activeModel) e.currentTarget.style.background = 'rgba(168, 85, 247, 0.08)';
+                if (m.available && m.id !== activeModel) e.currentTarget.style.background = 'rgba(168, 85, 247, 0.08)';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = m.id === activeModel ? 'rgba(168, 85, 247, 0.15)' : 'transparent';
+                e.currentTarget.style.background = m.available && m.id === activeModel ? 'rgba(168, 85, 247, 0.15)' : 'transparent';
               }}
             >
               <span style={{
                 width: '5px', height: '5px', borderRadius: '50%', flexShrink: 0,
-                background: m.id === activeModel ? '#A855F7' : 'rgba(255,255,255,0.15)',
+                background: m.available && m.id === activeModel ? '#A855F7' : m.available ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
               }} />
-              <span style={{ fontWeight: m.id === activeModel ? 600 : 400 }}>{m.name}</span>
+              <span style={{ fontWeight: m.available && m.id === activeModel ? 600 : 400 }}>{m.name}</span>
               <span style={{ fontSize: '10px', opacity: 0.35, marginLeft: 'auto' }}>{m.provider}</span>
             </button>
           ))}

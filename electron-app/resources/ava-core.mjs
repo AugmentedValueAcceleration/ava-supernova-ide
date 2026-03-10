@@ -2824,6 +2824,15 @@ var AvaFreeProvider = class extends BaseProvider {
 };
 
 // packages/core/src/providers/provider-registry.ts
+var ALL_MODELS = {
+  "ava-free": AVA_FREE_MODELS,
+  deepseek: DEEPSEEK_MODELS,
+  kimi: KIMI_MODELS,
+  qwen: QWEN_MODELS,
+  zhipu: ZHIPU_MODELS,
+  mistral: MISTRAL_MODELS,
+  anthropic: ANTHROPIC_MODELS
+};
 var BUILT_IN_PROVIDERS = {
   deepseek: (config) => new DeepSeekProvider(config),
   kimi: (config) => new KimiProvider(config),
@@ -2871,6 +2880,28 @@ var ProviderRegistry = class {
       models.push(...provider.listModels());
     }
     return models;
+  }
+  /**
+   * List every model Ava supports, regardless of whether the provider is configured.
+   * Each entry includes `available: true` if the provider is registered (user has API key),
+   * or `available: false` if not.
+   */
+  listAllPossibleModels() {
+    const results = [];
+    for (const [providerName, models] of Object.entries(ALL_MODELS)) {
+      const isAvailable = this.providers.has(providerName);
+      for (const m of models) {
+        results.push({ ...m, available: isAvailable });
+      }
+    }
+    for (const [name, provider] of this.providers) {
+      if (!(name in ALL_MODELS)) {
+        for (const m of provider.listModels()) {
+          results.push({ ...m, available: true });
+        }
+      }
+    }
+    return results;
   }
 };
 

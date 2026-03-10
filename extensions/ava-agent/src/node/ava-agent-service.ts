@@ -205,10 +205,11 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
       this.checkProviderHealth().catch(() => {});
     }, 5 * 60 * 1000);
 
-    const models = this.providerRegistry.listAllModels().map((m: any) => ({
+    const models = this.providerRegistry.listAllPossibleModels().map((m: any) => ({
       id: `${m.provider}:${m.id}`,
       name: m.name,
       provider: m.provider,
+      available: m.available,
       ...(m.supportsVision ? { supportsVision: true } : {}),
     }));
 
@@ -815,10 +816,11 @@ Start-Process -FilePath '${appExePath.replace(/'/g, "''")}'
     };
 
     const models = this.providerRegistry
-      ? this.providerRegistry.listAllModels().map((m: any) => ({
+      ? this.providerRegistry.listAllPossibleModels().map((m: any) => ({
           id: `${m.provider}:${m.id}`,
           name: m.name,
           provider: m.provider,
+          available: m.available,
           ...(m.supportsVision ? { supportsVision: true } : {}),
         }))
       : [];
@@ -1588,10 +1590,11 @@ Start-Process -FilePath '${appExePath.replace(/'/g, "''")}'
     }
 
     // Build refreshed state
-    const models = this.providerRegistry.listAllModels().map((m: any) => ({
+    const models = this.providerRegistry.listAllPossibleModels().map((m: any) => ({
       id: `${m.provider}:${m.id}`,
       name: m.name,
       provider: m.provider,
+      available: m.available,
       ...(m.supportsVision ? { supportsVision: true } : {}),
     }));
 
