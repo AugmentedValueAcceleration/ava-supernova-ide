@@ -2758,6 +2758,71 @@ function safeParse(str) {
   }
 }
 
+// packages/core/src/providers/ava-free/models.ts
+var AVA_FREE_MODELS = [
+  {
+    id: "glm-4.5-flash",
+    name: "GLM-4.5 Flash (Free)",
+    provider: "ava-free",
+    contextWindow: 128e3,
+    maxOutputTokens: 4096,
+    supportsToolCalls: true,
+    supportsStreaming: true,
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }
+  }
+];
+
+// packages/core/src/providers/ava-free/index.ts
+var AvaFreeProvider = class extends BaseProvider {
+  name = "ava-free";
+  displayName = "Ava Free";
+  constructor() {
+    super({ apiKey: "" });
+  }
+  getDefaultBaseUrl() {
+    return "https://ava-supernova.com/api/v1/free";
+  }
+  getCompletionUrl() {
+    return `${this.baseUrl}/chat`;
+  }
+  getAuthHeaders() {
+    return { "Content-Type": "application/json" };
+  }
+  listModels() {
+    return AVA_FREE_MODELS;
+  }
+  transformRequest(request2) {
+    return { ...request2, model: "glm-4.5-flash" };
+  }
+  // Zhipu sometimes returns tool_call arguments as objects instead of strings
+  normalizeResponse(raw) {
+    const response = raw;
+    for (const choice of response.choices) {
+      if (choice.message.tool_calls) {
+        for (const tc of choice.message.tool_calls) {
+          if (typeof tc.function.arguments !== "string") {
+            tc.function.arguments = JSON.stringify(tc.function.arguments);
+          }
+        }
+      }
+    }
+    return response;
+  }
+  normalizeStreamChunk(raw) {
+    const chunk = raw;
+    for (const choice of chunk.choices) {
+      if (choice.delta.tool_calls) {
+        for (const tc of choice.delta.tool_calls) {
+          if (tc.function?.arguments && typeof tc.function.arguments !== "string") {
+            tc.function.arguments = JSON.stringify(tc.function.arguments);
+          }
+        }
+      }
+    }
+    return chunk;
+  }
+};
+
 // packages/core/src/providers/provider-registry.ts
 var BUILT_IN_PROVIDERS = {
   deepseek: (config) => new DeepSeekProvider(config),
@@ -2769,6 +2834,9 @@ var BUILT_IN_PROVIDERS = {
 };
 var ProviderRegistry = class {
   providers = /* @__PURE__ */ new Map();
+  constructor() {
+    this.providers.set("ava-free", new AvaFreeProvider());
+  }
   register(name, config) {
     const factory = BUILT_IN_PROVIDERS[name];
     if (!factory) {
@@ -11241,6 +11309,7 @@ export {
   AVA_HOME,
   Agent,
   AvaError,
+  AvaFreeProvider,
   BaseProvider,
   BrowserTool,
   CONFIG_PATH,
