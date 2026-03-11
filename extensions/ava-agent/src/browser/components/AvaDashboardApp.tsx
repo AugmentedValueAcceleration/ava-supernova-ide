@@ -1,6 +1,6 @@
 import * as React from '@theia/core/shared/react';
 import type { DashboardState } from '../ava-agent-client';
-import type { AvaDashboardSettings, AvaAccountInfo, AvaUsageSummary } from '../../common/ava-agent-protocol';
+import type { AvaDashboardSettings, AvaAccountInfo, AvaUsageSummary, AvaMemoryEntryUI } from '../../common/ava-agent-protocol';
 
 // ── Props ───────────────────────────────────────────────────────────────────
 
@@ -12,9 +12,12 @@ export interface AvaDashboardAppProps {
   onConnectAccount: (key: string) => void;
   onDisconnectAccount: () => void;
   onGetUsageSummary?: () => Promise<AvaUsageSummary>;
-  onGetMemory?: () => Promise<{ global: string | null; project: string | null }>;
+  onGetMemory?: () => Promise<{ global: AvaMemoryEntryUI[]; project: AvaMemoryEntryUI[] }>;
   onSaveMemory?: (scope: 'global' | 'project', content: string) => Promise<void>;
   onClearMemory?: (scope: 'global' | 'project') => Promise<void>;
+  onArchiveMemory?: (scope: 'global' | 'project', id: string) => Promise<void>;
+  onRestoreMemory?: (scope: 'global' | 'project', id: string) => Promise<void>;
+  onDeleteMemory?: (scope: 'global' | 'project', id: string) => Promise<void>;
   onGetCurrentVersion?: () => Promise<string>;
   onCheckForUpdates?: () => Promise<{ version: string } | null>;
   onDownloadUpdate?: () => Promise<boolean>;
@@ -1378,58 +1381,108 @@ function UsageSummaryCard({ onGetUsageSummary }: { onGetUsageSummary: () => Prom
 
 // ── Memory page ─────────────────────────────────────────────────────────────
 
-function MemoryPage({ onGetMemory, onSaveMemory, onClearMemory }: {
-  onGetMemory: () => Promise<{ global: string | null; project: string | null }>;
+const MEM_CATEGORY_COLORS: Record<string, string> = {
+  pattern: '#3b82f6',
+  preference: '#8b5cf6',
+  architecture: '#06b6d4',
+  'bug-fix': '#ef4444',
+  convention: '#f59e0b',
+  'tool-config': '#10b981',
+  decision: '#f97316',
+  person: '#ec4899',
+  general: '#6b7280',
+};
+
+function memTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days > 30) return `${Math.floor(days / 30)}mo ago`;
+  if (days > 0) return `${days}d ago`;
+  const hours = Math.floor(diff / 3600000);
+  if (hours > 0) return `${hours}h ago`;
+  return 'just now';
+}
+
+function MemoryPage({ onGetMemory, onSaveMemory, onClearMemory, onArchiveMemory, onRestoreMemory, onDeleteMemory }: {
+  onGetMemory: () => Promise<{ global: AvaMemoryEntryUI[]; project: AvaMemoryEntryUI[] }>;
   onSaveMemory: (scope: 'global' | 'project', content: string) => Promise<void>;
   onClearMemory: (scope: 'global' | 'project') => Promise<void>;
+  onArchiveMemory?: (scope: 'global' | 'project', id: string) => Promise<void>;
+  onRestoreMemory?: (scope: 'global' | 'project', id: string) => Promise<void>;
+  onDeleteMemory?: (scope: 'global' | 'project', id: string) => Promise<void>;
 }) {
   const [activeTab, setActiveTab] = React.useState<'global' | 'project'>('global');
-  const [globalMemory, setGlobalMemory] = React.useState<string | null>(null);
-  const [projectMemory, setProjectMemory] = React.useState<string | null>(null);
-  const [editing, setEditing] = React.useState(false);
-  const [editContent, setEditContent] = React.useState('');
+  const [viewMode, setViewMode] = React.useState<'active' | 'archived'>('active');
+  const [globalEntries, setGlobalEntries] = React.useState<AvaMemoryEntryUI[]>([]);
+  const [projectEntries, setProjectEntries] = React.useState<AvaMemoryEntryUI[]>([]);
+  const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
   const [confirmClear, setConfirmClear] = React.useState(false);
+  const [adding, setAdding] = React.useState(false);
+  const [newContent, setNewContent] = React.useState('');
   const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => {
+  const refresh = React.useCallback(() => {
     onGetMemory().then(({ global, project }) => {
-      setGlobalMemory(global);
-      setProjectMemory(project);
+      setGlobalEntries(global);
+      setProjectEntries(project);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  }, [onGetMemory]);
 
-  const currentContent = activeTab === 'global' ? globalMemory : projectMemory;
+  React.useEffect(() => { refresh(); }, []);
 
-  const handleEdit = () => {
-    setEditContent(currentContent ?? '');
-    setEditing(true);
+  const entries = activeTab === 'global' ? globalEntries : projectEntries;
+  const activeEntries = React.useMemo(() => entries.filter(e => !e.archived), [entries]);
+  const archivedEntries = React.useMemo(() => entries.filter(e => e.archived), [entries]);
+  const displayEntries = viewMode === 'active' ? activeEntries : archivedEntries;
+
+  const handleTabSwitch = (tab: 'global' | 'project') => {
+    setActiveTab(tab);
+    setViewMode('active');
+    setConfirmDelete(null);
+    setConfirmClear(false);
+    setAdding(false);
   };
 
-  const handleSave = async () => {
-    await onSaveMemory(activeTab, editContent);
-    if (activeTab === 'global') setGlobalMemory(editContent);
-    else setProjectMemory(editContent);
-    setEditing(false);
+  const handleAdd = async () => {
+    if (newContent.trim()) {
+      await onSaveMemory(activeTab, newContent.trim());
+      setNewContent('');
+      setAdding(false);
+      refresh();
+    }
   };
 
   const handleClear = async () => {
     if (confirmClear) {
       await onClearMemory(activeTab);
-      if (activeTab === 'global') setGlobalMemory(null);
-      else setProjectMemory(null);
       setConfirmClear(false);
-      setEditing(false);
+      refresh();
     } else {
       setConfirmClear(true);
       setTimeout(() => setConfirmClear(false), 3000);
     }
   };
 
-  const handleTabSwitch = (tab: 'global' | 'project') => {
-    setActiveTab(tab);
-    setEditing(false);
-    setConfirmClear(false);
+  const handleArchive = async (id: string) => {
+    await onArchiveMemory?.(activeTab, id);
+    refresh();
+  };
+
+  const handleRestore = async (id: string) => {
+    await onRestoreMemory?.(activeTab, id);
+    refresh();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirmDelete === id) {
+      await onDeleteMemory?.(activeTab, id);
+      setConfirmDelete(null);
+      refresh();
+    } else {
+      setConfirmDelete(id);
+      setTimeout(() => setConfirmDelete(null), 3000);
+    }
   };
 
   if (loading) {
@@ -1439,8 +1492,8 @@ function MemoryPage({ onGetMemory, onSaveMemory, onClearMemory }: {
   return (
     <div>
       <div style={{ marginBottom: '16px' }}>
-        <div style={s.pageTitle}>Memory</div>
-        <div style={s.pageSubtitle}>Persistent knowledge that Ava remembers across sessions</div>
+        <div style={s.pageTitle}>Memory v2</div>
+        <div style={s.pageSubtitle}>Persistent knowledge that Ava remembers across sessions — structured entries with categories, archiving, and recall stats</div>
       </div>
 
       {/* Tabs */}
@@ -1462,25 +1515,56 @@ function MemoryPage({ onGetMemory, onSaveMemory, onClearMemory }: {
             }}
           >
             {tab === 'global' ? 'Global' : 'Project'}
+            <span style={{ marginLeft: '4px', opacity: 0.5 }}>
+              ({(tab === 'global' ? globalEntries : projectEntries).filter(e => !e.archived).length})
+            </span>
           </button>
         ))}
       </div>
 
-      {/* Path hint */}
-      <div style={{ fontSize: '10px', opacity: 0.4, marginBottom: '10px' }}>
-        {activeTab === 'global' ? '~/.ava/memory.md' : '.ava/memory.md'}
+      {/* View mode toggle + Add button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+        {(['active', 'archived'] as const).map(mode => (
+          <button
+            key={mode}
+            onClick={() => setViewMode(mode)}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '10px',
+              fontFamily: 'inherit',
+              background: viewMode === mode ? 'var(--theia-button-background)' : 'transparent',
+              color: viewMode === mode ? 'var(--theia-button-foreground)' : 'var(--theia-foreground, #e0e0e0)',
+              opacity: viewMode === mode ? 1 : 0.5,
+            }}
+          >
+            {mode === 'active' ? `Active (${activeEntries.length})` : `Archived (${archivedEntries.length})`}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        {viewMode === 'active' && (
+          <button
+            onClick={() => setAdding(true)}
+            style={{ padding: '3px 10px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '10px', fontFamily: 'inherit', background: 'transparent', color: 'var(--theia-foreground)', opacity: 0.5 }}
+          >
+            + Add
+          </button>
+        )}
       </div>
 
-      {/* Content */}
-      <div style={s.section}>
-        {editing ? (
+      {/* Add new entry form */}
+      {adding && (
+        <div style={{ ...s.section, marginBottom: '12px' }}>
           <textarea
             autoFocus
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
+            value={newContent}
+            onChange={e => setNewContent(e.target.value)}
+            placeholder="Enter memory content..."
             style={{
               width: '100%',
-              minHeight: '240px',
+              minHeight: '80px',
               padding: '8px',
               border: '1px solid var(--theia-input-border, rgba(255,255,255,0.1))',
               borderRadius: '4px',
@@ -1489,47 +1573,127 @@ function MemoryPage({ onGetMemory, onSaveMemory, onClearMemory }: {
               fontFamily: 'var(--theia-editor-font-family, monospace)',
               fontSize: '12px',
               lineHeight: '1.5',
-              resize: 'vertical' as const,
+              resize: 'none' as const,
               outline: 'none',
               boxSizing: 'border-box' as const,
             }}
           />
-        ) : currentContent ? (
-          <pre style={{
-            margin: 0,
-            whiteSpace: 'pre-wrap' as const,
-            fontFamily: 'var(--theia-editor-font-family, monospace)',
-            fontSize: '12px',
-            lineHeight: '1.5',
-            opacity: 0.9,
-          }}>{currentContent}</pre>
-        ) : (
-          <div style={{ padding: '24px', textAlign: 'center', opacity: 0.5, fontSize: '12px' }}>
-            {activeTab === 'global'
-              ? 'No global memories yet. Ava will save memories as you work together.'
-              : 'No project memories yet. Ava will save project-specific patterns here.'}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <button style={s.btnSmall} onClick={handleAdd}>Save</button>
+            <button style={s.btnSecondary} onClick={() => { setAdding(false); setNewContent(''); }}>Cancel</button>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Path hint */}
+      <div style={{ fontSize: '10px', opacity: 0.4, marginBottom: '10px' }}>
+        {activeTab === 'global' ? '~/.ava/memory.json' : '.ava/memory.json'}
       </div>
 
-      {/* Actions */}
-      <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-        {editing ? (
+      {/* Entries list */}
+      {displayEntries.length === 0 ? (
+        <div style={{ padding: '24px', textAlign: 'center', opacity: 0.5, fontSize: '12px' }}>
+          {viewMode === 'archived'
+            ? 'No archived memories.'
+            : activeTab === 'global'
+              ? 'No global memories yet. Ava saves memories as you work together.'
+              : 'No project memories yet. Ava saves project-specific patterns here.'}
+        </div>
+      ) : (
+        displayEntries.map(entry => (
+          <DashboardMemoryCard
+            key={entry.id}
+            entry={entry}
+            isArchived={viewMode === 'archived'}
+            isConfirmDelete={confirmDelete === entry.id}
+            onArchive={() => handleArchive(entry.id)}
+            onRestore={() => handleRestore(entry.id)}
+            onDelete={() => handleDelete(entry.id)}
+          />
+        ))
+      )}
+
+      {/* Clear All */}
+      {activeEntries.length > 0 && viewMode === 'active' && (
+        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+          <button
+            style={confirmClear ? { ...s.btnSmall, background: 'var(--theia-errorForeground, #e53935)' } : s.btnSecondary}
+            onClick={handleClear}
+          >
+            {confirmClear ? 'Confirm Clear All' : 'Clear All'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DashboardMemoryCard({ entry, isArchived, isConfirmDelete, onArchive, onRestore, onDelete }: {
+  entry: AvaMemoryEntryUI;
+  isArchived: boolean;
+  isConfirmDelete: boolean;
+  onArchive: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const categoryColor = MEM_CATEGORY_COLORS[entry.category] ?? '#6b7280';
+  const isLong = entry.content.length > 120;
+
+  return (
+    <div style={{ ...s.section, marginBottom: '8px', padding: '10px 14px' }}>
+      {/* Top row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+        <span style={{
+          display: 'inline-block',
+          padding: '0 6px',
+          borderRadius: '4px',
+          fontSize: '10px',
+          fontWeight: 500,
+          backgroundColor: categoryColor + '22',
+          color: categoryColor,
+        }}>{entry.category}</span>
+        {entry.branch && (
+          <span style={{
+            display: 'inline-block',
+            padding: '0 6px',
+            borderRadius: '4px',
+            fontSize: '10px',
+            fontWeight: 500,
+            backgroundColor: '#8b5cf622',
+            color: '#8b5cf6',
+          }}>{entry.branch}</span>
+        )}
+        {entry.tags?.map(tag => (
+          <span key={tag} style={{ fontSize: '10px', opacity: 0.5 }}>#{tag}</span>
+        ))}
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: '10px', opacity: 0.4 }} title={entry.updatedAt}>{memTimeAgo(entry.updatedAt)}</span>
+      </div>
+
+      {/* Content */}
+      <div style={{ fontSize: '12px', lineHeight: '1.5', opacity: 0.9, cursor: isLong ? 'pointer' : 'default' }} onClick={() => isLong && setExpanded(!expanded)}>
+        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' as const, fontFamily: 'var(--theia-editor-font-family, monospace)', fontSize: '12px' }}>
+          {isLong && !expanded ? entry.content.slice(0, 120) + '...' : entry.content}
+        </pre>
+      </div>
+
+      {/* Stats + Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
+        <span style={{ fontSize: '10px', opacity: 0.3 }}>recalled {entry.recallCount}x</span>
+        {entry.lastRecalledAt && (
+          <span style={{ fontSize: '10px', opacity: 0.3 }}>last: {memTimeAgo(entry.lastRecalledAt)}</span>
+        )}
+        <div style={{ flex: 1 }} />
+        {isArchived ? (
           <>
-            <button style={s.btnSmall} onClick={handleSave}>Save</button>
-            <button style={s.btnSecondary} onClick={() => { setEditing(false); setConfirmClear(false); }}>Cancel</button>
+            <button onClick={onRestore} style={{ padding: '2px 6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '10px', fontFamily: 'inherit', background: 'transparent', color: 'var(--theia-foreground)', opacity: 0.4 }}>Restore</button>
+            <button onClick={onDelete} style={{ padding: '2px 6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '10px', fontFamily: 'inherit', background: isConfirmDelete ? 'var(--theia-errorForeground, #e53935)' : 'transparent', color: isConfirmDelete ? '#fff' : 'var(--theia-foreground)', opacity: isConfirmDelete ? 1 : 0.4 }}>{isConfirmDelete ? 'Confirm' : 'Delete'}</button>
           </>
         ) : (
           <>
-            <button style={s.btnSmall} onClick={handleEdit}>Edit</button>
-            {currentContent && (
-              <button
-                style={confirmClear ? { ...s.btnSmall, background: 'var(--theia-errorForeground, #e53935)' } : s.btnSecondary}
-                onClick={handleClear}
-              >
-                {confirmClear ? 'Confirm Clear' : 'Clear'}
-              </button>
-            )}
+            <button onClick={onArchive} style={{ padding: '2px 6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '10px', fontFamily: 'inherit', background: 'transparent', color: 'var(--theia-foreground)', opacity: 0.4 }}>Archive</button>
+            <button onClick={onDelete} style={{ padding: '2px 6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '10px', fontFamily: 'inherit', background: isConfirmDelete ? 'var(--theia-errorForeground, #e53935)' : 'transparent', color: isConfirmDelete ? '#fff' : 'var(--theia-foreground)', opacity: isConfirmDelete ? 1 : 0.4 }}>{isConfirmDelete ? 'Confirm' : 'Delete'}</button>
           </>
         )}
       </div>
@@ -2528,7 +2692,7 @@ export function AvaDashboardApp(props: AvaDashboardAppProps) {
         return <SettingsPage state={state} onSaveProviderKey={onSaveProviderKey} onRemoveProviderKey={onRemoveProviderKey} onSavePreferences={onSavePreferences} onGetUsageSummary={props.onGetUsageSummary} />;
       case 'memory':
         if (props.onGetMemory && props.onSaveMemory && props.onClearMemory) {
-          return <MemoryPage onGetMemory={props.onGetMemory} onSaveMemory={props.onSaveMemory} onClearMemory={props.onClearMemory} />;
+          return <MemoryPage onGetMemory={props.onGetMemory} onSaveMemory={props.onSaveMemory} onClearMemory={props.onClearMemory} onArchiveMemory={props.onArchiveMemory} onRestoreMemory={props.onRestoreMemory} onDeleteMemory={props.onDeleteMemory} />;
         }
         return <SettingsPage state={state} onSaveProviderKey={onSaveProviderKey} onRemoveProviderKey={onRemoveProviderKey} onSavePreferences={onSavePreferences} onGetUsageSummary={props.onGetUsageSummary} />;
       case 'billing':

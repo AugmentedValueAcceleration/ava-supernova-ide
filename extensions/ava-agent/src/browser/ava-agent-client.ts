@@ -15,6 +15,7 @@ import {
   AvaToolCallMetadata,
   AvaHistoryEntry,
   AvaReplayMessage,
+  AvaMemoryEntryUI,
 } from '../common/ava-agent-protocol';
 
 // ── UI state types ──────────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ export interface ChatState {
   view: ChatView;
   history: HistoryState;
   replay: ReplayState | null;
-  memory: { global: string | null; project: string | null };
+  memory: { global: AvaMemoryEntryUI[]; project: AvaMemoryEntryUI[] };
   /** Set to true after loading a conversation from history — cleared after scroll */
   justLoaded?: boolean;
 }
@@ -103,7 +104,7 @@ const initialState: ChatState = {
   view: 'chat',
   history: { ...initialHistoryState },
   replay: null,
-  memory: { global: null, project: null },
+  memory: { global: [], project: [] },
 };
 
 // ── Dashboard state ──────────────────────────────────────────────────────────
@@ -567,7 +568,7 @@ export class AvaAgentClient implements IAvaAgentClient {
   /** Set by the widget to handle memory change notifications. */
   onMemoryChangedCallback?: () => void;
 
-  setMemoryState(memory: { global: string | null; project: string | null }): void {
+  setMemoryState(memory: { global: AvaMemoryEntryUI[]; project: AvaMemoryEntryUI[] }): void {
     this.update({ memory });
   }
 

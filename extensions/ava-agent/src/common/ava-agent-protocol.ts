@@ -107,6 +107,23 @@ export interface AvaDashboardState {
   activeModel: string | null;
 }
 
+// ── Memory entry types ──────────────────────────────────────────────────────
+
+/** Structured memory entry for UI display (mirrors @ava/core MemoryEntry). */
+export interface AvaMemoryEntryUI {
+  id: string;
+  category: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  lastRecalledAt: string | null;
+  recallCount: number;
+  tags?: string[];
+  archived?: boolean;
+  archivedAt?: string | null;
+  branch?: string | null;
+}
+
 // ── Attachment types ─────────────────────────────────────────────────────────
 
 export interface AvaAttachment {
@@ -339,14 +356,23 @@ export interface IAvaAgentService {
 
   // ── Memory management ──────────────────────────────────────────────────
 
-  /** Get current memory content for both scopes. */
-  getMemory(): Promise<{ global: string | null; project: string | null }>;
+  /** Get structured memory entries for both scopes. */
+  getMemory(): Promise<{ global: AvaMemoryEntryUI[]; project: AvaMemoryEntryUI[] }>;
 
-  /** Save memory for a given scope. */
+  /** Save a new memory entry for a given scope. */
   saveMemory(scope: 'global' | 'project', content: string): Promise<void>;
 
-  /** Clear memory for a given scope. */
+  /** Clear all memory entries for a given scope. */
   clearMemory(scope: 'global' | 'project'): Promise<void>;
+
+  /** Archive a single memory entry. */
+  archiveMemory(scope: 'global' | 'project', id: string): Promise<void>;
+
+  /** Restore a single archived memory entry. */
+  restoreMemory(scope: 'global' | 'project', id: string): Promise<void>;
+
+  /** Permanently delete a single memory entry. */
+  deleteMemoryEntry(scope: 'global' | 'project', id: string): Promise<void>;
 
   // ── Auto-update ──────────────────────────────────────────────────────────
 

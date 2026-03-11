@@ -530,15 +530,15 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
 
   // ── Memory management ────────────────────────────────────────────────────────
 
-  async getMemory(): Promise<{ global: string | null; project: string | null }> {
+  async getMemory(): Promise<{ global: any[]; project: any[] }> {
     if (!this.memoryManager) {
-      return { global: null, project: null };
+      return { global: [], project: [] };
     }
-    const [global, project] = await Promise.all([
-      this.memoryManager.loadGlobalMemory(),
-      this.memoryManager.loadProjectMemory(),
+    const [globalEntries, projectEntries] = await Promise.all([
+      this.memoryManager.getEntries('global'),
+      this.memoryManager.getEntries('project'),
     ]);
-    return { global, project };
+    return { global: globalEntries || [], project: projectEntries || [] };
   }
 
   async saveMemory(scope: 'global' | 'project', content: string): Promise<void> {
@@ -558,6 +558,24 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     } else {
       await this.memoryManager.saveProjectMemory('');
     }
+    this.client?.notifyMemoryChanged(scope);
+  }
+
+  async archiveMemory(scope: 'global' | 'project', id: string): Promise<void> {
+    if (!this.memoryManager) return;
+    await this.memoryManager.archiveEntry(scope, id);
+    this.client?.notifyMemoryChanged(scope);
+  }
+
+  async restoreMemory(scope: 'global' | 'project', id: string): Promise<void> {
+    if (!this.memoryManager) return;
+    await this.memoryManager.restoreEntry(scope, id);
+    this.client?.notifyMemoryChanged(scope);
+  }
+
+  async deleteMemoryEntry(scope: 'global' | 'project', id: string): Promise<void> {
+    if (!this.memoryManager) return;
+    await this.memoryManager.deleteEntry(scope, id);
     this.client?.notifyMemoryChanged(scope);
   }
 

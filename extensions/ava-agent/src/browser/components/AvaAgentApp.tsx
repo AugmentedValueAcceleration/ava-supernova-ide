@@ -66,6 +66,9 @@ export interface AvaAgentAppProps {
   onShowMemory?: () => void;
   onSaveMemory?: (scope: 'global' | 'project', content: string) => void;
   onClearMemory?: (scope: 'global' | 'project') => void;
+  onArchiveMemory?: (scope: 'global' | 'project', id: string) => void;
+  onRestoreMemory?: (scope: 'global' | 'project', id: string) => void;
+  onDeleteMemory?: (scope: 'global' | 'project', id: string) => void;
   // Documentation
   onShowDocs?: () => void;
 }
@@ -727,7 +730,7 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
     onOpenDashboard, onShowHistory, onSearchHistory, onResumeConversation, onDeleteConversation,
     onRenameConversation, onPinConversation, onExportConversation, onImportSession,
     onStartReplay, onReplayStep, onReplayJump, onBackToChat,
-    onShowMemory, onSaveMemory, onClearMemory, onShowDocs } = props;
+    onShowMemory, onSaveMemory, onClearMemory, onArchiveMemory, onRestoreMemory, onDeleteMemory, onShowDocs } = props;
   const [input, setInput] = React.useState('');
   const [mode, setMode] = React.useState<AvaMode>('code');
   const [attachments, setAttachments] = React.useState<AvaAttachment[]>([]);
@@ -982,10 +985,13 @@ export function AvaAgentApp(props: AvaAgentAppProps) {
       {/* Memory view */}
       {state.view === 'memory' && onSaveMemory && onClearMemory && onBackToChat && (
         <AvaMemoryBrowser
-          globalMemory={state.memory.global}
-          projectMemory={state.memory.project}
+          globalEntries={state.memory.global}
+          projectEntries={state.memory.project}
           onSave={onSaveMemory}
           onClear={onClearMemory}
+          onArchive={onArchiveMemory ?? (() => {})}
+          onRestore={onRestoreMemory ?? (() => {})}
+          onDelete={onDeleteMemory ?? (() => {})}
           onBack={onBackToChat}
         />
       )}

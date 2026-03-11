@@ -267,6 +267,21 @@ export class AvaAgentWidget extends ReactWidget {
         const mem = await this.service.getMemory();
         this.client.setMemoryState(mem);
       },
+      onArchiveMemory: async (scope: 'global' | 'project', id: string) => {
+        await this.service.archiveMemory(scope, id);
+        const mem = await this.service.getMemory();
+        this.client.setMemoryState(mem);
+      },
+      onRestoreMemory: async (scope: 'global' | 'project', id: string) => {
+        await this.service.restoreMemory(scope, id);
+        const mem = await this.service.getMemory();
+        this.client.setMemoryState(mem);
+      },
+      onDeleteMemory: async (scope: 'global' | 'project', id: string) => {
+        await this.service.deleteMemoryEntry(scope, id);
+        const mem = await this.service.getMemory();
+        this.client.setMemoryState(mem);
+      },
     });
   }
 
