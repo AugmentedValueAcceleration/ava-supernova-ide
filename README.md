@@ -6,7 +6,9 @@ Standalone AI coding IDE built on [Eclipse Theia](https://theia-ide.org/) with A
 
 ## Features
 
-- **Full Ava agent** — 24 tools, 15 models, 7 providers, persistent memory, security scanning
+- **Full Ava agent** — 26 tools, 15 models, 7 providers, smart memory v2, security scanning
+- **Smart memory v2** — Structured entries, TF-IDF retrieval, branch scoping, auto-archival, credential blocking
+- **Mid-task interjection** — Type while Ava is working to add context, corrections, or redirect — true collaborative flow
 - **2 free models** — GLM-4.7 Flash and GLM-4.5 Flash work instantly with zero setup
 - **VS Code extension compatibility** — Install extensions from Open VSX
 - **Monaco editor** — Same editor engine as VS Code
