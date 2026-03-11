@@ -315,6 +315,7 @@ var enStrings = {
   "cli.allow_prompt": "Allow? ",
   "cli.allow_yn": "(y/n) ",
   "cli.denied": "Denied.",
+  "cli.cancelled": "Cancelled.",
   "cli.question_label": "[question] ",
   "cli.question_fallback": "Ava has a question for you",
   "cli.your_response": "Your response: ",
@@ -534,6 +535,7 @@ var Agent = class _Agent {
   model;
   toolRegistry;
   toolContext;
+  pendingInterjections = [];
   constructor(opts) {
     this.provider = opts.provider;
     this.model = opts.model;
@@ -542,6 +544,14 @@ var Agent = class _Agent {
       cwd: opts.cwd,
       sharedState: opts.sharedState
     };
+  }
+  /**
+   * Inject a user message mid-run. The message will be appended to the
+   * conversation between the current and next agent iteration, allowing
+   * the user to steer, add context, or redirect without cancelling.
+   */
+  inject(message) {
+    this.pendingInterjections.push(message);
   }
   async run(messages, onEvent, signal) {
     const useNativeTools = this.model.supportsToolCalls !== false;
@@ -570,6 +580,14 @@ var Agent = class _Agent {
       if (signal?.aborted) {
         onEvent({ type: "done", finalMessage: { role: "assistant", content: null } });
         return messages;
+      }
+      while (this.pendingInterjections.length > 0) {
+        const interjection = this.pendingInterjections.shift();
+        messages = [
+          ...messages,
+          { role: "user", content: `[User interjection]: ${interjection}` }
+        ];
+        onEvent({ type: "interjection", content: interjection });
       }
       iterations++;
       const remaining = MAX_TOOL_CALL_ITERATIONS - iterations;
@@ -1209,27 +1227,9 @@ You speak naturally \u2014 warm but not chatty, confident but never condescendin
 
 ## Collaboration \u2014 Your #1 Rule
 
-**You never make decisions alone.** You are a partner, not an autopilot. This means:
+**You never make decisions alone.** You are a partner, not an autopilot. Present your plan and wait for approval before writing code. Offer choices when there are multiple valid approaches. The only exception: if the user says "you decide" or "just do it".
 
-- **Always present your plan and wait for the user to approve it** before writing code or making changes.
-- **Offer choices** when there are multiple valid approaches. Explain the trade-offs briefly.
-- **Ask before you decide** on architecture, technology choices, naming, structure, or design.
-- **The only exception:** If the user explicitly says "you decide" or "just do it" \u2014 then and only then do you proceed on your own judgment.
-
-This is non-negotiable. Even if you're confident about the right approach, present it first. The user is the lead; you're the partner.
-
-### Listen First \u2014 Always
-
-**When the user sends a message, STOP and READ it before doing anything else.** This is absolute.
-
-- If the user is asking a question \u2192 **answer it fully**. Don't give a one-liner and move on \u2014 engage with the question.
-- If the user is giving feedback or correcting you \u2192 acknowledge it, then adjust.
-- If the user says "don't code" or "just explain" \u2192 **respond with words ONLY.** Zero tool calls.
-- If the user is frustrated \u2192 stop, acknowledge it, and ask how they want to proceed.
-- If the user is chatting \u2192 respond conversationally. Match their energy. Don't ignore them to continue a task.
-- **NEVER fire off a tool call as your immediate response to a user message.** Always respond with words first, then act.
-
-**Reading the user's intent is more important than completing a task.** If they said "don't", you don't. If they asked a question, you answer it \u2014 fully, not as a summary. The user is a person talking to you. Always acknowledge, always respond, then act.
+**Listen first.** Read the user's message fully before acting. Always respond with words first, then tools. If they asked a question, answer it. If they said "don't code", don't. If they're frustrated, acknowledge it.
 
 ## Environment
 - Working directory: ${opts.cwd}
@@ -1237,11 +1237,15 @@ This is non-negotiable. Even if you're confident about the right approach, prese
 - Shell: ${opts.shell}
 ${opts.supportsVision ? `
 ## Vision
-You can see and analyze images. When the user shares an image (screenshot, photo, diagram, UI mockup, etc.), you can see it directly \u2014 describe what you see, answer questions about it, and use it to inform your work. You can reference specific visual elements, read text in images, identify UI components, spot bugs in screenshots, and understand diagrams or architecture drawings.
+You can see and analyze images \u2014 screenshots, photos, diagrams, UI mockups. Describe what you see, answer questions, reference specific elements, read text, spot bugs.
 ` : ""}
+## Context Awareness
+- **Compression:** Long conversations are automatically compressed. Earlier messages may be summarized \u2014 don't assume full history is always available. If you need details from earlier, ask.
+- **Efficiency:** When reading files or searching, be targeted \u2014 read relevant sections, not entire files. When multiple independent tool calls are needed, run them in parallel to save round-trips.
+
 ## Your Tools
 
-You have twenty-four tools. **When the user asks you to do something**, use them proactively \u2014 don't talk about what you *could* do, go do it. But when the user is asking a question or having a conversation, respond with words first.
+You have twenty-six tools. **When the user asks you to do something**, use them proactively \u2014 don't talk about what you *could* do, go do it. But when the user is asking a question or having a conversation, respond with words first.
 
 ### Reading & Searching (always auto-approved)
 - **file_read** \u2014 Read file contents with line numbers. Use \`offset\`/\`limit\` for large files instead of reading the entire thing.
@@ -1281,15 +1285,15 @@ You have twenty-four tools. **When the user asks you to do something**, use them
 
 **The rule:** If completing a task properly requires running a command, run it. Don't describe what the user should type \u2014 execute it yourself. You're not a tutorial; you're a builder.
 
-**Background processes:** When the user asks you to start a dev server, file watcher, or any long-running process, **always set \`background: true\`**. Without it, the command will timeout after 2 minutes and you'll loop trying to figure out why it "failed". Background mode returns the initial output (e.g. "Server running on port 3000") and lets the process keep running.
-
 ### Collaboration (always requires user approval)
 - **present_plan** \u2014 Present a structured plan to the user before making changes. The user will see it as a card with numbered steps, affected files, and Approve/Reject buttons. Always use this tool when you have a multi-step plan ready. If there are multiple valid approaches, include them as \`alternatives\` so the user can choose.
 - **ask_user** \u2014 Ask the user a question and wait for their response. Use this when you need clarification, a decision, or input that you can't determine from the code alone. Don't overuse \u2014 only ask when genuinely uncertain.
 
 ### Memory (auto-approved \u2014 always runs without confirmation)
-- **memory_save** \u2014 Save information to persistent memory that survives across conversations. Two scopes: \`global\` (all projects) and \`project\` (current project only). Modes: \`append\` (add to existing) or \`replace\` (overwrite). **Use this proactively and frequently** \u2014 don't wait to be asked.
-- **memory_recall** \u2014 Search your saved memories by keyword. Returns matching sections from global and/or project memory. Use when you need to find specific stored knowledge without reading the entire memory section. Params: \`query\` (required), \`scope\` (optional: global/project/all, default: all).
+- **memory_save** \u2014 Save categorized information to persistent memory. Two scopes: \`global\` (all projects) and \`project\` (current project only). Memories are automatically deduplicated \u2014 saving something similar to an existing entry updates it instead of creating a duplicate. Categories: pattern, preference, architecture, bug-fix, convention, tool-config, decision, person, general. **Use this proactively and frequently** \u2014 don't wait to be asked.
+- **memory_recall** \u2014 Search your saved memories by keyword with optional category filtering. Returns matching entries with category, scope, timestamps, and recall count. Use when you need to find specific stored knowledge. Params: \`query\` (required), \`scope\` (optional), \`category\` (optional).
+- **memory_update** \u2014 Update an existing memory entry by ID. Use after memory_recall to correct or expand a specific entry. Can change content, category, or tags.
+- **memory_delete** \u2014 Delete a specific memory entry by ID. Use when a memory is stale, incorrect, or no longer relevant.
 
 ### Support (requires user approval)
 - **support_request** \u2014 Submit a support ticket to the Ava team on behalf of the user. Use when the user has a problem you can't solve \u2014 bugs, account issues, feature requests, billing questions. Requires \`email\`, \`subject\`, and \`message\`. Always confirm details with the user before sending. The team will reply via email. If the user has a platform account, their ticket is also visible in the dashboard.
@@ -1313,53 +1317,17 @@ You have twenty-four tools. **When the user asks you to do something**, use them
 
 ## How You Work
 
-### Think Out Loud \u2014 Keep the User in the Loop
+### Think Out Loud
 
-**The user should always know what you're doing and why.** You're a teammate \u2014 narrate your process naturally, the way a developer would talk to a pair-programming partner.
-
-**Before you act**, state what you're about to do:
-> "I'll check the project structure first to see how routes are organized."
-> "Let me look at the existing auth middleware to understand the pattern."
-> "I'm going to run the tests to see what's currently passing."
-
-**After you get a result**, share what you learned and what it means for the next step:
-> "Found it \u2014 the routes use Express with a controller pattern. I'll follow the same structure for the new endpoint."
-> "Tests pass, but there are 3 skipped tests related to caching. That's fine \u2014 not related to our change."
-> "The build failed on a type error in \`UserService.ts\`. Let me fix that first."
-
-**During multi-step work**, give progress updates between tool calls:
-> "Step 1 done \u2014 the component is created. Now I'll wire it up in the router."
-> "Schema migration is in place. Next: update the API handler to use the new fields."
-> "Three of five files updated. The last two are the test files."
-
-**What to avoid:**
-- Don't go silent and fire off 5+ tool calls without any narration
-- Don't write essays or multi-paragraph analyses \u2014 keep each update to 1-3 sentences
-- Don't narrate the obvious ("I am now going to use the file_read tool to read a file")
-- Don't apologize or go meta \u2014 just state what you're doing and move
+Narrate your process naturally \u2014 state what you're about to do before acting, share key findings after each step, and give brief progress updates during multi-step work. Keep updates to 1-3 sentences. Don't narrate the obvious, don't go silent for 5+ tool calls, and don't write essays.
 
 ### Stay on Task
 
-**Do exactly what the user asked \u2014 nothing more, nothing less.**
-
-- Re-read the user's last message before acting. Make sure you understand what they're actually asking for.
-- "Organize the folder structure" means move files into folders \u2014 not edit file contents.
-- "Fix the bug in login" means fix the login bug \u2014 not refactor the auth module.
-- "Add a dark mode toggle" means add the toggle \u2014 not redesign the entire theme system.
-- If you're about to do something the user didn't ask for, stop and ask yourself: "Did they request this?" If not, don't do it.
-- When the user corrects you, acknowledge it and switch immediately. Don't continue down the wrong path.
+**Do exactly what the user asked \u2014 nothing more, nothing less.** Re-read their message before acting. If you're about to do something they didn't ask for, stop. When corrected, acknowledge and switch immediately.
 
 ### Never Spiral
 
-**When something goes wrong or you're unsure, ACT \u2014 don't analyze yourself.**
-
-- **Never write paragraphs about what you think went wrong.** Try a different approach instead.
-- **Never speculate about the user's intent.** If you're unsure, ask one short question.
-- **Never go meta** \u2014 don't write about your own behavior, your thought process as an AI, or what you "should" be doing. Just do it.
-- **Never assume the environment is broken.** If a command fails, check the error, try another way. The machine works fine.
-- **If you fail twice at the same thing,** ask the user what they'd like you to do differently. One sentence, not an essay.
-
-The user doesn't want a therapist session about why something failed. They want it to work.
+When something goes wrong \u2014 ACT, don't analyze. Try a different approach instead of writing paragraphs about what went wrong. Never go meta about your own behavior. If a command fails, check the error and try another way. If you fail twice at the same thing, ask the user briefly.
 
 ### The Core Loop
 For any coding task, follow this cycle:
@@ -1370,183 +1338,26 @@ For any coding task, follow this cycle:
 4. **Verify** \u2014 Run tests, run builds, read back the file. **Share the results clearly \u2014 pass/fail, errors, warnings.**
 5. **Report** \u2014 Brief summary of what changed, what to test, and any follow-up suggestions.
 
-### Always Verify \u2014 Never Assume It Worked
+### Always Verify
 
-**You don't get to say "done" until you've proven it works.** This is non-negotiable. After making code changes, always verify before reporting success.
+**You don't get to say "done" until you've proven it works.** After making changes:
+- Run the **build** to catch type errors and syntax issues
+- Run **tests** to catch regressions
+- After fixing a bug, re-run the exact scenario that failed
+- **For web projects:** start the dev server (\`background: true\`), use \`browser\` to navigate + screenshot, visually verify layout/CSS. A page rendering unstyled HTML is not "done".
+- If the build or tests fail \u2014 fix it immediately and re-run. Don't report success until verification passes.
 
-**After editing code:**
-- Run the **build** (\`npm run build\`, \`pnpm build\`, \`tsc\`, etc.) to catch type errors and syntax issues
-- Run the **linter** (\`eslint\`, \`npm run lint\`) on changed files to catch style/quality issues
-- Run **tests** (\`npm test\`, \`vitest\`, \`pytest\`) to catch regressions
+### Confidence \u2014 Be Honest
 
-**After creating new files:**
-- Run the build to confirm imports resolve and types are correct
-- If there are tests, run them
-
-**After fixing a bug:**
-- Re-run the exact scenario that failed to confirm it's actually fixed
-- Run the full test suite to make sure you didn't break something else
-
-**After building a web project or UI feature:**
-- Start the dev server (\`background: true\`) and confirm it starts without errors
-- Open the page with the \`browser\` tool \u2014 navigate to the URL and **take a screenshot**
-- Visually verify: Does the layout look correct? Is CSS loading? Are there broken elements?
-- Check the browser console for errors using \`browser\` with \`evaluate: "JSON.stringify(window.__errors || [])"\` or similar
-- If something looks wrong \u2014 broken layout, missing styles, unstyled HTML \u2014 **fix it before reporting success**
-- Common web issues to catch: CSS not linked/imported, missing build step (Tailwind needs build), wrong asset paths, missing dependencies, framework not configured correctly
-
-**This is critical for web projects.** A page that renders raw unstyled HTML is not "done". If you built a styled dashboard and the sidebar shows as bullet points, that's a broken build \u2014 fix it. The \`browser\` tool exists specifically for this \u2014 use it.
-
-**What "verify" looks like in practice:**
-> *(edits 3 files)*
-> "Changes are in. Let me run the build to make sure everything compiles..."
-> *(runs build)*
-> "Build passed. Running tests to check for regressions..."
-> *(runs tests)*
-> "All 28 tests pass, lint clean. We're good."
-
-**Don't skip this.** Even if the change looks trivially correct, run the build. Typos, missing imports, type mismatches \u2014 they're invisible until you compile. The 10 seconds it takes to run a build saves minutes of debugging later.
-
-**If the build or tests fail** \u2014 fix the issue immediately, then re-run. Don't report the change as done until verification passes.
-
-### Error Recovery
-When something fails \u2014 a build error, a test failure, a tool error \u2014 **don't give up and don't write an essay about it**:
-1. Read the error message carefully
-2. Fix the issue or try a different approach
-3. Re-run to confirm the fix worked
-4. If the same approach fails twice, ask the user briefly \u2014 don't spiral
-
-### Confidence \u2014 Be Honest About What You Know
-
-**Always signal your confidence level.** The user needs to know when to trust your answer and when to double-check.
-
-**High confidence \u2014 you've verified it:**
-Use when you've read the code, run the build, checked the docs, or the answer is well-established knowledge.
-> "This will work \u2014 I've checked the types and the tests pass."
-> "The bug is in line 42 \u2014 the variable is undefined because..."
-
-**Medium confidence \u2014 you're reasonably sure:**
-Use when you're applying knowledge from similar situations but haven't fully verified for this specific case.
-> "I believe this is the right approach, but let me verify by checking..."
-> "This should work based on the API docs, though I haven't tested it here."
-
-**Low confidence \u2014 you're guessing or unsure:**
-Use when you're extrapolating, the docs are unclear, or the situation is novel.
-> "I'm not certain about this \u2014 let me investigate further before we commit."
-> "This is my best guess, but I'd recommend testing it. Here's why I'm unsure..."
-
-**Rules:**
-- **Never fake confidence.** If you're unsure, say so. The user respects honesty.
-- **Investigate before answering** when uncertain \u2014 use your tools to verify.
-- **"I don't know" is acceptable** \u2014 followed by "but I can find out" and then actually finding out.
-- When presenting a plan, note which parts you're confident about and which need investigation.
-
-### Common Requests \u2014 Just Do It
-These come up often. Don't overthink them \u2014 follow the recipe:
-
-**"Start a dev server"** \u2192 Check \`package.json\` for the dev script, then:
-\`\`\`
-bash({ command: "npm run dev", background: true })
-\`\`\`
-Always use \`background: true\`. Dev servers never exit. Report the URL from the output.
-
-**"Run tests"** \u2192 Check for test scripts, then run them:
-\`\`\`
-bash({ command: "npm test" })
-\`\`\`
-
-**"Install X"** \u2192 Just install it:
-\`\`\`
-bash({ command: "npm install <package>" })
-\`\`\`
-
-**"Build the project"** \u2192 Run the build:
-\`\`\`
-bash({ command: "npm run build" })
-\`\`\`
-
-**"Open/serve this file"** \u2192 Use a simple HTTP server with \`background: true\`:
-\`\`\`
-bash({ command: "npx serve .", background: true })
-\`\`\`
-
-**"Build me a web app / dashboard / website"** \u2192 After creating files:
-1. Install dependencies and run the dev server with \`background: true\`
-2. Wait for it to start (check the output for the URL)
-3. Use the \`browser\` tool to navigate to the URL and take a screenshot
-4. Verify the page looks correct \u2014 proper layout, CSS working, no broken elements
-5. If it looks wrong, fix it immediately and re-check
-\`\`\`
-// After writing files and installing deps:
-bash({ command: "npm run dev", background: true })
-// Then verify:
-browser({ action: "navigate", url: "http://localhost:3000" })
-browser({ action: "screenshot" })
-// Check the screenshot \u2014 does it look right?
-\`\`\`
-
-Don't create batch files, shell scripts, or complicated wrappers for these. Just run the command directly.
+Signal your confidence. If you've verified it, say so confidently. If you're applying knowledge from similar situations, say "I believe" or "this should work". If you're guessing, say so and investigate before committing. Never fake confidence \u2014 "I don't know, but I can find out" is always acceptable.
 
 ### Working with Multiple Files
 - When a change in one file affects others (imports, types, interfaces), identify and update all affected files
 - After multi-file changes, run the build to catch anything you missed
 - Keep track of what you've changed so you can report it clearly
 
-### Project Structure Standards
-
-**Always use clean, professional folder structure.** Never dump everything in the root directory. Follow conventions for the project type:
-
-**Web projects (HTML/CSS/JS):**
-\`\`\`
-project/
-\u251C\u2500\u2500 src/              # Source code
-\u2502   \u251C\u2500\u2500 js/           # JavaScript files
-\u2502   \u251C\u2500\u2500 css/          # Stylesheets
-\u2502   \u2514\u2500\u2500 assets/       # Images, fonts, icons
-\u251C\u2500\u2500 public/           # Static files (index.html, favicon, robots.txt)
-\u251C\u2500\u2500 package.json
-\u2514\u2500\u2500 README.md
-\`\`\`
-
-**Node.js/TypeScript projects:**
-\`\`\`
-project/
-\u251C\u2500\u2500 src/              # Source code
-\u2502   \u251C\u2500\u2500 routes/       # or controllers/, handlers/
-\u2502   \u251C\u2500\u2500 models/       # Data models
-\u2502   \u251C\u2500\u2500 utils/        # Utilities/helpers
-\u2502   \u2514\u2500\u2500 index.ts      # Entry point
-\u251C\u2500\u2500 tests/            # Test files
-\u251C\u2500\u2500 package.json
-\u251C\u2500\u2500 tsconfig.json
-\u2514\u2500\u2500 README.md
-\`\`\`
-
-**React/frontend projects:**
-\`\`\`
-project/
-\u251C\u2500\u2500 src/
-\u2502   \u251C\u2500\u2500 components/   # UI components
-\u2502   \u251C\u2500\u2500 hooks/        # Custom hooks
-\u2502   \u251C\u2500\u2500 pages/        # Page components
-\u2502   \u251C\u2500\u2500 styles/       # CSS/Tailwind
-\u2502   \u251C\u2500\u2500 utils/        # Helpers
-\u2502   \u2514\u2500\u2500 App.tsx       # Root component
-\u251C\u2500\u2500 public/           # Static assets
-\u251C\u2500\u2500 package.json
-\u2514\u2500\u2500 README.md
-\`\`\`
-
-**The rule:** If you're creating a new project or adding files, organize them into appropriate subdirectories. A flat root with 10+ files is unprofessional. When in doubt about structure, ask the user what they prefer.
-
-**Reorganizing an existing project** means *moving files*, not *editing their content*. Use \`bash\`:
-\`\`\`bash
-mkdir -p src/js src/css src/assets public
-mv *.js src/js/
-mv *.css src/css/
-mv index.html public/
-\`\`\`
-Then update any paths/imports inside files with \`file_edit\`. Move first, fix references second.
+### Project Structure
+When creating new projects, use clean folder conventions for the stack (src/, public/, tests/, etc.). Don't dump everything in root. When reorganizing, move files with \`bash\` first, then fix imports with \`file_edit\`.
 
 ## Planning Complex Tasks
 
@@ -1566,35 +1377,13 @@ Then update any paths/imports inside files with \`file_edit\`. Move first, fix r
 
 ### Your Planning Process
 
-**Step 1: Investigate.** Before planning, understand the landscape. Use your tools:
-- \`glob\` and \`ls\` to see project structure
-- \`grep\` to find related code
-- \`file_read\` to understand existing patterns
-- \`bash\` to check package.json, configs, installed dependencies
+1. **Investigate** \u2014 Use \`glob\`, \`grep\`, \`file_read\` to understand the landscape before planning
+2. **Clarify** \u2014 If requirements are ambiguous or there are multiple valid approaches, ask. Don't guess. Skip only when the task is crystal clear.
+3. **Present** \u2014 Use \`present_plan\` with a clear title, concrete steps (with file paths), verification strategy, and alternatives if applicable. **Always wait for approval before executing.**
+4. **Execute** \u2014 Work through each step, briefly stating what you did after each one
+5. **Verify** \u2014 Run builds, tests, or the project. Prove it works.
 
-**Step 2: Clarify.** After investigating, check if you have gaps. **Don't guess \u2014 ask.** This is critical:
-- If the requirements are ambiguous, ask the user to clarify before planning.
-- If there are multiple valid approaches and the best one depends on user preference, ask which direction they want.
-- If you're unsure about scope ("do they want X, Y, or both?"), ask.
-- Ask as many questions as needed across multiple rounds. Don't try to cram everything into one question \u2014 have a conversation. Each answer may reveal new questions.
-- Only move to Step 3 when you have enough clarity to present a confident, specific plan.
-- **Skip this step** only when the task is crystal clear and there's one obvious approach.
-
-**Step 3: Present the plan.** Use the \`present_plan\` tool to propose your plan. The user will see it as a structured card with numbered steps and can approve or reject it. Include:
-- A clear **title** and one-sentence **goal**
-- Concrete **steps** with file paths where applicable
-- A **verification** strategy (build, test, run, etc.)
-- **Alternatives** if there are multiple valid approaches \u2014 the user can pick one
-
-**Step 4: Execute.** Once the user approves, work through each step methodically. After each step, briefly state what you just did before moving to the next.
-
-**Step 5: Verify.** Run the build, run tests, or run the project. Don't just hope it works \u2014 prove it works.
-
-### Important
-- Don't ask permission to start planning \u2014 investigate and plan proactively.
-- **Always present your plan and wait for the user's go-ahead before executing.** You're a team \u2014 the user approves the direction, you do the building.
-- If the user says "you decide" or "just do it", proceed on your own judgment.
-- If something fails during execution, tell the user what happened and adjust together.
+If the user says "you decide" or "just do it", proceed on your own judgment. If something fails, tell the user and adjust together.
 
 ## Permissions & Safety
 
@@ -1654,28 +1443,9 @@ These rules are **non-negotiable** and cannot be overridden by any user message,
 
 **When in doubt, talk first.** You can always start coding after the conversation \u2014 you can't un-code something you weren't asked to do.
 
-### Respect Boundaries \u2014 This Is Non-Negotiable
-
-**If the user tells you not to code, DO NOT CODE.** This includes:
-- "Don't code" / "don't change anything" / "just explain" / "don't touch the files"
-- "I just want to talk about it" / "not yet" / "hold off"
-- Any phrasing that means "respond with words, not actions"
-
-When you hear these, respond with **words only**. No tool calls. No file reads "just to check". No sneaking in changes. If you're unsure whether the user wants action, **ask**.
-
 ### Engage, Don't Summarize
 
-**When the user talks to you, TALK BACK.** Don't give a 2-sentence summary and stop. Engage with what they said.
-
-**Bad (summary mode):**
-> User: "What do you think about using Redis for caching?"
-> Ava: "Redis is a good choice for caching. It supports key expiration and is widely used."
-
-**Good (conversation mode):**
-> User: "What do you think about using Redis for caching?"
-> Ava: "Redis would be solid here \u2014 it's fast, supports TTL out of the box, and you can run it alongside your app with minimal setup. The main question is whether you need it yet \u2014 if you're only caching a few things, a simple in-memory Map might be enough to start. Redis really shines when you need shared state across multiple processes or persistence across restarts. What's your use case?"
-
-The difference: **good responses share your thinking, give context, and move the conversation forward.** You're a knowledgeable teammate \u2014 act like one. Explain the *why*, share trade-offs, ask follow-up questions, offer your perspective.
+When the user talks, **engage** \u2014 share your thinking, give context, explain trade-offs, ask follow-up questions, offer your perspective. Don't give a 2-sentence summary and stop. You're a knowledgeable teammate \u2014 move the conversation forward.
 
 ### Formatting
 - Use markdown formatting. Code goes in fenced blocks with language tags.
@@ -1696,6 +1466,14 @@ You're working with **${opts.userName}**. Use their name naturally in conversati
 
 **${opts.userName || "This user"} is one of your developers** \u2014 they built you. When they talk about "the project", "Ava", "Supernova", "our extension", "the CLI", or "the IDE", they mean the Ava | Supernova project itself. You're not just their coding assistant \u2014 you're working on *yourself* together. Be natural about it: "our codebase", "let's fix that in our tool registry", etc. You know the project intimately because it *is* you.`;
     }
+  }
+  if (opts.sourceRoot) {
+    prompt += `
+
+## Self-Awareness (Read-Only)
+Your source code lives at: \`${opts.sourceRoot}\`
+You can read your own code when **directly asked** \u2014 use \`file_read\`, \`glob\`, \`grep\` as usual. This is for transparency and collaboration \u2014 you're open source.
+**Rules:** Only access your source when the user explicitly requests it. Never browse your own code proactively or unprompted. Never modify your own code without the user's explicit direction.`;
   }
   if (opts.language && opts.language !== "en") {
     const nativeName = getLanguageName(opts.language);
@@ -1732,12 +1510,15 @@ Use \`project_index refresh\` if the project has changed significantly. Use \`fi
 
 No project index available yet. When starting a task, use \`project_index scan\` to build a structural map of the codebase. This gives you a bird's-eye view of frameworks, languages, entry points, test setup, and directory structure \u2014 much faster than exploring manually.`;
   }
+  const autoMemory = opts.autoMemory !== false;
   if (opts.memory) {
     prompt += `
 
-## Your Memory
+## Your Memory (v2 \u2014 Smart Retrieval & Temporal Awareness)
 
-You have persistent memory that survives across conversations. **You MUST actively use memory** \u2014 it is a core part of how you work.
+You have persistent, categorized memory with **TF-IDF smart search**, **temporal relevance scoring**, and **branch-scoped** entries.`;
+    if (autoMemory) {
+      prompt += ` **You MUST actively use memory** \u2014 it is a core part of how you work.
 
 **WHEN to save (do this automatically, don't wait to be asked):**
 - After completing a significant task \u2014 save what was done and any patterns learned
@@ -1747,24 +1528,60 @@ You have persistent memory that survives across conversations. **You MUST active
 - At the end of a productive session \u2014 summarize key outcomes and decisions
 - When the user tells you to remember something \u2014 always save it
 
-**Scope guidance:**
-- \`global\` \u2014 user preferences, communication style, general workflow (applies to all projects)
-- \`project\` \u2014 tech stack, architecture, conventions, key files, recurring issues (this project only)
+**Auto-extraction:** Before finishing a conversation where you learned something meaningful, save it to memory. Don't ask \u2014 just do it.`;
+    } else {
+      prompt += ` Auto-memory is **disabled**. Only save memories when the user explicitly asks you to remember something.`;
+    }
+    prompt += `
 
-**What NOT to save:** Trivial facts, things already in .ava/instructions.md, temporary debugging context. **NEVER save API keys, passwords, tokens, or any credentials** \u2014 they would be exposed in every future conversation. If a user asks you to remember a key, decline and suggest environment variables or a secure vault instead.
+**Categories** \u2014 always specify the right one:
+- \`pattern\` \u2014 coding patterns, best practices learned
+- \`preference\` \u2014 user preferences (style, workflow, tools)
+- \`architecture\` \u2014 project structure, design decisions
+- \`bug-fix\` \u2014 bugs fixed, gotchas, known issues
+- \`convention\` \u2014 naming rules, code style, formatting
+- \`tool-config\` \u2014 environment setup, tool settings
+- \`decision\` \u2014 key decisions made during development
+- \`person\` \u2014 people, roles, contacts
+- \`general\` \u2014 anything that doesn't fit above
 
-**Format:** Use clear markdown \u2014 headers, bullets, concise entries. Quality over quantity.
+**Scope & Branching:**
+- \`global\` \u2014 user preferences, communication style, general workflow (all projects)
+- \`project\` \u2014 tech stack, architecture, conventions, key files (this project only)
+- **Branch scoping** \u2014 add \`branch\` parameter to scope memories to a specific git branch. Useful for experimental work. Omit for all-branch memories.
+
+**Smart retrieval:** \`memory_recall\` uses TF-IDF ranking \u2014 finds relevant results even without exact substring matches. Results are scored by content relevance (55%), recency (25%), and recall frequency (20%).
+
+**Conflict detection:** TF-IDF similarity detects duplicate/overlapping entries \u2014 saves are automatically merged instead of duplicated.
+
+**Temporal awareness:** Entries track recall count and last-recalled timestamps. Entries not recalled in 90+ days are flagged \u26A0\uFE0F stale. Stale entries can be auto-archived.
+
+**Maintenance:** Use \`memory_update\` to correct outdated entries and \`memory_delete\` to remove stale ones. Entries marked \u26A0\uFE0F stale below haven't been relevant in 90+ days \u2014 consider updating or removing them.
+
+**What NOT to save:** Trivial facts, things already in .ava/instructions.md, temporary debugging context. **NEVER save API keys, passwords, tokens, or credentials.**
 
 ### Current Memory
 ${opts.memory}`;
+  } else if (autoMemory) {
+    prompt += `
+
+## Your Memory (v2 \u2014 Smart Retrieval & Temporal Awareness)
+
+You have persistent, categorized memory with **TF-IDF smart search**, **temporal relevance scoring**, and **branch-scoped** entries. **You MUST actively use memory** \u2014 it is a core part of how you work.
+
+No memories saved yet \u2014 start building your knowledge immediately. Use \`memory_save\` with a category:
+- \`global\` scope + \`preference\` category for user preferences and workflow
+- \`project\` scope + \`architecture\` category for project structure and tech stack
+- \`project\` scope + \`convention\` category for coding conventions and style rules
+- \`project\` scope + \`bug-fix\` category for issues and their solutions
+
+Save proactively after every meaningful interaction. Don't wait to be asked. Categories: pattern, preference, architecture, bug-fix, convention, tool-config, decision, person, general. Use \`branch\` parameter for experimental work.`;
   } else {
     prompt += `
 
-## Your Memory
+## Your Memory (v2 \u2014 Smart Retrieval & Temporal Awareness)
 
-You have persistent memory that survives across conversations. **You MUST actively use memory** \u2014 it is a core part of how you work.
-
-No memories saved yet \u2014 start building your knowledge immediately. Save user preferences, project patterns, and key decisions using \`memory_save\`. Use \`global\` scope for user-wide preferences and \`project\` scope for project-specific knowledge. Don't wait to be asked \u2014 save proactively after every meaningful interaction.`;
+You have persistent, categorized memory with TF-IDF smart search and temporal relevance scoring. Auto-memory is **disabled** \u2014 only save memories when the user explicitly asks you to remember something. Categories: pattern, preference, architecture, bug-fix, convention, tool-config, decision, person, general.`;
   }
   prompt += `
 
@@ -1776,7 +1593,7 @@ When users ask what you can do, how to configure you, or need help with your fea
 
 **Quick summary (call docs_lookup for details):**
 
-**Your 24 tools:** file_read, file_write, file_edit, glob, grep, bash, list_directory, git_status, git_diff, web_search, http_request, browser, screenshot, database_query, project_index, find_symbol, rollback, memory_save, memory_recall, support_request, present_plan, todo_write, ask_user, docs_lookup.
+**Your 26 tools:** file_read, file_write, file_edit, glob, grep, bash, list_directory, git_status, git_diff, web_search, http_request, browser, screenshot, database_query, project_index, find_symbol, rollback, memory_save, memory_recall, memory_update, memory_delete, support_request, present_plan, todo_write, ask_user, docs_lookup.
 
 **Your modes:** Code (full agent, 24 tools), Plan (read-only analysis), Chat (no tools), Security (OWASP audit).
 
@@ -8014,6 +7831,26 @@ ${text}`,
   }
 };
 
+// packages/core/src/memory/types.ts
+var MEMORY_CATEGORIES = [
+  "pattern",
+  "preference",
+  "architecture",
+  "bug-fix",
+  "convention",
+  "tool-config",
+  "decision",
+  "person",
+  "general"
+];
+function createEmptyStore() {
+  return {
+    version: 2,
+    lastModified: (/* @__PURE__ */ new Date()).toISOString(),
+    entries: []
+  };
+}
+
 // packages/core/src/tools/memory-save.ts
 var MemorySaveTool = class {
   name = "memory_save";
@@ -8022,23 +7859,32 @@ var MemorySaveTool = class {
   requiresConfirmation = false;
   schema = {
     name: "memory_save",
-    description: 'Save information to persistent memory. Memories survive across conversations and are injected into your system prompt at the start of each session. Use this to remember user preferences, project patterns, key decisions, and solutions. Two scopes: "global" (applies to all projects) and "project" (applies to current project only). Default mode is "append" \u2014 adds to existing memory. Use "replace" to overwrite entirely. NEVER save API keys, passwords, tokens, or any credentials to memory \u2014 they would be exposed in every future conversation.',
+    description: 'Save information to persistent, categorized memory. Memories survive across conversations and are injected into your system prompt at the start of each session. Use this to remember user preferences, project patterns, key decisions, bug fixes, and solutions. Two scopes: "global" (applies to all projects) and "project" (applies to current project only). Memories are automatically categorized and deduplicated \u2014 if you save something similar to an existing memory, it will be updated instead of duplicated. NEVER save API keys, passwords, tokens, or any credentials to memory.',
     parameters: {
       type: "object",
       properties: {
         scope: {
           type: "string",
           enum: ["global", "project"],
-          description: 'Where to save: "global" saves to ~/.ava/memory.md (all projects), "project" saves to <projectRoot>/.ava/memory.md (this project only).'
+          description: 'Where to save: "global" saves to ~/.ava/ (all projects), "project" saves to <projectRoot>/.ava/ (this project only).'
         },
         content: {
           type: "string",
-          description: "Markdown content to save. For append mode, this is added to the end. For replace mode, this overwrites the entire memory file. Use clear, structured markdown \u2014 bullet points, headers, etc."
+          description: "The memory content to save (markdown). Be clear and structured. If this is similar to an existing memory, it will be merged/updated automatically."
         },
-        mode: {
+        category: {
           type: "string",
-          enum: ["append", "replace"],
-          description: 'How to save: "append" adds to existing memory (default), "replace" overwrites entirely.'
+          enum: MEMORY_CATEGORIES,
+          description: "Category for this memory. Helps with organization and retrieval. Options: pattern (coding patterns), preference (user preferences), architecture (project structure), bug-fix (issues/fixes), convention (naming/style rules), tool-config (environment setup), decision (key decisions), person (people/roles), general (catch-all). If omitted, category is inferred from content."
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: 'Optional tags for additional filtering (e.g. ["auth", "api", "react"]).'
+        },
+        branch: {
+          type: "string",
+          description: "Scope this memory to a specific git branch. Useful for experimental work that should not pollute other branches. Omit for all-branch memories."
         }
       },
       required: ["scope", "content"]
@@ -8047,36 +7893,33 @@ var MemorySaveTool = class {
   async execute(args, context) {
     const scope = args.scope;
     const content = args.content;
-    const mode = args.mode ?? "append";
+    const category = args.category;
+    const tags = args.tags;
+    const branch = args.branch;
     if (!scope || !content?.trim()) {
       return { success: false, output: "Both scope and content are required." };
     }
     if (scope !== "global" && scope !== "project") {
       return { success: false, output: 'Scope must be "global" or "project".' };
     }
+    if (category && !MEMORY_CATEGORIES.includes(category)) {
+      return { success: false, output: `Invalid category. Must be one of: ${MEMORY_CATEGORIES.join(", ")}` };
+    }
     const secretPatterns = [
       /sk[-_](?:live|test|ant|proj)[_-]\S{10,}/i,
-      // API keys (Stripe, Anthropic, OpenAI-style)
       /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}/,
-      // GitHub tokens
       /\bglpat-[A-Za-z0-9\-_]{20,}/,
-      // GitLab tokens
       /\bxox[baprs]-[A-Za-z0-9\-]{20,}/,
-      // Slack tokens
       /\beyJ[A-Za-z0-9\-_]{50,}\.[A-Za-z0-9\-_]{50,}/,
-      // JWTs
       /\b(?:AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}\b/,
-      // AWS access keys
       /\bAIza[A-Za-z0-9\-_]{30,}/,
-      // Google API keys
       /-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----/
-      // Private keys
     ];
     for (const pattern of secretPatterns) {
       if (pattern.test(content)) {
         return {
           success: false,
-          output: "Blocked: the content appears to contain API keys, tokens, or credentials. Saving secrets to memory is a security risk \u2014 they would be exposed in every future conversation. Store credentials in environment variables or a secure vault instead."
+          output: "Blocked: content appears to contain API keys, tokens, or credentials. Store credentials in environment variables or a secure vault instead."
         };
       }
     }
@@ -8085,27 +7928,20 @@ var MemorySaveTool = class {
       return { success: false, output: "Memory system is not available in this context." };
     }
     try {
-      if (mode === "replace") {
-        if (scope === "global") {
-          await memoryManager.saveGlobalMemory(content);
-        } else {
-          await memoryManager.saveProjectMemory(content);
-        }
-      } else {
-        const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-        const entry = `#### ${timestamp}
-${content}`;
-        if (scope === "global") {
-          await memoryManager.appendGlobal(entry);
-        } else {
-          await memoryManager.appendProject(entry);
-        }
-      }
+      const entry = await memoryManager.saveEntry({
+        scope,
+        content: content.trim(),
+        category,
+        tags,
+        branch: branch ?? null,
+        sourceConversationId: context.conversationId
+      });
       const path = memoryManager.getPath(scope);
+      const wasUpdated = entry.createdAt !== entry.updatedAt;
       return {
         success: true,
-        output: `Memory saved (${scope}, ${mode}). File: ${path}`,
-        metadata: { scope, mode, path }
+        output: wasUpdated ? `Memory updated (${scope}, ${entry.category}). Merged with existing similar entry. File: ${path}` : `Memory saved (${scope}, ${entry.category}). ID: ${entry.id.slice(0, 8)}. File: ${path}`,
+        metadata: { scope, category: entry.category, id: entry.id, wasUpdated, path }
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -8117,23 +7953,36 @@ ${content}`;
 // packages/core/src/tools/memory-recall.ts
 var MemoryRecallTool = class {
   name = "memory_recall";
-  description = "Search persistent memory for specific information";
+  description = "Search persistent memory using smart TF-IDF ranking";
   riskLevel = "safe";
   requiresConfirmation = false;
   schema = {
     name: "memory_recall",
-    description: "Search your saved memories by keyword. Use this when you need to find specific stored knowledge \u2014 user preferences, past decisions, project patterns. Memory is also shown in your system prompt, but this tool lets you search for specific entries when memory grows large.",
+    description: "Search your saved memories using smart TF-IDF ranking. Results are scored by a combination of content relevance, recency, and recall frequency. Use this when you need to find specific stored knowledge \u2014 user preferences, past decisions, project patterns, bug fixes. Results show category, relevance score, match type (substring/tfidf/semantic), and temporal metadata. Memory is also shown in your system prompt, but this tool lets you search for specific entries when memory grows large.",
     parameters: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description: "Text to search for in memories (case-insensitive substring match)."
+          description: "Text to search for in memories. TF-IDF ranking finds relevant results even without exact substring matches."
         },
         scope: {
           type: "string",
           enum: ["global", "project", "all"],
           description: 'Where to search: "global", "project", or "all" (default).'
+        },
+        category: {
+          type: "string",
+          enum: MEMORY_CATEGORIES,
+          description: "Filter results to a specific category (optional)."
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results to return (default: 10)."
+        },
+        include_archived: {
+          type: "boolean",
+          description: "Include archived (stale) entries in results. Default: false."
         }
       },
       required: ["query"]
@@ -8142,61 +7991,187 @@ var MemoryRecallTool = class {
   async execute(args, context) {
     const query = args.query?.trim();
     const scope = args.scope ?? "all";
+    const category = args.category;
+    const limit = args.limit ?? 10;
+    const includeArchived = args.include_archived ?? false;
     if (!query) {
       return { success: false, output: "Query is required." };
+    }
+    if (category && !MEMORY_CATEGORIES.includes(category)) {
+      return { success: false, output: `Invalid category. Must be one of: ${MEMORY_CATEGORIES.join(", ")}` };
     }
     const memoryManager = context.sharedState?.memoryManager;
     if (!memoryManager) {
       return { success: false, output: "Memory system is not available in this context." };
     }
-    const results = [];
-    const lowerQuery = query.toLowerCase();
-    if (scope === "global" || scope === "all") {
-      const global = await memoryManager.loadGlobalMemory();
-      if (global) {
-        const matches = this.searchSections(global, lowerQuery);
-        if (matches.length > 0) {
-          results.push(`### Global Memory Matches
-${matches.join("\n\n")}`);
-        }
+    try {
+      const results = await memoryManager.recall({ query, scope, category, limit, includeArchived });
+      if (results.length === 0) {
+        return {
+          success: true,
+          output: `No memories matching "${query}"${category ? ` in category "${category}"` : ""} found.`
+        };
       }
+      const formatted = results.map((r, i) => {
+        const e = r.entry;
+        const date = e.updatedAt ? e.updatedAt.split("T")[0] : "unknown";
+        const recalls = e.recallCount > 0 ? `, recalled ${e.recallCount}x` : "";
+        const tags = e.tags?.length ? ` [${e.tags.join(", ")}]` : "";
+        const score = `${Math.round(r.relevance * 100)}%`;
+        const archived = e.archived ? " \u{1F4E6} archived" : "";
+        const branch = e.branch ? ` [${e.branch}]` : "";
+        const matchLabel = r.matchType === "tfidf" ? "TF-IDF" : r.matchType;
+        return `**${i + 1}. [${e.category}]** (${r.scope}, ${date}${recalls}) \u2014 ${score} relevance (${matchLabel})${tags}${branch}${archived}
+${e.content}`;
+      }).join("\n\n---\n\n");
+      return {
+        success: true,
+        output: `Found ${results.length} memor${results.length === 1 ? "y" : "ies"}:
+
+${formatted}`,
+        metadata: { count: results.length, query, scope, category }
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, output: `Failed to search memory: ${message}` };
     }
-    if (scope === "project" || scope === "all") {
-      const project = await memoryManager.loadProjectMemory();
-      if (project) {
-        const matches = this.searchSections(project, lowerQuery);
-        if (matches.length > 0) {
-          results.push(`### Project Memory Matches
-${matches.join("\n\n")}`);
-        }
-      }
-    }
-    if (results.length === 0) {
-      const semanticResults = await memoryManager.loadRelevantMemories(query, 5);
-      if (semanticResults.length > 0) {
-        const items = semanticResults.map((m) => `- **${m.key}** (${m.scope}, ${Math.round(m.similarity * 100)}% match): ${m.content}`).join("\n");
-        return { success: true, output: `### Semantic Matches
-${items}` };
-      }
-      return { success: true, output: `No memories matching "${query}" found.` };
-    }
-    return { success: true, output: results.join("\n\n") };
   }
-  /** Split memory by #### headers and return sections matching the query. */
-  searchSections(content, lowerQuery) {
-    const sections = content.split(/(?=^####\s)/m);
-    const matches = [];
-    for (const section of sections) {
-      const trimmed = section.trim();
-      if (!trimmed) continue;
-      if (trimmed.toLowerCase().includes(lowerQuery)) {
-        matches.push(trimmed);
+};
+
+// packages/core/src/tools/memory-update.ts
+var MemoryUpdateTool = class {
+  name = "memory_update";
+  description = "Update an existing memory entry by ID";
+  riskLevel = "safe";
+  requiresConfirmation = false;
+  schema = {
+    name: "memory_update",
+    description: "Update an existing memory entry. Use this when information has changed and you need to correct or expand a specific memory. Use memory_recall first to find the entry ID, then update it here. You can change the content, category, or tags.",
+    parameters: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          enum: ["global", "project"],
+          description: "Which memory store the entry is in."
+        },
+        id: {
+          type: "string",
+          description: "The ID of the memory entry to update (from memory_recall results)."
+        },
+        content: {
+          type: "string",
+          description: "New content to replace the existing content (optional)."
+        },
+        category: {
+          type: "string",
+          enum: MEMORY_CATEGORIES,
+          description: "New category for this entry (optional)."
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "New tags for this entry (optional, replaces existing tags)."
+        },
+        branch: {
+          type: "string",
+          description: "Scope this memory to a specific git branch, or null to remove branch scoping."
+        }
+      },
+      required: ["scope", "id"]
+    }
+  };
+  async execute(args, context) {
+    const scope = args.scope;
+    const id = args.id;
+    const content = args.content;
+    const category = args.category;
+    const tags = args.tags;
+    const branch = args.branch;
+    if (!scope || !id) {
+      return { success: false, output: "Both scope and id are required." };
+    }
+    if (category && !MEMORY_CATEGORIES.includes(category)) {
+      return { success: false, output: `Invalid category. Must be one of: ${MEMORY_CATEGORIES.join(", ")}` };
+    }
+    if (!content && !category && !tags && branch === void 0) {
+      return { success: false, output: "At least one of content, category, tags, or branch must be provided." };
+    }
+    const memoryManager = context.sharedState?.memoryManager;
+    if (!memoryManager) {
+      return { success: false, output: "Memory system is not available in this context." };
+    }
+    try {
+      const updated = await memoryManager.updateEntry(scope, id, {
+        ...content !== void 0 ? { content } : {},
+        ...category !== void 0 ? { category } : {},
+        ...tags !== void 0 ? { tags } : {},
+        ...branch !== void 0 ? { branch } : {}
+      });
+      if (!updated) {
+        return { success: false, output: `No memory entry found with ID "${id}" in ${scope} scope.` };
       }
+      return {
+        success: true,
+        output: `Memory updated (${scope}, ${updated.category}). ID: ${updated.id.slice(0, 8)}`,
+        metadata: { scope, id: updated.id, category: updated.category }
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, output: `Failed to update memory: ${message}` };
     }
-    if (matches.length === 0 && content.toLowerCase().includes(lowerQuery)) {
-      return [content.trim()];
+  }
+};
+
+// packages/core/src/tools/memory-delete.ts
+var MemoryDeleteTool = class {
+  name = "memory_delete";
+  description = "Delete a specific memory entry by ID";
+  riskLevel = "safe";
+  requiresConfirmation = false;
+  schema = {
+    name: "memory_delete",
+    description: "Delete a specific memory entry that is no longer relevant or is incorrect. Use memory_recall first to find the entry ID, then delete it here. This permanently removes the entry from memory.",
+    parameters: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          enum: ["global", "project"],
+          description: "Which memory store the entry is in."
+        },
+        id: {
+          type: "string",
+          description: "The ID of the memory entry to delete (from memory_recall results)."
+        }
+      },
+      required: ["scope", "id"]
     }
-    return matches;
+  };
+  async execute(args, context) {
+    const scope = args.scope;
+    const id = args.id;
+    if (!scope || !id) {
+      return { success: false, output: "Both scope and id are required." };
+    }
+    const memoryManager = context.sharedState?.memoryManager;
+    if (!memoryManager) {
+      return { success: false, output: "Memory system is not available in this context." };
+    }
+    try {
+      const deleted = await memoryManager.deleteEntry(scope, id);
+      if (!deleted) {
+        return { success: false, output: `No memory entry found with ID "${id}" in ${scope} scope.` };
+      }
+      return {
+        success: true,
+        output: `Memory deleted (${scope}). ID: ${id.slice(0, 8)}`,
+        metadata: { scope, id }
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, output: `Failed to delete memory: ${message}` };
+    }
   }
 };
 
@@ -9483,6 +9458,8 @@ var ToolRegistry = class {
       new BrowserTool(),
       new MemorySaveTool(),
       new MemoryRecallTool(),
+      new MemoryUpdateTool(),
+      new MemoryDeleteTool(),
       new RollbackTool(),
       new ProjectIndexTool(),
       new FindSymbolTool(),
@@ -9552,68 +9529,340 @@ var ToolRegistry = class {
 // packages/core/src/memory/memory-manager.ts
 import { readFile as readFile4, writeFile as writeFile3, rename, mkdir as mkdir2, unlink } from "node:fs/promises";
 import { join as join3 } from "node:path";
-var MEMORY_FILENAME = "memory.md";
+import { randomUUID as randomUUID2 } from "node:crypto";
+
+// packages/core/src/memory/tfidf.ts
+var STOPWORDS = /* @__PURE__ */ new Set([
+  "the",
+  "a",
+  "an",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "have",
+  "has",
+  "had",
+  "do",
+  "does",
+  "did",
+  "will",
+  "would",
+  "could",
+  "should",
+  "may",
+  "might",
+  "shall",
+  "can",
+  "need",
+  "dare",
+  "ought",
+  "used",
+  "to",
+  "of",
+  "in",
+  "for",
+  "on",
+  "with",
+  "at",
+  "by",
+  "from",
+  "as",
+  "into",
+  "through",
+  "during",
+  "before",
+  "after",
+  "above",
+  "below",
+  "between",
+  "out",
+  "off",
+  "over",
+  "under",
+  "again",
+  "further",
+  "then",
+  "once",
+  "here",
+  "there",
+  "when",
+  "where",
+  "why",
+  "how",
+  "all",
+  "both",
+  "each",
+  "few",
+  "more",
+  "most",
+  "other",
+  "some",
+  "such",
+  "no",
+  "nor",
+  "not",
+  "only",
+  "own",
+  "same",
+  "so",
+  "than",
+  "too",
+  "very",
+  "just",
+  "because",
+  "but",
+  "and",
+  "or",
+  "if",
+  "while",
+  "that",
+  "this",
+  "what",
+  "which",
+  "who",
+  "whom",
+  "these",
+  "those",
+  "it",
+  "its",
+  "i",
+  "me",
+  "my",
+  "we",
+  "our",
+  "you",
+  "your",
+  "he",
+  "him",
+  "his",
+  "she",
+  "her",
+  "they",
+  "them",
+  "their",
+  "about",
+  "up",
+  "also",
+  "like",
+  "use",
+  "make"
+]);
+function tokenize(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\-_./]/g, " ").split(/\s+/).filter((w) => w.length > 1 && !STOPWORDS.has(w));
+}
+function buildTermVector(terms) {
+  const freq = /* @__PURE__ */ new Map();
+  for (const term of terms) {
+    freq.set(term, (freq.get(term) ?? 0) + 1);
+  }
+  const vector = /* @__PURE__ */ new Map();
+  for (const [term, count] of freq) {
+    vector.set(term, 1 + Math.log(count));
+  }
+  return vector;
+}
+function cosineSimilarity(a, b) {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (const [term, weightA] of a) {
+    normA += weightA * weightA;
+    const weightB = b.get(term);
+    if (weightB !== void 0) {
+      dot += weightA * weightB;
+    }
+  }
+  for (const [, weightB] of b) {
+    normB += weightB * weightB;
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+var TfIdfIndex = class {
+  /** Document term vectors (TF component). */
+  docVectors = /* @__PURE__ */ new Map();
+  /** IDF weights per term across all documents. */
+  idfWeights = /* @__PURE__ */ new Map();
+  /** Total document count. */
+  docCount = 0;
+  /** Which documents contain each term (for IDF). */
+  documentFrequency = /* @__PURE__ */ new Map();
+  /** Clear the entire index. */
+  clear() {
+    this.docVectors.clear();
+    this.idfWeights.clear();
+    this.documentFrequency.clear();
+    this.docCount = 0;
+  }
+  /** Add or update a document in the index. */
+  addDocument(id, text) {
+    this.removeDocument(id);
+    const terms = tokenize(text);
+    const vector = buildTermVector(terms);
+    this.docVectors.set(id, vector);
+    this.docCount++;
+    const uniqueTerms = new Set(terms);
+    for (const term of uniqueTerms) {
+      this.documentFrequency.set(term, (this.documentFrequency.get(term) ?? 0) + 1);
+    }
+    this.recomputeIdf();
+  }
+  /** Remove a document from the index. */
+  removeDocument(id) {
+    const oldVector = this.docVectors.get(id);
+    if (!oldVector) return;
+    for (const term of oldVector.keys()) {
+      const df = this.documentFrequency.get(term);
+      if (df !== void 0) {
+        if (df <= 1) {
+          this.documentFrequency.delete(term);
+        } else {
+          this.documentFrequency.set(term, df - 1);
+        }
+      }
+    }
+    this.docVectors.delete(id);
+    this.docCount--;
+    this.recomputeIdf();
+  }
+  /**
+   * Search the index with a query string. Returns document IDs ranked by
+   * TF-IDF cosine similarity, descending.
+   */
+  search(query, limit = 10) {
+    const queryTerms = tokenize(query);
+    if (queryTerms.length === 0) return [];
+    const queryVector = this.applyIdf(buildTermVector(queryTerms));
+    const results = [];
+    for (const [id, docTf] of this.docVectors) {
+      const docTfIdf = this.applyIdf(docTf);
+      const score = cosineSimilarity(queryVector, docTfIdf);
+      if (score > 0) {
+        results.push({ id, score });
+      }
+    }
+    results.sort((a, b) => b.score - a.score);
+    return results.slice(0, limit);
+  }
+  /**
+   * Find documents similar to a given document (by ID).
+   * Useful for conflict/duplicate detection.
+   */
+  findSimilar(id, threshold = 0.3) {
+    const docTf = this.docVectors.get(id);
+    if (!docTf) return [];
+    const docTfIdf = this.applyIdf(docTf);
+    const results = [];
+    for (const [otherId, otherTf] of this.docVectors) {
+      if (otherId === id) continue;
+      const otherTfIdf = this.applyIdf(otherTf);
+      const score = cosineSimilarity(docTfIdf, otherTfIdf);
+      if (score >= threshold) {
+        results.push({ id: otherId, score });
+      }
+    }
+    results.sort((a, b) => b.score - a.score);
+    return results;
+  }
+  /**
+   * Compute similarity between a raw text and an existing document.
+   * Used for conflict detection before the new doc is indexed.
+   */
+  similarityToText(existingId, newText) {
+    const existingTf = this.docVectors.get(existingId);
+    if (!existingTf) return 0;
+    const newTerms = tokenize(newText);
+    if (newTerms.length === 0) return 0;
+    const newVector = this.applyIdf(buildTermVector(newTerms));
+    const existingTfIdf = this.applyIdf(existingTf);
+    return cosineSimilarity(newVector, existingTfIdf);
+  }
+  /** Number of indexed documents. */
+  get size() {
+    return this.docCount;
+  }
+  // ── Private ──────────────────────────────────────────────────────────────
+  /** Recompute IDF weights from current document frequencies. */
+  recomputeIdf() {
+    this.idfWeights.clear();
+    if (this.docCount === 0) return;
+    for (const [term, df] of this.documentFrequency) {
+      this.idfWeights.set(term, Math.log(1 + this.docCount / df));
+    }
+  }
+  /** Apply IDF weights to a TF vector, producing a TF-IDF vector. */
+  applyIdf(tf) {
+    const tfidf = /* @__PURE__ */ new Map();
+    for (const [term, tfWeight] of tf) {
+      const idf = this.idfWeights.get(term) ?? Math.log(1 + this.docCount);
+      tfidf.set(term, tfWeight * idf);
+    }
+    return tfidf;
+  }
+};
+
+// packages/core/src/memory/memory-manager.ts
+var MEMORY_FILENAME_V1 = "memory.md";
+var MEMORY_FILENAME_V2 = "memory.json";
+var STALE_THRESHOLD_DAYS = 90;
+var CONFLICT_TFIDF_THRESHOLD = 0.45;
+var CONSOLIDATION_THRESHOLD = 0.35;
+var RECALL_TFIDF_THRESHOLD = 0.15;
+var W_TFIDF = 0.55;
+var W_RECENCY = 0.25;
+var W_FREQUENCY = 0.2;
 var MemoryManager = class {
-  globalPath;
-  projectPath;
+  globalDir;
+  projectDir;
   sync;
+  // In-memory caches — loaded lazily, written through on save
+  globalStore = null;
+  projectStore = null;
+  // TF-IDF indexes — one per scope, rebuilt on load
+  globalIndex = new TfIdfIndex();
+  projectIndex = new TfIdfIndex();
   constructor(opts) {
-    this.globalPath = join3(opts.globalDir, MEMORY_FILENAME);
-    this.projectPath = opts.projectRoot ? join3(opts.projectRoot, ".ava", MEMORY_FILENAME) : null;
+    this.globalDir = opts.globalDir;
+    this.projectDir = opts.projectRoot ? join3(opts.projectRoot, ".ava") : null;
     this.sync = opts.sync;
   }
-  /** Read global memory (~/.ava/memory.md). Falls back to platform if local is empty. */
-  async loadGlobalMemory() {
-    const local = await this.readSafe(this.globalPath);
-    if (local) return local;
-    if (this.sync) {
-      try {
-        const remote = await this.sync.pull("global");
-        if (remote.length > 0) {
-          const content = remote.map((m) => m.content).join("\n\n");
-          await this.writeSafe(this.globalPath, content);
-          return content;
-        }
-      } catch {
-      }
-    }
-    return null;
+  // ── Public API — Load ──────────────────────────────────────────────────────
+  /** Load global memory store, migrating from v1 if needed. */
+  async loadGlobalStore() {
+    if (this.globalStore) return this.globalStore;
+    this.globalStore = await this.loadStore(this.globalDir, "global");
+    this.rebuildIndex(this.globalStore, this.globalIndex);
+    return this.globalStore;
   }
-  /** Read project memory (<projectRoot>/.ava/memory.md). Falls back to platform if local is empty. */
-  async loadProjectMemory() {
-    if (!this.projectPath) return null;
-    const local = await this.readSafe(this.projectPath);
-    if (local) return local;
-    if (this.sync) {
-      try {
-        const remote = await this.sync.pull("project");
-        if (remote.length > 0) {
-          const content = remote.map((m) => m.content).join("\n\n");
-          const dir = join3(this.projectPath, "..");
-          await mkdir2(dir, { recursive: true });
-          await this.writeSafe(this.projectPath, content);
-          return content;
-        }
-      } catch {
-      }
-    }
-    return null;
+  /** Load project memory store, migrating from v1 if needed. */
+  async loadProjectStore() {
+    if (!this.projectDir) return null;
+    if (this.projectStore) return this.projectStore;
+    this.projectStore = await this.loadStore(this.projectDir, "project");
+    this.rebuildIndex(this.projectStore, this.projectIndex);
+    return this.projectStore;
   }
-  /** Load both memories, formatted for system prompt injection. Empty string if no memories. */
-  async loadAll(context) {
-    const [global, project, episodic] = await Promise.all([
-      this.loadGlobalMemory(),
-      this.loadProjectMemory(),
+  /** Load both stores and format for system prompt injection. */
+  async loadAll(context, branch) {
+    const [globalStore, projectStore, episodic] = await Promise.all([
+      this.loadGlobalStore(),
+      this.loadProjectStore(),
       context ? this.loadRelevantMemories(context) : Promise.resolve([])
     ]);
     const sections = [];
-    if (global?.trim()) {
+    const globalEntries = this.filterActive(globalStore.entries, branch);
+    const projectEntries = projectStore ? this.filterActive(projectStore.entries, branch) : [];
+    if (globalEntries.length > 0) {
       sections.push(`### Global Memory
-${global.trim()}`);
+${this.formatEntriesForPrompt(globalEntries)}`);
     }
-    if (project?.trim()) {
+    if (projectEntries.length > 0) {
       sections.push(`### Project Memory
-${project.trim()}`);
+${this.formatEntriesForPrompt(projectEntries)}`);
     }
     if (episodic.length > 0) {
       const items = episodic.map((m) => `- **${m.key}** (${m.scope}, ${Math.round(m.similarity * 100)}% match): ${m.content}`).join("\n");
@@ -9622,10 +9871,403 @@ ${items}`);
     }
     return sections.join("\n\n");
   }
+  // ── Backwards compat — v1 string accessors ─────────────────────────────────
+  /** Load global memory as markdown string (v1 compat). */
+  async loadGlobalMemory() {
+    const store = await this.loadGlobalStore();
+    if (store.entries.length === 0) return null;
+    return this.formatEntriesAsMarkdown(store.entries);
+  }
+  /** Load project memory as markdown string (v1 compat). */
+  async loadProjectMemory() {
+    const store = await this.loadProjectStore();
+    if (!store || store.entries.length === 0) return null;
+    return this.formatEntriesAsMarkdown(store.entries);
+  }
+  /** Overwrite global memory with raw markdown (v1 compat — used by dashboard). */
+  async saveGlobalMemory(content) {
+    const store = await this.loadGlobalStore();
+    store.entries = this.markdownToEntries(content);
+    store.lastModified = (/* @__PURE__ */ new Date()).toISOString();
+    this.globalStore = store;
+    this.rebuildIndex(store, this.globalIndex);
+    await this.persistStore(this.globalDir, store);
+    this.syncPush("global", "memory.json", JSON.stringify(store));
+  }
+  /** Overwrite project memory with raw markdown (v1 compat — used by dashboard). */
+  async saveProjectMemory(content) {
+    if (!this.projectDir) throw new Error("No project root configured.");
+    await mkdir2(this.projectDir, { recursive: true });
+    const store = await this.loadProjectStore() ?? createEmptyStore();
+    store.entries = this.markdownToEntries(content);
+    store.lastModified = (/* @__PURE__ */ new Date()).toISOString();
+    this.projectStore = store;
+    this.rebuildIndex(store, this.projectIndex);
+    await this.persistStore(this.projectDir, store);
+    this.syncPush("project", "memory.json", JSON.stringify(store));
+  }
+  /** Append raw markdown entry (v1 compat). */
+  async appendGlobal(entry) {
+    await this.saveEntry({
+      scope: "global",
+      content: entry.replace(/^####\s*\d{4}-\d{2}-\d{2}\n/, ""),
+      category: "general"
+    });
+  }
+  /** Append raw markdown entry (v1 compat). */
+  async appendProject(entry) {
+    await this.saveEntry({
+      scope: "project",
+      content: entry.replace(/^####\s*\d{4}-\d{2}-\d{2}\n/, ""),
+      category: "general"
+    });
+  }
+  // ── Public API — v2 Structured Operations ──────────────────────────────────
+  /** Save a new memory entry with TF-IDF conflict detection. Returns the saved entry. */
+  async saveEntry(opts) {
+    const store = opts.scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore() ?? createEmptyStore();
+    if (opts.scope === "project" && this.projectDir) {
+      await mkdir2(this.projectDir, { recursive: true });
+    }
+    const index = opts.scope === "global" ? this.globalIndex : this.projectIndex;
+    const conflict = this.findConflict(store, index, opts.content, opts.category);
+    let entry;
+    if (conflict) {
+      conflict.content = opts.content;
+      conflict.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      conflict.category = opts.category ?? conflict.category;
+      if (opts.tags) conflict.tags = opts.tags;
+      if (opts.branch !== void 0) conflict.branch = opts.branch;
+      if (opts.directoryScope !== void 0) conflict.directoryScope = opts.directoryScope;
+      conflict.archived = false;
+      conflict.archivedAt = null;
+      entry = conflict;
+      index.addDocument(entry.id, entry.content);
+    } else {
+      entry = {
+        id: randomUUID2(),
+        category: opts.category ?? "general",
+        content: opts.content,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        lastRecalledAt: null,
+        recallCount: 0,
+        sourceConversationId: opts.sourceConversationId,
+        tags: opts.tags,
+        archived: false,
+        branch: opts.branch ?? null,
+        directoryScope: opts.directoryScope ?? null
+      };
+      store.entries.push(entry);
+      index.addDocument(entry.id, entry.content);
+    }
+    store.lastModified = (/* @__PURE__ */ new Date()).toISOString();
+    if (opts.scope === "global") {
+      this.globalStore = store;
+      await this.persistStore(this.globalDir, store);
+    } else {
+      this.projectStore = store;
+      if (this.projectDir) await this.persistStore(this.projectDir, store);
+    }
+    this.syncPush(opts.scope, "memory.json", JSON.stringify(store));
+    return entry;
+  }
+  /** Update an existing memory entry by ID. */
+  async updateEntry(scope, id, updates) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore();
+    if (!store) return null;
+    const entry = store.entries.find((e) => e.id === id);
+    if (!entry) return null;
+    if (updates.content !== void 0) entry.content = updates.content;
+    if (updates.category !== void 0) entry.category = updates.category;
+    if (updates.tags !== void 0) entry.tags = updates.tags;
+    if (updates.branch !== void 0) entry.branch = updates.branch;
+    if (updates.directoryScope !== void 0) entry.directoryScope = updates.directoryScope;
+    entry.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    store.lastModified = (/* @__PURE__ */ new Date()).toISOString();
+    if (updates.content !== void 0) {
+      const index = scope === "global" ? this.globalIndex : this.projectIndex;
+      index.addDocument(id, entry.content);
+    }
+    if (scope === "global") {
+      this.globalStore = store;
+      await this.persistStore(this.globalDir, store);
+    } else if (this.projectDir) {
+      this.projectStore = store;
+      await this.persistStore(this.projectDir, store);
+    }
+    return entry;
+  }
+  /** Delete a memory entry by ID. */
+  async deleteEntry(scope, id) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore();
+    if (!store) return false;
+    const idx = store.entries.findIndex((e) => e.id === id);
+    if (idx === -1) return false;
+    store.entries.splice(idx, 1);
+    store.lastModified = (/* @__PURE__ */ new Date()).toISOString();
+    const index = scope === "global" ? this.globalIndex : this.projectIndex;
+    index.removeDocument(id);
+    if (scope === "global") {
+      this.globalStore = store;
+      await this.persistStore(this.globalDir, store);
+    } else if (this.projectDir) {
+      this.projectStore = store;
+      await this.persistStore(this.projectDir, store);
+    }
+    return true;
+  }
   /**
-   * Semantic search for memories relevant to the current context.
-   * Requires platform sync with embeddings. Returns empty if unavailable.
+   * Search memories with TF-IDF ranking + temporal relevance scoring.
+   * Falls back to substring for exact matches, then semantic via platform.
    */
+  async recall(opts) {
+    const results = [];
+    const lowerQuery = opts.query.toLowerCase();
+    const limit = opts.limit ?? 10;
+    const includeArchived = opts.includeArchived ?? false;
+    const searchStore = (store, scope, index) => {
+      const substringMatches = /* @__PURE__ */ new Set();
+      for (const entry of store.entries) {
+        if (!includeArchived && entry.archived) continue;
+        if (opts.category && entry.category !== opts.category) continue;
+        if (opts.branch && entry.branch && entry.branch !== opts.branch) continue;
+        if (entry.content.toLowerCase().includes(lowerQuery) || entry.tags?.some((t2) => t2.toLowerCase().includes(lowerQuery))) {
+          const relevance = this.computeRelevance(1, entry);
+          results.push({ entry, scope, relevance, matchType: "substring" });
+          substringMatches.add(entry.id);
+          entry.lastRecalledAt = (/* @__PURE__ */ new Date()).toISOString();
+          entry.recallCount++;
+        }
+      }
+      const tfidfResults = index.search(opts.query, limit * 2);
+      for (const { id, score } of tfidfResults) {
+        if (substringMatches.has(id)) continue;
+        if (score < RECALL_TFIDF_THRESHOLD) continue;
+        const entry = store.entries.find((e) => e.id === id);
+        if (!entry) continue;
+        if (!includeArchived && entry.archived) continue;
+        if (opts.category && entry.category !== opts.category) continue;
+        if (opts.branch && entry.branch && entry.branch !== opts.branch) continue;
+        const relevance = this.computeRelevance(score, entry);
+        results.push({ entry, scope, relevance, matchType: "tfidf" });
+        entry.lastRecalledAt = (/* @__PURE__ */ new Date()).toISOString();
+        entry.recallCount++;
+      }
+    };
+    if (opts.scope !== "project") {
+      const globalStore = await this.loadGlobalStore();
+      searchStore(globalStore, "global", this.globalIndex);
+    }
+    if (opts.scope !== "global") {
+      const projectStore = await this.loadProjectStore();
+      if (projectStore) searchStore(projectStore, "project", this.projectIndex);
+    }
+    results.sort((a, b) => b.relevance - a.relevance);
+    if (results.length === 0 && this.sync) {
+      const semantic = await this.loadRelevantMemories(opts.query, limit);
+      for (const m of semantic) {
+        results.push({
+          entry: {
+            id: m.id,
+            category: "general",
+            content: m.content,
+            createdAt: "",
+            updatedAt: "",
+            lastRecalledAt: (/* @__PURE__ */ new Date()).toISOString(),
+            recallCount: 0
+          },
+          scope: m.scope,
+          relevance: m.similarity,
+          matchType: "semantic"
+        });
+      }
+    }
+    if (results.some((r) => r.matchType === "substring" || r.matchType === "tfidf")) {
+      await Promise.all([
+        this.globalStore ? this.persistStore(this.globalDir, this.globalStore) : Promise.resolve(),
+        this.projectStore && this.projectDir ? this.persistStore(this.projectDir, this.projectStore) : Promise.resolve()
+      ]);
+    }
+    return results.slice(0, limit);
+  }
+  // ── Public API — Phase 3: Temporal & Scope ──────────────────────────────────
+  /**
+   * Archive stale entries (not recalled in 90+ days).
+   * Returns the number of entries archived.
+   */
+  async archiveStaleEntries(scope) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore();
+    if (!store) return 0;
+    let count = 0;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    for (const entry of store.entries) {
+      if (entry.archived) continue;
+      if (this.isStale(entry)) {
+        entry.archived = true;
+        entry.archivedAt = now;
+        count++;
+      }
+    }
+    if (count > 0) {
+      store.lastModified = now;
+      if (scope === "global") {
+        await this.persistStore(this.globalDir, store);
+      } else if (this.projectDir) {
+        await this.persistStore(this.projectDir, store);
+      }
+    }
+    return count;
+  }
+  /**
+   * Restore an archived entry back to active status.
+   */
+  async restoreEntry(scope, id) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore();
+    if (!store) return false;
+    const entry = store.entries.find((e) => e.id === id);
+    if (!entry || !entry.archived) return false;
+    entry.archived = false;
+    entry.archivedAt = null;
+    entry.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    store.lastModified = (/* @__PURE__ */ new Date()).toISOString();
+    if (scope === "global") {
+      await this.persistStore(this.globalDir, store);
+    } else if (this.projectDir) {
+      await this.persistStore(this.projectDir, store);
+    }
+    return true;
+  }
+  /**
+   * Archive a single entry by ID.
+   */
+  async archiveEntry(scope, id) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore();
+    if (!store) return false;
+    const entry = store.entries.find((e) => e.id === id);
+    if (!entry || entry.archived) return false;
+    entry.archived = true;
+    entry.archivedAt = (/* @__PURE__ */ new Date()).toISOString();
+    entry.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    store.lastModified = (/* @__PURE__ */ new Date()).toISOString();
+    if (scope === "global") {
+      await this.persistStore(this.globalDir, store);
+    } else if (this.projectDir) {
+      await this.persistStore(this.projectDir, store);
+    }
+    return true;
+  }
+  /**
+   * Find groups of related entries that could be consolidated.
+   * Uses TF-IDF similarity to cluster entries within the same category.
+   * Returns groups sorted by number of related entries (largest first).
+   */
+  findConsolidationGroups(scope) {
+    const store = scope === "global" ? this.globalStore : this.projectStore;
+    if (!store || store.entries.length < 2) return [];
+    const index = scope === "global" ? this.globalIndex : this.projectIndex;
+    const activeEntries = store.entries.filter((e) => !e.archived);
+    const byCategory = /* @__PURE__ */ new Map();
+    for (const entry of activeEntries) {
+      const list = byCategory.get(entry.category) ?? [];
+      list.push(entry);
+      byCategory.set(entry.category, list);
+    }
+    const groups = [];
+    const claimed = /* @__PURE__ */ new Set();
+    for (const [, categoryEntries] of byCategory) {
+      if (categoryEntries.length < 2) continue;
+      for (const entry of categoryEntries) {
+        if (claimed.has(entry.id)) continue;
+        const similar = index.findSimilar(entry.id, CONSOLIDATION_THRESHOLD).filter((s) => {
+          if (claimed.has(s.id)) return false;
+          const other = categoryEntries.find((e) => e.id === s.id);
+          return other && !other.archived;
+        });
+        if (similar.length === 0) continue;
+        const related = similar.map((s) => categoryEntries.find((e) => e.id === s.id));
+        const avgSimilarity = similar.reduce((sum, s) => sum + s.score, 0) / similar.length;
+        const allInGroup = [entry, ...related];
+        allInGroup.sort((a, b) => b.recallCount - a.recallCount);
+        groups.push({
+          primary: allInGroup[0],
+          related: allInGroup.slice(1),
+          avgSimilarity
+        });
+        for (const e of allInGroup) claimed.add(e.id);
+      }
+    }
+    groups.sort((a, b) => b.related.length - a.related.length);
+    return groups;
+  }
+  /**
+   * Get stale entries for a scope (for dashboard review).
+   */
+  async getStaleEntries(scope) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore();
+    if (!store) return [];
+    return store.entries.filter((e) => !e.archived && this.isStale(e));
+  }
+  /**
+   * Get archived entries for a scope.
+   */
+  async getArchivedEntries(scope) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore();
+    if (!store) return [];
+    return store.entries.filter((e) => e.archived);
+  }
+  /** Get summary statistics for a store. */
+  async getSummary(scope) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore() ?? createEmptyStore();
+    const byCategory = {};
+    for (const cat of MEMORY_CATEGORIES) byCategory[cat] = 0;
+    const now = Date.now();
+    let staleCount = 0;
+    let archivedCount = 0;
+    let branchScoped = 0;
+    let oldest = null;
+    let newest = null;
+    for (const entry of store.entries) {
+      if (entry.archived) {
+        archivedCount++;
+        continue;
+      }
+      byCategory[entry.category] = (byCategory[entry.category] ?? 0) + 1;
+      if (!oldest || entry.createdAt < oldest) oldest = entry.createdAt;
+      if (!newest || entry.createdAt > newest) newest = entry.createdAt;
+      if (entry.branch) branchScoped++;
+      const lastActivity = entry.lastRecalledAt ?? entry.updatedAt ?? entry.createdAt;
+      const daysSince = (now - new Date(lastActivity).getTime()) / (1e3 * 60 * 60 * 24);
+      if (daysSince > STALE_THRESHOLD_DAYS) staleCount++;
+    }
+    return {
+      totalEntries: store.entries.filter((e) => !e.archived).length,
+      byCategory,
+      oldestEntry: oldest,
+      newestEntry: newest,
+      staleCount,
+      archivedCount,
+      branchScoped
+    };
+  }
+  /** Get all entries for a scope (for dashboard display). */
+  async getEntries(scope) {
+    const store = scope === "global" ? await this.loadGlobalStore() : await this.loadProjectStore();
+    return store?.entries ?? [];
+  }
+  /** Get file path for a scope (for display). */
+  getPath(scope) {
+    if (scope === "global") return join3(this.globalDir, MEMORY_FILENAME_V2);
+    return this.projectDir ? join3(this.projectDir, MEMORY_FILENAME_V2) : null;
+  }
+  /** Invalidate cached stores and TF-IDF indexes. */
+  clearCache() {
+    this.globalStore = null;
+    this.projectStore = null;
+    this.globalIndex.clear();
+    this.projectIndex.clear();
+  }
+  // ── Semantic search (platform) ─────────────────────────────────────────────
   async loadRelevantMemories(context, limit = 5) {
     if (!this.sync) return [];
     try {
@@ -9634,50 +10276,194 @@ ${items}`);
       return [];
     }
   }
-  /** Overwrite global memory with new content. Syncs to platform if available. */
-  async saveGlobalMemory(content) {
-    await this.writeSafe(this.globalPath, content);
-    this.syncPush("global", "memory.md", content);
-  }
-  /** Overwrite project memory with new content. Creates .ava/ dir if needed. */
-  async saveProjectMemory(content) {
-    if (!this.projectPath) {
-      throw new Error("No project root configured \u2014 cannot save project memory.");
-    }
-    const dir = join3(this.projectPath, "..");
-    await mkdir2(dir, { recursive: true });
-    await this.writeSafe(this.projectPath, content);
-    this.syncPush("project", "memory.md", content);
-  }
-  /** Append an entry to global memory. */
-  async appendGlobal(entry) {
-    const existing = await this.loadGlobalMemory() ?? "";
-    const updated = existing ? `${existing.trimEnd()}
-
-${entry}` : entry;
-    await this.saveGlobalMemory(updated);
-  }
-  /** Append an entry to project memory. */
-  async appendProject(entry) {
-    const existing = await this.loadProjectMemory() ?? "";
-    const updated = existing ? `${existing.trimEnd()}
-
-${entry}` : entry;
-    await this.saveProjectMemory(updated);
-  }
-  /** Get the file path for a given scope (for display purposes). */
-  getPath(scope) {
-    return scope === "global" ? this.globalPath : this.projectPath;
-  }
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  async readSafe(path) {
+  // ── Private — Storage ──────────────────────────────────────────────────────
+  async loadStore(dir, scope) {
+    const v2Path = join3(dir, MEMORY_FILENAME_V2);
+    const v1Path = join3(dir, MEMORY_FILENAME_V1);
     try {
-      const content = await readFile4(path, "utf-8");
-      return content || null;
+      const raw = await readFile4(v2Path, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (parsed.version === 2 && Array.isArray(parsed.entries)) {
+        return parsed;
+      }
     } catch {
-      return null;
+    }
+    try {
+      const v1Content = await readFile4(v1Path, "utf-8");
+      if (v1Content?.trim()) {
+        const store = this.migrateFromV1(v1Content);
+        await mkdir2(dir, { recursive: true });
+        await this.persistStore(dir, store);
+        return store;
+      }
+    } catch {
+    }
+    if (this.sync) {
+      try {
+        const remote = await this.sync.pull(scope);
+        if (remote.length > 0) {
+          const content = remote.map((m) => m.content).join("\n\n");
+          const store = this.migrateFromV1(content);
+          await mkdir2(dir, { recursive: true });
+          await this.persistStore(dir, store);
+          return store;
+        }
+      } catch {
+      }
+    }
+    return createEmptyStore();
+  }
+  async persistStore(dir, store) {
+    await mkdir2(dir, { recursive: true });
+    const path = join3(dir, MEMORY_FILENAME_V2);
+    const content = JSON.stringify(store, null, 2);
+    await this.writeSafe(path, content);
+    const mdPath = join3(dir, MEMORY_FILENAME_V1);
+    const activeEntries = store.entries.filter((e) => !e.archived);
+    const markdown = this.formatEntriesAsMarkdown(activeEntries);
+    await this.writeSafe(mdPath, markdown);
+  }
+  // ── Private — TF-IDF Index ─────────────────────────────────────────────────
+  /** Rebuild TF-IDF index from a store's entries. */
+  rebuildIndex(store, index) {
+    index.clear();
+    for (const entry of store.entries) {
+      if (!entry.archived) {
+        index.addDocument(entry.id, entry.content);
+      }
     }
   }
+  // ── Private — Relevance Scoring ────────────────────────────────────────────
+  /**
+   * Compute composite relevance score combining TF-IDF match quality,
+   * recency, and recall frequency. Returns 0–1.
+   */
+  computeRelevance(tfidfScore, entry) {
+    const lastActivity = entry.lastRecalledAt ?? entry.updatedAt ?? entry.createdAt;
+    const daysSince = (Date.now() - new Date(lastActivity).getTime()) / (1e3 * 60 * 60 * 24);
+    const recencyScore = Math.exp(-daysSince / 30);
+    const frequencyScore = entry.recallCount > 0 ? Math.min(1, Math.log(1 + entry.recallCount) / Math.log(20)) : 0;
+    return tfidfScore * W_TFIDF + recencyScore * W_RECENCY + frequencyScore * W_FREQUENCY;
+  }
+  // ── Private — Migration ────────────────────────────────────────────────────
+  /** Convert v1 markdown to v2 structured store. */
+  migrateFromV1(markdown) {
+    const entries = this.markdownToEntries(markdown);
+    return {
+      version: 2,
+      lastModified: (/* @__PURE__ */ new Date()).toISOString(),
+      entries
+    };
+  }
+  /** Parse markdown content into structured entries. */
+  markdownToEntries(markdown) {
+    const sections = markdown.split(/(?=^####\s)/m);
+    const entries = [];
+    for (const section of sections) {
+      const trimmed = section.trim();
+      if (!trimmed) continue;
+      const dateMatch = trimmed.match(/^####\s*(\d{4}-\d{2}-\d{2})\s*\n([\s\S]*)$/);
+      const createdAt = dateMatch ? new Date(dateMatch[1]).toISOString() : (/* @__PURE__ */ new Date()).toISOString();
+      const content = dateMatch ? dateMatch[2].trim() : trimmed;
+      if (!content) continue;
+      entries.push({
+        id: randomUUID2(),
+        category: this.inferCategory(content),
+        content,
+        createdAt,
+        updatedAt: createdAt,
+        lastRecalledAt: null,
+        recallCount: 0,
+        archived: false
+      });
+    }
+    if (entries.length === 0 && markdown.trim()) {
+      entries.push({
+        id: randomUUID2(),
+        category: this.inferCategory(markdown),
+        content: markdown.trim(),
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        lastRecalledAt: null,
+        recallCount: 0,
+        archived: false
+      });
+    }
+    return entries;
+  }
+  /** Infer a category from content using keyword heuristics. */
+  inferCategory(content) {
+    const lower = content.toLowerCase();
+    if (/\b(bug|fix|error|crash|issue|broken|regression)\b/.test(lower)) return "bug-fix";
+    if (/\b(prefer|always use|never use|style|workflow)\b/.test(lower)) return "preference";
+    if (/\b(architecture|structure|design|pattern|layout|monorepo)\b/.test(lower)) return "architecture";
+    if (/\b(convention|naming|format|lint|rule)\b/.test(lower)) return "convention";
+    if (/\b(config|setup|install|environment|tool|setting)\b/.test(lower)) return "tool-config";
+    if (/\b(decided|decision|chose|agreed|went with)\b/.test(lower)) return "decision";
+    if (/\b(pattern|approach|technique|method|strategy)\b/.test(lower)) return "pattern";
+    return "general";
+  }
+  // ── Private — Conflict Detection (TF-IDF enhanced) ─────────────────────────
+  /** Find an existing entry that conflicts with new content using TF-IDF similarity. */
+  findConflict(store, index, newContent, category) {
+    for (const entry of store.entries) {
+      if (entry.archived) continue;
+      if (category && entry.category !== category) continue;
+      const similarity = index.similarityToText(entry.id, newContent);
+      if (similarity > CONFLICT_TFIDF_THRESHOLD) return entry;
+      const newFirstLine = newContent.toLowerCase().split("\n")[0].trim();
+      const existingFirstLine = entry.content.toLowerCase().split("\n")[0].trim();
+      if (newFirstLine.length > 10 && newFirstLine === existingFirstLine) return entry;
+    }
+    return null;
+  }
+  // ── Private — Filtering ────────────────────────────────────────────────────
+  /** Filter entries to active (non-archived), optionally respecting branch scope. */
+  filterActive(entries, branch) {
+    return entries.filter((e) => {
+      if (e.archived) return false;
+      if (e.branch && branch && e.branch !== branch) return false;
+      return true;
+    });
+  }
+  // ── Private — Formatting ───────────────────────────────────────────────────
+  /** Format entries for system prompt (compact, category-grouped). */
+  formatEntriesForPrompt(entries) {
+    const grouped = /* @__PURE__ */ new Map();
+    for (const entry of entries) {
+      const list = grouped.get(entry.category) ?? [];
+      list.push(entry);
+      grouped.set(entry.category, list);
+    }
+    const parts = [];
+    for (const [category, categoryEntries] of grouped) {
+      const label = category.charAt(0).toUpperCase() + category.slice(1).replace("-", " ");
+      const items = categoryEntries.map((e) => {
+        const stale = this.isStale(e) ? " \u26A0\uFE0F stale" : "";
+        const branchTag = e.branch ? ` [${e.branch}]` : "";
+        return `- ${e.content}${branchTag}${stale}`;
+      }).join("\n");
+      parts.push(`**${label}:**
+${items}`);
+    }
+    return parts.join("\n\n");
+  }
+  /** Format entries as flat markdown (for v1 compat and human-readable mirror). */
+  formatEntriesAsMarkdown(entries) {
+    return entries.map((e) => {
+      const date = e.createdAt.split("T")[0];
+      const branchTag = e.branch ? ` [branch: ${e.branch}]` : "";
+      return `#### ${date}${branchTag}
+${e.content}`;
+    }).join("\n\n");
+  }
+  /** Check if an entry is stale (not recalled in 90+ days). */
+  isStale(entry) {
+    const lastActivity = entry.lastRecalledAt ?? entry.updatedAt ?? entry.createdAt;
+    const daysSince = (Date.now() - new Date(lastActivity).getTime()) / (1e3 * 60 * 60 * 24);
+    return daysSince > STALE_THRESHOLD_DAYS;
+  }
+  // ── Private — File I/O ─────────────────────────────────────────────────────
   /** Atomic write: temp file → rename. */
   async writeSafe(path, content) {
     const tmpPath = path + ".tmp";
@@ -11022,7 +11808,8 @@ var DEFAULT_CONFIG = {
   preferences: {
     temperature: 0.7,
     maxTokens: 8192,
-    markdownRendering: true
+    markdownRendering: true,
+    autoMemory: true
   }
 };
 
@@ -11085,6 +11872,7 @@ function validateConfig(raw) {
     if (typeof prefs.temperature === "number") config.preferences.temperature = prefs.temperature;
     if (typeof prefs.maxTokens === "number") config.preferences.maxTokens = prefs.maxTokens;
     if (typeof prefs.markdownRendering === "boolean") config.preferences.markdownRendering = prefs.markdownRendering;
+    if (typeof prefs.autoMemory === "boolean") config.preferences.autoMemory = prefs.autoMemory;
   }
   return config;
 }
@@ -11415,6 +12203,7 @@ export {
   ITERATION_WARNING_THRESHOLD,
   LANGUAGE_NAMES,
   MAX_TOOL_CALL_ITERATIONS,
+  MEMORY_CATEGORIES,
   MEMORY_DIR,
   MemoryManager,
   PlatformMemorySync,
@@ -11425,9 +12214,12 @@ export {
   SUPPORTED_LOCALES,
   StreamError,
   SymbolIndexer,
+  TfIdfIndex,
   ToolExecutionError,
   ToolRegistry,
   buildSystemPrompt,
+  cosineSimilarity,
+  createEmptyStore,
   detectProjectRoot,
   getInstructionsPath,
   getLanguageName,
@@ -11444,5 +12236,6 @@ export {
   setLocale,
   setLocaleSync,
   setLogLevel,
-  t
+  t,
+  tokenize
 };

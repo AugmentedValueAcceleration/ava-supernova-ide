@@ -248,7 +248,10 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
 
     if (this.isRunning) {
-      this.client?.notifyError('Ava is still working on the previous message.', 'busy');
+      // Inject as mid-run interjection instead of rejecting
+      this.agent.inject(text);
+      this.conversation.addUserMessage(text);
+      this.client?.notifyInterjectionAck?.(text);
       return;
     }
 
@@ -269,7 +272,10 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
     }
 
     if (this.isRunning) {
-      this.client?.notifyError('Ava is still working on the previous message.', 'busy');
+      // Inject as mid-run interjection (text only — images can't be injected mid-run)
+      this.agent.inject(text);
+      this.conversation.addUserMessage(text);
+      this.client?.notifyInterjectionAck?.(text);
       return;
     }
 
@@ -365,6 +371,9 @@ export class AvaAgentServiceImpl implements IAvaAgentService {
             event.context.limit,
             event.context.percent,
           );
+          break;
+        case 'interjection':
+          // Interjection processed — UI already acknowledged via notifyInterjectionAck
           break;
         case 'done':
           this.client?.notifyDone();
@@ -1672,8 +1681,19 @@ Start-Process -FilePath '${appExePath.replace(/'/g, "''")}'
     // Load persistent memory (pass project instructions as context for episodic retrieval)
     const memory = (await this.memoryManager?.loadAll(projectInstructions)) || undefined;
 
+    // Detect if workspace is the Ava monorepo — let Ava read her own source
+    const cwd = this.getCwd();
+    let sourceRoot: string | undefined;
+    if (this.cachedIsAdmin) {
+      const { existsSync } = require('node:fs');
+      const { join } = require('node:path');
+      if (existsSync(join(cwd, 'packages/core/src/agent/agent.ts'))) {
+        sourceRoot = cwd;
+      }
+    }
+
     return _core.buildSystemPrompt({
-      cwd: this.getCwd(),
+      cwd,
       platform: process.platform,
       shell: 'bash',
       permissionMode: 'balanced',
@@ -1682,6 +1702,7 @@ Start-Process -FilePath '${appExePath.replace(/'/g, "''")}'
       memory,
       userName: this.cachedUserName,
       isAdmin: this.cachedIsAdmin,
+      sourceRoot,
     });
   }
 

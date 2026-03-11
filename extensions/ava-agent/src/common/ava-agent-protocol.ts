@@ -412,6 +412,7 @@ export interface IAvaAgentClient {
   ): void;
   notifyUsage(usage: AvaUsageInfo): void;
   notifyError(message: string, code?: string, suggestion?: string): void;
+  notifyInterjectionAck(content: string): void;
   notifyDone(): void;
   notifyModelSwitched(modelId: string, modelName: string): void;
   notifyChatCleared(): void;

@@ -402,6 +402,20 @@ export class AvaAgentClient implements IAvaAgentClient {
     });
   }
 
+  notifyInterjectionAck(content: string): void {
+    // Show the interjected message as a user bubble in the chat
+    const msg: UIMessage = {
+      id: nextId(),
+      role: 'user',
+      content,
+      toolCalls: [],
+      isStreaming: false,
+    };
+    this.update({
+      messages: [...this.state.messages, msg],
+    });
+  }
+
   notifyDone(): void {
     this.flushDeltaBuffer();
     this.update({ isStreaming: false, isThinking: false });
