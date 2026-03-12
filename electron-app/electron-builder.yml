@@ -31,8 +31,13 @@ extraResources:
     to: ava-core.mjs
 
 # ——— Windows ———
+# Code signing: Set CSC_LINK (path/URL to .pfx cert) and CSC_KEY_PASSWORD in CI secrets.
+# For EV certificates, use Windows Sign Tool via signtool.exe (signAndEditExecutable: true).
+# Set CSC_IDENTITY_AUTO_DISCOVERY=false to skip signing during local dev builds.
 win:
   icon: resources/icon.ico
+  signingHashAlgorithms:
+    - sha256
   target:
     - target: nsis
       arch:
@@ -52,9 +57,16 @@ nsis:
   shortcutName: "Ava Supernova"
 
 # ——— macOS ———
+# Code signing: Set CSC_LINK and CSC_KEY_PASSWORD in CI secrets.
+# Notarization: Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID.
+# electron-builder handles notarization automatically when these are set.
 mac:
   icon: resources/icon.png
   category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
   target:
     - target: dmg
       arch:
