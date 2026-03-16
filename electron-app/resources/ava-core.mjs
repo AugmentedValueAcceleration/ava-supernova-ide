@@ -1245,7 +1245,7 @@ You can see and analyze images \u2014 screenshots, photos, diagrams, UI mockups.
 
 ## Your Tools
 
-You have twenty-six tools. **When the user asks you to do something**, use them proactively \u2014 don't talk about what you *could* do, go do it. But when the user is asking a question or having a conversation, respond with words first.
+You have forty-five tools. **When the user asks you to do something**, use them proactively \u2014 don't talk about what you *could* do, go do it. But when the user is asking a question or having a conversation, respond with words first.
 
 ### Reading & Searching (always auto-approved)
 - **file_read** \u2014 Read file contents with line numbers. Use \`offset\`/\`limit\` for large files instead of reading the entire thing.
@@ -1593,9 +1593,9 @@ When users ask what you can do, how to configure you, or need help with your fea
 
 **Quick summary (call docs_lookup for details):**
 
-**Your 26 tools:** file_read, file_write, file_edit, glob, grep, bash, list_directory, git_status, git_diff, web_search, http_request, browser, screenshot, database_query, project_index, find_symbol, rollback, memory_save, memory_recall, memory_update, memory_delete, support_request, present_plan, todo_write, ask_user, docs_lookup.
+**Your 45 tools:** file_read, file_write, file_edit, glob, grep, bash, list_directory, git_status, git_diff, web_search, http_request, browser, screenshot, database_query, project_index, find_symbol, rollback, memory_save, memory_recall, memory_update, memory_delete, support_request, present_plan, todo_write, ask_user, docs_lookup.
 
-**Your modes:** Code (full agent, 24 tools), Plan (read-only analysis), Chat (no tools), Security (OWASP audit).
+**Your modes:** Code (full agent, 45 tools), Plan (read-only analysis), Chat (no tools), Security (OWASP audit).
 
 **docs_lookup topics:** getting-started, models, tools, modes, permissions, memory, configuration, project-context, cli-commands, languages, keyboard-shortcuts, troubleshooting, platform-account, dashboard, history, security-audit.`;
   return prompt;
@@ -8585,9 +8585,9 @@ This works with Ollama, LM Studio, vLLM, or any OpenAI-compatible API endpoint.
     topic: "tools",
     keywords: ["tool", "file_read", "file_write", "file_edit", "glob", "grep", "bash", "web_search", "browser", "screenshot", "database", "git", "memory_save", "memory_recall", "present_plan", "todo_write", "ask_user", "rollback", "http_request", "project_index", "find_symbol", "list_directory", "docs_lookup", "support_request", "support"],
     title: "Built-in Tools",
-    content: `# Built-in Tools (24)
+    content: `# Built-in Tools (45)
 
-Ava has 24 built-in tools organized by category. Tool availability depends on the current mode and permission settings.
+Ava has 45 built-in tools organized by category. Tool availability depends on the current mode and permission settings.
 
 ## Reading & Searching (always auto-approved)
 | Tool | Description |
@@ -8664,7 +8664,7 @@ Ava has 24 built-in tools organized by category. Tool availability depends on th
 Ava has four modes that control what tools are available and how she behaves.
 
 ## Code Mode (default)
-Full agent with all 24 tools. Ava reads, writes, searches, and executes across your codebase. This is the primary working mode.
+Full agent with all 45 tools. Ava reads, writes, searches, and executes across your codebase. This is the primary working mode.
 
 ## Plan Mode
 Read-only analysis. Ava reads your code and creates plans without modifying anything. Use this when you want Ava to analyze and propose changes before committing to them.
@@ -9048,7 +9048,7 @@ On macOS, use Cmd instead of Ctrl.`
 
 ### Free Tier
 - Bring your own API keys \u2014 no account needed
-- All 23 tools, all modes, all features
+- All 45 tools, all modes, all features
 - Local memory and history
 - Full open-source experience
 

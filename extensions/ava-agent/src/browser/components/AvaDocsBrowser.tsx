@@ -431,7 +431,7 @@ export const AvaDocsBrowser: React.FC<AvaDocsBrowserProps> = ({ onBack }) => {
         {/* Tools */}
         {activeTab === 'tools' && (
           <div style={s.section}>
-            <div style={s.sectionTitle}>Built-in Tools (24)</div>
+            <div style={s.sectionTitle}>Built-in Tools (45)</div>
             {TOOL_GROUPS.map(group => (
               <div key={group.title}>
                 <div style={s.h3}>{group.title}</div>
@@ -769,7 +769,7 @@ const TOOL_GROUPS = [
 ];
 
 const MODES = [
-  { name: 'Code Mode', desc: 'Full agent with all 24 tools. Reads, writes, searches, and executes across your codebase.' },
+  { name: 'Code Mode', desc: 'Full agent with all 45 tools. Reads, writes, searches, and executes across your codebase.' },
   { name: 'Plan Mode', desc: 'Read-only analysis. Reads your code and creates plans without modifying anything.' },
   { name: 'Chat Mode', desc: 'Conversation only. No tools, just discussion about code, architecture, or ideas.' },
   { name: 'Security Mode', desc: 'AI-powered OWASP-aligned security audit. Scans your project for vulnerabilities.' },
