@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import type { ActivityItem } from '../App';
+import type { ActivityItem, SidebarPosition } from '../App';
 
 interface Props {
   activePanel: ActivityItem;
+  position?: SidebarPosition;
+  onTogglePosition?: () => void;
 }
 
 const panelTitles: Record<ActivityItem, string> = {
@@ -409,7 +411,7 @@ function DebugPanel() {
   );
 }
 
-export default function Sidebar({ activePanel }: Props) {
+export default function Sidebar({ activePanel, position = 'left', onTogglePosition }: Props) {
   const panels: Record<ActivityItem, () => ReactNode> = {
     explorer: ExplorerPanel,
     search: SearchPanel,
@@ -426,7 +428,8 @@ export default function Sidebar({ activePanel }: Props) {
       style={{
         width: 260,
         background: '#181825',
-        borderRight: '1px solid #313244',
+        borderRight: position === 'left' ? '1px solid #313244' : 'none',
+        borderLeft: position === 'right' ? '1px solid #313244' : 'none',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -447,6 +450,26 @@ export default function Sidebar({ activePanel }: Props) {
         <span style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.8 }}>
           {panelTitles[activePanel]}
         </span>
+        <div style={{ display: 'flex', gap: 2 }}>
+          {onTogglePosition && (
+            <button
+              onClick={onTogglePosition}
+              title={`Move sidebar to ${position === 'left' ? 'right' : 'left'}`}
+              style={{
+                width: 22, height: 22, background: 'transparent', border: 'none',
+                color: '#6c7086', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 4, padding: 0,
+              }}
+              onMouseOver={(e) => e.currentTarget.style.color = '#cdd6f4'}
+              onMouseOut={(e) => e.currentTarget.style.color = '#6c7086'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                style={{ transform: position === 'left' ? 'none' : 'scaleX(-1)' }}>
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+            </button>
+          )}
         <button
           style={{
             width: 22,
@@ -467,6 +490,7 @@ export default function Sidebar({ activePanel }: Props) {
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
         </button>
+        </div>
       </div>
 
       {/* Content */}
