@@ -118,29 +118,32 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
         })}
       </div>
 
-      {/* Bottom: Settings gear */}
+      {/* Bottom: Dashboard */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <button
-          title="Settings"
+          title="Dashboard"
+          onClick={() => onSelect('dashboard')}
           style={{
             width: 48,
             height: 48,
             background: 'transparent',
             border: 'none',
-            borderLeft: '2px solid transparent',
-            color: '#6c7086',
+            borderLeft: active === 'dashboard' && sidebarOpen ? '2px solid #a855f7' : '2px solid transparent',
+            color: active === 'dashboard' && sidebarOpen ? '#cdd6f4' : '#6c7086',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             transition: 'color 0.15s',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; }}
+          onMouseEnter={(e) => { if (!(active === 'dashboard' && sidebarOpen)) e.currentTarget.style.color = '#cdd6f4'; }}
+          onMouseLeave={(e) => { if (!(active === 'dashboard' && sidebarOpen)) e.currentTarget.style.color = '#6c7086'; }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+            <rect x="3" y="3" width="7" height="9" rx="1" />
+            <rect x="14" y="3" width="7" height="5" rx="1" />
+            <rect x="14" y="12" width="7" height="9" rx="1" />
+            <rect x="3" y="16" width="7" height="5" rx="1" />
           </svg>
         </button>
       </div>

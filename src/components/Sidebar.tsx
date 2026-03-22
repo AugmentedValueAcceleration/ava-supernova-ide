@@ -14,6 +14,7 @@ const panelTitles: Record<ActivityItem, string> = {
   ava: 'AVA',
   extensions: 'EXTENSIONS',
   debug: 'RUN AND DEBUG',
+  dashboard: 'DASHBOARD',
 };
 
 /* ---------- File tree placeholder ---------- */
@@ -411,6 +412,45 @@ function DebugPanel() {
   );
 }
 
+function DashboardPanel() {
+  const items = [
+    { icon: '⚡', label: 'Command Centre', desc: 'Overview of everything' },
+    { icon: '🧠', label: 'Memory', desc: 'View and manage memories' },
+    { icon: '✅', label: 'Tasks', desc: 'Your task list' },
+    { icon: '📓', label: 'Journal', desc: 'Daily entries' },
+    { icon: '🎓', label: 'Learning', desc: 'Curriculums and progress' },
+    { icon: '🎨', label: 'Personality', desc: 'Design your AI' },
+    { icon: '☁️', label: 'Cloud Sync', desc: 'Push to cloud' },
+    { icon: '📊', label: 'Usage', desc: 'Token usage and stats' },
+    { icon: '⚙️', label: 'Settings', desc: 'Preferences and keys' },
+    { icon: '📋', label: 'Release Notes', desc: 'What\'s new' },
+  ];
+
+  return (
+    <div style={{ padding: 8 }}>
+      {items.map((item) => (
+        <button
+          key={item.label}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+            padding: '8px 10px', borderRadius: 6, border: 'none',
+            background: 'transparent', color: '#cdd6f4', cursor: 'pointer',
+            fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
+          }}
+          onMouseOver={(e) => e.currentTarget.style.background = '#313244'}
+          onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+        >
+          <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>{item.icon}</span>
+          <div>
+            <div style={{ fontWeight: 500 }}>{item.label}</div>
+            <div style={{ fontSize: 11, color: '#6c7086' }}>{item.desc}</div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Sidebar({ activePanel, position = 'left', onTogglePosition }: Props) {
   const panels: Record<ActivityItem, () => ReactNode> = {
     explorer: ExplorerPanel,
@@ -419,6 +459,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
     ava: AvaPanel,
     extensions: ExtensionsPanel,
     debug: DebugPanel,
+    dashboard: DashboardPanel,
   };
 
   const Panel = panels[activePanel];

@@ -6,7 +6,7 @@ import EditorArea from './components/EditorArea';
 import BottomPanel from './components/BottomPanel';
 import StatusBar from './components/StatusBar';
 
-export type ActivityItem = 'explorer' | 'search' | 'git' | 'ava' | 'extensions' | 'debug';
+export type ActivityItem = 'explorer' | 'search' | 'git' | 'ava' | 'extensions' | 'debug' | 'dashboard';
 export type BottomTab = 'terminal' | 'problems' | 'output' | 'debug-console';
 export type SidebarPosition = 'left' | 'right';
 
