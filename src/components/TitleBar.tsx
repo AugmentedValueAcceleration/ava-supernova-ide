@@ -18,9 +18,7 @@ export default function TitleBar() {
     >
       {/* Left: Logo + Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#a855f7">
-          <path d="M12 0l3.09 6.26L22 7.27l-5 4.87L18.18 19 12 15.77 5.82 19 7 12.14l-5-4.87 6.91-1.01L12 0z" />
-        </svg>
+        <img src="/icon.png" width="18" height="18" style={{ borderRadius: 4 }} alt="Ava" />
         <span style={{ fontSize: 12, color: '#cdd6f4', fontWeight: 500, letterSpacing: 0.3 }}>
           Ava | Supernova IDE
         </span>

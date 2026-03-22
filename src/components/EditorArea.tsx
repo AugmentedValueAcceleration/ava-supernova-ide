@@ -68,21 +68,13 @@ export default function EditorArea() {
         <div style={{ maxWidth: 640, width: '100%' }}>
           {/* Hero */}
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
-            <div style={{
-              width: 72,
-              height: 72,
-              borderRadius: 16,
-              background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 20px',
-              boxShadow: '0 8px 32px rgba(168,85,247,0.25)',
-            }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            </div>
+            <img
+              src="/icon.png"
+              width="72"
+              height="72"
+              style={{ borderRadius: 16, margin: '0 auto 20px', display: 'block', boxShadow: '0 8px 32px rgba(168,85,247,0.25)' }}
+              alt="Ava | Supernova"
+            />
             <h1 style={{
               fontSize: 28,
               fontWeight: 300,
