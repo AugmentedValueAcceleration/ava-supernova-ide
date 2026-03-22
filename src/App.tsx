@@ -3,6 +3,7 @@ import TitleBar from './components/TitleBar';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
 import EditorArea from './components/EditorArea';
+import type { DashboardPageId } from './components/EditorArea';
 import BottomPanel from './components/BottomPanel';
 import StatusBar from './components/StatusBar';
 
@@ -25,8 +26,14 @@ export default function App() {
   const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => load('sidebarPos', 'left'));
   const [bottomPanelOpen, setBottomPanelOpen] = useState(() => load('panelOpen', false));
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>(() => load('panelTab', 'terminal'));
+  const [dashboardPage, setDashboardPage] = useState<DashboardPageId | null>(null);
 
   const toggleActivity = useCallback((item: ActivityItem) => {
+    // When clicking a non-dashboard activity item, clear the dashboard page
+    if (item !== 'dashboard') {
+      setDashboardPage(null);
+    }
+
     if (activeActivity === item && sidebarOpen) {
       setSidebarOpen(false);
       save('sidebarOpen', false);
@@ -37,6 +44,10 @@ export default function App() {
       save('sidebarOpen', true);
     }
   }, [activeActivity, sidebarOpen]);
+
+  const handleDashboardSelect = useCallback((page: string) => {
+    setDashboardPage(page as DashboardPageId);
+  }, []);
 
   const toggleSidebarPosition = useCallback(() => {
     setSidebarPosition(p => {
@@ -67,6 +78,7 @@ export default function App() {
       activePanel={activeActivity}
       position={sidebarPosition}
       onTogglePosition={toggleSidebarPosition}
+      onDashboardSelect={handleDashboardSelect}
     />
   ) : null;
 
@@ -77,7 +89,7 @@ export default function App() {
         {sidebarPosition === 'left' && activityBar}
         {sidebarPosition === 'left' && sidebar}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-          <EditorArea />
+          <EditorArea dashboardPage={dashboardPage} />
           {bottomPanelOpen && (
             <BottomPanel activeTab={activeBottomTab} onTabChange={changeBottomTab} onClose={toggleBottomPanel} />
           )}

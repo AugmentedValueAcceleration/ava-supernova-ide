@@ -5,6 +5,7 @@ interface Props {
   activePanel: ActivityItem;
   position?: SidebarPosition;
   onTogglePosition?: () => void;
+  onDashboardSelect?: (page: string) => void;
 }
 
 const panelTitles: Record<ActivityItem, string> = {
@@ -412,54 +413,325 @@ function DebugPanel() {
   );
 }
 
-function DashboardPanel() {
-  const items = [
-    { icon: '⚡', label: 'Command Centre', desc: 'Overview of everything' },
-    { icon: '🧠', label: 'Memory', desc: 'View and manage memories' },
-    { icon: '✅', label: 'Tasks', desc: 'Your task list' },
-    { icon: '📓', label: 'Journal', desc: 'Daily entries' },
-    { icon: '🎓', label: 'Learning', desc: 'Curriculums and progress' },
-    { icon: '🎨', label: 'Personality', desc: 'Design your AI' },
-    { icon: '☁️', label: 'Cloud Sync', desc: 'Push to cloud' },
-    { icon: '📊', label: 'Usage', desc: 'Token usage and stats' },
-    { icon: '⚙️', label: 'Settings', desc: 'Preferences and keys' },
-    { icon: '📋', label: 'Release Notes', desc: 'What\'s new' },
-  ];
+/* ---------- Auth + BYOK Section ---------- */
+function AuthSection() {
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    try { return localStorage.getItem('ava-ide-auth') === 'true'; } catch { return false; }
+  });
+  const [email, setEmail] = useState(() => {
+    try { return localStorage.getItem('ava-ide-email') || ''; } catch { return ''; }
+  });
+  const [showLoginForm, setShowLoginForm] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showKeys, setShowKeys] = useState(false);
+  const [usePlatform, setUsePlatform] = useState(true);
+  const [selectedModel, setSelectedModel] = useState('deepseek-chat');
+
+  const providers = ['DeepSeek', 'Moonshot', 'Qwen', 'Zhipu', 'Mistral'];
+
+  const [keys, setKeys] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem('ava-ide-byok');
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
+  });
+
+  const saveKey = (provider: string, value: string) => {
+    const next = { ...keys, [provider]: value };
+    setKeys(next);
+    try { localStorage.setItem('ava-ide-byok', JSON.stringify(next)); } catch { /* */ }
+  };
+
+  const handleLogin = () => {
+    if (!loginEmail.trim()) return;
+    setIsLoggedIn(true);
+    setEmail(loginEmail);
+    try {
+      localStorage.setItem('ava-ide-auth', 'true');
+      localStorage.setItem('ava-ide-email', loginEmail);
+    } catch { /* */ }
+    setShowLoginForm(false);
+    setLoginEmail('');
+    setLoginPassword('');
+  };
+
+  const handleDisconnect = () => {
+    setIsLoggedIn(false);
+    setEmail('');
+    try {
+      localStorage.removeItem('ava-ide-auth');
+      localStorage.removeItem('ava-ide-email');
+    } catch { /* */ }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    height: 28,
+    background: '#313244',
+    border: '1px solid #313244',
+    borderRadius: 4,
+    padding: '0 8px',
+    fontSize: 12,
+    color: '#cdd6f4',
+    outline: 'none',
+  };
 
   return (
-    <div style={{ padding: 8 }}>
-      {items.map((item) => (
-        <button
-          key={item.label}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-            padding: '8px 10px', borderRadius: 6, border: 'none',
-            background: 'transparent', color: '#cdd6f4', cursor: 'pointer',
-            fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
-          }}
-          onMouseOver={(e) => e.currentTarget.style.background = '#313244'}
-          onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-        >
-          <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>{item.icon}</span>
-          <div>
-            <div style={{ fontWeight: 500 }}>{item.label}</div>
-            <div style={{ fontSize: 11, color: '#6c7086' }}>{item.desc}</div>
+    <div style={{ borderTop: '1px solid #313244', padding: '10px 12px' }}>
+      {isLoggedIn ? (
+        <>
+          {/* Logged in state */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{
+              width: 24, height: 24, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #a855f7, #6366f1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {email}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{
+                  fontSize: 9, fontWeight: 600, color: '#a855f7',
+                  background: 'rgba(168,85,247,0.15)', padding: '1px 6px', borderRadius: 3,
+                }}>
+                  Free
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              style={{
+                background: 'transparent', border: '1px solid #313244',
+                borderRadius: 4, padding: '3px 8px',
+                fontSize: 10, color: '#6c7086', cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#f38ba8'; e.currentTarget.style.color = '#f38ba8'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#313244'; e.currentTarget.style.color = '#6c7086'; }}
+            >
+              Disconnect
+            </button>
           </div>
-        </button>
-      ))}
+
+          {/* Platform / API Key toggle */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+            <button
+              onClick={() => setUsePlatform(true)}
+              style={{
+                flex: 1, padding: '5px 0', borderRadius: 4, border: 'none',
+                fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                background: usePlatform ? '#a855f7' : '#313244',
+                color: usePlatform ? '#fff' : '#6c7086',
+              }}
+            >
+              Platform
+            </button>
+            <button
+              onClick={() => setUsePlatform(false)}
+              style={{
+                flex: 1, padding: '5px 0', borderRadius: 4, border: 'none',
+                fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                background: !usePlatform ? '#a855f7' : '#313244',
+                color: !usePlatform ? '#fff' : '#6c7086',
+              }}
+            >
+              API Key
+            </button>
+          </div>
+
+          {/* Model selector */}
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            style={{
+              ...inputStyle,
+              marginBottom: 8,
+              height: 26,
+              fontSize: 11,
+            }}
+          >
+            <option value="deepseek-chat">DeepSeek Chat</option>
+            <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+            <option value="qwen-plus">Qwen Plus</option>
+            <option value="qwen-max">Qwen Max</option>
+            <option value="moonshot-v1-128k">Moonshot v1 128K</option>
+            <option value="glm-4-plus">GLM-4 Plus</option>
+            <option value="mistral-large">Mistral Large</option>
+          </select>
+        </>
+      ) : (
+        <>
+          {/* Not logged in */}
+          {!showLoginForm ? (
+            <button
+              onClick={() => setShowLoginForm(true)}
+              style={{
+                width: '100%', padding: '7px 0', borderRadius: 6, border: 'none',
+                background: '#a855f7', color: '#fff', fontSize: 12, fontWeight: 500,
+                cursor: 'pointer', marginBottom: 8,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
+            >
+              Connect Account
+            </button>
+          ) : (
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="email"
+                placeholder="Email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 6 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleLogin(); }}
+                style={{ ...inputStyle, marginBottom: 6 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={handleLogin}
+                  style={{
+                    flex: 1, padding: '5px 0', borderRadius: 4, border: 'none',
+                    background: '#a855f7', color: '#fff', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setShowLoginForm(false)}
+                  style={{
+                    flex: 1, padding: '5px 0', borderRadius: 4,
+                    border: '1px solid #313244', background: 'transparent',
+                    color: '#6c7086', fontSize: 11, cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#313244'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* API Keys (BYOK) — always available */}
+      <button
+        onClick={() => setShowKeys(!showKeys)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '5px 0', background: 'transparent', border: 'none',
+          color: '#6c7086', fontSize: 11, cursor: 'pointer',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; }}
+      >
+        <span style={{ fontWeight: 600 }}>API Keys (BYOK)</span>
+        <svg
+          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: showKeys ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {showKeys && (
+        <div style={{ paddingTop: 6 }}>
+          {providers.map((p) => (
+            <div key={p} style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 2 }}>{p}</div>
+              <input
+                type="password"
+                placeholder={`${p} API key`}
+                value={keys[p] || ''}
+                onChange={(e) => saveKey(p, e.target.value)}
+                style={{ ...inputStyle, height: 24, fontSize: 11 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-export default function Sidebar({ activePanel, position = 'left', onTogglePosition }: Props) {
-  const panels: Record<ActivityItem, () => ReactNode> = {
+/* ---------- Dashboard Panel ---------- */
+function DashboardPanel({ onDashboardSelect }: { onDashboardSelect?: (page: string) => void }) {
+  const items = [
+    { icon: '\u26A1', label: 'Command Centre', desc: 'Overview of everything' },
+    { icon: '\u2601\uFE0F', label: 'Ava Chat', desc: 'Full-width AI chat' },
+    { icon: '\uD83E\uDDE0', label: 'Memory', desc: 'View and manage memories' },
+    { icon: '\u2705', label: 'Tasks', desc: 'Your task list' },
+    { icon: '\uD83D\uDCD3', label: 'Journal', desc: 'Daily entries' },
+    { icon: '\uD83C\uDF93', label: 'Learning', desc: 'Curriculums and progress' },
+    { icon: '\uD83C\uDFA8', label: 'Personality', desc: 'Design your AI' },
+    { icon: '\u2601\uFE0F', label: 'Cloud Sync', desc: 'Push to cloud' },
+    { icon: '\uD83D\uDCCA', label: 'Usage', desc: 'Token usage and stats' },
+    { icon: '\u2699\uFE0F', label: 'Settings', desc: 'Preferences and keys' },
+    { icon: '\uD83D\uDCCB', label: 'Release Notes', desc: 'What\'s new' },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+        {items.map((item) => (
+          <button
+            key={item.label}
+            onClick={() => onDashboardSelect?.(item.label)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              padding: '8px 10px', borderRadius: 6, border: 'none',
+              background: 'transparent', color: '#cdd6f4', cursor: 'pointer',
+              fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = '#313244'}
+            onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+          >
+            <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>{item.icon}</span>
+            <div>
+              <div style={{ fontWeight: 500 }}>{item.label}</div>
+              <div style={{ fontSize: 11, color: '#6c7086' }}>{item.desc}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Auth + BYOK section at the bottom */}
+      <AuthSection />
+    </div>
+  );
+}
+
+export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onDashboardSelect }: Props) {
+  const panels: Record<ActivityItem, (props?: { onDashboardSelect?: (page: string) => void }) => ReactNode> = {
     explorer: ExplorerPanel,
     search: SearchPanel,
     git: GitPanel,
     ava: AvaPanel,
     extensions: ExtensionsPanel,
     debug: DebugPanel,
-    dashboard: DashboardPanel,
+    dashboard: () => <DashboardPanel onDashboardSelect={onDashboardSelect} />,
   };
 
   const Panel = panels[activePanel];

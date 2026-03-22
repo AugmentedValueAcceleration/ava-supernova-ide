@@ -7,7 +7,7 @@ interface Props {
   sidebarOpen: boolean;
 }
 
-const icons: Record<ActivityItem, { label: string; svg: ReactNode }> = {
+const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = {
   explorer: {
     label: 'Explorer',
     svg: (
@@ -90,7 +90,7 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
           return (
             <button
               key={item}
-              title={icons[item].label}
+              title={icons[item]?.label}
               onClick={() => onSelect(item)}
               style={{
                 width: 48,
@@ -112,7 +112,7 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
                 if (!isActive) e.currentTarget.style.color = '#6c7086';
               }}
             >
-              {icons[item].svg}
+              {icons[item]?.svg}
             </button>
           );
         })}
