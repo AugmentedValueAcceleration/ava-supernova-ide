@@ -415,26 +415,22 @@ function DebugPanel() {
 
 /* ---------- Auth + BYOK Section ---------- */
 function AuthSection() {
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    try { return localStorage.getItem('ava-ide-auth') === 'true'; } catch { return false; }
+  const [platformKey, setPlatformKey] = useState(() => {
+    try { return localStorage.getItem('ava-ide-platform-key') || ''; } catch { return ''; }
   });
-  const [email, setEmail] = useState(() => {
-    try { return localStorage.getItem('ava-ide-email') || ''; } catch { return ''; }
-  });
-  const [showLoginForm, setShowLoginForm] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [showConnect, setShowConnect] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
   const [usePlatform, setUsePlatform] = useState(true);
-  const [selectedModel, setSelectedModel] = useState('deepseek-chat');
+
+  const isConnected = platformKey.startsWith('sk-ava-');
 
   const providers = ['DeepSeek', 'Moonshot', 'Qwen', 'Zhipu', 'Mistral'];
-
   const [keys, setKeys] = useState<Record<string, string>>(() => {
-    try {
-      const stored = localStorage.getItem('ava-ide-byok');
-      return stored ? JSON.parse(stored) : {};
-    } catch { return {}; }
+    try { const s = localStorage.getItem('ava-ide-byok'); return s ? JSON.parse(s) : {}; }
+    catch { return {}; }
   });
 
   const saveKey = (provider: string, value: string) => {
@@ -443,45 +439,34 @@ function AuthSection() {
     try { localStorage.setItem('ava-ide-byok', JSON.stringify(next)); } catch { /* */ }
   };
 
-  const handleLogin = () => {
-    if (!loginEmail.trim()) return;
-    setIsLoggedIn(true);
-    setEmail(loginEmail);
-    try {
-      localStorage.setItem('ava-ide-auth', 'true');
-      localStorage.setItem('ava-ide-email', loginEmail);
-    } catch { /* */ }
-    setShowLoginForm(false);
-    setLoginEmail('');
-    setLoginPassword('');
+  const handleConnect = () => {
+    const trimmed = keyInput.trim();
+    if (!trimmed.startsWith('sk-ava-')) { setError('Key must start with sk-ava-'); return; }
+    setError('');
+    setLoading(true);
+    // TODO: validate key against platform API
+    setPlatformKey(trimmed);
+    try { localStorage.setItem('ava-ide-platform-key', trimmed); } catch { /* */ }
+    setLoading(false);
+    setShowConnect(false);
+    setKeyInput('');
   };
 
   const handleDisconnect = () => {
-    setIsLoggedIn(false);
-    setEmail('');
-    try {
-      localStorage.removeItem('ava-ide-auth');
-      localStorage.removeItem('ava-ide-email');
-    } catch { /* */ }
+    setPlatformKey('');
+    try { localStorage.removeItem('ava-ide-platform-key'); } catch { /* */ }
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%',
-    height: 28,
-    background: '#313244',
-    border: '1px solid #313244',
-    borderRadius: 4,
-    padding: '0 8px',
-    fontSize: 12,
-    color: '#cdd6f4',
-    outline: 'none',
+    width: '100%', height: 28, background: '#313244', border: '1px solid #313244',
+    borderRadius: 4, padding: '0 8px', fontSize: 12, color: '#cdd6f4', outline: 'none',
   };
 
   return (
     <div style={{ borderTop: '1px solid #313244', padding: '10px 12px' }}>
-      {isLoggedIn ? (
+      {isConnected ? (
         <>
-          {/* Logged in state */}
+          {/* Connected state */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <div style={{
               width: 24, height: 24, borderRadius: '50%',
@@ -494,25 +479,16 @@ function AuthSection() {
               </svg>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {email}
+              <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500, fontFamily: 'monospace' }}>
+                {platformKey.slice(0, 12)}...
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{
-                  fontSize: 9, fontWeight: 600, color: '#a855f7',
-                  background: 'rgba(168,85,247,0.15)', padding: '1px 6px', borderRadius: 3,
-                }}>
-                  Free
-                </span>
-              </div>
+              <span style={{ fontSize: 9, fontWeight: 600, color: '#a6e3a1', background: 'rgba(166,227,161,0.15)', padding: '1px 6px', borderRadius: 3 }}>
+                Connected
+              </span>
             </div>
             <button
               onClick={handleDisconnect}
-              style={{
-                background: 'transparent', border: '1px solid #313244',
-                borderRadius: 4, padding: '3px 8px',
-                fontSize: 10, color: '#6c7086', cursor: 'pointer',
-              }}
+              style={{ background: 'transparent', border: '1px solid #313244', borderRadius: 4, padding: '3px 8px', fontSize: 10, color: '#6c7086', cursor: 'pointer' }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#f38ba8'; e.currentTarget.style.color = '#f38ba8'; }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#313244'; e.currentTarget.style.color = '#6c7086'; }}
             >
@@ -522,109 +498,58 @@ function AuthSection() {
 
           {/* Platform / API Key toggle */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-            <button
-              onClick={() => setUsePlatform(true)}
-              style={{
-                flex: 1, padding: '5px 0', borderRadius: 4, border: 'none',
-                fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                background: usePlatform ? '#a855f7' : '#313244',
-                color: usePlatform ? '#fff' : '#6c7086',
-              }}
-            >
-              Platform
-            </button>
-            <button
-              onClick={() => setUsePlatform(false)}
-              style={{
-                flex: 1, padding: '5px 0', borderRadius: 4, border: 'none',
-                fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                background: !usePlatform ? '#a855f7' : '#313244',
-                color: !usePlatform ? '#fff' : '#6c7086',
-              }}
-            >
-              API Key
-            </button>
+            {['Platform', 'API Key'].map((label) => {
+              const active = label === 'Platform' ? usePlatform : !usePlatform;
+              return (
+                <button key={label} onClick={() => setUsePlatform(label === 'Platform')}
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer', background: active ? '#a855f7' : '#313244', color: active ? '#fff' : '#6c7086' }}>
+                  {label}
+                </button>
+              );
+            })}
           </div>
-
-          {/* Model selector */}
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            style={{
-              ...inputStyle,
-              marginBottom: 8,
-              height: 26,
-              fontSize: 11,
-            }}
-          >
-            <option value="deepseek-chat">DeepSeek Chat</option>
-            <option value="deepseek-reasoner">DeepSeek Reasoner</option>
-            <option value="qwen-plus">Qwen Plus</option>
-            <option value="qwen-max">Qwen Max</option>
-            <option value="moonshot-v1-128k">Moonshot v1 128K</option>
-            <option value="glm-4-plus">GLM-4 Plus</option>
-            <option value="mistral-large">Mistral Large</option>
-          </select>
         </>
       ) : (
         <>
-          {/* Not logged in */}
-          {!showLoginForm ? (
-            <button
-              onClick={() => setShowLoginForm(true)}
-              style={{
-                width: '100%', padding: '7px 0', borderRadius: 6, border: 'none',
-                background: '#a855f7', color: '#fff', fontSize: 12, fontWeight: 500,
-                cursor: 'pointer', marginBottom: 8,
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
-            >
-              Connect Account
-            </button>
+          {!showConnect ? (
+            <>
+              <button
+                onClick={() => setShowConnect(true)}
+                style={{ width: '100%', padding: '7px 0', borderRadius: 6, border: 'none', background: '#a855f7', color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer', marginBottom: 6 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
+              >
+                Connect Account
+              </button>
+              <div style={{ fontSize: 10, color: '#6c7086', textAlign: 'center', marginBottom: 8 }}>
+                Using your own API keys
+              </div>
+            </>
           ) : (
             <div style={{ marginBottom: 8 }}>
-              <input
-                type="email"
-                placeholder="Email"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 6 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
-              />
+              <div style={{ fontSize: 10, color: '#a6adc8', marginBottom: 6 }}>
+                1. Sign up at ava-supernova.com<br/>
+                2. Dashboard → API Keys<br/>
+                3. Paste your sk-ava-... key below
+              </div>
               <input
                 type="password"
-                placeholder="Password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleLogin(); }}
-                style={{ ...inputStyle, marginBottom: 6 }}
+                placeholder="sk-ava-..."
+                value={keyInput}
+                onChange={(e) => { setKeyInput(e.target.value); setError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleConnect(); }}
+                style={{ ...inputStyle, marginBottom: 4, fontFamily: 'monospace', fontSize: 11 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
               />
+              {error && <div style={{ fontSize: 10, color: '#f38ba8', marginBottom: 4 }}>{error}</div>}
               <div style={{ display: 'flex', gap: 6 }}>
-                <button
-                  onClick={handleLogin}
-                  style={{
-                    flex: 1, padding: '5px 0', borderRadius: 4, border: 'none',
-                    background: '#a855f7', color: '#fff', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
-                >
-                  Sign In
+                <button onClick={handleConnect} disabled={loading}
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', background: '#a855f7', color: '#fff', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>
+                  {loading ? 'Connecting...' : 'Connect'}
                 </button>
-                <button
-                  onClick={() => setShowLoginForm(false)}
-                  style={{
-                    flex: 1, padding: '5px 0', borderRadius: 4,
-                    border: '1px solid #313244', background: 'transparent',
-                    color: '#6c7086', fontSize: 11, cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#313244'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                >
+                <button onClick={() => { setShowConnect(false); setKeyInput(''); setError(''); }}
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: '1px solid #313244', background: 'transparent', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>
                   Cancel
                 </button>
               </div>
@@ -636,20 +561,13 @@ function AuthSection() {
       {/* API Keys (BYOK) — always available */}
       <button
         onClick={() => setShowKeys(!showKeys)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '5px 0', background: 'transparent', border: 'none',
-          color: '#6c7086', fontSize: 11, cursor: 'pointer',
-        }}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', background: 'transparent', border: 'none', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}
         onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; }}
         onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; }}
       >
         <span style={{ fontWeight: 600 }}>API Keys (BYOK)</span>
-        <svg
-          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: showKeys ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
-        >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: showKeys ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
@@ -659,10 +577,7 @@ function AuthSection() {
           {providers.map((p) => (
             <div key={p} style={{ marginBottom: 6 }}>
               <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 2 }}>{p}</div>
-              <input
-                type="password"
-                placeholder={`${p} API key`}
-                value={keys[p] || ''}
+              <input type="password" placeholder={`${p} API key`} value={keys[p] || ''}
                 onChange={(e) => saveKey(p, e.target.value)}
                 style={{ ...inputStyle, height: 24, fontSize: 11 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
