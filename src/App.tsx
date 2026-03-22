@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import TitleBar from './components/TitleBar';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
@@ -10,21 +10,53 @@ export type ActivityItem = 'explorer' | 'search' | 'git' | 'ava' | 'extensions' 
 export type BottomTab = 'terminal' | 'problems' | 'output' | 'debug-console';
 export type SidebarPosition = 'left' | 'right';
 
-export default function App() {
-  const [activeActivity, setActiveActivity] = useState<ActivityItem>('explorer');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>('left');
-  const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
-  const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>('terminal');
+// Persist layout to localStorage
+function load<T>(key: string, fallback: T): T {
+  try { const v = localStorage.getItem(`ava-ide-${key}`); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function save(key: string, value: unknown) {
+  localStorage.setItem(`ava-ide-${key}`, JSON.stringify(value));
+}
 
-  const toggleActivity = (item: ActivityItem) => {
+export default function App() {
+  const [activeActivity, setActiveActivity] = useState<ActivityItem>(() => load('activity', 'explorer'));
+  const [sidebarOpen, setSidebarOpen] = useState(() => load('sidebarOpen', true));
+  const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => load('sidebarPos', 'left'));
+  const [bottomPanelOpen, setBottomPanelOpen] = useState(() => load('panelOpen', false));
+  const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>(() => load('panelTab', 'terminal'));
+
+  const toggleActivity = useCallback((item: ActivityItem) => {
     if (activeActivity === item && sidebarOpen) {
       setSidebarOpen(false);
+      save('sidebarOpen', false);
     } else {
       setActiveActivity(item);
       setSidebarOpen(true);
+      save('activity', item);
+      save('sidebarOpen', true);
     }
-  };
+  }, [activeActivity, sidebarOpen]);
+
+  const toggleSidebarPosition = useCallback(() => {
+    setSidebarPosition(p => {
+      const next = p === 'left' ? 'right' : 'left';
+      save('sidebarPos', next);
+      return next;
+    });
+  }, []);
+
+  const toggleBottomPanel = useCallback(() => {
+    setBottomPanelOpen(p => {
+      save('panelOpen', !p);
+      return !p;
+    });
+  }, []);
+
+  const changeBottomTab = useCallback((tab: BottomTab) => {
+    setActiveBottomTab(tab);
+    save('panelTab', tab);
+  }, []);
 
   const activityBar = (
     <ActivityBar active={activeActivity} onSelect={toggleActivity} sidebarOpen={sidebarOpen} />
@@ -34,7 +66,7 @@ export default function App() {
     <Sidebar
       activePanel={activeActivity}
       position={sidebarPosition}
-      onTogglePosition={() => setSidebarPosition(p => p === 'left' ? 'right' : 'left')}
+      onTogglePosition={toggleSidebarPosition}
     />
   ) : null;
 
@@ -47,13 +79,13 @@ export default function App() {
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <EditorArea />
           {bottomPanelOpen && (
-            <BottomPanel activeTab={activeBottomTab} onTabChange={setActiveBottomTab} onClose={() => setBottomPanelOpen(false)} />
+            <BottomPanel activeTab={activeBottomTab} onTabChange={changeBottomTab} onClose={toggleBottomPanel} />
           )}
         </div>
         {sidebarPosition === 'right' && sidebar}
         {sidebarPosition === 'right' && activityBar}
       </div>
-      <StatusBar onToggleTerminal={() => setBottomPanelOpen(!bottomPanelOpen)} mode="Work" />
+      <StatusBar onToggleTerminal={toggleBottomPanel} mode="Work" />
     </div>
   );
 }
