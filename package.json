@@ -1,35 +1,27 @@
 {
-  "private": true,
   "name": "ava-supernova-ide",
-  "version": "0.2.0",
-  "description": "Ava | Supernova — Agent-first development environment",
-  "license": "Apache-2.0",
-  "packageManager": "yarn@1.22.22",
-  "engines": {
-    "node": ">=20",
-    "yarn": ">=1.7.0 <2"
-  },
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
   "scripts": {
-    "postinstall": "node scripts/fix-native-builds.js",
-    "build": "yarn build:extensions && yarn build:browser",
-    "build:extensions": "lerna run build --scope ava-*",
-    "download:plugins": "yarn --cwd electron-app theia download:plugins --ignore-errors",
-    "build:electron": "yarn download:plugins && yarn --cwd electron-app bundle",
-    "build:browser": "yarn --cwd browser-app bundle",
-    "start": "yarn --cwd browser-app start",
-    "start:electron": "node scripts/launch-electron.js",
-    "start:browser": "yarn --cwd browser-app start",
-    "watch": "lerna run --parallel watch",
-    "package:electron": "yarn --cwd electron-app package",
-    "clean": "lerna run clean && lerna clean -y",
-    "prepare": "lerna run prepare"
+    "dev": "vite --port 1430",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
-  "workspaces": [
-    "electron-app",
-    "browser-app",
-    "extensions/*"
-  ],
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-shell": "^2"
+  },
   "devDependencies": {
-    "lerna": "^7.4.2"
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4",
+    "@tauri-apps/cli": "^2"
   }
 }

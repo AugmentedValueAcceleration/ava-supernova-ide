@@ -1,9 +1,0 @@
-{
-  "version": "0.1.0",
-  "npmClient": "yarn",
-  "packages": [
-    "electron-app",
-    "browser-app",
-    "extensions/*"
-  ]
-}
