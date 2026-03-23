@@ -32,6 +32,81 @@ export function apiStreamUrl(path: string): string {
   return `${PLATFORM_URL}${path}`;
 }
 
+/* ── Shared Session Stats ──────────────────────────────────────────────── */
+
+export interface SessionStats {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  messages: number;
+  toolCalls: number;
+  models: Record<string, { input: number; output: number; requests: number }>;
+}
+
+const SESSION_KEY = 'ava-ide-session-stats';
+
+function loadStats(): SessionStats {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : { inputTokens: 0, outputTokens: 0, totalTokens: 0, messages: 0, toolCalls: 0, models: {} };
+  } catch {
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0, messages: 0, toolCalls: 0, models: {} };
+  }
+}
+
+function saveStats(stats: SessionStats) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(stats));
+  window.dispatchEvent(new CustomEvent('ava-session-stats', { detail: stats }));
+}
+
+export function getSessionStats(): SessionStats {
+  return loadStats();
+}
+
+export function resetSessionStats() {
+  const empty: SessionStats = { inputTokens: 0, outputTokens: 0, totalTokens: 0, messages: 0, toolCalls: 0, models: {} };
+  saveStats(empty);
+}
+
+export function trackTokenUsage(usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }, model?: string) {
+  const stats = loadStats();
+  const inp = usage.prompt_tokens || 0;
+  const out = usage.completion_tokens || 0;
+  const total = usage.total_tokens || (inp + out);
+  stats.inputTokens += inp;
+  stats.outputTokens += out;
+  stats.totalTokens += total;
+  if (model) {
+    if (!stats.models[model]) stats.models[model] = { input: 0, output: 0, requests: 0 };
+    stats.models[model].input += inp;
+    stats.models[model].output += out;
+  }
+  saveStats(stats);
+}
+
+export function trackMessage(model?: string) {
+  const stats = loadStats();
+  stats.messages += 1;
+  if (model) {
+    if (!stats.models[model]) stats.models[model] = { input: 0, output: 0, requests: 0 };
+    stats.models[model].requests += 1;
+  }
+  saveStats(stats);
+}
+
+export function trackToolCall() {
+  const stats = loadStats();
+  stats.toolCalls += 1;
+  saveStats(stats);
+}
+
+/** React hook — re-renders when session stats change */
+export function useSessionStats(): SessionStats {
+  // This is a simple hook — import { useState, useEffect } at top won't work in a non-React file
+  // Instead, consumers can use getSessionStats() + listen for 'ava-session-stats' events
+  return loadStats();
+}
+
 export async function validateKey(key: string): Promise<{ valid: boolean; email?: string; tier?: string; error?: string }> {
   try {
     const res = await fetch(`${PLATFORM_URL}/account-info`, {

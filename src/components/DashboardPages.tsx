@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, apiStreamUrl } from '../lib/api';
+import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, apiStreamUrl, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 
 /* ===== Shared Styles ===== */
@@ -947,9 +947,17 @@ export function CommandCentrePage() {
     return releaseData;
   }, [releaseData]);
 
-  // Stats
-  const tokensUsed = usage?.tokens_used ?? usage?.today?.total_tokens ?? 0;
-  const requestsCount = usage?.requests_count ?? usage?.requests ?? 0;
+  // Live session stats
+  const [session, setSession] = useState<SessionStats>(getSessionStats);
+  useEffect(() => {
+    const handler = (e: Event) => setSession({ ...(e as CustomEvent).detail });
+    window.addEventListener('ava-session-stats', handler);
+    return () => window.removeEventListener('ava-session-stats', handler);
+  }, []);
+
+  // Stats — merge API + session
+  const tokensUsed = connected && usage ? (usage.tokens_used ?? usage.today?.total_tokens ?? 0) : session.totalTokens;
+  const requestsCount = connected && usage ? (usage.requests_count ?? usage.requests ?? 0) : session.messages;
 
   return (
     <div style={pageWrapper}>
@@ -996,13 +1004,13 @@ export function CommandCentrePage() {
           <div style={{ display: 'grid', gridTemplateColumns: connected ? '1fr 1fr' : '1fr 1fr 1fr', gap: 12 }}>
             <CCStatCard
               icon={'\uD83D\uDCCA'}
-              value={connected && usage ? formatNumber(tokensUsed) : formatNumber(parseInt(localStorage.getItem('ava-ide-session-tokens') || '0'))}
+              value={formatNumber(tokensUsed)}
               label="Tokens Used"
               subtext={connected ? (usageLoading ? 'Loading...' : 'This period') : 'This session'}
             />
             <CCStatCard
               icon={'\u26A1'}
-              value={connected && usage ? String(requestsCount) : localStorage.getItem('ava-ide-session-requests') || '0'}
+              value={String(requestsCount)}
               label="Requests"
               subtext={connected ? (usageLoading ? 'Loading...' : 'This period') : 'This session'}
             />
@@ -1447,6 +1455,7 @@ export function AvaChatPage() {
         break;
 
       case 'tool_call_end':
+        trackToolCall();
         setMessages((prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
@@ -1520,6 +1529,7 @@ export function AvaChatPage() {
         if (event.usage) {
           const total = event.usage.total_tokens || (event.usage.prompt_tokens || 0) + (event.usage.completion_tokens || 0);
           setTokenCount((prev) => prev + total);
+          trackTokenUsage(event.usage, model);
         }
         break;
 
@@ -1596,6 +1606,7 @@ export function AvaChatPage() {
     setConversationTitle('New Chat');
     setTokenCount(0);
     setContextPercent(0);
+    resetSessionStats();
     if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
     if (chatBackend === 'local') {
       const sidecar = getSidecar();
@@ -1816,7 +1827,9 @@ export function AvaChatPage() {
         if (json.usage) {
           const total = json.usage.total_tokens || (json.usage.prompt_tokens || 0) + (json.usage.completion_tokens || 0);
           setTokenCount((prev) => prev + total);
+          trackTokenUsage(json.usage, model);
         }
+        trackMessage(model);
       }
       // ── SSE streaming response ───────────────────────────────────────
       else {
@@ -1880,6 +1893,7 @@ export function AvaChatPage() {
                 if (json.usage) {
                   sessionTokens += json.usage.total_tokens || json.usage.completion_tokens || 0;
                   setTokenCount(sessionTokens);
+                  trackTokenUsage(json.usage, model);
                   if (json.usage.prompt_tokens && json.usage.completion_tokens) {
                     const total = json.usage.prompt_tokens + json.usage.completion_tokens;
                     const ctxWindow = 131072;
@@ -1959,12 +1973,14 @@ export function AvaChatPage() {
     setMessages(updatedMessages);
     setPendingAttachments([]);
 
+    trackMessage(model);
+
     if (chatBackend === 'local') {
       sendLocal(trimmed);
     } else {
       sendCloud(trimmed, updatedMessages);
     }
-  }, [input, messages, chatBackend, sendLocal, sendCloud, pendingAttachments]);
+  }, [input, messages, chatBackend, sendLocal, sendCloud, pendingAttachments, model]);
 
   // ── Tool confirmation handlers ─────────────────────────────────────────
   const approveConfirm = useCallback(async () => {
@@ -5061,28 +5077,40 @@ export function UsagePage() {
   const [activeTab, setActiveTab] = useState<'session' | 'alltime'>('session');
   const { data: usage, loading, error } = useApiData<any>('/usage/summary', null);
 
-  // Map from unified /usage/summary response
+  // Live session stats from shared store
+  const [session, setSession] = useState<SessionStats>(getSessionStats);
+  useEffect(() => {
+    const handler = (e: Event) => setSession({ ...(e as CustomEvent).detail });
+    window.addEventListener('ava-session-stats', handler);
+    return () => window.removeEventListener('ava-session-stats', handler);
+  }, []);
+
+  // Map from unified /usage/summary response (for All-Time tab)
   const period = usage?.period || {};
   const totals = usage?.totals || {};
 
-  // Token data
+  // Session tab uses live local data; All-Time uses API
+  const totalTokens = activeTab === 'session' ? session.totalTokens : (period.free_tokens_used || 0) + (period.tokens_used || 0);
+  const inputTokens = activeTab === 'session' ? session.inputTokens : Math.round(totalTokens * 0.6);
+  const outputTokens = activeTab === 'session' ? session.outputTokens : totalTokens - inputTokens;
+  const messages = activeTab === 'session' ? session.messages : (period.requests_count || totals.requests || 0);
+  const toolCalls = activeTab === 'session' ? session.toolCalls : 0;
+
+  // All-time from totals
   const freeUsed = period.free_tokens_used || 0;
   const freeLimit = period.free_tokens_limit || 3000000;
   const subUsed = period.tokens_used || 0;
   const subLimit = period.tokens_limit || 0;
-  const totalTokens = freeUsed + subUsed;
-  const inputTokens = Math.round(totalTokens * 0.6); // estimate 60/40 split
-  const outputTokens = totalTokens - inputTokens;
-  const messages = period.requests_count || totals.requests || 0;
-  const toolCalls = 0; // not tracked in API yet
-
-  // All-time from totals
   const tokensMonth = totals.tokens || 0;
   const tokensLastMonth = 0; // not in API yet
   const avgPerSession = messages > 0 ? Math.round(tokensMonth / Math.max(messages, 1)) : 0;
   const totalSessions = totals.requests || 0;
 
-  const models: any[] = usage?.models || [];
+  // Session tab: model breakdown from local tracking; All-Time: from API
+  const sessionModels = Object.entries(session.models).map(([name, m]) => ({
+    model: name, input_tokens: m.input, output_tokens: m.output, requests: m.requests,
+  }));
+  const models: any[] = activeTab === 'session' ? sessionModels : (usage?.models || []);
   const daily: any[] = usage?.daily || [];
   const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || 0)) : 1;
   const today = new Date().toISOString().slice(0, 10);
