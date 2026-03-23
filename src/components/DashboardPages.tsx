@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiFetch, getPlatformKey, getStoredEmail, getStoredTier, isConnected as checkConnected, apiStreamUrl } from '../lib/api';
 
 /* ===== Shared Styles ===== */
@@ -152,96 +152,900 @@ function useApiData<T>(path: string, defaultValue: T): { data: T; loading: boole
 }
 
 /* ===== 1. Command Centre ===== */
-export function CommandCentrePage() {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const connected = checkConnected();
-  const email = getStoredEmail();
 
-  const { data: usage, loading: usageLoading } = useApiData<any>('/usage/summary', null);
-  const { data: releases, loading: releasesLoading } = useApiData<any[]>('/releases?limit=5', []);
+// ── Interfaces ──────────────────────────────────────────────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tokensToday = usage?.today?.total_tokens || usage?.tokens_today || 0;
-  const memoriesCount = usage?.memories_count ?? usage?.memories ?? '--';
-  const tasksCount = usage?.tasks_count ?? usage?.tasks ?? '--';
-  const streak = usage?.streak ?? '--';
-
-  const stats = [
-    { label: 'Tasks', value: connected && usage ? String(tasksCount) : '--', icon: '\u2705', color: '#a6e3a1' },
-    { label: 'Memories', value: connected && usage ? String(memoriesCount) : '--', icon: '\uD83E\uDDE0', color: '#89b4fa' },
-    { label: 'Tokens Today', value: connected && usage ? formatTokens(tokensToday) : '--', icon: '\uD83D\uDCCA', color: '#f9e2af' },
-    { label: 'Streak', value: connected && usage ? `${streak} days` : '--', icon: '\uD83D\uDD25', color: '#fab387' },
-  ];
-
-  return (
-    <div style={pageWrapper}>
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
-        {/* Greeting */}
-        <div style={{ marginBottom: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: 28, fontWeight: 300, color: '#cdd6f4', marginBottom: 4 }}>
-            {greeting}{email ? `, ${email.split('@')[0]}` : ''}
-          </div>
-          <div style={{ fontSize: 14, color: '#6c7086' }}>Here is your daily overview</div>
-        </div>
-
-        {!connected && <NotConnectedBanner />}
-
-        {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
-          {stats.map((s) => (
-            <div key={s.label} style={{ ...card, textAlign: 'center', marginBottom: 0 }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
-              {usageLoading && connected ? (
-                <div style={{ fontSize: 14, color: '#6c7086' }}>...</div>
-              ) : (
-                <div style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.value}</div>
-              )}
-              <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Recent Activity */}
-        <div style={card}>
-          <div style={sectionTitle}>Recent Activity</div>
-          {connected ? (
-            releasesLoading ? <LoadingSpinner /> :
-            releases.length > 0 ? releases.map((r: any, i: number) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
-                  borderBottom: i < releases.length - 1 ? '1px solid #313244' : 'none',
-                }}
-              >
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7', flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: '#cdd6f4' }}>{r.version || r.title || `Release ${i + 1}`}</div>
-                  <div style={{ fontSize: 11, color: '#6c7086' }}>
-                    {r.highlights ? (Array.isArray(r.highlights) ? r.highlights[0] : r.highlights) : r.description || ''}
-                  </div>
-                </div>
-                <div style={{ fontSize: 11, color: '#6c7086', flexShrink: 0 }}>{r.date || ''}</div>
-              </div>
-            )) : (
-              <div style={{ fontSize: 13, color: '#6c7086', textAlign: 'center', padding: '16px 0' }}>No recent activity</div>
-            )
-          ) : (
-            <div style={{ fontSize: 13, color: '#6c7086', textAlign: 'center', padding: '16px 0' }}>
-              Connect to see your activity
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+interface WeatherData {
+  location: string;
+  temp_c: number;
+  condition: string;
+  emoji: string;
+  humidity: number;
+  wind_kmph: number;
+  forecast: Array<{ date: string; day: string; max_c: number; min_c: number; condition: string; emoji: string }>;
 }
+
+interface NewsArticle {
+  title: string;
+  slug: string;
+  category: string;
+  reading_time: number;
+  date: string;
+}
+
+interface ReleaseInfo {
+  version: string;
+  title: string;
+  published_at: string;
+}
+
+interface TaskEntry {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  due_date?: string;
+}
+
+interface JournalDay {
+  user_entry?: { content: string; mood?: number };
+  ava_entry?: { content: string };
+}
+
+interface LearningCurriculum {
+  id: string;
+  title: string;
+  subject: string;
+  status: string;
+  progress_percent: number;
+}
+
+interface MemoryEntry {
+  key?: string;
+  content: string;
+  archived?: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+// ── Constants ───────────────────────────────────────────────────────────────
+
+const PRIORITY_COLORS: Record<string, string> = {
+  low: '#a6e3a1',
+  medium: '#89b4fa',
+  high: '#f9e2af',
+  urgent: '#f38ba8',
+};
+
+const MOOD_EMOJI: Record<number, string> = {
+  1: '\uD83D\uDE14', 2: '\uD83D\uDE15', 3: '\uD83D\uDE10', 4: '\uD83D\uDE0A', 5: '\uD83D\uDE04',
+};
+
+const NEWS_CATEGORIES = [
+  'ai-agents', 'models', 'dev-tools', 'open-source', 'education',
+  'productivity', 'companions', 'health', 'enterprise', 'industry',
+] as const;
+
+const WMO_EMOJI: Record<number, { label: string; emoji: string }> = {
+  0: { label: 'Clear sky', emoji: '\u2600\uFE0F' },
+  1: { label: 'Mainly clear', emoji: '\uD83C\uDF24\uFE0F' },
+  2: { label: 'Partly cloudy', emoji: '\u26C5' },
+  3: { label: 'Overcast', emoji: '\u2601\uFE0F' },
+  45: { label: 'Fog', emoji: '\uD83C\uDF2B\uFE0F' },
+  48: { label: 'Rime fog', emoji: '\uD83C\uDF2B\uFE0F' },
+  51: { label: 'Light drizzle', emoji: '\uD83C\uDF26\uFE0F' },
+  53: { label: 'Drizzle', emoji: '\uD83C\uDF26\uFE0F' },
+  55: { label: 'Dense drizzle', emoji: '\uD83C\uDF27\uFE0F' },
+  61: { label: 'Light rain', emoji: '\uD83C\uDF26\uFE0F' },
+  63: { label: 'Rain', emoji: '\uD83C\uDF27\uFE0F' },
+  65: { label: 'Heavy rain', emoji: '\uD83C\uDF27\uFE0F' },
+  71: { label: 'Light snow', emoji: '\uD83C\uDF28\uFE0F' },
+  73: { label: 'Snow', emoji: '\u2744\uFE0F' },
+  75: { label: 'Heavy snow', emoji: '\u2744\uFE0F' },
+  77: { label: 'Snow grains', emoji: '\u2744\uFE0F' },
+  80: { label: 'Light showers', emoji: '\uD83C\uDF26\uFE0F' },
+  81: { label: 'Showers', emoji: '\uD83C\uDF27\uFE0F' },
+  82: { label: 'Heavy showers', emoji: '\uD83C\uDF27\uFE0F' },
+  85: { label: 'Snow showers', emoji: '\uD83C\uDF28\uFE0F' },
+  86: { label: 'Heavy snow showers', emoji: '\uD83C\uDF28\uFE0F' },
+  95: { label: 'Thunderstorm', emoji: '\u26A1' },
+  96: { label: 'Thunderstorm + hail', emoji: '\u26A1' },
+  99: { label: 'Thunderstorm + heavy hail', emoji: '\u26A1' },
+};
+
+const WEATHER_CACHE_KEY = 'ava-ide-weather-cache';
+const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
+}
+
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+}
+
+function formatRelativeDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function truncate(str: string, len: number): string {
+  if (str.length <= len) return str;
+  return str.slice(0, len).trimEnd() + '...';
+}
+
+function formatCategoryLabel(slug: string): string {
+  return slug
+    .split('-')
+    .map(word => (word === 'ai' ? 'AI' : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(' ');
+}
+
+function getDayName(dateStr: string): string {
+  const d = new Date(dateStr);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+  return d.toLocaleDateString('en-GB', { weekday: 'short' });
+}
+
+// ── Weather fetching (direct HTTP, no platform) ────────────────────────────
+
+async function fetchWeatherDirect(): Promise<WeatherData> {
+  // Get location from ipwho.is
+  const geoRes = await fetch('https://ipwho.is/');
+  const geo = await geoRes.json();
+  const lat = geo.latitude;
+  const lon = geo.longitude;
+  const city = geo.city || geo.region || 'Unknown';
+  const country = geo.country_code || '';
+  const location = country ? `${city}, ${country}` : city;
+
+  // Fetch weather from Open-Meteo
+  const weatherRes = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=4`
+  );
+  const w = await weatherRes.json();
+
+  const currentCode = w.current?.weather_code ?? 0;
+  const wmo = WMO_EMOJI[currentCode] || { label: 'Unknown', emoji: '\uD83C\uDF24\uFE0F' };
+
+  const forecast: WeatherData['forecast'] = [];
+  if (w.daily?.time) {
+    // Skip today (index 0), take next 3 days
+    for (let i = 1; i < Math.min(w.daily.time.length, 4); i++) {
+      const dayCode = w.daily.weather_code?.[i] ?? 0;
+      const dayWmo = WMO_EMOJI[dayCode] || { label: 'Unknown', emoji: '\uD83C\uDF24\uFE0F' };
+      forecast.push({
+        date: w.daily.time[i],
+        day: getDayName(w.daily.time[i]),
+        max_c: Math.round(w.daily.temperature_2m_max[i]),
+        min_c: Math.round(w.daily.temperature_2m_min[i]),
+        condition: dayWmo.label,
+        emoji: dayWmo.emoji,
+      });
+    }
+  }
+
+  return {
+    location,
+    temp_c: Math.round(w.current?.temperature_2m ?? 0),
+    condition: wmo.label,
+    emoji: wmo.emoji,
+    humidity: w.current?.relative_humidity_2m ?? 0,
+    wind_kmph: Math.round(w.current?.wind_speed_10m ?? 0),
+    forecast,
+  };
+}
+
+function getCachedWeather(): WeatherData | null {
+  try {
+    const raw = localStorage.getItem(WEATHER_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (Date.now() - cached.timestamp > WEATHER_CACHE_TTL) return null;
+    return cached.data;
+  } catch { return null; }
+}
+
+function setCachedWeather(data: WeatherData): void {
+  try {
+    localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+// ── News fetching (direct HTTP) ────────────────────────────────────────────
+
+async function fetchNewsDirect(category?: string): Promise<NewsArticle[]> {
+  try {
+    const url = category
+      ? `https://ava-supernova.com/api/news?category=${category}&limit=6`
+      : `https://ava-supernova.com/api/news?limit=6`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.articles || data.items || []);
+  } catch { return []; }
+}
+
+// ── Reusable WidgetCard ─────────────────────────────────────────────────────
+
+const widgetCardStyle: React.CSSProperties = {
+  background: '#181825',
+  border: '1px solid #313244',
+  borderRadius: 12,
+  padding: 16,
+};
+
+function WidgetCard({
+  title, icon, subtitle, action, onRefresh, children,
+}: {
+  title: string;
+  icon: string;
+  subtitle?: string;
+  action?: { label: string; onClick: () => void };
+  onRefresh?: () => void;
+  children: React.ReactNode;
+}) {
+  const [spinning, setSpinning] = useState(false);
+  const handleRefresh = () => {
+    if (!onRefresh || spinning) return;
+    setSpinning(true);
+    onRefresh();
+    setTimeout(() => setSpinning(false), 1000);
+  };
+
+  return (
+    <div style={widgetCardStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14 }}>{icon}</span>
+          <h3 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, color: '#a6adc8', margin: 0 }}>{title}</h3>
+          {subtitle && (
+            <span style={{ fontSize: 10, color: '#6c7086' }}>&middot; {subtitle}</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {onRefresh && (
+            <button
+              onClick={handleRefresh}
+              title={`Refresh ${title.toLowerCase()}`}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6c7086', padding: 2, display: 'flex' }}
+            >
+              <svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+                style={{ animation: spinning ? 'spin 0.8s linear infinite' : 'none' }}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          )}
+          {action && (
+            <button
+              onClick={action.onClick}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#a855f7', padding: 0 }}
+            >
+              {action.label} &rarr;
+            </button>
+          )}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Weather Widget ──────────────────────────────────────────────────────────
+
+function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData | null; loading: boolean; onRefresh: () => void }) {
+  if (loading) {
+    return (
+      <WidgetCard title="Weather" icon={'\uD83C\uDF24\uFE0F'}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0', fontSize: 12, color: '#6c7086' }}>
+          Loading weather...
+        </div>
+      </WidgetCard>
+    );
+  }
+
+  if (!weather) {
+    return (
+      <WidgetCard title="Weather" icon={'\uD83C\uDF24\uFE0F'} onRefresh={onRefresh}>
+        <p style={{ padding: '8px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>Unable to load weather data.</p>
+      </WidgetCard>
+    );
+  }
+
+  return (
+    <WidgetCard title="Weather" icon={'\uD83C\uDF24\uFE0F'} subtitle={weather.location} onRefresh={onRefresh}>
+      {/* Current conditions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <span style={{ fontSize: 36 }}>{weather.emoji}</span>
+        <div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>{weather.temp_c}&deg;C</div>
+          <div style={{ fontSize: 12, color: '#a6adc8' }}>{weather.condition}</div>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'grid', gridTemplateColumns: 'auto auto', gap: '4px 16px', fontSize: 12, color: '#6c7086' }}>
+          <span>Humidity</span>
+          <span style={{ color: '#a6adc8' }}>{weather.humidity}%</span>
+          <span>Wind</span>
+          <span style={{ color: '#a6adc8' }}>{weather.wind_kmph} km/h</span>
+        </div>
+      </div>
+
+      {/* 3-day forecast */}
+      {weather.forecast.length > 0 && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid #313244' }}>
+          {weather.forecast.map(day => (
+            <div key={day.date} style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 10, color: '#6c7086' }}>{day.day}</div>
+              <div style={{ fontSize: 20, margin: '4px 0' }}>{day.emoji}</div>
+              <div style={{ fontSize: 10 }}>
+                <span style={{ color: '#cdd6f4' }}>{day.max_c}&deg;</span>
+                <span style={{ color: '#6c7086' }}> / {day.min_c}&deg;</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </WidgetCard>
+  );
+}
+
+// ── Statistics Widget ───────────────────────────────────────────────────────
+
+function CCStatCard({ icon, value, label, subtext }: { icon: string; value: string; label: string; subtext?: string }) {
+  return (
+    <div style={{ background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: 16 }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: 8, background: '#313244',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, fontSize: 16,
+      }}>
+        {icon}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4' }}>{value}</div>
+      <div style={{ fontSize: 12, color: '#a6adc8' }}>{label}</div>
+      {subtext && <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{subtext}</div>}
+    </div>
+  );
+}
+
+// ── News Widget ─────────────────────────────────────────────────────────────
+
+function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, onRefresh }: {
+  articles: NewsArticle[];
+  loading: boolean;
+  onCategoryChange: (cat: string | null) => void;
+  selectedCategory: string | null;
+  onRefresh: () => void;
+}) {
+  const catBtnBase: React.CSSProperties = {
+    flexShrink: 0, borderRadius: 9999, padding: '4px 10px', fontSize: 10, fontWeight: 500,
+    border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+  };
+
+  return (
+    <WidgetCard title="Latest News" icon={'\uD83D\uDCF0'} onRefresh={onRefresh}>
+      {/* Category carousel */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 12, scrollbarWidth: 'none' }}>
+        <style>{`.cc-news-scroll::-webkit-scrollbar { display: none; }`}</style>
+        <div className="cc-news-scroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
+          <button
+            onClick={() => onCategoryChange(null)}
+            style={{
+              ...catBtnBase,
+              background: selectedCategory === null ? '#a855f7' : '#313244',
+              color: selectedCategory === null ? '#fff' : '#6c7086',
+            }}
+          >
+            All
+          </button>
+          {NEWS_CATEGORIES.map(cat => (
+            <button
+              key={cat}
+              onClick={() => onCategoryChange(cat)}
+              style={{
+                ...catBtnBase,
+                background: selectedCategory === cat ? '#a855f7' : '#313244',
+                color: selectedCategory === cat ? '#fff' : '#6c7086',
+              }}
+            >
+              {formatCategoryLabel(cat)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading news...</div>
+      ) : articles.length === 0 ? (
+        <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>No news articles available.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {articles.map((article, idx) => (
+            <button
+              key={article.slug || idx}
+              onClick={() => window.open(`https://ava-supernova.com/news/${article.slug}`, '_blank')}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left', padding: 12,
+                background: 'rgba(49,50,68,0.3)', border: '1px solid #313244', borderRadius: 8, cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                {article.category && (
+                  <span style={{
+                    borderRadius: 9999, background: 'rgba(168,85,247,0.15)', padding: '2px 8px',
+                    fontSize: 9, fontWeight: 500, color: '#a855f7',
+                  }}>
+                    {formatCategoryLabel(article.category)}
+                  </span>
+                )}
+                {article.reading_time > 0 && (
+                  <span style={{ fontSize: 9, color: '#6c7086' }}>{article.reading_time} min read</span>
+                )}
+              </div>
+              <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0, lineHeight: 1.4 }}>{article.title}</p>
+              <p style={{ fontSize: 10, color: '#6c7086', margin: '4px 0 0 0' }}>{formatRelativeDate(article.date)}</p>
+            </button>
+          ))}
+        </div>
+      )}
+    </WidgetCard>
+  );
+}
+
+// ── Tasks Widget ────────────────────────────────────────────────────────────
+
+function CCTasksWidget({ tasks, loading, onRefresh }: {
+  tasks: TaskEntry[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const todayTasks = useMemo(() => {
+    return tasks.filter(t => {
+      if (t.status === 'done' || t.status === 'archived') return false;
+      if (t.due_date && t.due_date <= today) return true;
+      if (t.status === 'in-progress') return true;
+      return false;
+    }).sort((a, b) => {
+      const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+      const aOverdue = a.due_date && a.due_date < today ? -1 : 0;
+      const bOverdue = b.due_date && b.due_date < today ? -1 : 0;
+      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+      return (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2);
+    }).slice(0, 6);
+  }, [tasks, today]);
+
+  const handleComplete = async (id: string) => {
+    try {
+      await apiFetch(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) });
+      onRefresh();
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <WidgetCard
+      title="Today's Tasks"
+      icon={'\u2705'}
+      action={tasks.length > 0 ? { label: 'View all', onClick: () => {} } : undefined}
+      onRefresh={onRefresh}
+    >
+      {loading ? (
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading tasks...</div>
+      ) : todayTasks.length === 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', textAlign: 'center' }}>
+          <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83C\uDF89'}</span>
+          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>No tasks today. Enjoy the clear board!</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {todayTasks.map(task => {
+            const isOverdue = task.due_date && task.due_date < today;
+            return (
+              <div
+                key={task.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: 10, borderRadius: 8,
+                  border: isOverdue ? '1px solid rgba(243,139,168,0.2)' : '1px solid #313244',
+                  background: isOverdue ? 'rgba(243,139,168,0.05)' : 'rgba(49,50,68,0.3)',
+                }}
+              >
+                {/* Complete button */}
+                <button
+                  onClick={() => handleComplete(task.id)}
+                  title="Complete task"
+                  style={{
+                    width: 20, height: 20, borderRadius: '50%', border: '1px solid #313244',
+                    background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', flexShrink: 0, color: '#6c7086', fontSize: 10,
+                  }}
+                >
+                  {task.status === 'in-progress' ? '\u27F3' : '\u25CB'}
+                </button>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <span style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: PRIORITY_COLORS[task.priority] ?? '#89b4fa', display: 'inline-block',
+                    }} />
+                    <span style={{ fontSize: 9, color: '#6c7086' }}>{task.priority}</span>
+                    {isOverdue && (
+                      <span style={{ fontSize: 9, fontWeight: 500, color: '#f38ba8' }}>Overdue</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </WidgetCard>
+  );
+}
+
+// ── Journal Widget ──────────────────────────────────────────────────────────
+
+function CCJournalWidget({ journalDay, loading }: { journalDay: JournalDay | null; loading: boolean }) {
+  const userEntry = journalDay?.user_entry;
+  const avaEntry = journalDay?.ava_entry;
+  const hasContent = Boolean(userEntry || avaEntry);
+
+  return (
+    <WidgetCard
+      title="Today's Journal"
+      icon={'\uD83D\uDCD3'}
+      action={{ label: hasContent ? 'Open journal' : 'Write entry', onClick: () => {} }}
+    >
+      {loading ? (
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading journal...</div>
+      ) : !hasContent ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', textAlign: 'center' }}>
+          <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83D\uDCDD'}</span>
+          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>No journal entries today.</p>
+          <p style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>Take a moment to reflect.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {userEntry && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#a6adc8' }}>Your entry</span>
+                {userEntry.mood && (
+                  <span style={{ fontSize: 14 }}>{MOOD_EMOJI[userEntry.mood] ?? ''}</span>
+                )}
+              </div>
+              <p style={{ fontSize: 12, color: '#6c7086', margin: 0, lineHeight: 1.6 }}>
+                {truncate(userEntry.content, 120)}
+              </p>
+            </div>
+          )}
+          {avaEntry && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#a855f7' }}>Ava's entry</span>
+              </div>
+              <p style={{ fontSize: 12, color: '#6c7086', margin: 0, lineHeight: 1.6 }}>
+                {truncate(avaEntry.content, 120)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </WidgetCard>
+  );
+}
+
+// ── Learning Widget ─────────────────────────────────────────────────────────
+
+function CCLearningWidget({ curriculums, loading }: { curriculums: LearningCurriculum[]; loading: boolean }) {
+  const active = useMemo(() => {
+    return curriculums.filter(c => c.status !== 'completed').slice(0, 3);
+  }, [curriculums]);
+
+  return (
+    <WidgetCard
+      title="Learning"
+      icon={'\uD83C\uDF93'}
+      action={curriculums.length > 0 ? { label: 'Continue learning', onClick: () => {} } : undefined}
+    >
+      {loading ? (
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading learning...</div>
+      ) : active.length === 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', textAlign: 'center' }}>
+          <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83D\uDCDA'}</span>
+          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>No active learning paths.</p>
+          <p style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>Tell Ava what you want to learn.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {active.map(curr => (
+            <div key={curr.id}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{curr.title}</p>
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#a6adc8', marginLeft: 8, flexShrink: 0 }}>
+                  {Math.round(curr.progress_percent)}%
+                </span>
+              </div>
+              <div style={{ height: 6, borderRadius: 9999, background: '#313244', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 9999, transition: 'width 0.3s',
+                  width: `${curr.progress_percent}%`,
+                  background: 'linear-gradient(to right, #a855f7, #6366f1)',
+                }} />
+              </div>
+              <p style={{ fontSize: 9, color: '#6c7086', margin: '2px 0 0 0' }}>{curr.subject}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </WidgetCard>
+  );
+}
+
+// ── Memory Widget ───────────────────────────────────────────────────────────
+
+function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loading: boolean }) {
+  const activeCount = memories.filter(m => !m.archived).length;
+  const lastMemory = memories.length > 0
+    ? memories.reduce((latest, m) => {
+        const mDate = m.updated_at ?? m.created_at;
+        const latestDate = latest.updated_at ?? latest.created_at;
+        return mDate > latestDate ? m : latest;
+      })
+    : null;
+
+  return (
+    <WidgetCard
+      title="Memory"
+      icon={'\uD83E\uDDE0'}
+      action={{ label: 'View all', onClick: () => {} }}
+    >
+      {loading ? (
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading memories...</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>{activeCount}</div>
+              <div style={{ fontSize: 10, color: '#6c7086' }}>Active memories</div>
+            </div>
+            <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+              <div style={{ fontSize: 20, fontWeight: 600, color: '#a6adc8' }}>{memories.length}</div>
+              <div style={{ fontSize: 10, color: '#6c7086' }}>Total</div>
+            </div>
+          </div>
+          {lastMemory && (
+            <div style={{ background: 'rgba(49,50,68,0.3)', border: '1px solid #313244', borderRadius: 8, padding: 10 }}>
+              <p style={{ fontSize: 10, color: '#6c7086', margin: '0 0 2px 0' }}>Last saved</p>
+              <p style={{ fontSize: 12, color: '#a6adc8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {lastMemory.key || truncate(lastMemory.content, 60)}
+              </p>
+              <p style={{ fontSize: 9, color: '#6c7086', margin: '2px 0 0 0' }}>
+                {formatRelativeDate(lastMemory.updated_at ?? lastMemory.created_at)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </WidgetCard>
+  );
+}
+
+// ── Release Widget ──────────────────────────────────────────────────────────
+
+function CCReleaseWidget({ release, loading, onRefresh }: { release: ReleaseInfo | null; loading: boolean; onRefresh: () => void }) {
+  return (
+    <WidgetCard title="Latest Release" icon={'\uD83D\uDE80'} onRefresh={onRefresh}>
+      {loading ? (
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading release info...</div>
+      ) : !release ? (
+        <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>No release info available.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              borderRadius: 9999, background: 'rgba(168,85,247,0.15)', padding: '2px 10px',
+              fontSize: 12, fontWeight: 700, color: '#a855f7',
+            }}>
+              v{release.version}
+            </span>
+            <span style={{ fontSize: 10, color: '#6c7086' }}>{formatRelativeDate(release.published_at)}</span>
+          </div>
+          <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0 }}>{release.title}</p>
+          <button
+            onClick={() => window.open('https://ava-supernova.com/releases', '_blank')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#a855f7', padding: 0, textAlign: 'left' }}
+          >
+            View release notes &rarr;
+          </button>
+        </div>
+      )}
+    </WidgetCard>
+  );
+}
+
+// ── Not Connected Widget Placeholder ────────────────────────────────────────
+
+function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
+  return (
+    <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', textAlign: 'center' }}>
+      Connect your account to see {widgetName.toLowerCase()}
+    </div>
+  );
+}
+
+// ── Main Command Centre Page ────────────────────────────────────────────────
+
+export function CommandCentrePage() {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const connected = checkConnected();
+  const email = getStoredEmail();
+  const dateStr = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  // ── Weather state (direct fetch, cached) ──────────────────────────────
+  const [weather, setWeather] = useState<WeatherData | null>(getCachedWeather());
+  const [weatherLoading, setWeatherLoading] = useState(!getCachedWeather());
+
+  const loadWeather = useCallback(() => {
+    setWeatherLoading(true);
+    fetchWeatherDirect()
+      .then(data => { setWeather(data); setCachedWeather(data); })
+      .catch(() => setWeather(null))
+      .finally(() => setWeatherLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!getCachedWeather()) loadWeather();
+  }, [loadWeather]);
+
+  // ── News state (direct fetch) ─────────────────────────────────────────
+  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsCategory, setNewsCategory] = useState<string | null>(null);
+
+  const loadNews = useCallback((category?: string | null) => {
+    setNewsLoading(true);
+    fetchNewsDirect(category || undefined)
+      .then(setNewsArticles)
+      .catch(() => setNewsArticles([]))
+      .finally(() => setNewsLoading(false));
+  }, []);
+
+  useEffect(() => { loadNews(); }, [loadNews]);
+
+  const handleNewsCategory = (cat: string | null) => {
+    setNewsCategory(cat);
+    loadNews(cat);
+  };
+
+  // ── Platform API data (tasks, journal, learning, memory, usage, release) ──
+  const { data: usage, loading: usageLoading } = useApiData<any>('/usage/summary', null);
+  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useApiData<TaskEntry[]>('/tasks', []);
+  const { data: journalDay, loading: journalLoading } = useApiData<JournalDay | null>(`/journal?date=${new Date().toISOString().slice(0, 10)}`, null);
+  const { data: curriculums, loading: learningLoading } = useApiData<LearningCurriculum[]>('/learning', []);
+  const { data: memories, loading: memoriesLoading } = useApiData<MemoryEntry[]>('/memories', []);
+  const { data: releaseData, loading: releaseLoading, refetch: refetchRelease } = useApiData<any>('/releases?limit=1', null);
+
+  const latestRelease: ReleaseInfo | null = useMemo(() => {
+    if (!releaseData) return null;
+    if (Array.isArray(releaseData)) return releaseData[0] ?? null;
+    return releaseData;
+  }, [releaseData]);
+
+  // Stats
+  const tokensUsed = usage?.tokens_used ?? usage?.today?.total_tokens ?? 0;
+  const requestsCount = usage?.requests_count ?? usage?.requests ?? 0;
+
+  return (
+    <div style={pageWrapper}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        {/* Spin animation */}
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+        {/* ── Greeting Header ───────────────────────────────────────────── */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 28, fontWeight: 300, color: '#cdd6f4', marginBottom: 4 }}>
+            {greeting}{email ? `, ${email.split('@')[0]}` : ''}
+          </div>
+          <div style={{ fontSize: 13, color: '#6c7086' }}>{dateStr}</div>
+        </div>
+
+        {!connected && <NotConnectedBanner />}
+
+        {/* ── Weather (full width) ──────────────────────────────────────── */}
+        <div style={{ marginBottom: 16 }}>
+          <CCWeatherWidget weather={weather} loading={weatherLoading} onRefresh={loadWeather} />
+        </div>
+
+        {/* ── Statistics (2x2 grid) ─────────────────────────────────────── */}
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, color: '#6c7086', marginBottom: 12 }}>Statistics</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <CCStatCard
+              icon={'\uD83D\uDCCA'}
+              value={connected && usage ? formatNumber(tokensUsed) : '--'}
+              label="Tokens Used"
+              subtext={usageLoading && connected ? 'Loading...' : 'This period'}
+            />
+            <CCStatCard
+              icon={'\u26A1'}
+              value={connected && usage ? String(requestsCount) : '--'}
+              label="Requests"
+              subtext={usageLoading && connected ? 'Loading...' : 'This period'}
+            />
+          </div>
+        </div>
+
+        {/* ── News + Tasks (2 column) ───────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <CCNewsWidget
+            articles={newsArticles}
+            loading={newsLoading}
+            onCategoryChange={handleNewsCategory}
+            selectedCategory={newsCategory}
+            onRefresh={() => loadNews(newsCategory)}
+          />
+          {connected ? (
+            <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
+          ) : (
+            <WidgetCard title="Today's Tasks" icon={'\u2705'}>
+              <CCNotConnectedPlaceholder widgetName="tasks" />
+            </WidgetCard>
+          )}
+        </div>
+
+        {/* ── Journal + Learning (2 column) ─────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          {connected ? (
+            <CCJournalWidget journalDay={journalDay} loading={journalLoading} />
+          ) : (
+            <WidgetCard title="Today's Journal" icon={'\uD83D\uDCD3'}>
+              <CCNotConnectedPlaceholder widgetName="journal entries" />
+            </WidgetCard>
+          )}
+          {connected ? (
+            <CCLearningWidget curriculums={curriculums} loading={learningLoading} />
+          ) : (
+            <WidgetCard title="Learning" icon={'\uD83C\uDF93'}>
+              <CCNotConnectedPlaceholder widgetName="learning paths" />
+            </WidgetCard>
+          )}
+        </div>
+
+        {/* ── Memory + Release (2 column) ───────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          {connected ? (
+            <CCMemoryWidget memories={memories} loading={memoriesLoading} />
+          ) : (
+            <WidgetCard title="Memory" icon={'\uD83E\uDDE0'}>
+              <CCNotConnectedPlaceholder widgetName="memories" />
+            </WidgetCard>
+          )}
+          <CCReleaseWidget release={latestRelease} loading={releaseLoading} onRefresh={refetchRelease} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ===== 2. Ava Chat ===== */
