@@ -1,4 +1,8 @@
+import { getCurrentWindow } from '@tauri-apps/api/window';
+
 export default function TitleBar() {
+  const win = getCurrentWindow();
+
   return (
     <div
       data-tauri-drag-region
@@ -43,6 +47,7 @@ export default function TitleBar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 0, WebkitAppRegion: 'no-drag' }}>
         {/* Minimize */}
         <button
+          onClick={() => win.minimize()}
           style={{
             width: 46,
             height: 32,
@@ -64,6 +69,7 @@ export default function TitleBar() {
 
         {/* Maximize */}
         <button
+          onClick={() => win.toggleMaximize()}
           style={{
             width: 46,
             height: 32,
@@ -85,6 +91,7 @@ export default function TitleBar() {
 
         {/* Close */}
         <button
+          onClick={() => win.close()}
           style={{
             width: 46,
             height: 32,
