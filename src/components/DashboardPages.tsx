@@ -589,6 +589,7 @@ function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData
 // ── Working Hours Clock ──────────────────────────────────────────────────
 
 function WorkingHoursClock() {
+  const connected = checkConnected();
   const [start, setStart] = useState<number>(() => {
     try { return Number(localStorage.getItem('ava-ide-work-start')) || 9; } catch { return 9; }
   });
@@ -598,12 +599,25 @@ function WorkingHoursClock() {
   const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
   const clockRef = useRef<SVGSVGElement>(null);
 
+  // Load from platform on mount (connected users)
+  useEffect(() => {
+    if (!connected) return;
+    apiFetch('/settings').then((data: any) => {
+      if (data?.work_start != null) { setStart(data.work_start); localStorage.setItem('ava-ide-work-start', String(data.work_start)); }
+      if (data?.work_end != null) { setEnd(data.work_end); localStorage.setItem('ava-ide-work-end', String(data.work_end)); }
+    }).catch(() => {});
+  }, [connected]);
+
   const save = useCallback((s: number, e: number) => {
     try {
       localStorage.setItem('ava-ide-work-start', String(s));
       localStorage.setItem('ava-ide-work-end', String(e));
       window.dispatchEvent(new CustomEvent('ava-working-hours-changed'));
     } catch {}
+    // Sync to platform for connected users
+    if (checkConnected()) {
+      apiFetch('/settings', { method: 'POST', body: JSON.stringify({ work_start: s, work_end: e }) }).catch(() => {});
+    }
   }, []);
 
   const angleForHour = (h: number) => ((h / 24) * 360 - 90) * (Math.PI / 180);
