@@ -1824,13 +1824,39 @@ export function AvaChatPage() {
   // ── Cancel streaming ──────────────────────────────────────────────────────
   const cancelStream = useCallback(() => {
     const sidecar = getSidecar();
-    sidecar.cancel().catch(() => {});
+    // Send cancel command and also kill + restart the sidecar if it's stuck
+    sidecar.cancel().catch(() => {
+      // If cancel fails (already processing / stuck), force stop and restart
+      sidecar.stop().then(() => {
+        sidecar.start({
+          providers: {},
+          platformKey: getPlatformKey() || undefined,
+          activeModel: `platform:${model}`,
+          cwd: '.',
+          mode,
+          permissionMode: 'balanced',
+          autoMemory: true,
+          _devPlatformFallback: true,
+        } as SidecarConfig).catch(() => {});
+      }).catch(() => {});
+    });
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
+    // Clear pending state
+    setPendingConfirm(null);
     setStreaming(false);
-  }, []);
+    // Mark last ava message as complete if empty
+    setMessages((prev) => {
+      const copy = [...prev];
+      const last = copy[copy.length - 1];
+      if (last?.role === 'ava' && !last.text) {
+        copy[copy.length - 1] = { ...last, text: '(Stopped)' };
+      }
+      return copy;
+    });
+  }, [model, mode]);
 
   // ── Render markdown (basic) ───────────────────────────────────────────────
   const renderMarkdown = useCallback((text: string) => {
@@ -2710,63 +2736,26 @@ export function AvaChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ── Tool Confirmation Dialog (local mode) ────────────────────────── */}
+      {/* ── Tool Confirmation — inline banner above input ──────────────── */}
       {pendingConfirm && (
         <div style={{
-          position: 'absolute', inset: 0, zIndex: 1000,
-          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 16px', padding: '12px 16px',
+          background: '#181825', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 10,
+          borderBottom: 'none', borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
         }}>
-          <div style={{
-            background: '#1e1e2e', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 14,
-            padding: 24, maxWidth: 480, width: '90%', boxShadow: '0 16px 64px rgba(0,0,0,0.6)',
-          }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>
-              Tool Confirmation
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#eab308', animation: 'avaPulse 1.5s infinite' }} />
+              <span style={{ fontSize: 12, color: '#cdd6f4' }}>
+                Ava wants to run <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span>
+              </span>
             </div>
-            <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 16 }}>
-              Ava wants to use <span style={{ color: '#f5c2e7', fontFamily: 'monospace' }}>{pendingConfirm.toolName}</span>
-            </div>
-
-            {/* Show args preview */}
-            <div style={{
-              background: '#11111b', border: '1px solid #313244', borderRadius: 8,
-              padding: '10px 12px', marginBottom: 16, maxHeight: 200, overflowY: 'auto',
-            }}>
-              <pre style={{
-                fontSize: 11, color: '#a6adc8', fontFamily: 'monospace',
-                whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
-              }}>
-                {JSON.stringify(pendingConfirm.args, null, 2)}
-              </pre>
-            </div>
-
-            {/* Free-text input for ask_user / present_plan */}
-            {(pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan') && (
-              <div style={{ marginBottom: 16 }}>
-                <input
-                  type="text"
-                  value={confirmInput}
-                  onChange={(e) => setConfirmInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') approveConfirm(); }}
-                  placeholder={pendingConfirm.toolName === 'ask_user' ? 'Type your answer...' : 'Approve with comment (optional)...'}
-                  autoFocus
-                  style={{
-                    width: '100%', padding: '8px 12px', background: '#181825',
-                    border: '1px solid #313244', borderRadius: 8, color: '#cdd6f4',
-                    fontSize: 13, outline: 'none',
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Buttons */}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 6 }}>
               <button
                 onClick={denyConfirm}
                 style={{
-                  padding: '8px 18px', background: 'transparent', border: '1px solid #45475a',
-                  borderRadius: 8, color: '#6c7086', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                  padding: '4px 12px', background: 'transparent', border: '1px solid #45475a',
+                  borderRadius: 6, color: '#6c7086', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                 }}
               >
                 Deny
@@ -2774,15 +2763,45 @@ export function AvaChatPage() {
               <button
                 onClick={approveConfirm}
                 style={{
-                  padding: '8px 18px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
-                  border: 'none', borderRadius: 8, color: '#fff', fontSize: 12,
-                  fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(168,85,247,0.4)',
+                  padding: '4px 12px', background: '#a855f7',
+                  border: 'none', borderRadius: 6, color: '#fff', fontSize: 11,
+                  fontWeight: 600, cursor: 'pointer',
                 }}
               >
                 Approve
               </button>
             </div>
           </div>
+
+          {/* Collapsible args preview */}
+          <details style={{ marginBottom: (pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan') ? 8 : 0 }}>
+            <summary style={{ fontSize: 10, color: '#585b70', cursor: 'pointer', userSelect: 'none' }}>View arguments</summary>
+            <pre style={{
+              fontSize: 10, color: '#6c7086', fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '6px 0 0',
+              maxHeight: 120, overflowY: 'auto', background: '#11111b',
+              padding: '8px 10px', borderRadius: 6,
+            }}>
+              {JSON.stringify(pendingConfirm.args, null, 2)}
+            </pre>
+          </details>
+
+          {/* Input for ask_user / present_plan */}
+          {(pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan') && (
+            <input
+              type="text"
+              value={confirmInput}
+              onChange={(e) => setConfirmInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') approveConfirm(); }}
+              placeholder={pendingConfirm.toolName === 'ask_user' ? 'Type your answer...' : 'Comment (optional)...'}
+              autoFocus
+              style={{
+                width: '100%', padding: '6px 10px', background: '#11111b',
+                border: '1px solid #313244', borderRadius: 6, color: '#cdd6f4',
+                fontSize: 12, outline: 'none',
+              }}
+            />
+          )}
         </div>
       )}
 
