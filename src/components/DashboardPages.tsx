@@ -374,12 +374,10 @@ function setCachedWeather(data: WeatherData): void {
 async function fetchNewsDirect(category?: string): Promise<NewsArticle[]> {
   try {
     const url = category
-      ? `https://ava-supernova.com/api/news?category=${category}&limit=6`
-      : `https://ava-supernova.com/api/news?limit=6`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : (data.articles || data.items || []);
+      ? `/news?category=${category}&limit=6`
+      : `/news?limit=6`;
+    const data = await apiFetch(url);
+    return Array.isArray(data) ? data : (data.posts || data.articles || data.items || []);
   } catch { return []; }
 }
 
@@ -961,7 +959,7 @@ export function CommandCentrePage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ width: '100%' }}>
         {/* Spin animation */}
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
