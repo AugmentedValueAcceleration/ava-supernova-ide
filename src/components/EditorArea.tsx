@@ -80,7 +80,6 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
 export default function EditorArea({ dashboardPage }: Props) {
   const activePage = dashboardPage || 'Command Centre';
   const DashboardComponent = dashboardComponents[activePage];
-  const tabLabel = `${dashboardIcons[activePage]} ${activePage}`;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
