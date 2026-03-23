@@ -1756,15 +1756,15 @@ export function AvaChatPage() {
     }
   }, []);
 
-  // ── Attach sidecar event listener (separate effect to avoid re-spawning) ──
+  // ── Attach sidecar event listener (both Local and Cloud use sidecar) ──
   useEffect(() => {
-    if (chatBackend !== 'local') return;
+    if (!canChat) return;
     const sidecar = getSidecar();
     sidecar.onAny(handleSidecarEvent);
     return () => {
       sidecar.offAny(handleSidecarEvent);
     };
-  }, [chatBackend, handleSidecarEvent]);
+  }, [canChat, handleSidecarEvent]);
 
   // ── New Chat ──────────────────────────────────────────────────────────────
   const newChat = useCallback(() => {
@@ -1823,15 +1823,14 @@ export function AvaChatPage() {
 
   // ── Cancel streaming ──────────────────────────────────────────────────────
   const cancelStream = useCallback(() => {
-    if (chatBackend === 'local') {
-      const sidecar = getSidecar();
-      sidecar.cancel().catch(() => {});
-    } else if (abortRef.current) {
+    const sidecar = getSidecar();
+    sidecar.cancel().catch(() => {});
+    if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
     setStreaming(false);
-  }, [chatBackend]);
+  }, []);
 
   // ── Render markdown (basic) ───────────────────────────────────────────────
   const renderMarkdown = useCallback((text: string) => {
