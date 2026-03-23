@@ -1923,7 +1923,11 @@ export function AvaChatPage() {
     setMessages((prev) => [...prev, avaMsg]);
 
     try {
-      await sidecar.sendMessage(text, attachments);
+      // Send full chat history so the sidecar sees the entire conversation
+      const history = messages
+        .filter(m => m.role === 'user' || m.role === 'ava')
+        .map(m => ({ role: m.role === 'ava' ? 'assistant' : 'user', text: m.text }));
+      await sidecar.sendMessage(text, attachments, history);
     } catch (err: any) {
       setMessages((prev) => [...prev, {
         id: mkId(), role: 'error' as const,

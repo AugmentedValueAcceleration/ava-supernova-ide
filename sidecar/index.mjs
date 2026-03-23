@@ -279,6 +279,24 @@ async function handleMessage(data) {
   currentAbort = abortController;
 
   try {
+    // Sync conversation from UI history if provided (ensures sidecar sees full chat window)
+    if (data.history && Array.isArray(data.history) && data.history.length > 0) {
+      const currentMessages = conversation.getMessages();
+      const currentUserCount = currentMessages.filter(m => m.role === 'user').length;
+      const historyUserCount = data.history.filter(m => m.role === 'user').length;
+      // Only resync if the UI has more history than the sidecar (e.g. after model switch)
+      if (historyUserCount > currentUserCount) {
+        // Keep system message, rebuild from UI history
+        const sysMsg = currentMessages.find(m => m.role === 'system');
+        const rebuilt = [];
+        if (sysMsg) rebuilt.push(sysMsg);
+        for (const h of data.history) {
+          if (h.text) rebuilt.push({ role: h.role === 'assistant' ? 'assistant' : 'user', content: h.text });
+        }
+        conversation.setMessages(rebuilt);
+      }
+    }
+
     // Build multimodal content if attachments are present (images, files)
     if (data.attachments && Array.isArray(data.attachments) && data.attachments.length > 0) {
       const parts = [];

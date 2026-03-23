@@ -195,8 +195,8 @@ export class SidecarManager {
   /**
    * Send a chat message to the agent.
    */
-  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[]): Promise<void> {
-    await this.send({ cmd: 'message', content, attachments: attachments?.length ? attachments : undefined });
+  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[]): Promise<void> {
+    await this.send({ cmd: 'message', content, attachments: attachments?.length ? attachments : undefined, history: history?.length ? history : undefined });
   }
 
   /**
