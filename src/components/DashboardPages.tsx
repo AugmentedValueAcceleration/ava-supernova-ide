@@ -3942,29 +3942,37 @@ export function UsagePage() {
   const [activeTab, setActiveTab] = useState<'session' | 'alltime'>('session');
   const { data: usage, loading, error } = useApiData<any>('/usage/summary', null);
 
-  // Session data
-  const inputTokens = usage?.session?.input_tokens || usage?.today?.input_tokens || 0;
-  const outputTokens = usage?.session?.output_tokens || usage?.today?.output_tokens || 0;
-  const totalTokens = inputTokens + outputTokens;
-  const messages = usage?.session?.messages || usage?.messages || 0;
-  const toolCalls = usage?.session?.tool_calls || usage?.tool_calls || 0;
+  // Map from unified /usage/summary response
+  const period = usage?.period || {};
+  const totals = usage?.totals || {};
 
-  // All-time data
-  const tokensMonth = usage?.month?.total_tokens || usage?.tokens_month || 0;
-  const tokensLastMonth = usage?.last_month?.total_tokens || usage?.tokens_last_month || 0;
-  const avgPerSession = usage?.avg_per_session || 0;
-  const totalSessions = usage?.total_sessions || 0;
+  // Token data
+  const freeUsed = period.free_tokens_used || 0;
+  const freeLimit = period.free_tokens_limit || 3000000;
+  const subUsed = period.tokens_used || 0;
+  const subLimit = period.tokens_limit || 0;
+  const totalTokens = freeUsed + subUsed;
+  const inputTokens = Math.round(totalTokens * 0.6); // estimate 60/40 split
+  const outputTokens = totalTokens - inputTokens;
+  const messages = period.requests_count || totals.requests || 0;
+  const toolCalls = 0; // not tracked in API yet
 
-  const models: any[] = usage?.models || usage?.model_breakdown || [];
-  const daily: any[] = usage?.daily || usage?.daily_usage || [];
-  const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || d.total_tokens || 0)) : 1;
+  // All-time from totals
+  const tokensMonth = totals.tokens || 0;
+  const tokensLastMonth = 0; // not in API yet
+  const avgPerSession = messages > 0 ? Math.round(tokensMonth / Math.max(messages, 1)) : 0;
+  const totalSessions = totals.requests || 0;
+
+  const models: any[] = usage?.models || [];
+  const daily: any[] = usage?.daily || [];
+  const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || 0)) : 1;
   const today = new Date().toISOString().slice(0, 10);
 
   // Balance
-  const balance = usage?.balance;
-  const balanceUsed = balance?.used || 0;
-  const balanceLimit = balance?.limit || 1;
-  const balancePct = balanceLimit > 0 ? Math.min((balanceUsed / balanceLimit) * 100, 100) : 0;
+  const isUnlimited = usage?.isUnlimited || false;
+  const balanceUsed = freeUsed + subUsed;
+  const balanceLimit = freeLimit + subLimit;
+  const balancePct = isUnlimited ? 0 : (balanceLimit > 0 ? Math.min((balanceUsed / balanceLimit) * 100, 100) : 0);
 
   // Cost estimate
   const MODEL_PRICING: Record<string, { input: number; output: number }> = {
