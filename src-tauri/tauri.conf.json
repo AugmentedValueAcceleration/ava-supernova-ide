@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Ava | Supernova IDE",
+  "productName": "Ava Supernova IDE",
   "version": "0.1.0",
   "identifier": "com.augmentedvalueacceleration.ide",
   "build": {
@@ -40,7 +40,6 @@
       "developmentTeam": "AugmentedValueAcceleration"
     },
     "android": {
-      "namespace": "com.augmentedvalueacceleration.ide"
     }
   }
 }

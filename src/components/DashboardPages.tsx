@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, apiStreamUrl } from '../lib/api';
+import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -964,7 +965,23 @@ export function CommandCentrePage() {
           <div style={{ fontSize: 13, color: '#6c7086' }}>{dateStr}</div>
         </div>
 
-        {!connected && <NotConnectedBanner />}
+        {!connected && (
+          <div style={{
+            ...card, padding: '16px 20px', marginBottom: 16,
+            background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(99,102,241,0.05))',
+            border: '1px solid rgba(168,85,247,0.2)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 24 }}>{'\uD83D\uDD11'}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>BYOK Mode</div>
+                <div style={{ fontSize: 11, color: '#6c7086' }}>
+                  You're using your own API keys. Connect a platform account in the sidebar for cloud sync, usage tracking, and managed tokens.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Weather (full width) ──────────────────────────────────────── */}
         <div style={{ marginBottom: 16 }}>
@@ -973,20 +990,30 @@ export function CommandCentrePage() {
 
         {/* ── Statistics (2x2 grid) ─────────────────────────────────────── */}
         <div style={{ marginBottom: 16 }}>
-          <h2 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, color: '#6c7086', marginBottom: 12 }}>Statistics</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <h2 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, color: '#6c7086', marginBottom: 12 }}>
+            {connected ? 'Statistics' : 'Session'}
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: connected ? '1fr 1fr' : '1fr 1fr 1fr', gap: 12 }}>
             <CCStatCard
               icon={'\uD83D\uDCCA'}
-              value={connected && usage ? formatNumber(tokensUsed) : '--'}
+              value={connected && usage ? formatNumber(tokensUsed) : formatNumber(parseInt(localStorage.getItem('ava-ide-session-tokens') || '0'))}
               label="Tokens Used"
-              subtext={usageLoading && connected ? 'Loading...' : 'This period'}
+              subtext={connected ? (usageLoading ? 'Loading...' : 'This period') : 'This session'}
             />
             <CCStatCard
               icon={'\u26A1'}
-              value={connected && usage ? String(requestsCount) : '--'}
+              value={connected && usage ? String(requestsCount) : localStorage.getItem('ava-ide-session-requests') || '0'}
               label="Requests"
-              subtext={usageLoading && connected ? 'Loading...' : 'This period'}
+              subtext={connected ? (usageLoading ? 'Loading...' : 'This period') : 'This session'}
             />
+            {!connected && (
+              <CCStatCard
+                icon={'\uD83E\uDD16'}
+                value={localStorage.getItem('ava-ide-chat-backend') === 'local' ? 'Local' : 'Cloud'}
+                label="Engine"
+                subtext="Current mode"
+              />
+            )}
           </div>
         </div>
 
@@ -1051,7 +1078,10 @@ export function AvaChatPage() {
     role: 'ava' | 'user' | 'error' | 'system';
     text: string;
     timestamp: number;
-    toolCalls?: { name: string; status: 'running' | 'done' | 'error' }[];
+    toolCalls?: { name: string; status: 'running' | 'done' | 'error'; result?: string }[];
+    images?: { src: string; alt?: string }[]; // base64 or URL images
+    files?: { name: string; path?: string; url?: string; type?: string }[]; // created files
+    attachments?: { name: string; dataUri: string; mimeType: string }[]; // user-attached files
   }
   interface Conversation {
     id: string;
@@ -1129,6 +1159,20 @@ export function AvaChatPage() {
   const [conversationTitle, setConversationTitle] = useState('New Chat');
   const [contextPercent, setContextPercent] = useState(0);
 
+  // ── Local sidecar state ─────────────────────────────────────────────────
+  const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() =>
+    (localStorage.getItem('ava-ide-chat-backend') as 'local' | 'cloud') || 'cloud'
+  );
+  const [sidecarReady, setSidecarReady] = useState(false);
+  const [sidecarStatus, setSidecarStatus] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    id: string; toolName: string; args: Record<string, unknown>;
+  } | null>(null);
+  const [confirmInput, setConfirmInput] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<{ name: string; dataUri: string; mimeType: string }[]>([]);
+  const chatUserAvatar = useMemo(() => localStorage.getItem('ava-ide-user-avatar') || '', []);
+  const chatAiAvatar = useMemo(() => localStorage.getItem('ava-ide-ai-avatar') || '', []);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -1191,6 +1235,51 @@ export function AvaChatPage() {
     }
   }, []);
 
+  // ── Paste/drop image handler ──────────────────────────────────────────────
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onload = () => {
+          setPendingAttachments((prev) => [...prev, {
+            name: file.name || `pasted-image.${item.type.split('/')[1]}`,
+            dataUri: reader.result as string,
+            mimeType: item.type,
+          }]);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer?.files;
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setPendingAttachments((prev) => [...prev, {
+            name: file.name,
+            dataUri: reader.result as string,
+            mimeType: file.type,
+          }]);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  }, []);
+
+  const removeAttachment = useCallback((idx: number) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1206,6 +1295,278 @@ export function AvaChatPage() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  // ── Persist chat backend ─────────────────────────────────────────────────
+  useEffect(() => {
+    try { localStorage.setItem('ava-ide-chat-backend', chatBackend); } catch { /* */ }
+  }, [chatBackend]);
+
+  // ── Sidecar lifecycle ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (chatBackend !== 'local') {
+      setSidecarReady(false);
+      setSidecarStatus('off');
+      return;
+    }
+
+    let cancelled = false;
+    const sidecar = getSidecar();
+
+    const startSidecar = async () => {
+      setSidecarStatus('starting');
+      try {
+        // Build config from localStorage BYOK keys
+        const providers: Record<string, { apiKey: string }> = {};
+        try {
+          const raw = localStorage.getItem('ava-ide-byok');
+          if (raw) {
+            const keys: Record<string, string> = JSON.parse(raw);
+            const nameMap: Record<string, string> = { DeepSeek: 'deepseek', Qwen: 'qwen', Moonshot: 'kimi', Zhipu: 'glm', Mistral: 'mistral' };
+            for (const [name, key] of Object.entries(keys)) {
+              if (key?.trim()) {
+                const mapped = nameMap[name] || name.toLowerCase();
+                providers[mapped] = { apiKey: key.trim() };
+              }
+            }
+          }
+        } catch { /* */ }
+
+        // Map model ID to qualified provider:model format for core
+        // Platform models use platform: prefix, BYOK use provider-specific prefix
+        const modelMap: Record<string, string> = {
+          'qwen-flash': 'platform:qwen-flash',
+          'qwen3.5-plus': 'platform:qwen3.5-plus',
+          'deepseek-chat': 'deepseek:deepseek-chat',
+          'deepseek-reasoner': 'deepseek:deepseek-reasoner',
+          'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
+          'glm-4-plus': 'zhipu:glm-4-plus',
+          'mistral-large': 'mistral:mistral-large-latest',
+        };
+
+        const config: SidecarConfig = {
+          providers,
+          platformKey: getPlatformKey() || undefined,
+          activeModel: modelMap[model] || `qwen:${model}`,
+          cwd: '.', // TODO: use project folder from Explorer
+          mode,
+          permissionMode: 'balanced',
+          autoMemory: true,
+          _devPlatformFallback: true, // DEV ONLY — remove before 1.0.0
+        } as SidecarConfig;
+
+        await sidecar.start(config);
+
+        if (!cancelled) {
+          setSidecarReady(true);
+          setSidecarStatus('ready');
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setSidecarStatus('error');
+          console.error('[sidecar start]', err);
+        }
+      }
+    };
+
+    startSidecar();
+
+    // Listen for sidecar close
+    const onClose = () => {
+      if (!cancelled) {
+        setSidecarReady(false);
+        setSidecarStatus('off');
+      }
+    };
+    sidecar.on('close', onClose);
+
+    return () => {
+      cancelled = true;
+      sidecar.off('close', onClose);
+      sidecar.removeAllListeners();
+      sidecar.stop().catch(() => {});
+    };
+  }, [chatBackend]); // Only restart sidecar when switching local/cloud — NOT on model/mode change
+
+  // ── Send model/mode changes to running sidecar (no restart) ────────────
+  const prevModelRef = useRef(model);
+  const prevModeRef = useRef(mode);
+  useEffect(() => {
+    if (chatBackend !== 'local' || !sidecarReady) return;
+    const sidecar = getSidecar();
+    const modelMap: Record<string, string> = {
+      'qwen-flash': 'platform:qwen-flash',
+      'qwen3.5-plus': 'platform:qwen3.5-plus',
+      'deepseek-chat': 'deepseek:deepseek-chat',
+      'deepseek-reasoner': 'deepseek:deepseek-reasoner',
+      'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
+      'glm-4-plus': 'zhipu:glm-4-plus',
+      'mistral-large': 'mistral:mistral-large-latest',
+    };
+    if (model !== prevModelRef.current) {
+      prevModelRef.current = model;
+      sidecar.setModel(modelMap[model] || `platform:${model}`).catch(() => {});
+    }
+    if (mode !== prevModeRef.current) {
+      prevModeRef.current = mode;
+      sidecar.setMode(mode).catch(() => {});
+    }
+  }, [model, mode, chatBackend, sidecarReady]);
+
+  // ── Sidecar event handler (for local mode streaming) ──────────────────
+  const handleSidecarEvent = useCallback((event: SidecarEvent) => {
+    switch (event.event) {
+      case 'stream_start':
+        break;
+
+      case 'stream_delta':
+        if (event.content) {
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last?.role === 'ava') {
+              copy[copy.length - 1] = { ...last, text: last.text + event.content };
+            }
+            return copy;
+          });
+        }
+        break;
+
+      case 'tool_call_start':
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last?.role === 'ava') {
+            const existing = last.toolCalls || [];
+            copy[copy.length - 1] = {
+              ...last,
+              toolCalls: [...existing, { name: event.toolName || 'unknown', status: 'running' }],
+            };
+          }
+          return copy;
+        });
+        break;
+
+      case 'tool_call_end':
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last?.role === 'ava') {
+            const updates: Partial<ChatMessage> = {};
+
+            // Update tool status
+            if (last.toolCalls) {
+              const tools = [...last.toolCalls];
+              const idx = tools.findIndex((t) => t.name === event.toolName && t.status === 'running');
+              if (idx >= 0) {
+                tools[idx] = { ...tools[idx], status: event.success ? 'done' : 'error', result: event.result };
+                updates.toolCalls = tools;
+              }
+            }
+
+            // Extract images from tool results (generate_image, screenshot, remove_background)
+            const imageTools = ['generate_image', 'screenshot', 'remove_background'];
+            if (imageTools.includes(event.toolName || '') && event.result) {
+              try {
+                const parsed = typeof event.result === 'string' ? JSON.parse(event.result) : event.result;
+                if (parsed?.base64_image || parsed?.url || parsed?.image_url) {
+                  const src = parsed.base64_image
+                    ? `data:${parsed.mime_type || 'image/png'};base64,${parsed.base64_image}`
+                    : parsed.url || parsed.image_url;
+                  updates.images = [...(last.images || []), { src, alt: event.toolName }];
+                }
+              } catch {
+                // Result might contain a base64 string directly or a file path
+                if (event.result && (event.result as string).startsWith?.('data:')) {
+                  updates.images = [...(last.images || []), { src: event.result as string }];
+                }
+              }
+            }
+
+            // Extract created files (document_manage, presentation_create, etc.)
+            const fileTools = ['document_manage', 'presentation_create', 'email_draft', 'report_generate'];
+            if (fileTools.includes(event.toolName || '') && event.result && event.success) {
+              try {
+                const parsed = typeof event.result === 'string' ? JSON.parse(event.result) : event.result;
+                if (parsed?.path || parsed?.filename) {
+                  const name = parsed.filename || parsed.path?.split(/[/\\]/).pop() || 'file';
+                  updates.files = [...(last.files || []), { name, path: parsed.path, url: parsed.url }];
+                }
+              } catch {
+                // Plain text result with file path
+                const match = (event.result as string)?.match?.(/(?:saved|created|wrote).*?([^\s]+\.\w{2,5})/i);
+                if (match) {
+                  updates.files = [...(last.files || []), { name: match[1].split(/[/\\]/).pop() || 'file', path: match[1] }];
+                }
+              }
+            }
+
+            if (Object.keys(updates).length > 0) {
+              copy[copy.length - 1] = { ...last, ...updates };
+            }
+          }
+          return copy;
+        });
+        break;
+
+      case 'confirm_required':
+        setPendingConfirm({
+          id: event.id!,
+          toolName: event.toolName || 'unknown',
+          args: event.args || {},
+        });
+        break;
+
+      case 'usage':
+        if (event.usage) {
+          const total = event.usage.total_tokens || (event.usage.prompt_tokens || 0) + (event.usage.completion_tokens || 0);
+          setTokenCount((prev) => prev + total);
+        }
+        break;
+
+      case 'context_usage':
+        if (event.percent) {
+          setContextPercent(Math.round(event.percent));
+        }
+        break;
+
+      case 'done':
+        setStreaming(false);
+        textareaRef.current?.focus();
+        break;
+
+      case 'cancelled':
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last?.role === 'ava' && !last.text) {
+            copy[copy.length - 1] = { ...last, text: '(Cancelled)', role: 'system' };
+          }
+          return copy;
+        });
+        setStreaming(false);
+        break;
+
+      case 'error':
+      case 'agent_error':
+        setMessages((prev) => [...prev, {
+          id: mkId(), role: 'error' as const,
+          text: event.message || 'Unknown error',
+          timestamp: Date.now(),
+        }]);
+        setStreaming(false);
+        break;
+    }
+  }, []);
+
+  // ── Attach sidecar event listener (separate effect to avoid re-spawning) ──
+  useEffect(() => {
+    if (chatBackend !== 'local') return;
+    const sidecar = getSidecar();
+    sidecar.onAny(handleSidecarEvent);
+    return () => {
+      sidecar.offAny(handleSidecarEvent);
+    };
+  }, [chatBackend, handleSidecarEvent]);
 
   // ── New Chat ──────────────────────────────────────────────────────────────
   const newChat = useCallback(() => {
@@ -1236,9 +1597,14 @@ export function AvaChatPage() {
     setTokenCount(0);
     setContextPercent(0);
     if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
+    if (chatBackend === 'local') {
+      const sidecar = getSidecar();
+      sidecar.clear().catch(() => {});
+      sidecar.removeAllListeners();
+    }
     setStreaming(false);
     textareaRef.current?.focus();
-  }, [messages, model]);
+  }, [messages, model, chatBackend]);
 
   // ── Copy message ──────────────────────────────────────────────────────────
   const copyMessage = useCallback((msgId: string, text: string) => {
@@ -1250,12 +1616,15 @@ export function AvaChatPage() {
 
   // ── Cancel streaming ──────────────────────────────────────────────────────
   const cancelStream = useCallback(() => {
-    if (abortRef.current) {
+    if (chatBackend === 'local') {
+      const sidecar = getSidecar();
+      sidecar.cancel().catch(() => {});
+    } else if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
     setStreaming(false);
-  }, []);
+  }, [chatBackend]);
 
   // ── Render markdown (basic) ───────────────────────────────────────────────
   const renderMarkdown = useCallback((text: string) => {
@@ -1328,22 +1697,42 @@ export function AvaChatPage() {
     return nodes;
   };
 
-  // ── Send message ──────────────────────────────────────────────────────────
-  const send = useCallback(async () => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
-    setInput('');
-    if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
+  // ── Send message (local sidecar) ─────────────────────────────────────────
+  const sendLocal = useCallback(async (text: string) => {
+    const sidecar = getSidecar();
+    if (!sidecar.isReady) {
+      setMessages((prev) => [...prev, {
+        id: mkId(), role: 'error' as const,
+        text: 'Local engine not ready. Wait for sidecar to start or switch to Cloud mode.',
+        timestamp: Date.now(),
+      }]);
+      return;
+    }
 
-    const currentMode = MODES.find((m) => m.id === mode)!;
-    const userMsg: ChatMessage = { id: mkId(), role: 'user', text: trimmed, timestamp: Date.now() };
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
+    setStreaming(true);
 
+    // Create Ava response placeholder
+    const avaMsg: ChatMessage = { id: mkId(), role: 'ava', text: '', timestamp: Date.now(), toolCalls: [] };
+    setMessages((prev) => [...prev, avaMsg]);
+
+    try {
+      await sidecar.sendMessage(text);
+    } catch (err: any) {
+      setMessages((prev) => [...prev, {
+        id: mkId(), role: 'error' as const,
+        text: `Sidecar error: ${err.message || 'unknown'}`,
+        timestamp: Date.now(),
+      }]);
+      setStreaming(false);
+    }
+  }, []);
+
+  // ── Send message (cloud SSE) ───────────────────────────────────────────
+  const sendCloud = useCallback(async (_text: string, allMessages: ChatMessage[]) => {
     if (!connected) {
       setMessages((prev) => [...prev, {
         id: mkId(), role: 'error' as const,
-        text: "I'm not connected to the platform yet. Connect your account in the Dashboard sidebar to chat with me.",
+        text: "Not connected to platform. Connect your account or switch to Local mode.",
         timestamp: Date.now(),
       }]);
       return;
@@ -1353,15 +1742,16 @@ export function AvaChatPage() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const modeInfo = MODES.find((m) => m.id === mode)!;
+
     // Build API messages, applying mode prefix
-    const apiMessages = updatedMessages.map((m) => ({
+    const apiMessages = allMessages.map((m) => ({
       role: m.role === 'user' ? 'user' : m.role === 'ava' ? 'assistant' : 'user',
       content: m.text,
     }));
-    // Add mode prefix to the latest user message
-    if (currentMode.prefix && apiMessages.length > 0) {
+    if (modeInfo.prefix && apiMessages.length > 0) {
       const last = apiMessages[apiMessages.length - 1];
-      apiMessages[apiMessages.length - 1] = { ...last, content: currentMode.prefix + last.content };
+      apiMessages[apiMessages.length - 1] = { ...last, content: modeInfo.prefix + last.content };
     }
 
     const avaMsg: ChatMessage = { id: mkId(), role: 'ava', text: '', timestamp: Date.now(), toolCalls: [] };
@@ -1391,105 +1781,141 @@ export function AvaChatPage() {
         return;
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        setMessages((prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          if (last && last.role === 'ava') {
-            copy[copy.length - 1] = { ...last, text: 'No response stream available.', role: 'error' };
-          }
-          return copy;
-        });
-        setStreaming(false);
-        abortRef.current = null;
-        return;
+      const contentType = response.headers.get('content-type') || '';
+
+      // ── JSON response (non-streaming) ────────────────────────────────
+      if (contentType.includes('application/json')) {
+        const json = await response.json();
+        const text = json.choices?.[0]?.message?.content
+          || json.choices?.[0]?.delta?.content
+          || json.content
+          || json.text
+          || json.response
+          || (typeof json === 'string' ? json : '');
+
+        if (json.error) {
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last && last.role === 'ava') {
+              copy[copy.length - 1] = { ...last, text: `Error: ${json.error.message || json.error}`, role: 'error' };
+            }
+            return copy;
+          });
+        } else if (text) {
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last && last.role === 'ava') {
+              copy[copy.length - 1] = { ...last, text };
+            }
+            return copy;
+          });
+        }
+
+        if (json.usage) {
+          const total = json.usage.total_tokens || (json.usage.prompt_tokens || 0) + (json.usage.completion_tokens || 0);
+          setTokenCount((prev) => prev + total);
+        }
       }
+      // ── SSE streaming response ───────────────────────────────────────
+      else {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last && last.role === 'ava') {
+              copy[copy.length - 1] = { ...last, text: 'No response stream available.', role: 'error' };
+            }
+            return copy;
+          });
+          setStreaming(false);
+          abortRef.current = null;
+          return;
+        }
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let sessionTokens = 0;
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let sessionTokens = 0;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-          if (trimmedLine === 'data: [DONE]') continue;
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+            if (trimmedLine === 'data: [DONE]') continue;
 
-          if (trimmedLine.startsWith('data: ')) {
-            try {
-              const json = JSON.parse(trimmedLine.slice(6));
+            if (trimmedLine.startsWith('data: ')) {
+              try {
+                const json = JSON.parse(trimmedLine.slice(6));
 
-              // Handle tool calls
-              if (json.choices?.[0]?.delta?.tool_calls || json.tool_calls) {
-                const toolCalls = json.choices?.[0]?.delta?.tool_calls || json.tool_calls || [];
-                for (const tc of toolCalls) {
-                  if (tc.function?.name) {
-                    setMessages((prev) => {
-                      const copy = [...prev];
-                      const last = copy[copy.length - 1];
-                      if (last && last.role === 'ava') {
-                        const existing = last.toolCalls || [];
-                        copy[copy.length - 1] = {
-                          ...last,
-                          toolCalls: [...existing, { name: tc.function.name, status: 'running' }],
-                        };
-                      }
-                      return copy;
-                    });
+                if (json.choices?.[0]?.delta?.tool_calls || json.tool_calls) {
+                  const toolCalls = json.choices?.[0]?.delta?.tool_calls || json.tool_calls || [];
+                  for (const tc of toolCalls) {
+                    if (tc.function?.name) {
+                      setMessages((prev) => {
+                        const copy = [...prev];
+                        const last = copy[copy.length - 1];
+                        if (last && last.role === 'ava') {
+                          const existing = last.toolCalls || [];
+                          copy[copy.length - 1] = {
+                            ...last,
+                            toolCalls: [...existing, { name: tc.function.name, status: 'running' }],
+                          };
+                        }
+                        return copy;
+                      });
+                    }
+                  }
+                  continue;
+                }
+
+                if (json.usage) {
+                  sessionTokens += json.usage.total_tokens || json.usage.completion_tokens || 0;
+                  setTokenCount(sessionTokens);
+                  if (json.usage.prompt_tokens && json.usage.completion_tokens) {
+                    const total = json.usage.prompt_tokens + json.usage.completion_tokens;
+                    const ctxWindow = 131072;
+                    setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
                   }
                 }
-                continue;
-              }
 
-              // Handle usage info
-              if (json.usage) {
-                sessionTokens += json.usage.total_tokens || json.usage.completion_tokens || 0;
-                setTokenCount(sessionTokens);
-                if (json.usage.prompt_tokens && json.usage.completion_tokens) {
-                  const total = json.usage.prompt_tokens + json.usage.completion_tokens;
-                  const ctxWindow = 131072; // Default context window
-                  setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
+                const content = json.choices?.[0]?.delta?.content
+                  || json.delta?.content
+                  || json.content
+                  || json.text
+                  || '';
+                if (content) {
+                  setMessages((prev) => {
+                    const copy = [...prev];
+                    const last = copy[copy.length - 1];
+                    if (last && last.role === 'ava') {
+                      copy[copy.length - 1] = { ...last, text: last.text + content };
+                    }
+                    return copy;
+                  });
                 }
-              }
 
-              // Handle content delta
-              const content = json.choices?.[0]?.delta?.content
-                || json.delta?.content
-                || json.content
-                || json.text
-                || '';
-              if (content) {
-                setMessages((prev) => {
-                  const copy = [...prev];
-                  const last = copy[copy.length - 1];
-                  if (last && last.role === 'ava') {
-                    copy[copy.length - 1] = { ...last, text: last.text + content };
-                  }
-                  return copy;
-                });
+                if (json.error) {
+                  setMessages((prev) => {
+                    const copy = [...prev];
+                    const last = copy[copy.length - 1];
+                    if (last && last.role === 'ava') {
+                      copy[copy.length - 1] = { ...last, text: `Error: ${json.error.message || json.error}`, role: 'error' };
+                    }
+                    return copy;
+                  });
+                }
+              } catch {
+                // Non-JSON SSE line
               }
-
-              // Handle error events
-              if (json.error) {
-                setMessages((prev) => {
-                  const copy = [...prev];
-                  const last = copy[copy.length - 1];
-                  if (last && last.role === 'ava') {
-                    copy[copy.length - 1] = { ...last, text: `Error: ${json.error.message || json.error}`, role: 'error' };
-                  }
-                  return copy;
-                });
-              }
-            } catch {
-              // Non-JSON SSE line
             }
           }
         }
@@ -1516,7 +1942,51 @@ export function AvaChatPage() {
     setStreaming(false);
     abortRef.current = null;
     textareaRef.current?.focus();
-  }, [input, mode, model, messages, connected]);
+  }, [mode, model, connected]);
+
+  // ── Send dispatcher ──────────────────────────────────────────────────────
+  const send = useCallback(async () => {
+    const trimmed = input.trim();
+    if (!trimmed && pendingAttachments.length === 0) return;
+    setInput('');
+    if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
+
+    const userMsg: ChatMessage = {
+      id: mkId(), role: 'user', text: trimmed || '(image attached)', timestamp: Date.now(),
+      attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
+    };
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    setPendingAttachments([]);
+
+    if (chatBackend === 'local') {
+      sendLocal(trimmed);
+    } else {
+      sendCloud(trimmed, updatedMessages);
+    }
+  }, [input, messages, chatBackend, sendLocal, sendCloud, pendingAttachments]);
+
+  // ── Tool confirmation handlers ─────────────────────────────────────────
+  const approveConfirm = useCallback(async () => {
+    if (!pendingConfirm) return;
+    const sidecar = getSidecar();
+    const isAskUser = pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan';
+    if (isAskUser && confirmInput.trim()) {
+      await sidecar.confirm(pendingConfirm.id, true, confirmInput.trim());
+    } else {
+      await sidecar.confirm(pendingConfirm.id, true);
+    }
+    setPendingConfirm(null);
+    setConfirmInput('');
+  }, [pendingConfirm, confirmInput]);
+
+  const denyConfirm = useCallback(async () => {
+    if (!pendingConfirm) return;
+    const sidecar = getSidecar();
+    await sidecar.confirm(pendingConfirm.id, false);
+    setPendingConfirm(null);
+    setConfirmInput('');
+  }, [pendingConfirm]);
 
   // ── Active mode info ──────────────────────────────────────────────────────
   const currentMode = MODES.find((m) => m.id === mode) || MODES[0];
@@ -1639,8 +2109,34 @@ export function AvaChatPage() {
           </span>
         </div>
 
-        {/* Right: tokens + new chat */}
+        {/* Right: backend toggle + tokens + new chat */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Local/Cloud toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              onClick={() => setChatBackend(chatBackend === 'local' ? 'cloud' : 'local')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
+                background: chatBackend === 'local' ? 'rgba(166,227,161,0.1)' : 'rgba(108,112,134,0.1)',
+                border: `1px solid ${chatBackend === 'local' ? 'rgba(166,227,161,0.3)' : 'rgba(108,112,134,0.2)'}`,
+                borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 600,
+                color: chatBackend === 'local' ? '#a6e3a1' : '#6c7086',
+              }}
+              title={chatBackend === 'local'
+                ? 'Local mode — full 54 tools, runs on your machine'
+                : 'Cloud mode — chat via platform API'}
+            >
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: chatBackend === 'local'
+                  ? (sidecarStatus === 'ready' ? '#a6e3a1' : sidecarStatus === 'starting' ? '#eab308' : '#ef4444')
+                  : (connected ? '#a6e3a1' : '#6c7086'),
+                ...(sidecarStatus === 'starting' ? { animation: 'avaPulse 1.5s infinite' } : {}),
+              }} />
+              {chatBackend === 'local' ? 'Local' : 'Cloud'}
+            </button>
+          </div>
+
           {/* Token counter */}
           <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used`}>
             {tokenCount > 0 ? fmtTokens(tokenCount) + ' tokens' : '0 tokens'}
@@ -1722,18 +2218,37 @@ export function AvaChatPage() {
               onMouseEnter={() => setHoveredMsg(msg.id)}
               onMouseLeave={() => setHoveredMsg(null)}
             >
-              {/* Ava avatar */}
+              {/* Ava / User avatar */}
               {(isAva || isError) && (
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%', flexShrink: 0, marginRight: 10, marginTop: 4,
-                  background: isError ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #a855f7, #6366f1)',
+                  background: isError ? 'linear-gradient(135deg, #ef4444, #dc2626)' : (chatAiAvatar ? 'transparent' : 'linear-gradient(135deg, #a855f7, #6366f1)'),
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden',
                 }}>
                   {isError ? (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  ) : chatAiAvatar ? (
+                    <img src={chatAiAvatar} alt="Ava" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  )}
+                </div>
+              )}
+              {isUser && (
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0, marginLeft: 10, marginTop: 4,
+                  background: chatUserAvatar ? 'transparent' : 'linear-gradient(135deg, #b4befe, #89b4fa)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden', order: 1,
+                }}>
+                  {chatUserAvatar ? (
+                    <img src={chatUserAvatar} alt="You" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
                     </svg>
                   )}
                 </div>
@@ -1792,6 +2307,87 @@ export function AvaChatPage() {
                     </div>
                   )}
 
+                  {/* Inline images */}
+                  {msg.images && msg.images.length > 0 && (
+                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {msg.images.map((img, idx) => (
+                        <div key={idx} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid #313244' }}>
+                          <img
+                            src={img.src}
+                            alt={img.alt || 'Generated image'}
+                            style={{ maxWidth: '100%', maxHeight: 300, display: 'block', borderRadius: 10 }}
+                          />
+                          <div style={{
+                            position: 'absolute', bottom: 0, left: 0, right: 0,
+                            padding: '20px 10px 8px', display: 'flex', gap: 6, justifyContent: 'flex-end',
+                            background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                          }}>
+                            <a
+                              href={img.src}
+                              download={`ava-image-${idx + 1}.png`}
+                              style={{
+                                padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                                background: 'rgba(168,85,247,0.8)', color: '#fff', textDecoration: 'none',
+                                backdropFilter: 'blur(4px)',
+                              }}
+                            >Download</a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Created files */}
+                  {msg.files && msg.files.length > 0 && (
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {msg.files.map((file, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                          background: '#11111b', border: '1px solid #313244', borderRadius: 8,
+                        }}>
+                          <span style={{ fontSize: 18 }}>
+                            {file.name?.endsWith('.pptx') ? '\uD83D\uDCBB' :
+                             file.name?.endsWith('.xlsx') ? '\uD83D\uDCCA' :
+                             file.name?.endsWith('.pdf') ? '\uD83D\uDCC4' :
+                             file.name?.endsWith('.docx') ? '\uD83D\uDCC4' : '\uD83D\uDCC1'}
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>{file.name}</div>
+                            {file.path && <div style={{ fontSize: 10, color: '#6c7086', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.path}</div>}
+                          </div>
+                          {file.url && (
+                            <a href={file.url} target="_blank" rel="noopener noreferrer" style={{
+                              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                              background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)',
+                              textDecoration: 'none',
+                            }}>Open</a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* User attachments (pasted/dropped images) */}
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {msg.attachments.map((att, idx) => (
+                        att.mimeType.startsWith('image/') ? (
+                          <img key={idx} src={att.dataUri} alt={att.name} style={{
+                            maxWidth: 200, maxHeight: 150, borderRadius: 8, border: '1px solid #313244',
+                          }} />
+                        ) : (
+                          <div key={idx} style={{
+                            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+                            background: '#11111b', border: '1px solid #313244', borderRadius: 8,
+                            fontSize: 11, color: '#6c7086',
+                          }}>
+                            {'\uD83D\uDCCE'} {att.name}
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  )}
+
                   {/* Copy button on hover for Ava messages */}
                   {isAva && msg.text && hoveredMsg === msg.id && (
                     <button
@@ -1837,6 +2433,82 @@ export function AvaChatPage() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* ── Tool Confirmation Dialog (local mode) ────────────────────────── */}
+      {pendingConfirm && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: '#1e1e2e', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 14,
+            padding: 24, maxWidth: 480, width: '90%', boxShadow: '0 16px 64px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>
+              Tool Confirmation
+            </div>
+            <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 16 }}>
+              Ava wants to use <span style={{ color: '#f5c2e7', fontFamily: 'monospace' }}>{pendingConfirm.toolName}</span>
+            </div>
+
+            {/* Show args preview */}
+            <div style={{
+              background: '#11111b', border: '1px solid #313244', borderRadius: 8,
+              padding: '10px 12px', marginBottom: 16, maxHeight: 200, overflowY: 'auto',
+            }}>
+              <pre style={{
+                fontSize: 11, color: '#a6adc8', fontFamily: 'monospace',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
+              }}>
+                {JSON.stringify(pendingConfirm.args, null, 2)}
+              </pre>
+            </div>
+
+            {/* Free-text input for ask_user / present_plan */}
+            {(pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan') && (
+              <div style={{ marginBottom: 16 }}>
+                <input
+                  type="text"
+                  value={confirmInput}
+                  onChange={(e) => setConfirmInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') approveConfirm(); }}
+                  placeholder={pendingConfirm.toolName === 'ask_user' ? 'Type your answer...' : 'Approve with comment (optional)...'}
+                  autoFocus
+                  style={{
+                    width: '100%', padding: '8px 12px', background: '#181825',
+                    border: '1px solid #313244', borderRadius: 8, color: '#cdd6f4',
+                    fontSize: 13, outline: 'none',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={denyConfirm}
+                style={{
+                  padding: '8px 18px', background: 'transparent', border: '1px solid #45475a',
+                  borderRadius: 8, color: '#6c7086', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                }}
+              >
+                Deny
+              </button>
+              <button
+                onClick={approveConfirm}
+                style={{
+                  padding: '8px 18px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                  border: 'none', borderRadius: 8, color: '#fff', fontSize: 12,
+                  fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(168,85,247,0.4)',
+                }}
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Input Bar (fixed at bottom) ─────────────────────────────────── */}
       <div style={{
@@ -1912,40 +2584,96 @@ export function AvaChatPage() {
               )}
             </div>
 
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if (!streaming) send();
-                }
-              }}
-              placeholder={connected ? currentMode.placeholder : 'Connect account to chat...'}
-              disabled={!connected}
-              rows={1}
-              style={{
-                flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',
-                color: '#cdd6f4', fontSize: 14, lineHeight: 1.5, padding: '6px 0',
-                fontFamily: 'inherit', maxHeight: 160, minHeight: 24,
-                opacity: !connected ? 0.4 : 1,
-              }}
-            />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+            >
+              {/* Pending attachments preview */}
+              {pendingAttachments.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                  {pendingAttachments.map((att, idx) => (
+                    <div key={idx} style={{
+                      position: 'relative', borderRadius: 8, overflow: 'hidden',
+                      border: '1px solid rgba(168,85,247,0.3)', background: '#181825',
+                    }}>
+                      {att.mimeType.startsWith('image/') ? (
+                        <img src={att.dataUri} alt={att.name} style={{ height: 48, maxWidth: 80, objectFit: 'cover', display: 'block' }} />
+                      ) : (
+                        <div style={{ padding: '8px 12px', fontSize: 11, color: '#6c7086' }}>{att.name}</div>
+                      )}
+                      <button
+                        onClick={() => removeAttachment(idx)}
+                        style={{
+                          position: 'absolute', top: 2, right: 2, width: 16, height: 16,
+                          borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.7)',
+                          color: '#fff', fontSize: 10, cursor: 'pointer', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                        }}
+                      >{'\u00D7'}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-            {/* Mic placeholder */}
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!streaming) send();
+                  }
+                }}
+                onPaste={handlePaste}
+                placeholder={
+                  chatBackend === 'local'
+                    ? (sidecarReady ? currentMode.placeholder : 'Starting local engine...')
+                    : (connected ? currentMode.placeholder : 'Connect your account in the sidebar, or switch to Local mode')
+                }
+                disabled={false}
+                rows={1}
+                style={{
+                  flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',
+                  color: '#cdd6f4', fontSize: 14, lineHeight: 1.5, padding: '6px 0',
+                  fontFamily: 'inherit', maxHeight: 160, minHeight: 24,
+                  opacity: 1,
+                }}
+              />
+            </div>
+
+            {/* Attach file button */}
             <button
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.md';
+                input.multiple = true;
+                input.onchange = () => {
+                  if (!input.files) return;
+                  for (const file of Array.from(input.files)) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setPendingAttachments((prev) => [...prev, {
+                        name: file.name,
+                        dataUri: reader.result as string,
+                        mimeType: file.type,
+                      }]);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                };
+                input.click();
+              }}
               style={{
                 width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(168,85,247,0.15)',
-                background: 'rgba(168,85,247,0.05)', color: '#6c7086', cursor: 'not-allowed',
+                background: 'rgba(168,85,247,0.05)', color: '#6c7086', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                opacity: 0.4,
               }}
-              title="Voice input (coming soon)"
-              disabled
+              title="Attach image or file"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
               </svg>
             </button>
 
@@ -1968,16 +2696,16 @@ export function AvaChatPage() {
             ) : (
               <button
                 onClick={send}
-                disabled={!input.trim() || !connected}
+                disabled={!input.trim() || (chatBackend === 'local' ? !sidecarReady : !connected)}
                 style={{
                   width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                  border: input.trim() && connected ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.08)',
-                  background: input.trim() && connected ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'transparent',
-                  color: input.trim() && connected ? '#fff' : '#6c7086',
-                  cursor: input.trim() && connected ? 'pointer' : 'not-allowed',
+                  border: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.08)',
+                  background: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'transparent',
+                  color: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? '#fff' : '#6c7086',
+                  cursor: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  opacity: input.trim() && connected ? 1 : 0.15,
-                  boxShadow: input.trim() && connected ? '0 2px 8px rgba(168,85,247,0.4)' : 'none',
+                  opacity: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? 1 : 0.15,
+                  boxShadow: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? '0 2px 8px rgba(168,85,247,0.4)' : 'none',
                   transition: 'all 0.2s',
                 }}
                 title="Send (Enter)"
@@ -2325,7 +3053,7 @@ function formatTaskDate(dateStr: string | undefined): string {
 
 export function TasksPage() {
   const connected = checkConnected();
-  const { data: rawTasks, loading, error, refetch } = useApiData<any>('/tasks', []);
+  const { data: rawTasks, loading, error } = useApiData<any>('/tasks', []);
   const [tasks, setTasks] = useState<any[]>([]);
   const [filter, setFilter] = useState<TaskFilter>('all');
   const [showForm, setShowForm] = useState(false);
@@ -2345,7 +3073,6 @@ export function TasksPage() {
   }, [rawTasks, loading]);
 
   const stats = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
     return {
       all: tasks.filter((t: any) => !t.done && t.status !== 'done').length,
       today: tasks.filter((t: any) => isTaskDueToday(t) && !t.done && t.status !== 'done').length,
@@ -2868,9 +3595,18 @@ export function JournalPage() {
     setDateOffset(diffDays);
   };
 
+  // Mini calendar state
+  const calendarMonth = targetDate.getMonth();
+  const calendarYear = targetDate.getFullYear();
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(calendarYear, calendarMonth, 1).getDay();
+  const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const monthLabel = new Date(calendarYear, calendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   return (
-    <div style={pageWrapper}>
-      <div style={{ width: '100%' }}>
+    <div style={{ ...pageWrapper, display: 'flex', gap: 24 }}>
+      {/* Main content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={pageTitle}>Journal</div>
         <div style={pageSubtitle}>Your daily reflections and Ava's observations</div>
 
@@ -3105,6 +3841,60 @@ export function JournalPage() {
             )}
           </>
         )}
+      </div>
+
+      {/* Mini Calendar */}
+      <div style={{ width: 220, flexShrink: 0 }}>
+        <div style={{ ...card, padding: 14 }}>
+          {/* Month nav */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <button onClick={() => setDateOffset((d) => d - 30)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 14 }}>{'\u25C0'}</button>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4' }}>{monthLabel}</span>
+            <button onClick={() => setDateOffset((d) => d + 30)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 14 }}>{'\u25B6'}</button>
+          </div>
+          {/* Day headers */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', marginBottom: 4 }}>
+            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+              <span key={d} style={{ fontSize: 9, color: '#45475a', fontWeight: 600 }}>{d}</span>
+            ))}
+          </div>
+          {/* Day grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+            {/* Empty cells for offset */}
+            {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`e-${i}`} />)}
+            {calendarDays.map((day) => {
+              const isSelected = day === targetDate.getDate();
+              const todayDate = new Date();
+              const isCurrentDay = day === todayDate.getDate() && calendarMonth === todayDate.getMonth() && calendarYear === todayDate.getFullYear();
+              return (
+                <button
+                  key={day}
+                  onClick={() => {
+                    const clicked = new Date(calendarYear, calendarMonth, day);
+                    const now = new Date(); now.setHours(0, 0, 0, 0);
+                    setDateOffset(Math.round((clicked.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+                  }}
+                  style={{
+                    width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                    background: isSelected ? '#a855f7' : isCurrentDay ? 'rgba(168,85,247,0.2)' : 'transparent',
+                    color: isSelected ? '#fff' : isCurrentDay ? '#a855f7' : '#a6adc8',
+                    fontSize: 11, fontWeight: isSelected || isCurrentDay ? 600 : 400,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >{day}</button>
+              );
+            })}
+          </div>
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 12, marginTop: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6c7086' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#cdd6f4' }} /> Your entry
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6c7086' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }} /> Ava's entry
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3390,7 +4180,335 @@ export function LearningPage() {
   );
 }
 
-/* ===== 7. Personality ===== */
+/* ===== 7. Library ===== */
+type LibraryFileType = 'image' | 'document' | 'spreadsheet' | 'presentation';
+interface LibraryFile {
+  name: string;
+  path: string;
+  folder: string;
+  type: LibraryFileType;
+  size: number;
+  modified: string;
+  url?: string; // platform URL for images
+}
+
+const FILE_TYPE_EXTENSIONS: Record<string, LibraryFileType> = {
+  '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image',
+  '.webp': 'image', '.svg': 'image', '.ico': 'image', '.bmp': 'image',
+  '.docx': 'document', '.doc': 'document', '.pdf': 'document',
+  '.txt': 'document', '.md': 'document', '.rtf': 'document', '.html': 'document',
+  '.xlsx': 'spreadsheet', '.xls': 'spreadsheet', '.csv': 'spreadsheet',
+  '.pptx': 'presentation', '.ppt': 'presentation',
+};
+
+const FILE_TYPE_ICONS: Record<LibraryFileType, string> = {
+  image: '\uD83D\uDDBC\uFE0F',
+  document: '\uD83D\uDCC4',
+  spreadsheet: '\uD83D\uDCCA',
+  presentation: '\uD83D\uDCBB',
+};
+
+const FILE_TYPE_COLORS: Record<LibraryFileType, { bg: string; text: string; border: string }> = {
+  image: { bg: 'rgba(168,85,247,0.10)', text: '#c084fc', border: 'rgba(168,85,247,0.25)' },
+  document: { bg: 'rgba(59,130,246,0.10)', text: '#60a5fa', border: 'rgba(59,130,246,0.25)' },
+  spreadsheet: { bg: 'rgba(34,197,94,0.10)', text: '#4ade80', border: 'rgba(34,197,94,0.25)' },
+  presentation: { bg: 'rgba(249,115,22,0.10)', text: '#fb923c', border: 'rgba(249,115,22,0.25)' },
+};
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function LibraryPage() {
+  const connected = checkConnected();
+  const [files, setFiles] = useState<LibraryFile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<LibraryFileType | 'all'>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
+
+  // Fetch files from platform API
+  useEffect(() => {
+    if (!connected) { setLoading(false); return; }
+    setLoading(true);
+    apiFetch('/library')
+      .then((res) => res.json())
+      .then((data) => {
+        const items = Array.isArray(data) ? data : data?.files || [];
+        setFiles(items.map((f: any) => ({
+          name: f.name || f.filename || '',
+          path: f.path || f.url || '',
+          folder: f.folder || f.directory || '',
+          type: f.type || f.fileType || detectFileType(f.name || f.filename || ''),
+          size: f.size || 0,
+          modified: f.modified || f.updated_at || f.created_at || '',
+          url: f.url || f.download_url || '',
+        })));
+      })
+      .catch(() => setFiles([]))
+      .finally(() => setLoading(false));
+  }, [connected]);
+
+  const detectFileType = (name: string): LibraryFileType => {
+    const ext = '.' + name.split('.').pop()?.toLowerCase();
+    return FILE_TYPE_EXTENSIONS[ext] || 'document';
+  };
+
+  const filtered = filter === 'all' ? files : files.filter((f) => f.type === filter);
+
+  const typeCounts = useMemo(() => ({
+    all: files.length,
+    image: files.filter((f) => f.type === 'image').length,
+    document: files.filter((f) => f.type === 'document').length,
+    spreadsheet: files.filter((f) => f.type === 'spreadsheet').length,
+    presentation: files.filter((f) => f.type === 'presentation').length,
+  }), [files]);
+
+  return (
+    <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '24px 32px 0', flexShrink: 0 }}>
+        <h1 style={pageTitle}>Library</h1>
+        <p style={{ ...pageSubtitle, marginBottom: 20 }}>Images, documents, presentations, and spreadsheets created by Ava</p>
+
+        {/* Filter tabs + view toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {([
+              { id: 'all', label: 'All', count: typeCounts.all },
+              { id: 'image', label: 'Images', count: typeCounts.image },
+              { id: 'document', label: 'Docs', count: typeCounts.document },
+              { id: 'spreadsheet', label: 'Sheets', count: typeCounts.spreadsheet },
+              { id: 'presentation', label: 'Slides', count: typeCounts.presentation },
+            ] as { id: LibraryFileType | 'all'; label: string; count: number }[]).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setFilter(tab.id)}
+                style={{
+                  padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: filter === tab.id ? 600 : 400,
+                  background: filter === tab.id ? 'rgba(168,85,247,0.2)' : '#181825',
+                  color: filter === tab.id ? '#e0b0ff' : '#6c7086',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {tab.label}
+                <span style={{
+                  fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                  background: filter === tab.id ? 'rgba(168,85,247,0.3)' : '#313244',
+                  color: filter === tab.id ? '#fff' : '#6c7086',
+                }}>{tab.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* View toggle */}
+          <div style={{ display: 'flex', gap: 4, background: '#181825', borderRadius: 8, padding: 3 }}>
+            {(['grid', 'list'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setViewMode(v)}
+                style={{
+                  padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                  background: viewMode === v ? 'rgba(168,85,247,0.2)' : 'transparent',
+                  color: viewMode === v ? '#e0b0ff' : '#6c7086', fontSize: 11, fontWeight: 500,
+                }}
+              >
+                {v === 'grid' ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                    <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 32px 32px' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>
+            <div style={{ fontSize: 13 }}>Scanning files...</div>
+          </div>
+        ) : !connected ? (
+          <div style={{ ...card, textAlign: 'center', padding: 60 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDDBC\uFE0F'}</div>
+            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>Connect to view your Library</div>
+            <div style={{ fontSize: 12, color: '#6c7086' }}>Your images, documents, and creations will appear here</div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ ...card, textAlign: 'center', padding: 60 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{filter === 'all' ? '\uD83D\uDCC1' : FILE_TYPE_ICONS[filter as LibraryFileType]}</div>
+            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
+              {filter === 'all' ? 'No files yet' : `No ${filter}s yet`}
+            </div>
+            <div style={{ fontSize: 12, color: '#6c7086' }}>
+              Ask Ava to create images, documents, presentations, or spreadsheets
+            </div>
+          </div>
+        ) : viewMode === 'grid' ? (
+          /* Grid view */
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+            {filtered.map((file, i) => {
+              const colors = FILE_TYPE_COLORS[file.type];
+              const isSelected = selectedFile?.path === file.path;
+              return (
+                <div
+                  key={i}
+                  onClick={() => setSelectedFile(isSelected ? null : file)}
+                  style={{
+                    background: '#181825', border: `1px solid ${isSelected ? colors.border : '#313244'}`,
+                    borderRadius: 10, overflow: 'hidden', cursor: 'pointer',
+                    transition: 'border-color 0.2s, transform 0.15s',
+                  }}
+                >
+                  {/* Thumbnail area */}
+                  <div style={{
+                    height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: colors.bg, position: 'relative',
+                  }}>
+                    {file.type === 'image' && file.url ? (
+                      <img src={file.url} alt={file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontSize: 36 }}>{FILE_TYPE_ICONS[file.type]}</span>
+                    )}
+                    {/* Type badge */}
+                    <span style={{
+                      position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 600,
+                      padding: '2px 8px', borderRadius: 6, background: 'rgba(0,0,0,0.6)',
+                      color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5,
+                    }}>{file.type}</span>
+                  </div>
+                  {/* File info */}
+                  <div style={{ padding: '10px 12px' }}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 500, color: '#cdd6f4',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4,
+                    }}>{file.name}</div>
+                    <div style={{ fontSize: 10, color: '#6c7086', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>{formatFileSize(file.size)}</span>
+                      {file.modified && <span>{new Date(file.modified).toLocaleDateString()}</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* List view */
+          <div style={{ background: '#181825', border: '1px solid #313244', borderRadius: 10, overflow: 'hidden' }}>
+            {filtered.map((file, i) => {
+              const colors = FILE_TYPE_COLORS[file.type];
+              const isSelected = selectedFile?.path === file.path;
+              return (
+                <div
+                  key={i}
+                  onClick={() => setSelectedFile(isSelected ? null : file)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
+                    borderBottom: i < filtered.length - 1 ? '1px solid #313244' : 'none',
+                    background: isSelected ? 'rgba(168,85,247,0.08)' : 'transparent',
+                    cursor: 'pointer', transition: 'background 0.15s',
+                  }}
+                >
+                  {/* Icon */}
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                    background: colors.bg, border: `1px solid ${colors.border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+                  }}>{FILE_TYPE_ICONS[file.type]}</div>
+                  {/* Name + folder */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13, fontWeight: 500, color: '#cdd6f4',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{file.name}</div>
+                    {file.folder && (
+                      <div style={{ fontSize: 11, color: '#6c7086', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {file.folder}
+                      </div>
+                    )}
+                  </div>
+                  {/* Type badge */}
+                  <span style={{
+                    fontSize: 10, fontWeight: 500, padding: '3px 8px', borderRadius: 6,
+                    background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`,
+                    textTransform: 'capitalize', flexShrink: 0,
+                  }}>{file.type}</span>
+                  {/* Size */}
+                  <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', flexShrink: 0, width: 60, textAlign: 'right' }}>
+                    {formatFileSize(file.size)}
+                  </span>
+                  {/* Date */}
+                  <span style={{ fontSize: 11, color: '#6c7086', flexShrink: 0, width: 80, textAlign: 'right' }}>
+                    {file.modified ? new Date(file.modified).toLocaleDateString() : ''}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Selected file detail panel */}
+      {selectedFile && (
+        <div style={{
+          borderTop: '1px solid #313244', background: '#181825', padding: '16px 32px',
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 16,
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 10, flexShrink: 0,
+            background: FILE_TYPE_COLORS[selectedFile.type].bg,
+            border: `1px solid ${FILE_TYPE_COLORS[selectedFile.type].border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+          }}>{FILE_TYPE_ICONS[selectedFile.type]}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>{selectedFile.name}</div>
+            <div style={{ fontSize: 11, color: '#6c7086', display: 'flex', gap: 16 }}>
+              <span>{selectedFile.type}</span>
+              <span>{formatFileSize(selectedFile.size)}</span>
+              {selectedFile.folder && <span>{selectedFile.folder}</span>}
+              {selectedFile.modified && <span>{new Date(selectedFile.modified).toLocaleDateString()}</span>}
+            </div>
+          </div>
+          {selectedFile.url && (
+            <a
+              href={selectedFile.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff',
+                textDecoration: 'none', flexShrink: 0,
+              }}
+            >
+              Open
+            </a>
+          )}
+          <button
+            onClick={() => setSelectedFile(null)}
+            style={{
+              padding: '8px 12px', borderRadius: 8, border: '1px solid #45475a',
+              background: 'transparent', color: '#6c7086', fontSize: 12, cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >Close</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ===== 8. Personality ===== */
 export function PersonalityPage() {
   const connected = checkConnected();
   const [name, setName] = useState('Ava');
@@ -3717,6 +4835,7 @@ export function CloudSyncPage() {
     { key: 'history',     label: 'Chat History',     icon: '\uD83D\uDCAC', description: 'Conversation history with Ava',                          endpoint: '/history' },
     { key: 'settings',    label: 'Settings',         icon: '\u2699',       description: 'Preferences, model selection, permission mode',           endpoint: '/settings' },
     { key: 'personality', label: 'Personality',      icon: '\uD83C\uDFAD', description: 'Custom AI name, tone, energy, communication style',       endpoint: '/settings' },
+    { key: 'shared',      label: 'Shared Learnings', icon: '\uD83D\uDCA1', description: 'Community-confirmed improvements that help everyone',        endpoint: '/shared-learnings' },
   ];
 
   const [counts, setCounts] = useState<Record<string, { local: number; cloud: number; lastSynced?: string }>>({});
@@ -4266,6 +5385,57 @@ export function SettingsPage() {
     maxTokens: 8192,
   });
   const [personality, setPersonality] = useState<any>(null);
+  const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
+  const [aiAvatar, setAiAvatar] = useState<string>(() => localStorage.getItem('ava-ide-ai-avatar') || '');
+
+  // Resize image to max 128x128 and compress as JPEG for storage efficiency
+  const resizeAvatar = useCallback((dataUri: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const size = 128;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        // Center crop
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = () => resolve(dataUri);
+      img.src = dataUri;
+    });
+  }, []);
+
+  const saveAvatar = useCallback(async (type: 'user' | 'ai', dataUri: string) => {
+    const resized = await resizeAvatar(dataUri);
+    const key = type === 'user' ? 'ava-ide-user-avatar' : 'ava-ide-ai-avatar';
+    localStorage.setItem(key, resized);
+    if (type === 'user') setUserAvatar(resized); else setAiAvatar(resized);
+    // Sync to platform if connected
+    if (connected) {
+      apiFetch('/settings', {
+        method: 'POST',
+        body: JSON.stringify({ [`${type}_avatar`]: resized }),
+      }).catch(() => {});
+    }
+    return resized;
+  }, [connected, resizeAvatar]);
+
+  const removeAvatar = useCallback((type: 'user' | 'ai') => {
+    const key = type === 'user' ? 'ava-ide-user-avatar' : 'ava-ide-ai-avatar';
+    localStorage.removeItem(key);
+    if (type === 'user') setUserAvatar(''); else setAiAvatar('');
+    if (connected) {
+      apiFetch('/settings', {
+        method: 'POST',
+        body: JSON.stringify({ [`${type}_avatar`]: null }),
+      }).catch(() => {});
+    }
+  }, [connected]);
   const [providerKeys, setProviderKeys] = useState<Record<string, boolean>>({});
   const [providerInputs, setProviderInputs] = useState<Record<string, string>>({});
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
@@ -4312,6 +5482,9 @@ export function SettingsPage() {
           setSettings((prev: any) => ({ ...prev, ...data }));
           if (data.personality) setPersonality(data.personality);
           if (data.providerKeys) setProviderKeys(data.providerKeys);
+          // Load avatars from platform (overrides local if present)
+          if (data.user_avatar) { setUserAvatar(data.user_avatar); localStorage.setItem('ava-ide-user-avatar', data.user_avatar); }
+          if (data.ai_avatar) { setAiAvatar(data.ai_avatar); localStorage.setItem('ava-ide-ai-avatar', data.ai_avatar); }
         }
       })
       .catch(() => {});
@@ -4432,7 +5605,97 @@ export function SettingsPage() {
           </div>
         </div>
 
-        {/* 2. Model */}
+        {/* 2. Avatars */}
+        <div style={sLabel}>Avatars</div>
+        <div style={{
+          background: '#181825', border: '1px solid #313244', borderRadius: 12,
+          padding: '18px 20px', marginBottom: 16,
+        }}>
+          <div style={{ display: 'flex', gap: 32 }}>
+            {/* User Avatar */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>You</div>
+              <div
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => saveAvatar('user', reader.result as string);
+                    reader.readAsDataURL(file);
+                  };
+                  input.click();
+                }}
+                style={{
+                  width: 64, height: 64, borderRadius: '50%', cursor: 'pointer',
+                  border: '2px dashed rgba(168,85,247,0.3)',
+                  background: userAvatar ? 'transparent' : '#11111b',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden', position: 'relative',
+                }}
+                title="Click to upload your avatar"
+              >
+                {userAvatar ? (
+                  <img src={userAvatar} alt="You" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
+                  </svg>
+                )}
+              </div>
+              {userAvatar && (
+                <button onClick={() => removeAvatar('user')}
+                  style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>Remove</button>
+              )}
+            </div>
+
+            {/* AI Avatar */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>{personality?.name || 'Ava'}</div>
+              <div
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => saveAvatar('ai', reader.result as string);
+                    reader.readAsDataURL(file);
+                  };
+                  input.click();
+                }}
+                style={{
+                  width: 64, height: 64, borderRadius: '50%', cursor: 'pointer',
+                  border: '2px dashed rgba(168,85,247,0.3)',
+                  background: aiAvatar ? 'transparent' : 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(99,102,241,0.2))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden',
+                }}
+                title="Click to upload AI avatar"
+              >
+                {aiAvatar ? (
+                  <img src={aiAvatar} alt="Ava" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                )}
+              </div>
+              {aiAvatar && (
+                <button onClick={() => removeAvatar('ai')}
+                  style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>Remove</button>
+              )}
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: '#45475a', marginTop: 10 }}>Click to upload. Images are stored locally.</div>
+        </div>
+
+        {/* 3. Model */}
         <div style={sLabel}>Model</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
@@ -4804,7 +6067,679 @@ export function SettingsPage() {
   );
 }
 
-/* ===== 11. Release Notes ===== */
+/* ===== 11. Billing ===== */
+export function BillingPage() {
+  const connected = checkConnected();
+  const { data: usage, loading } = useApiData<any>('/usage/summary', null);
+  const tier = localStorage.getItem('ava-ide-tier') || 'free';
+
+  const tierConfig: Record<string, { label: string; color: string; bg: string; limit: string }> = {
+    free:       { label: 'Free', color: '#a6e3a1', bg: 'rgba(166,227,161,0.10)', limit: '3M tokens' },
+    pro:        { label: 'Pro', color: '#89b4fa', bg: 'rgba(137,180,250,0.10)', limit: '15M tokens' },
+    ultra:      { label: 'Ultra', color: '#cba6f7', bg: 'rgba(203,166,247,0.10)', limit: '40M tokens' },
+    enterprise: { label: 'Enterprise', color: '#f9e2af', bg: 'rgba(249,226,175,0.10)', limit: '100M tokens' },
+    admin:      { label: 'Admin', color: '#f38ba8', bg: 'rgba(243,139,168,0.10)', limit: 'Unlimited' },
+  };
+  const tc = tierConfig[tier] || tierConfig.free;
+
+  const freeUsed = usage?.period?.free_tokens_used || 0;
+  const freeLimit = usage?.period?.free_tokens_limit || 3000000;
+  const planUsed = usage?.period?.plan_tokens_used || 0;
+  const planLimit = usage?.period?.plan_tokens_limit || 0;
+  const topUpBalance = usage?.period?.topup_tokens_remaining || 0;
+
+  const fmtTokens = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
+  const pct = (used: number, limit: number) => limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+
+  return (
+    <div style={pageWrapper}>
+      <h1 style={pageTitle}>Billing</h1>
+      <p style={pageSubtitle}>Your plan, token usage, and top-ups</p>
+
+      {!connected ? (
+        <div style={{ ...card, textAlign: 'center', padding: 60 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCB3'}</div>
+          <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>Connect to view billing</div>
+          <div style={{ fontSize: 12, color: '#6c7086' }}>Sign in with your platform key in the sidebar</div>
+        </div>
+      ) : loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>Loading billing data...</div>
+      ) : (
+        <>
+          {/* Current Plan */}
+          <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>Current Plan</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4' }}>{tc.label}</span>
+                <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, color: tc.color, background: tc.bg }}>{tc.limit}</span>
+              </div>
+            </div>
+            <a href="https://ava-supernova.com/dashboard/billing" target="_blank" rel="noopener noreferrer" style={{
+              padding: '8px 18px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', textDecoration: 'none',
+            }}>Manage Plan</a>
+          </div>
+
+          {/* Token Pools */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+            {/* Free Pool */}
+            <div style={card}>
+              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Free Tokens</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#a6e3a1', marginBottom: 4 }}>{fmtTokens(freeLimit - freeUsed)}</div>
+              <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>of {fmtTokens(freeLimit)} remaining</div>
+              <div style={{ height: 6, background: '#313244', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct(freeUsed, freeLimit)}%`, background: 'linear-gradient(90deg, #a6e3a1, #94e2d5)', borderRadius: 3, transition: 'width 0.5s' }} />
+              </div>
+            </div>
+            {/* Plan Pool */}
+            <div style={card}>
+              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Plan Tokens</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#89b4fa', marginBottom: 4 }}>{planLimit > 0 ? fmtTokens(planLimit - planUsed) : '—'}</div>
+              <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>{planLimit > 0 ? `of ${fmtTokens(planLimit)} remaining` : 'Upgrade for plan tokens'}</div>
+              <div style={{ height: 6, background: '#313244', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct(planUsed, planLimit)}%`, background: 'linear-gradient(90deg, #89b4fa, #74c7ec)', borderRadius: 3, transition: 'width 0.5s' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Top-Up Balance */}
+          {topUpBalance > 0 && (
+            <div style={{ ...card, marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>Top-Up Balance</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#f9e2af' }}>{fmtTokens(topUpBalance)}</div>
+              </div>
+              <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 10, color: '#f9e2af', background: 'rgba(249,226,175,0.10)' }}>Active</span>
+            </div>
+          )}
+
+          {/* Top-Up Packages */}
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Top-Up Packages</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            {[
+              { tokens: '3M', price: '$3', desc: 'Quick boost' },
+              { tokens: '10M', price: '$8', desc: 'Best value', popular: true },
+              { tokens: '25M', price: '$15', desc: 'Power user' },
+            ].map((pkg) => (
+              <div key={pkg.tokens} style={{
+                ...card, textAlign: 'center', padding: '20px 16px', position: 'relative',
+                borderColor: pkg.popular ? 'rgba(168,85,247,0.4)' : '#313244',
+              }}>
+                {pkg.popular && <span style={{ position: 'absolute', top: -8, right: 12, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#a855f7', color: '#fff' }}>POPULAR</span>}
+                <div style={{ fontSize: 24, fontWeight: 700, color: '#cdd6f4', marginBottom: 2 }}>{pkg.tokens}</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>{pkg.desc}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#a855f7', marginBottom: 12 }}>{pkg.price}</div>
+                <a href="https://ava-supernova.com/dashboard/billing" target="_blank" rel="noopener noreferrer" style={{
+                  display: 'block', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  background: pkg.popular ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'rgba(168,85,247,0.1)',
+                  color: pkg.popular ? '#fff' : '#a855f7', border: pkg.popular ? 'none' : '1px solid rgba(168,85,247,0.25)',
+                  textDecoration: 'none', textAlign: 'center',
+                }}>Buy</a>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ===== 12. Connections ===== */
+export function ConnectionsPage() {
+  const services = [
+    { icon: '\uD83D\uDC19', name: 'GitHub', desc: 'Connect your GitHub account for PR creation and repo management.' },
+    { icon: '\u2709\uFE0F', name: 'Email (SMTP)', desc: 'Send emails through Ava using your SMTP server.' },
+    { icon: '\uD83D\uDCAC', name: 'Slack', desc: 'Post messages to Slack channels via incoming webhook.' },
+    { icon: '\uD83C\uDFAE', name: 'Discord', desc: 'Send notifications to Discord via webhook.' },
+  ];
+
+  return (
+    <div style={pageWrapper}>
+      <h1 style={pageTitle}>Connections</h1>
+      <p style={pageSubtitle}>Connect external services for extended capabilities</p>
+
+      <div style={{ ...card, textAlign: 'center', padding: '32px 20px', marginBottom: 24 }}>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDD17'}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Coming Soon</div>
+        <div style={{ fontSize: 12, color: '#6c7086' }}>Service connections are being built and will be available in a future update.</div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {services.map((svc) => (
+          <div key={svc.name} style={{ ...card, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.5 }}>
+            <span style={{ fontSize: 22 }}>{svc.icon}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{svc.name}</div>
+              <div style={{ fontSize: 11, color: '#6c7086' }}>{svc.desc}</div>
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 10px', borderRadius: 6, background: 'rgba(108,112,134,0.10)', color: '#6c7086' }}>Inactive</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* Full ConnectionsPage implementation preserved in git — swap back when backend is ready */
+
+/* ===== 13. Support ===== */
+export function SupportPage() {
+  const connected = checkConnected();
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>('all');
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
+  const [newCategory, setNewCategory] = useState('bug');
+  const [replyText, setReplyText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!connected) { setLoading(false); return; }
+    apiFetch('/support/tickets')
+      .then((r) => r.json())
+      .then((data) => setTickets(Array.isArray(data) ? data : data?.tickets || []))
+      .catch(() => setTickets([]))
+      .finally(() => setLoading(false));
+  }, [connected]);
+
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    open: { bg: 'rgba(249,226,175,0.10)', text: '#f9e2af' },
+    in_progress: { bg: 'rgba(137,180,250,0.10)', text: '#89b4fa' },
+    resolved: { bg: 'rgba(166,227,161,0.10)', text: '#a6e3a1' },
+    closed: { bg: 'rgba(108,112,134,0.10)', text: '#6c7086' },
+  };
+
+  const catColors: Record<string, { bg: string; text: string }> = {
+    bug: { bg: 'rgba(243,139,168,0.10)', text: '#f38ba8' },
+    feature: { bg: 'rgba(137,180,250,0.10)', text: '#89b4fa' },
+    question: { bg: 'rgba(166,227,161,0.10)', text: '#a6e3a1' },
+    account: { bg: 'rgba(249,226,175,0.10)', text: '#f9e2af' },
+    feedback: { bg: 'rgba(203,166,247,0.10)', text: '#cba6f7' },
+    other: { bg: 'rgba(108,112,134,0.10)', text: '#6c7086' },
+  };
+
+  const filteredTickets = filter === 'all' ? tickets : tickets.filter((t: any) => t.status === filter);
+
+  const createTicket = useCallback(async () => {
+    if (!newMessage.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await apiFetch('/support/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: newMessage.trim(), category: newCategory, source: 'ide' }),
+      });
+      const ticket = await res.json();
+      setTickets((prev) => [ticket, ...prev]);
+      setNewMessage('');
+      setShowNewForm(false);
+    } catch { /* */ }
+    setSubmitting(false);
+  }, [newMessage, newCategory]);
+
+  const sendReply = useCallback(async () => {
+    if (!replyText.trim() || !selectedTicket) return;
+    setSubmitting(true);
+    try {
+      await apiFetch(`/support/tickets/${selectedTicket.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: replyText.trim() }),
+      });
+      setReplyText('');
+      // Refresh ticket
+      const res = await apiFetch(`/support/tickets/${selectedTicket.id}`);
+      const updated = await res.json();
+      setSelectedTicket(updated);
+      setTickets((prev) => prev.map((t: any) => t.id === updated.id ? updated : t));
+    } catch { /* */ }
+    setSubmitting(false);
+  }, [replyText, selectedTicket]);
+
+  return (
+    <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '24px 32px 0', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <h1 style={{ ...pageTitle, marginBottom: 0 }}>Support</h1>
+          <button
+            onClick={() => { setShowNewForm(!showNewForm); setSelectedTicket(null); }}
+            style={{
+              padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              background: showNewForm ? '#313244' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              color: showNewForm ? '#6c7086' : '#fff', border: 'none',
+            }}
+          >{showNewForm ? 'Cancel' : 'New Ticket'}</button>
+        </div>
+        <p style={{ ...pageSubtitle, marginBottom: 16 }}>Get help or report issues</p>
+
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+          {['all', 'open', 'in_progress', 'resolved', 'closed'].map((f) => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11,
+              background: filter === f ? 'rgba(168,85,247,0.2)' : '#181825',
+              color: filter === f ? '#e0b0ff' : '#6c7086', fontWeight: filter === f ? 600 : 400,
+              textTransform: 'capitalize',
+            }}>{f.replace('_', ' ')}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 32px 32px' }}>
+        {!connected ? (
+          <div style={{ ...card, textAlign: 'center', padding: 60 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83C\uDD98'}</div>
+            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>Connect to access support</div>
+            <div style={{ fontSize: 12, color: '#6c7086' }}>Sign in with your platform key</div>
+          </div>
+        ) : showNewForm ? (
+          /* New Ticket Form */
+          <div style={card}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 12 }}>Create a Support Ticket</div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 11, color: '#6c7086', display: 'block', marginBottom: 4 }}>Category</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {['bug', 'feature', 'question', 'account', 'feedback', 'other'].map((c) => (
+                  <button key={c} onClick={() => setNewCategory(c)} style={{
+                    padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11,
+                    background: newCategory === c ? (catColors[c]?.bg || '#313244') : '#181825',
+                    color: newCategory === c ? (catColors[c]?.text || '#cdd6f4') : '#6c7086',
+                    fontWeight: newCategory === c ? 600 : 400, textTransform: 'capitalize',
+                  }}>{c}</button>
+                ))}
+              </div>
+            </div>
+            <textarea
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Describe your issue or request..."
+              rows={5}
+              style={{
+                width: '100%', padding: '10px 14px', background: '#11111b', border: '1px solid #313244',
+                borderRadius: 8, color: '#cdd6f4', fontSize: 13, resize: 'vertical', outline: 'none',
+                fontFamily: 'inherit', marginBottom: 12,
+              }}
+            />
+            <button onClick={createTicket} disabled={submitting || !newMessage.trim()} style={{
+              padding: '10px 24px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600,
+              background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', cursor: 'pointer',
+              opacity: submitting || !newMessage.trim() ? 0.5 : 1,
+            }}>{submitting ? 'Submitting...' : 'Submit Ticket'}</button>
+          </div>
+        ) : selectedTicket ? (
+          /* Ticket Detail */
+          <div>
+            <button onClick={() => setSelectedTicket(null)} style={{
+              background: 'transparent', border: 'none', color: '#a855f7', fontSize: 12, cursor: 'pointer', marginBottom: 12, padding: 0,
+            }}>{'\u2190'} Back to tickets</button>
+            <div style={card}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, ...(statusColors[selectedTicket.status] || statusColors.open), textTransform: 'capitalize' }}>{selectedTicket.status?.replace('_', ' ')}</span>
+                <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, ...(catColors[selectedTicket.category] || catColors.other), textTransform: 'capitalize' }}>{selectedTicket.category}</span>
+                <span style={{ fontSize: 10, color: '#45475a' }}>#{selectedTicket.id?.slice(0, 8)}</span>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginBottom: 16 }}>{selectedTicket.subject || selectedTicket.message?.slice(0, 80)}</div>
+
+              {/* Messages */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                {(selectedTicket.messages || [{ sender: 'You', body: selectedTicket.message, timestamp: selectedTicket.created_at }]).map((msg: any, i: number) => (
+                  <div key={i} style={{ background: '#11111b', borderRadius: 8, padding: '10px 14px', border: '1px solid #313244' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: msg.sender === 'Support' ? '#a855f7' : '#89b4fa' }}>{msg.sender || 'You'}</span>
+                      <span style={{ fontSize: 10, color: '#45475a' }}>{msg.timestamp ? new Date(msg.timestamp).toLocaleDateString() : ''}</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#a6adc8', lineHeight: 1.6 }}>{msg.body || msg.message}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Reply */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') sendReply(); }}
+                  placeholder="Type a reply..."
+                  style={{
+                    flex: 1, padding: '8px 14px', background: '#11111b', border: '1px solid #313244',
+                    borderRadius: 8, color: '#cdd6f4', fontSize: 13, outline: 'none',
+                  }}
+                />
+                <button onClick={sendReply} disabled={submitting || !replyText.trim()} style={{
+                  padding: '8px 18px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600,
+                  background: '#a855f7', color: '#fff', cursor: 'pointer', opacity: submitting ? 0.5 : 1,
+                }}>Send</button>
+              </div>
+            </div>
+          </div>
+        ) : loading ? (
+          <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>Loading tickets...</div>
+        ) : filteredTickets.length === 0 ? (
+          <div style={{ ...card, textAlign: 'center', padding: 60 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u2705'}</div>
+            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
+              {filter === 'all' ? 'No tickets yet' : `No ${filter.replace('_', ' ')} tickets`}
+            </div>
+            <div style={{ fontSize: 12, color: '#6c7086' }}>Click "New Ticket" to get help</div>
+          </div>
+        ) : (
+          /* Ticket List */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {filteredTickets.map((ticket: any) => (
+              <div key={ticket.id} onClick={() => setSelectedTicket(ticket)} style={{
+                ...card, padding: '14px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, ...(statusColors[ticket.status] || statusColors.open), textTransform: 'capitalize' }}>{ticket.status?.replace('_', ' ')}</span>
+                  <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, ...(catColors[ticket.category] || catColors.other), textTransform: 'capitalize' }}>{ticket.category}</span>
+                  <span style={{ fontSize: 10, color: '#45475a', marginLeft: 'auto' }}>
+                    {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : ''}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>
+                  {ticket.subject || ticket.message?.slice(0, 80)}
+                </div>
+                {ticket.message && (
+                  <div style={{ fontSize: 11, color: '#6c7086', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ticket.message.slice(0, 120)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===== 14. Documentation ===== */
+interface DocSection {
+  id: string;
+  title: string;
+  content: React.ReactNode;
+}
+
+export function DocumentationPage() {
+  const [activeSection, setActiveSection] = useState<string>('getting-started');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const docSections: DocSection[] = [
+    {
+      id: 'getting-started', title: 'Getting Started',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            Ava | Supernova IDE is a standalone desktop application with the full AI agent running locally.
+            Connect your account or add BYOK API keys to get started.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            {[
+              { step: '1', title: 'Connect Account', desc: 'Open the Dashboard sidebar and enter your platform key (sk-ava-...) or add BYOK provider keys.' },
+              { step: '2', title: 'Choose a Mode', desc: 'Toggle Local (BYOK keys, full 54 tools on your machine) or Cloud (platform API). Switch anytime.' },
+              { step: '3', title: 'Start Building', desc: 'Open Ava Chat and start giving instructions. She reads code, makes changes, runs commands, and more.' },
+            ].map((s) => (
+              <div key={s.step} style={{ ...card, padding: 16 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 10 }}>{s.step}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>{s.title}</div>
+                <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>{s.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'local-vs-cloud', title: 'Local vs Cloud Mode',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ ...card, padding: 16, borderColor: 'rgba(166,227,161,0.3)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#a6e3a1', marginBottom: 8 }}>Local Mode</div>
+              <ul style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.8, paddingLeft: 16, margin: 0 }}>
+                <li>Full 54-tool agent runs on your machine</li>
+                <li>Requires BYOK API keys (Qwen, DeepSeek, etc.)</li>
+                <li>Tools execute locally — file edits, bash, git, screenshots</li>
+                <li>24 specialist personas with orchestration</li>
+                <li>5-layer memory system</li>
+                <li>Tool confirmation dialogs for dangerous operations</li>
+              </ul>
+            </div>
+            <div style={{ ...card, padding: 16, borderColor: 'rgba(168,85,247,0.3)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#a855f7', marginBottom: 8 }}>Cloud Mode</div>
+              <ul style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.8, paddingLeft: 16, margin: 0 }}>
+                <li>Chat via platform API (ava-supernova.com)</li>
+                <li>Uses your platform account tokens</li>
+                <li>No local tool execution</li>
+                <li>Works with platform key (sk-ava-...)</li>
+                <li>Usage tracked and billed through platform</li>
+                <li>Simpler setup — just connect and chat</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'modes', title: '6 Modes — States of Thought',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>Modes are states of mind, not tool restrictions. Switch with the mode selector in the chat input or keyboard shortcuts.</p>
+          {[
+            { icon: '>>', name: 'Work', desc: 'Builder mindset — full 54-tool agent. Default mode.', key: 'Ctrl+Shift+1' },
+            { icon: '::', name: 'Plan', desc: 'Architect mindset — read-only analysis and strategic planning.', key: 'Ctrl+Shift+2' },
+            { icon: '..', name: 'Chat', desc: 'Friend mindset — personal conversation, memory, journal.', key: 'Ctrl+Shift+3' },
+            { icon: '??', name: 'Teach', desc: 'Tutor mindset — personalised learning with spaced repetition. Free for everyone.', key: 'Ctrl+Shift+4' },
+            { icon: '!!', name: 'Security', desc: 'Auditor mindset — dependency scanning, secret detection, code vulnerability analysis.', key: 'Ctrl+Shift+5' },
+            { icon: '**', name: 'Brainstorm', desc: 'Ideation mindset — research, generate, challenge, refine ideas.', key: 'Ctrl+Shift+6' },
+          ].map((m) => (
+            <div key={m.name} style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <span style={{ fontFamily: 'monospace', fontSize: 14, color: '#a855f7', fontWeight: 700, width: 28 }}>{m.icon}</span>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{m.name}</span>
+                <span style={{ fontSize: 12, color: '#6c7086', marginLeft: 8 }}>{m.desc}</span>
+              </div>
+              <span style={{ fontSize: 10, color: '#45475a', fontFamily: 'monospace' }}>{m.key}</span>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'tools', title: '54 Tools',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>Available in Local mode. Ava selects and chains tools automatically based on your instructions.</p>
+          {[
+            { cat: 'File Operations', tools: 'file_read, file_write, file_edit, glob, grep, list_directory, find_symbol, project_index' },
+            { cat: 'Shell & Git', tools: 'bash, git_status, git_diff, git_commit, git_create_pr, rollback' },
+            { cat: 'Web & API', tools: 'web_search, http_request, browser' },
+            { cat: 'Media', tools: 'screenshot, generate_image, remove_background' },
+            { cat: 'Memory', tools: 'memory_save, memory_recall, memory_update, memory_delete' },
+            { cat: 'Planning', tools: 'present_plan, todo_write, task_manage' },
+            { cat: 'Office Suite', tools: 'document_manage (.docx/.pdf/.csv/.md), presentation_create (.pptx), email_draft, report_generate' },
+            { cat: 'Learning', tools: 'learning_create, learning_teach, learning_progress' },
+            { cat: 'Testing & Quality', tools: 'test_run, test_generate, analyze_architecture, doc_generate, audit_dependencies, benchmark' },
+            { cat: 'Utility', tools: 'ask_user, get_datetime, detect_language, weather, news, journal_write, self_inspect, release_notes' },
+          ].map((g) => (
+            <div key={g.cat} style={{ ...card, padding: '10px 16px' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#a855f7', marginBottom: 4 }}>{g.cat}</div>
+              <div style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', lineHeight: 1.8 }}>{g.tools}</div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'library', title: 'Library',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            Browse images, documents, presentations, and spreadsheets created by Ava. Access from the Dashboard sidebar.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[
+              { title: 'Grid & List Views', desc: 'Toggle between visual grid (thumbnails) and compact list view.' },
+              { title: 'Type Filtering', desc: 'Filter by Images, Documents, Spreadsheets, or Presentations with count badges.' },
+              { title: 'File Details', desc: 'Click any file to see size, type, date, folder, and quick open/download.' },
+              { title: 'Image Preview', desc: 'Image thumbnails display inline. Documents show type icons with colour coding.' },
+            ].map((f) => (
+              <div key={f.title} style={{ ...card, padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{f.title}</div>
+                <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'images-files', title: 'Images & Files in Chat',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>Share images and files directly in the chat conversation.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[
+              { title: 'Paste Images', desc: 'Ctrl+V a screenshot or image directly into the chat input.' },
+              { title: 'Drag & Drop', desc: 'Drop images and files onto the input area to attach them.' },
+              { title: 'Attach Button', desc: 'Click the paperclip icon to browse and attach files (images, PDFs, docs, spreadsheets).' },
+              { title: 'Inline Display', desc: 'Generated images show inline in messages with download buttons. Created files appear as typed cards.' },
+            ].map((f) => (
+              <div key={f.title} style={{ ...card, padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{f.title}</div>
+                <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'personas', title: 'Personas',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>24 specialist personas across 5 modes, orchestrated by the Conductor.</p>
+          {[
+            { mode: 'Work', team: 'Scout, Architect, Verifier, Sequencer, Challenger, Builder' },
+            { mode: 'Plan', team: 'Researcher, Architect, Challenger' },
+            { mode: 'Teach', team: 'Curriculum Architect, Content Writer, Fact Checker, Quiz Master, Tutor' },
+            { mode: 'Security', team: 'Recon, Scanner, CVE Researcher, Verifier, Reporter' },
+            { mode: 'Brainstorm', team: 'Explorer, Researcher, Ideator, Challenger, Refiner' },
+          ].map((p) => (
+            <div key={p.mode} style={{ ...card, padding: '10px 16px' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#a855f7' }}>{p.mode}:</span>
+              <span style={{ fontSize: 12, color: '#6c7086', marginLeft: 8 }}>{p.team}</span>
+            </div>
+          ))}
+          <p style={{ fontSize: 11, color: '#45475a' }}>Chat mode has no personas — just Ava being a friend.</p>
+        </div>
+      ),
+    },
+    {
+      id: 'memory', title: 'Memory System',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>5-layer memory system that learns your coding style, decisions, and preferences across sessions.</p>
+          {[
+            { layer: 'L1 — Extract', desc: 'Regex-based extraction of facts, preferences, and patterns from conversations.' },
+            { layer: 'L2 — Reflect', desc: 'LLM reflection generates deeper insights from extracted data.' },
+            { layer: 'L3 — Accumulate', desc: 'Cross-session pattern detection — tracks recurring themes across conversations.' },
+            { layer: 'L4 — Analyse', desc: 'Cross-memory insights — connects related memories for deeper understanding.' },
+            { layer: 'L5 — Consolidate', desc: 'Merges duplicate entries, archives stale memories, maintains coherence.' },
+          ].map((l) => (
+            <div key={l.layer} style={{ ...card, padding: '10px 16px' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#a855f7' }}>{l.layer}</div>
+              <div style={{ fontSize: 12, color: '#6c7086' }}>{l.desc}</div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'shortcuts', title: 'Keyboard Shortcuts',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[
+            { keys: 'Ctrl+Shift+1-6', action: 'Switch mode (Work, Plan, Chat, Teach, Security, Brainstorm)' },
+            { keys: 'Enter', action: 'Send message' },
+            { keys: 'Shift+Enter', action: 'New line in input' },
+            { keys: 'Ctrl+V', action: 'Paste image from clipboard' },
+            { keys: 'F12', action: 'Open DevTools' },
+          ].map((s) => (
+            <div key={s.keys} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid #313244' }}>
+              <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#f5c2e7', background: '#313244', padding: '3px 10px', borderRadius: 6, flexShrink: 0 }}>{s.keys}</span>
+              <span style={{ fontSize: 12, color: '#6c7086' }}>{s.action}</span>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+  ];
+
+  const filteredSections = searchQuery
+    ? docSections.filter((s) => s.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : docSections;
+
+  return (
+    <div style={{ ...pageWrapper, display: 'flex', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
+      {/* Sidebar nav */}
+      <div style={{
+        width: 200, flexShrink: 0, borderRight: '1px solid #313244', background: '#181825',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{ padding: '16px 12px 8px' }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search docs..."
+            style={{
+              width: '100%', padding: '6px 10px', background: '#11111b', border: '1px solid #313244',
+              borderRadius: 6, color: '#cdd6f4', fontSize: 12, outline: 'none',
+            }}
+          />
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+          {filteredSections.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => { setActiveSection(s.id); document.getElementById(`doc-${s.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left', padding: '7px 10px',
+                borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
+                background: activeSection === s.id ? 'rgba(168,85,247,0.15)' : 'transparent',
+                color: activeSection === s.id ? '#e0b0ff' : '#6c7086',
+                fontWeight: activeSection === s.id ? 600 : 400,
+                marginBottom: 2,
+              }}
+            >{s.title}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px' }}>
+        <h1 style={pageTitle}>Documentation</h1>
+        <p style={{ ...pageSubtitle, marginBottom: 32 }}>Everything you need to know about Ava | Supernova IDE</p>
+
+        {filteredSections.map((s) => (
+          <div key={s.id} id={`doc-${s.id}`} style={{ marginBottom: 40 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 16, paddingBottom: 8, borderBottom: '1px solid #313244' }}>{s.title}</h2>
+            {s.content}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ===== 12. Release Notes ===== */
 export function ReleaseNotesPage() {
   const connected = checkConnected();
   const { data: apiReleases, loading } = useApiData<any[]>('/releases', []);

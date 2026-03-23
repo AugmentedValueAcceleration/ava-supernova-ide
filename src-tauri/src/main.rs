@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    temp_ide_scaffold_lib::run()
+    ava_supernova_ide_lib::run()
 }

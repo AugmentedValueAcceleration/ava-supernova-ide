@@ -1,0 +1,574 @@
+#!/usr/bin/env node
+
+/**
+ * Ava | Supernova IDE — Node.js Sidecar
+ *
+ * Runs @ava/core locally, communicating with the Tauri frontend
+ * via NDJSON over stdin (commands) / stdout (events).
+ *
+ * Protocol:
+ *   IDE → Sidecar:  { "cmd": "init"|"message"|"cancel"|"confirm"|"set_model"|"set_mode"|"clear"|"inject", ... }
+ *   Sidecar → IDE:  { "event": "ready"|"stream_delta"|"tool_call_start"|..., ... }
+ */
+
+import { createInterface } from 'node:readline';
+import { platform } from 'node:os';
+import { createHash } from 'node:crypto';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// ─── Resolve @ava/core ──────────────────────────────────────────────────────
+// In monorepo: workspace link. Standalone: relative path fallback.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+let core;
+try {
+  core = await import('@ava/core');
+} catch {
+  // Fallback: resolve from monorepo structure (packages/ide/sidecar → packages/core/dist)
+  const corePath = join(__dirname, '..', '..', 'core', 'dist', 'index.js');
+  core = await import(`file://${corePath.replace(/\\/g, '/')}`);
+}
+
+const {
+  Agent,
+  Conversation,
+  ToolRegistry,
+  ProviderRegistry,
+  PlatformProvider,
+  MemoryManager,
+  TaskManager,
+  JournalManager,
+  CheckpointManager,
+  buildSystemPrompt,
+  buildPersonalityPrefix,
+  loadPersonality,
+  AVA_HOME,
+  PlatformMemorySync,
+  ProviderHealthTracker,
+  ResilientProvider,
+  Conductor,
+  BriefingEngine,
+  detectProjectRoot,
+  loadProjectInstructions,
+  setLocale,
+  resolveLocale,
+} = core;
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+let agent = null;
+let conductor = null;
+let conversation = null;
+let toolRegistry = null;
+let memoryManager = null;
+let currentAbort = null;
+let currentMode = 'work';
+let isRunning = false;
+
+/** Map<confirmId, { resolve: Function }> */
+const pendingConfirmations = new Map();
+
+// ─── NDJSON I/O ─────────────────────────────────────────────────────────────
+
+function emit(event) {
+  // All output goes to stdout as single-line JSON
+  process.stdout.write(JSON.stringify(event) + '\n');
+}
+
+function emitError(message) {
+  emit({ event: 'error', message });
+}
+
+// Prevent unhandled errors from crashing the sidecar
+process.on('uncaughtException', (err) => {
+  emitError(`Uncaught: ${err.message}`);
+});
+process.on('unhandledRejection', (err) => {
+  emitError(`Unhandled rejection: ${err?.message || String(err)}`);
+});
+
+// ─── Command Handlers ───────────────────────────────────────────────────────
+
+async function handleInit(data) {
+  try {
+    const config = data.config || {};
+    const cwd = config.cwd || process.cwd();
+    const projectRoot = detectProjectRoot(cwd) ?? undefined;
+    currentMode = config.mode || 'work';
+
+    // Register providers from BYOK keys
+    const providerRegistry = new ProviderRegistry();
+    const providerMap = { glm: 'zhipu' };
+
+    if (config.providers) {
+      for (const [name, settings] of Object.entries(config.providers)) {
+        if (!settings?.apiKey) continue;
+        try {
+          const registryKey = providerMap[name] || name;
+          providerRegistry.register(registryKey, settings);
+        } catch {
+          // Provider not implemented, skip
+        }
+      }
+    }
+
+    // DEV ONLY — Platform fallback for testing sidecar without BYOK keys.
+    // TODO: Remove before 1.0.0. Production local mode = BYOK keys only.
+    if (config.platformKey && config._devPlatformFallback) {
+      try {
+        if (!PlatformProvider) {
+          emit({ event: 'info', message: 'PlatformProvider not available in core build' });
+        } else {
+          const platformProvider = new PlatformProvider({ apiKey: config.platformKey });
+          providerRegistry.registerCustom('platform', platformProvider);
+          emit({ event: 'info', message: `Platform provider registered, models: ${platformProvider.listModels().map(m => m.id).join(', ')}` });
+        }
+      } catch (err) {
+        emit({ event: 'info', message: `Platform provider error: ${err.message}` });
+      }
+    } else {
+      emit({ event: 'info', message: `Platform fallback skipped: key=${!!config.platformKey} flag=${!!config._devPlatformFallback}` });
+    }
+
+    // Resolve model — try BYOK first, then fall back to platform
+    let activeModel = config.activeModel || 'platform:qwen-flash';
+    emit({ event: 'info', message: `Resolving model: ${activeModel}` });
+    let resolved = providerRegistry.resolveModel(activeModel);
+
+    // If BYOK model not found, try platform models
+    if (!resolved && config.platformKey) {
+      const platformFallbacks = ['platform:qwen-flash', 'platform:qwen3.5-plus'];
+      for (const fb of platformFallbacks) {
+        resolved = providerRegistry.resolveModel(fb);
+        if (resolved) { activeModel = fb; break; }
+      }
+    }
+
+    if (!resolved) {
+      emitError(`No provider available. Set BYOK keys or connect your platform account.`);
+      return;
+    }
+
+    // Tools
+    toolRegistry = new ToolRegistry();
+    toolRegistry.registerBuiltins();
+    toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
+
+    // Confirmation handler — pauses and waits for IDE response
+    toolRegistry.setConfirmationHandler(async (toolName, args) => {
+      const id = Math.random().toString(36).slice(2, 10);
+      emit({ event: 'confirm_required', id, toolName, args });
+      return new Promise((resolve) => {
+        pendingConfirmations.set(id, { resolve });
+      });
+    });
+
+    // Memory
+    let sync;
+    if (config.platformKey) {
+      const projectId = projectRoot
+        ? createHash('sha256').update(projectRoot).digest('hex').slice(0, 16)
+        : undefined;
+      sync = new PlatformMemorySync('https://ava-supernova.com/api', config.platformKey, projectId);
+    }
+
+    // Load memory in background — don't block init
+    let memory = null;
+    let projectInstructions = null;
+    try {
+      memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot });
+    } catch {
+      memoryManager = null;
+    }
+    emit({ event: 'info', message: 'Memory manager created' });
+
+    // Personality
+    let personalityPrefix = '';
+    try {
+      const personality = await loadPersonality();
+      if (personality) personalityPrefix = buildPersonalityPrefix(personality);
+    } catch { /* no personality set */ }
+    emit({ event: 'info', message: 'Personality loaded' });
+
+    // Locale
+    const language = resolveLocale(config.language ?? 'auto');
+    await setLocale(language);
+    emit({ event: 'info', message: 'Locale set' });
+
+    // Conversation + system prompt
+    conversation = new Conversation();
+    conversation.setSystemPrompt(
+      buildSystemPrompt({
+        cwd,
+        platform: platform(),
+        shell: process.env.SHELL ?? (process.platform === 'win32' ? 'bash' : '/bin/bash'),
+        supportsVision: resolved.model.supportsVision,
+        projectInstructions: projectInstructions ?? undefined,
+        memory: memory || undefined,
+        autoMemory: config.autoMemory ?? true,
+        personality: personalityPrefix || undefined,
+        language,
+      })
+    );
+
+    // Shared state
+    const sharedState = {
+      memoryManager,
+      platformKey: config.platformKey,
+    };
+
+    // Build resilient provider with fallback
+    const healthTracker = new ProviderHealthTracker();
+    const fallbackChain = providerRegistry.buildFallbackChain(activeModel);
+    const provider = fallbackChain && fallbackChain.length > 1
+      ? new ResilientProvider({
+          primary: fallbackChain[0],
+          fallbacks: fallbackChain.slice(1),
+          healthTracker,
+          onFallback: (from, to, err) => {
+            emit({
+              event: 'info',
+              message: `Provider failover: ${from.provider.displayName} → ${to.provider.displayName} (${err.message})`,
+            });
+          },
+        })
+      : resolved.provider;
+
+    // Agent
+    agent = new Agent({
+      provider,
+      model: resolved.model,
+      toolRegistry,
+      cwd,
+      sharedState,
+    });
+
+    // Conductor (persona orchestration)
+    conductor = new Conductor({
+      provider,
+      model: resolved.model,
+      toolRegistry,
+      cwd,
+      sharedState,
+    });
+
+    // Store for hot-swap model changes
+    globalThis._providerRegistry = providerRegistry;
+    globalThis._cwd = cwd;
+    globalThis._sharedState = sharedState;
+
+    emit({ event: 'ready', model: resolved.model.id, provider: resolved.provider.name });
+  } catch (err) {
+    emitError(`Init failed: ${err.message}`);
+  }
+}
+
+async function handleMessage(data) {
+  if (!agent || !conversation) {
+    emitError('Not initialized. Send "init" first.');
+    return;
+  }
+  if (isRunning) {
+    emitError('Already processing a message. Cancel first or wait.');
+    return;
+  }
+
+  isRunning = true;
+  const abortController = new AbortController();
+  currentAbort = abortController;
+
+  try {
+    conversation.addUserMessage(data.content);
+    let messages = conversation.getMessages();
+
+    // Check if conductor orchestration is needed (plan, teach, security, brainstorm modes)
+    let conductorContext = null;
+    if (conductor && conductor.needsOrchestration(data.content, currentMode)) {
+      emit({ event: 'orchestration_start', mode: currentMode });
+      try {
+        conductorContext = await conductor.orchestrate(
+          data.content,
+          currentMode,
+          messages,
+          (cEvent) => {
+            emit({ event: 'conductor_event', ...cEvent });
+          },
+          abortController.signal,
+        );
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          emit({ event: 'conductor_error', message: err.message });
+        }
+      }
+      emit({ event: 'orchestration_end' });
+    }
+
+    // If conductor produced context, inject it
+    if (conductorContext?.synthesisPrompt) {
+      messages = [
+        ...messages,
+        { role: 'user', content: conductorContext.synthesisPrompt },
+      ];
+    }
+
+    // Run main agent loop
+    const updated = await agent.run(
+      messages,
+      (agentEvent) => {
+        // Forward all agent events to the IDE
+        switch (agentEvent.type) {
+          case 'stream_start':
+            emit({ event: 'stream_start' });
+            break;
+          case 'stream_delta':
+            emit({ event: 'stream_delta', content: agentEvent.content });
+            break;
+          case 'thinking_delta':
+            emit({ event: 'thinking_delta', content: agentEvent.content });
+            break;
+          case 'stream_end':
+            emit({ event: 'stream_end' });
+            break;
+          case 'tool_call_start':
+            emit({
+              event: 'tool_call_start',
+              toolName: agentEvent.toolCall.function.name,
+              args: safeParseArgs(agentEvent.toolCall.function.arguments),
+              toolCallId: agentEvent.toolCall.id,
+            });
+            break;
+          case 'tool_call_partial':
+            emit({
+              event: 'tool_call_partial',
+              toolCallId: agentEvent.toolCallId,
+              data: agentEvent.data,
+            });
+            break;
+          case 'tool_call_end':
+            emit({
+              event: 'tool_call_end',
+              toolName: agentEvent.toolCall.function.name,
+              toolCallId: agentEvent.toolCall.id,
+              result: truncateResult(agentEvent.result),
+              success: agentEvent.success,
+            });
+            break;
+          case 'usage':
+            emit({
+              event: 'usage',
+              usage: agentEvent.usage,
+              cost: agentEvent.cost,
+            });
+            break;
+          case 'context_usage':
+            emit({ event: 'context_usage', ...agentEvent.context });
+            break;
+          case 'context_compression_start':
+            emit({ event: 'context_compression_start' });
+            break;
+          case 'context_compression_end':
+            emit({
+              event: 'context_compression_end',
+              originalTokens: agentEvent.originalTokens,
+              compressedTokens: agentEvent.compressedTokens,
+            });
+            break;
+          case 'context_truncated':
+            emit({ event: 'context_truncated', droppedCount: agentEvent.droppedCount });
+            break;
+          case 'error':
+            emit({ event: 'agent_error', message: agentEvent.error.message });
+            break;
+          case 'done':
+            // Final message content
+            emit({
+              event: 'done',
+              content: agentEvent.finalMessage.content || '',
+            });
+            break;
+        }
+      },
+      abortController.signal,
+    );
+
+    conversation.setMessages(updated);
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      emit({ event: 'cancelled' });
+    } else {
+      emitError(`Message failed: ${err.message}`);
+    }
+  } finally {
+    isRunning = false;
+    currentAbort = null;
+  }
+}
+
+function handleCancel() {
+  if (currentAbort) {
+    currentAbort.abort();
+  }
+}
+
+function handleConfirm(data) {
+  const pending = pendingConfirmations.get(data.id);
+  if (!pending) {
+    emitError(`No pending confirmation: ${data.id}`);
+    return;
+  }
+  pendingConfirmations.delete(data.id);
+
+  if (data.response && typeof data.response === 'string') {
+    // Free-text response (e.g., ask_user, present_plan approval)
+    pending.resolve(data.response);
+  } else {
+    // Boolean approve/deny
+    pending.resolve(data.approved !== false);
+  }
+}
+
+function handleClear() {
+  if (isRunning) {
+    handleCancel();
+  }
+  if (conversation) {
+    // Preserve system prompt, clear messages
+    const messages = conversation.getMessages();
+    const systemMsg = messages.find((m) => m.role === 'system');
+    conversation.clear();
+    if (systemMsg) {
+      conversation.setSystemPrompt(systemMsg.content);
+    }
+  }
+  emit({ event: 'cleared' });
+}
+
+function handleInject(data) {
+  if (agent && isRunning) {
+    agent.inject(data.content);
+    emit({ event: 'injected' });
+  } else {
+    emitError('Cannot inject — no active run.');
+  }
+}
+
+function handleSetMode(data) {
+  currentMode = data.mode || 'work';
+  emit({ event: 'mode_changed', mode: currentMode });
+}
+
+async function handleSetModel(data) {
+  // Hot-swap the model without restarting the sidecar
+  // Re-resolve the model and recreate the agent
+  if (!data.model) { emitError('No model specified'); return; }
+
+  try {
+    const providerRegistry = globalThis._providerRegistry;
+    if (!providerRegistry) { emitError('Not initialized'); return; }
+
+    const resolved = providerRegistry.resolveModel(data.model);
+    if (!resolved) {
+      // Try platform fallback
+      const fb = providerRegistry.resolveModel(`platform:${data.model.split(':').pop()}`);
+      if (!fb) { emitError(`Model not found: ${data.model}`); return; }
+      Object.assign(resolved || {}, fb);
+    }
+
+    const finalResolved = resolved || providerRegistry.resolveModel(`platform:${data.model.split(':').pop()}`);
+    if (!finalResolved) { emitError(`Model not found: ${data.model}`); return; }
+
+    const cwd = globalThis._cwd || process.cwd();
+    const sharedState = globalThis._sharedState || {};
+
+    agent = new Agent({
+      provider: finalResolved.provider,
+      model: finalResolved.model,
+      toolRegistry,
+      cwd,
+      sharedState,
+    });
+
+    conductor = new Conductor({
+      provider: finalResolved.provider,
+      model: finalResolved.model,
+      toolRegistry,
+      cwd,
+      sharedState,
+    });
+
+    emit({ event: 'model_changed', model: finalResolved.model.id, provider: finalResolved.provider.name });
+  } catch (err) {
+    emitError(`Model switch failed: ${err.message}`);
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function safeParseArgs(argsStr) {
+  try {
+    return typeof argsStr === 'string' ? JSON.parse(argsStr) : argsStr;
+  } catch {
+    return { raw: argsStr };
+  }
+}
+
+function truncateResult(result) {
+  if (!result) return '';
+  const str = typeof result === 'string' ? result : JSON.stringify(result);
+  // Limit tool result size sent to IDE (full result stays in conversation)
+  return str.length > 2000 ? str.slice(0, 2000) + '…' : str;
+}
+
+// ─── stdin Command Router ───────────────────────────────────────────────────
+
+const rl = createInterface({ input: process.stdin, terminal: false });
+
+rl.on('line', async (line) => {
+  if (!line.trim()) return;
+
+  let data;
+  try {
+    data = JSON.parse(line);
+  } catch {
+    emitError(`Invalid JSON: ${line.slice(0, 100)}`);
+    return;
+  }
+
+  switch (data.cmd) {
+    case 'init':
+      await handleInit(data);
+      break;
+    case 'message':
+      handleMessage(data).catch((err) => emitError(err.message));
+      break;
+    case 'cancel':
+      handleCancel();
+      break;
+    case 'confirm':
+      handleConfirm(data);
+      break;
+    case 'clear':
+      handleClear();
+      break;
+    case 'inject':
+      handleInject(data);
+      break;
+    case 'set_mode':
+      handleSetMode(data);
+      break;
+    case 'set_model':
+      handleSetModel(data).catch((err) => emitError(err.message));
+      break;
+    default:
+      emitError(`Unknown command: ${data.cmd}`);
+  }
+});
+
+rl.on('close', () => {
+  // Parent process closed stdin — exit cleanly
+  process.exit(0);
+});
+
+// Signal readiness (process started)
+emit({ event: 'started', pid: process.pid });

@@ -5,10 +5,15 @@ import {
   TasksPage,
   JournalPage,
   LearningPage,
+  LibraryPage,
   PersonalityPage,
   CloudSyncPage,
   UsagePage,
+  BillingPage,
   SettingsPage,
+  ConnectionsPage,
+  SupportPage,
+  DocumentationPage,
   ReleaseNotesPage,
 } from './DashboardPages';
 
@@ -19,10 +24,15 @@ export type DashboardPageId =
   | 'Tasks'
   | 'Journal'
   | 'Learning'
+  | 'Library'
   | 'Personality'
   | 'Cloud Sync'
   | 'Usage'
+  | 'Billing'
   | 'Settings'
+  | 'Connections'
+  | 'Support'
+  | 'Documentation'
   | 'Release Notes';
 
 interface Props {
@@ -36,10 +46,15 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'Tasks': '\u2705',
   'Journal': '\uD83D\uDCD3',
   'Learning': '\uD83C\uDF93',
+  'Library': '\uD83D\uDDBC\uFE0F',
   'Personality': '\uD83C\uDFA8',
   'Cloud Sync': '\u2601\uFE0F',
   'Usage': '\uD83D\uDCCA',
+  'Billing': '\uD83D\uDCB3',
   'Settings': '\u2699\uFE0F',
+  'Connections': '\uD83D\uDD17',
+  'Support': '\uD83C\uDD98',
+  'Documentation': '\uD83D\uDCD6',
   'Release Notes': '\uD83D\uDCCB',
 };
 
@@ -50,10 +65,15 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'Tasks': TasksPage,
   'Journal': JournalPage,
   'Learning': LearningPage,
+  'Library': LibraryPage,
   'Personality': PersonalityPage,
   'Cloud Sync': CloudSyncPage,
   'Usage': UsagePage,
+  'Billing': BillingPage,
   'Settings': SettingsPage,
+  'Connections': ConnectionsPage,
+  'Support': SupportPage,
+  'Documentation': DocumentationPage,
   'Release Notes': ReleaseNotesPage,
 };
 

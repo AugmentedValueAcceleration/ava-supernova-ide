@@ -496,16 +496,26 @@ function AuthSection() {
         <>
           {/* Connected state */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <div style={{
-              width: 24, height: 24, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </div>
+            {(() => {
+              const av = localStorage.getItem('ava-ide-user-avatar');
+              return (
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: av ? 'transparent' : 'linear-gradient(135deg, #a855f7, #6366f1)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  overflow: 'hidden',
+                }}>
+                  {av ? (
+                    <img src={av} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  )}
+                </div>
+              );
+            })()}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {email || platformKey.slice(0, 12) + '...'}
@@ -628,10 +638,15 @@ function DashboardPanel({ onDashboardSelect }: { onDashboardSelect?: (page: stri
     { icon: '\u2705', label: 'Tasks', desc: 'Your task list' },
     { icon: '\uD83D\uDCD3', label: 'Journal', desc: 'Daily entries' },
     { icon: '\uD83C\uDF93', label: 'Learning', desc: 'Curriculums and progress' },
+    { icon: '\uD83D\uDDBC\uFE0F', label: 'Library', desc: 'Images and documents' },
     { icon: '\uD83C\uDFA8', label: 'Personality', desc: 'Design your AI' },
     { icon: '\u2601\uFE0F', label: 'Cloud Sync', desc: 'Push to cloud' },
     { icon: '\uD83D\uDCCA', label: 'Usage', desc: 'Token usage and stats' },
+    { icon: '\uD83D\uDCB3', label: 'Billing', desc: 'Plan and top-ups' },
     { icon: '\u2699\uFE0F', label: 'Settings', desc: 'Preferences and keys' },
+    { icon: '\uD83D\uDD17', label: 'Connections', desc: 'GitHub, Slack, Discord' },
+    { icon: '\uD83C\uDD98', label: 'Support', desc: 'Get help' },
+    { icon: '\uD83D\uDCD6', label: 'Documentation', desc: 'Guides and reference' },
     { icon: '\uD83D\uDCCB', label: 'Release Notes', desc: 'What\'s new' },
   ];
 

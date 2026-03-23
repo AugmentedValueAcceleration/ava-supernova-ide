@@ -8,7 +8,7 @@ import BottomPanel from './components/BottomPanel';
 import StatusBar from './components/StatusBar';
 
 export type ActivityItem = 'explorer' | 'search' | 'git' | 'ava' | 'extensions' | 'debug' | 'dashboard';
-export type BottomTab = 'terminal' | 'problems' | 'output' | 'debug-console';
+export type BottomTab = 'terminal' | 'problems' | 'output' | 'debug-console' | 'ava';
 export type SidebarPosition = 'left' | 'right';
 
 // Persist layout to localStorage
