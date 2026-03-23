@@ -1843,71 +1843,12 @@ export function AvaChatPage() {
         padding: '12px 24px 16px', borderTop: '1px solid #313244',
         background: '#181825', flexShrink: 0,
       }}>
-        <div style={{ maxWidth: 860, margin: '0 auto' }}>
-          {/* Mode selector row */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div ref={modeMenuRef} style={{ position: 'relative' }}>
-              <button
-                onClick={() => setModeMenuOpen(!modeMenuOpen)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)', border: '1px solid rgba(168,85,247,0.6)',
-                  borderRadius: 8, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(168,85,247,0.3)',
-                }}
-                title="Switch mode (Ctrl+Shift+1-6)"
-              >
-                <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.7 }}>{currentMode.icon}</span>
-                {currentMode.label}
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                  style={{ transform: modeMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                </svg>
-              </button>
-
-              {/* Mode dropdown (opens upward) */}
-              {modeMenuOpen && (
-                <div style={{
-                  position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, zIndex: 999,
-                  background: '#1e1e2e', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 10,
-                  padding: 6, minWidth: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                }}>
-                  {MODES.map((m, idx) => (
-                    <button
-                      key={m.id}
-                      onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                        padding: '8px 10px', background: mode === m.id ? 'rgba(168,85,247,0.2)' : 'transparent',
-                        border: 'none', borderRadius: 6, color: mode === m.id ? '#fff' : '#cdd6f4',
-                        fontSize: 12, fontWeight: mode === m.id ? 600 : 400, cursor: 'pointer', textAlign: 'left',
-                        opacity: mode === m.id ? 1 : 0.7,
-                      }}
-                      onMouseEnter={(e) => { if (mode !== m.id) { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; e.currentTarget.style.opacity = '1'; } }}
-                      onMouseLeave={(e) => { if (mode !== m.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0.7'; } }}
-                    >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.6, width: 16, textAlign: 'center' }}>{m.icon}</span>
-                        {m.label}
-                      </span>
-                      <span style={{ fontSize: 9, opacity: 0.4, fontFamily: 'monospace' }}>Ctrl+Shift+{idx + 1}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Character count */}
-            <span style={{ fontSize: 10, color: input.length > 4000 ? '#ef4444' : '#45475a', fontFamily: 'monospace' }}>
-              {input.length > 0 ? `${input.length.toLocaleString()} chars` : ''}
-            </span>
-          </div>
-
-          {/* Input container */}
+        <div style={{ width: '100%' }}>
+          {/* Input container with mode selector inside */}
           <div style={{
             display: 'flex', alignItems: 'flex-end', gap: 8,
             background: 'rgba(0,0,0,0.35)', border: '1.5px solid rgba(168,85,247,0.15)',
-            borderRadius: 14, padding: '8px 8px 8px 16px',
+            borderRadius: 14, padding: '8px 8px 8px 8px',
             transition: 'border-color 0.2s, box-shadow 0.2s',
           }}
             onFocus={(e) => {
@@ -1924,6 +1865,53 @@ export function AvaChatPage() {
               }
             }}
           >
+            {/* Mode selector (left of input) */}
+            <div ref={modeMenuRef} style={{ position: 'relative', flexShrink: 0, alignSelf: 'center' }}>
+              <button
+                onClick={() => setModeMenuOpen(!modeMenuOpen)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px',
+                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)', border: 'none',
+                  borderRadius: 8, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+                title="Switch mode"
+              >
+                <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.7 }}>{currentMode.icon}</span>
+                {currentMode.label}
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+                  style={{ transform: modeMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+              {modeMenuOpen && (
+                <div style={{
+                  position: 'absolute', bottom: '100%', left: 0, marginBottom: 8, zIndex: 999,
+                  background: '#1e1e2e', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 10,
+                  padding: 6, minWidth: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                }}>
+                  {MODES.map((m, idx) => (
+                    <button key={m.id} onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                        padding: '8px 10px', background: mode === m.id ? 'rgba(168,85,247,0.2)' : 'transparent',
+                        border: 'none', borderRadius: 6, color: mode === m.id ? '#fff' : '#cdd6f4',
+                        fontSize: 12, fontWeight: mode === m.id ? 600 : 400, cursor: 'pointer', textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => { if (mode !== m.id) e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+                      onMouseLeave={(e) => { if (mode !== m.id) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.6 }}>{m.icon}</span>
+                        {m.label}
+                      </span>
+                      <span style={{ fontSize: 9, opacity: 0.4, fontFamily: 'monospace' }}>Ctrl+Shift+{idx + 1}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <textarea
               ref={textareaRef}
               value={input}
@@ -2078,7 +2066,7 @@ export function MemoryPage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
+      <div style={{ width: '100%' }}>
         {/* Header */}
         <div style={{ marginBottom: 8 }}>
           <div style={pageTitle}>Memory</div>
@@ -2455,7 +2443,7 @@ export function TasksPage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ width: '100%' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div style={pageTitle}>Tasks</div>
@@ -2882,7 +2870,7 @@ export function JournalPage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ width: '100%' }}>
         <div style={pageTitle}>Journal</div>
         <div style={pageSubtitle}>Your daily reflections and Ava's observations</div>
 
@@ -3167,7 +3155,7 @@ export function LearningPage() {
 
     return (
       <div style={pageWrapper}>
-        <div style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
+        <div style={{ width: '100%' }}>
           <button
             onClick={() => { setSelectedId(null); setExpandedModules(new Set()); }}
             style={{
@@ -3288,7 +3276,7 @@ export function LearningPage() {
   // List view
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
+      <div style={{ width: '100%' }}>
         <div style={pageTitle}>Learning</div>
         <div style={pageSubtitle}>Your learning paths, created by Ava through conversation.</div>
 
@@ -3520,7 +3508,7 @@ export function PersonalityPage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 720, margin: '0 auto', width: '100%' }}>
+      <div style={{ width: '100%' }}>
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4' }}>Design Your AI</div>
@@ -3783,7 +3771,7 @@ export function CloudSyncPage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
+      <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 8 }}>
           <div style={pageTitle}>Cloud Sync</div>
           <div style={pageSubtitle}>
@@ -4009,7 +3997,7 @@ export function UsagePage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
+      <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 8 }}>
           <div style={pageTitle}>Usage Analytics</div>
           <div style={pageSubtitle}>Track token usage, costs, and model performance.</div>
@@ -4403,7 +4391,7 @@ export function SettingsPage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 640, margin: '0 auto', width: '100%', paddingBottom: 48 }}>
+      <div style={{ width: '100%', paddingBottom: 48 }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4' }}>Settings</div>
           <div style={{ fontSize: 13, color: '#6c7086', marginTop: 4 }}>
@@ -4888,7 +4876,7 @@ export function ReleaseNotesPage() {
 
   return (
     <div style={pageWrapper}>
-      <div style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
+      <div style={{ width: '100%' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
           <div>
