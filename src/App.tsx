@@ -81,6 +81,7 @@ export default function App() {
       position={sidebarPosition}
       onTogglePosition={toggleSidebarPosition}
       onDashboardSelect={handleDashboardSelect}
+      activeDashboardPage={dashboardPage}
     />
   ) : null;
 

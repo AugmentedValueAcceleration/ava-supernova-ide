@@ -7,6 +7,7 @@ interface Props {
   position?: SidebarPosition;
   onTogglePosition?: () => void;
   onDashboardSelect?: (page: string) => void;
+  activeDashboardPage?: string | null;
 }
 
 const panelTitles: Record<ActivityItem, string> = {
@@ -630,7 +631,7 @@ function AuthSection() {
 }
 
 /* ---------- Dashboard Panel ---------- */
-function DashboardPanel({ onDashboardSelect }: { onDashboardSelect?: (page: string) => void }) {
+function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?: (page: string) => void; activePage?: string | null }) {
   const items = [
     { icon: '\u26A1', label: 'Command Centre', desc: 'Overview of everything' },
     { icon: '\u2601\uFE0F', label: 'Ava Chat', desc: 'Full-width AI chat' },
@@ -653,18 +654,22 @@ function DashboardPanel({ onDashboardSelect }: { onDashboardSelect?: (page: stri
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
-        {items.map((item) => (
+        {items.map((item) => {
+          const isActive = activePage === item.label;
+          return (
           <button
             key={item.label}
             onClick={() => onDashboardSelect?.(item.label)}
             style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%',
               padding: '8px 10px', borderRadius: 6, border: 'none',
-              background: 'transparent', color: '#cdd6f4', cursor: 'pointer',
+              background: isActive ? '#313244' : 'transparent',
+              color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
               fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
+              borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
             }}
-            onMouseOver={(e) => e.currentTarget.style.background = '#313244'}
-            onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+            onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = '#313244'; }}
+            onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
           >
             <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>{item.icon}</span>
             <div>
@@ -672,7 +677,8 @@ function DashboardPanel({ onDashboardSelect }: { onDashboardSelect?: (page: stri
               <div style={{ fontSize: 11, color: '#6c7086' }}>{item.desc}</div>
             </div>
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* Auth + BYOK section at the bottom */}
@@ -681,7 +687,7 @@ function DashboardPanel({ onDashboardSelect }: { onDashboardSelect?: (page: stri
   );
 }
 
-export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onDashboardSelect }: Props) {
+export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onDashboardSelect, activeDashboardPage }: Props) {
   const panels: Record<ActivityItem, (props?: { onDashboardSelect?: (page: string) => void }) => ReactNode> = {
     explorer: ExplorerPanel,
     search: SearchPanel,
@@ -689,7 +695,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
     ava: AvaPanel,
     extensions: ExtensionsPanel,
     debug: DebugPanel,
-    dashboard: () => <DashboardPanel onDashboardSelect={onDashboardSelect} />,
+    dashboard: () => <DashboardPanel onDashboardSelect={onDashboardSelect} activePage={activeDashboardPage} />,
   };
 
   const Panel = panels[activePanel];

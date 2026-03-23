@@ -1025,8 +1025,8 @@ export function CommandCentrePage() {
           </div>
         </div>
 
-        {/* ── News + Tasks (2 column) ───────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        {/* ── News + Tasks (40/60 split, tasks gets more space) ─────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 16, marginBottom: 16 }}>
           <CCNewsWidget
             articles={newsArticles}
             loading={newsLoading}
