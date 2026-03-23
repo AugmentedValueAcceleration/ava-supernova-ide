@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, apiStreamUrl, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
+import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -382,6 +383,8 @@ const widgetCardStyle: React.CSSProperties = {
   border: '1px solid #313244',
   borderRadius: 12,
   padding: 16,
+  minWidth: 0,
+  overflow: 'hidden',
 };
 
 function WidgetCard({
@@ -1026,7 +1029,7 @@ export function CommandCentrePage() {
         </div>
 
         {/* ── News + Tasks (40/60 split, tasks gets more space) ─────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 16, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '40% 1fr', gap: 16, marginBottom: 16 }}>
           <CCNewsWidget
             articles={newsArticles}
             loading={newsLoading}
@@ -1086,7 +1089,7 @@ export function AvaChatPage() {
     role: 'ava' | 'user' | 'error' | 'system';
     text: string;
     timestamp: number;
-    toolCalls?: { name: string; status: 'running' | 'done' | 'error'; result?: string }[];
+    toolCalls?: { name: string; status: 'running' | 'done' | 'error'; result?: string; args?: Record<string, any> }[];
     images?: { src: string; alt?: string }[]; // base64 or URL images
     files?: { name: string; path?: string; url?: string; type?: string }[]; // created files
     attachments?: { name: string; dataUri: string; mimeType: string }[]; // user-attached files
@@ -1181,6 +1184,20 @@ export function AvaChatPage() {
   const chatUserAvatar = useMemo(() => localStorage.getItem('ava-ide-user-avatar') || '', []);
   const chatAiAvatar = useMemo(() => localStorage.getItem('ava-ide-ai-avatar') || '', []);
 
+  // ── Tasks panel state ──────────────────────────────────────────────────
+  const [tasksPanelOpen, setTasksPanelOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('ava-ide-tasks-open') === 'true'; } catch { return false; }
+  });
+  const [tasksPanelWidth, setTasksPanelWidth] = useState<number>(() => {
+    try { return Number(localStorage.getItem('ava-ide-tasks-width')) || 260; } catch { return 260; }
+  });
+  const [sessionTasks, setSessionTasks] = useState<SessionTaskUI[]>([]);
+  const [avaCompletedTasks, setAvaCompletedTasks] = useState<AvaCompletedTaskUI[]>(() => {
+    try { const s = localStorage.getItem('ava-ide-tasks-completed'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  const [todayTasks, setTodayTasks] = useState<TodayTaskUI[]>([]);
+  const [allTasks, setAllTasks] = useState<TodayTaskUI[]>([]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -1207,6 +1224,39 @@ export function AvaChatPage() {
   // ── Persist model & mode ──────────────────────────────────────────────────
   useEffect(() => { try { localStorage.setItem('ava-ide-chat-model', model); } catch { /* */ } }, [model]);
   useEffect(() => { try { localStorage.setItem('ava-ide-chat-mode', mode); } catch { /* */ } }, [mode]);
+
+  // ── Persist tasks panel state ───────────────────────────────────────────
+  useEffect(() => { try { localStorage.setItem('ava-ide-tasks-open', String(tasksPanelOpen)); } catch {} }, [tasksPanelOpen]);
+  useEffect(() => { try { localStorage.setItem('ava-ide-tasks-width', String(tasksPanelWidth)); } catch {} }, [tasksPanelWidth]);
+  useEffect(() => { try { localStorage.setItem('ava-ide-tasks-completed', JSON.stringify(avaCompletedTasks)); } catch {} }, [avaCompletedTasks]);
+
+  // ── Fetch user tasks when panel opens ───────────────────────────────────
+  const fetchUserTasks = useCallback(async () => {
+    if (!checkConnected()) return;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const data = await apiFetch(`/tasks?date=${today}`);
+      const arr = Array.isArray(data) ? data : (data?.tasks ?? data?.data ?? []);
+      const mapped = arr.map((t: any) => ({
+        id: t.id, title: t.title, priority: t.priority || 'medium',
+        status: t.status || 'todo', dueDate: t.due_date, category: t.category || 'general',
+      }));
+      setAllTasks(mapped);
+      setTodayTasks(mapped.filter((t: TodayTaskUI) => !t.dueDate || t.dueDate === today));
+    } catch { /* silently fail */ }
+  }, []);
+
+  useEffect(() => { if (tasksPanelOpen) fetchUserTasks(); }, [tasksPanelOpen, fetchUserTasks]);
+
+  const handleToggleTask = useCallback(async (taskId: string) => {
+    if (!checkConnected()) return;
+    try {
+      const task = allTasks.find(t => t.id === taskId);
+      const newStatus = task?.status === 'done' ? 'todo' : 'done';
+      await apiFetch(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
+      fetchUserTasks();
+    } catch { /* */ }
+  }, [allTasks, fetchUserTasks]);
 
   // ── Persist messages ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -1447,7 +1497,7 @@ export function AvaChatPage() {
             const existing = last.toolCalls || [];
             copy[copy.length - 1] = {
               ...last,
-              toolCalls: [...existing, { name: event.toolName || 'unknown', status: 'running' }],
+              toolCalls: [...existing, { name: event.toolName || 'unknown', status: 'running', args: event.args }],
             };
           }
           return copy;
@@ -1515,6 +1565,22 @@ export function AvaChatPage() {
           }
           return copy;
         });
+
+        // Extract session tasks from todo_write
+        if (event.toolName === 'todo_write' && event.success) {
+          try {
+            const parsed = typeof event.result === 'string' ? JSON.parse(event.result) : (event.args || event.result);
+            const todos = parsed?.todos || parsed?.items;
+            if (Array.isArray(todos)) {
+              setSessionTasks(todos.map((t: any, idx: number) => ({
+                id: `session-${Date.now()}-${idx}`,
+                title: t.content || t.title || t.text || '',
+                status: t.status || 'pending',
+              })));
+              if (!tasksPanelOpen) setTasksPanelOpen(true);
+            }
+          } catch { /* malformed */ }
+        }
         break;
 
       case 'confirm_required':
@@ -1607,6 +1673,14 @@ export function AvaChatPage() {
     setTokenCount(0);
     setContextPercent(0);
     resetSessionStats();
+    // Move completed session tasks to history, clear session
+    if (sessionTasks.length > 0) {
+      const completed = sessionTasks.filter(t => t.status === 'completed').map(t => ({
+        id: t.id, title: t.title, completedAt: new Date().toISOString(),
+      }));
+      if (completed.length > 0) setAvaCompletedTasks(prev => [...completed, ...prev]);
+      setSessionTasks([]);
+    }
     if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
     if (chatBackend === 'local') {
       const sidecar = getSidecar();
@@ -2021,7 +2095,9 @@ export function AvaChatPage() {
   `;
 
   return (
-    <div style={{ ...pageWrapper, padding: 0, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ ...pageWrapper, padding: 0, display: 'flex', flexDirection: 'row', height: '100%', overflow: 'hidden' }}>
+    {/* ── Main chat column ─────────────────────────────────────────────── */}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', minWidth: 0 }}>
       <style>{keyframesStyle}</style>
 
       {/* ── Header Bar (48px) ───────────────────────────────────────────── */}
@@ -2178,6 +2254,30 @@ export function AvaChatPage() {
             );
           })()}
 
+          {/* Tasks toggle */}
+          <button
+            onClick={() => setTasksPanelOpen(!tasksPanelOpen)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+              background: tasksPanelOpen ? 'rgba(168,85,247,0.2)' : 'rgba(168,85,247,0.05)',
+              border: `1px solid ${tasksPanelOpen ? 'rgba(168,85,247,0.4)' : 'rgba(168,85,247,0.15)'}`,
+              borderRadius: 8, color: tasksPanelOpen ? '#a855f7' : '#6c7086',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+            }}
+            title="Toggle Tasks Panel"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 3.5h8v1H6v-1Zm-2.25 5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 7.5h8v1H6v-1Zm-2.25 5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 11.5h8v1H6v-1Z"/>
+            </svg>
+            Tasks
+            {sessionTasks.length > 0 && (
+              <span style={{
+                fontSize: 9, padding: '1px 5px', borderRadius: 8,
+                background: 'rgba(168,85,247,0.25)', color: '#a855f7',
+              }}>{sessionTasks.length}</span>
+            )}
+          </button>
+
           {/* New Chat button */}
           <button
             onClick={newChat}
@@ -2322,6 +2422,41 @@ export function AvaChatPage() {
                       ))}
                     </div>
                   )}
+
+                  {/* Inline TodoCard for todo_write */}
+                  {msg.toolCalls?.filter(tc => tc.name === 'todo_write' && tc.args?.todos).map((tc, idx) => {
+                    const todos: any[] = tc.args?.todos || [];
+                    const done = todos.filter((t: any) => t.status === 'completed').length;
+                    return (
+                      <div key={`todo-${idx}`} style={{
+                        marginTop: 8, background: '#11111b', border: '1px solid #313244',
+                        borderRadius: 8, padding: '8px 12px', fontSize: 12,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <span style={{ fontWeight: 600, color: '#cba6f7', fontSize: 11 }}>Tasks ({done}/{todos.length})</span>
+                          <div style={{ height: 3, flex: 1, marginLeft: 10, background: '#313244', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${todos.length > 0 ? (done / todos.length) * 100 : 0}%`, background: '#a855f7', borderRadius: 2 }} />
+                          </div>
+                        </div>
+                        {todos.map((t: any, ti: number) => (
+                          <div key={ti} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', fontSize: 11 }}>
+                            <span style={{
+                              color: t.status === 'completed' ? '#a6e3a1' : t.status === 'in_progress' ? '#a855f7' : '#585b70',
+                              fontSize: 10, width: 14, textAlign: 'center',
+                            }}>
+                              {t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '◉' : '○'}
+                            </span>
+                            <span style={{
+                              color: t.status === 'completed' ? '#6c7086' : '#cdd6f4',
+                              textDecoration: t.status === 'completed' ? 'line-through' : 'none',
+                            }}>
+                              {t.content || t.title || ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
 
                   {/* Inline images */}
                   {msg.images && msg.images.length > 0 && (
@@ -2734,6 +2869,20 @@ export function AvaChatPage() {
           </div>
         </div>
       </div>
+    </div>
+    {/* ── Tasks Panel (collapsible right sidebar) ───────────────────────── */}
+    {tasksPanelOpen && (
+      <IdeTasksPanel
+        sessionTasks={sessionTasks}
+        avaCompletedTasks={avaCompletedTasks}
+        todayTasks={todayTasks}
+        allTasks={allTasks}
+        onClose={() => setTasksPanelOpen(false)}
+        onToggleTask={handleToggleTask}
+        width={tasksPanelWidth}
+        onWidthChange={setTasksPanelWidth}
+      />
+    )}
     </div>
   );
 }
