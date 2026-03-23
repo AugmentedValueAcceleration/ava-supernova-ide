@@ -212,14 +212,17 @@ async function handleInit(data) {
       })
     );
 
-    // Inject working hours into context so Ava respects the user's schedule
+    // Inject working hours into the system prompt so Ava respects the user's schedule
     if (config.workingHours) {
       const { start, end } = config.workingHours;
       const fmt = (h) => `${String(h).padStart(2, '0')}:00`;
       const now = new Date().getHours();
       const isWorking = start <= end ? (now >= start && now < end) : (now >= start || now < end);
-      conversation.addSystemMessage(
-        `[User Working Hours: ${fmt(start)} — ${fmt(end)}]` +
+      const msgs = conversation.getMessages();
+      const sysMsgContent = msgs[0]?.role === 'system' ? msgs[0].content : '';
+      conversation.setSystemPrompt(
+        sysMsgContent +
+        `\n\n[User Working Hours: ${fmt(start)} — ${fmt(end)}]` +
         `\nCurrent time: ${fmt(now)}. User is ${isWorking ? 'currently working' : 'outside their set working hours'}.` +
         `\nNEVER suggest stopping, wrapping up, or taking breaks during working hours. The user decides when to stop.`
       );
@@ -331,7 +334,10 @@ async function handleMessage(data) {
         const memories = await memoryManager.recall({ query: data.content || 'user context', limit: 10 });
         if (memories && memories.length > 0) {
           const memoryContext = memories.map(m => `[${m.category || m.scope || 'memory'}] (relevance: ${Math.round((m.relevance || 0) * 100)}%) ${m.content}`).join('\n\n');
-          conversation.addSystemMessage(`[Auto-recalled memories — Ava knows this about the user and project]\n\n${memoryContext}`);
+          // Inject memories into system prompt (Conversation has no addSystemMessage)
+          const currentMsgs = conversation.getMessages();
+          const currentSys = currentMsgs[0]?.role === 'system' ? currentMsgs[0].content : '';
+          conversation.setSystemPrompt(currentSys + `\n\n[Auto-recalled memories — Ava knows this about the user and project]\n\n${memoryContext}`);
           messages = conversation.getMessages();
           emit({ event: 'info', message: `Proactively recalled ${memories.length} memories` });
         } else {
