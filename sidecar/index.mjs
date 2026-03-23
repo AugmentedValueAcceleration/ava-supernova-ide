@@ -285,13 +285,18 @@ async function handleMessage(data) {
     // Proactive memory recall on first user message — Ava should know who you are
     if (memoryManager && messages.filter(m => m.role === 'user').length <= 1) {
       try {
-        const memories = await memoryManager.recall(data.content, 5);
+        const memories = await memoryManager.recall({ query: data.content || 'user context', limit: 10 });
         if (memories && memories.length > 0) {
-          const memoryContext = memories.map(m => `[${m.category || 'memory'}] ${m.content}`).join('\n');
-          conversation.addSystemMessage(`[Auto-recalled memories for context]\n${memoryContext}`);
+          const memoryContext = memories.map(m => `[${m.category || m.scope || 'memory'}] (relevance: ${Math.round((m.relevance || 0) * 100)}%) ${m.content}`).join('\n\n');
+          conversation.addSystemMessage(`[Auto-recalled memories — Ava knows this about the user and project]\n\n${memoryContext}`);
           messages = conversation.getMessages();
+          emit({ event: 'info', message: `Proactively recalled ${memories.length} memories` });
+        } else {
+          emit({ event: 'info', message: 'No memories found for proactive recall' });
         }
-      } catch { /* memory recall failed silently */ }
+      } catch (err) {
+        emit({ event: 'info', message: `Memory recall failed: ${err.message}` });
+      }
     }
 
     // Check if conductor orchestration is needed (plan, teach, security, brainstorm modes)
