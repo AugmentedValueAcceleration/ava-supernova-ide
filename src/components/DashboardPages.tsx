@@ -1345,17 +1345,37 @@ export function AvaChatPage() {
 
   // ── Paste/drop image handler ──────────────────────────────────────────────
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    // Try clipboardData.files first (works better in WebView2)
+    const files = e.clipboardData?.files;
+    if (files && files.length > 0) {
+      for (const file of Array.from(files)) {
+        if (file.type.startsWith('image/')) {
+          e.preventDefault();
+          const ext = file.type.split('/')[1] || 'png';
+          const name = file.name && file.name !== '' && file.name !== 'image.png' ? file.name : `pasted-${Date.now()}.${ext}`;
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUri = reader.result as string;
+            if (dataUri && dataUri.startsWith('data:')) {
+              setPendingAttachments((prev) => [...prev, { name, dataUri, mimeType: file.type }]);
+            }
+          };
+          reader.readAsDataURL(file);
+          return; // handled
+        }
+      }
+    }
+
+    // Fallback: try clipboardData.items
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of Array.from(items)) {
       if (item.type.startsWith('image/')) {
         e.preventDefault();
         const blob = item.getAsFile();
-        if (!blob) continue;
+        if (!blob || blob.size === 0) continue;
         const ext = item.type.split('/')[1] || 'png';
-        const name = blob.name && blob.name !== '' ? blob.name : `pasted-image.${ext}`;
-
-        // Convert blob to base64 data URI
+        const name = `pasted-${Date.now()}.${ext}`;
         const reader = new FileReader();
         reader.onloadend = () => {
           const dataUri = reader.result as string;
