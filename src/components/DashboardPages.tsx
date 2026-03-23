@@ -1350,17 +1350,20 @@ export function AvaChatPage() {
     for (const item of Array.from(items)) {
       if (item.type.startsWith('image/')) {
         e.preventDefault();
-        const file = item.getAsFile();
-        if (!file) continue;
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        const ext = item.type.split('/')[1] || 'png';
+        const name = blob.name && blob.name !== '' ? blob.name : `pasted-image.${ext}`;
+
+        // Convert blob to base64 data URI
         const reader = new FileReader();
-        reader.onload = () => {
-          setPendingAttachments((prev) => [...prev, {
-            name: file.name || `pasted-image.${item.type.split('/')[1]}`,
-            dataUri: reader.result as string,
-            mimeType: item.type,
-          }]);
+        reader.onloadend = () => {
+          const dataUri = reader.result as string;
+          if (dataUri && dataUri.startsWith('data:')) {
+            setPendingAttachments((prev) => [...prev, { name, dataUri, mimeType: item.type }]);
+          }
         };
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(blob);
       }
     }
   }, []);
@@ -2845,10 +2848,22 @@ export function AvaChatPage() {
                       position: 'relative', borderRadius: 8, overflow: 'hidden',
                       border: '1px solid rgba(168,85,247,0.3)', background: '#181825',
                     }}>
-                      {att.mimeType.startsWith('image/') ? (
-                        <img src={att.dataUri} alt={att.name} style={{ height: 48, maxWidth: 80, objectFit: 'cover', display: 'block' }} />
+                      {att.mimeType.startsWith('image/') && att.dataUri?.startsWith('data:') ? (
+                        <div style={{ position: 'relative', height: 48, minWidth: 48, maxWidth: 100, overflow: 'hidden' }}>
+                          <img
+                            src={att.dataUri}
+                            alt={att.name}
+                            style={{ height: 48, maxWidth: 100, objectFit: 'cover', display: 'block' }}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '2px 4px', background: 'rgba(0,0,0,0.6)', fontSize: 9, color: '#a6adc8', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {att.name}
+                          </div>
+                        </div>
                       ) : (
-                        <div style={{ padding: '8px 12px', fontSize: 11, color: '#6c7086' }}>{att.name}</div>
+                        <div style={{ padding: '8px 12px', fontSize: 11, color: '#6c7086', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>📎</span> {att.name}
+                        </div>
                       )}
                       <button
                         onClick={() => removeAttachment(idx)}
