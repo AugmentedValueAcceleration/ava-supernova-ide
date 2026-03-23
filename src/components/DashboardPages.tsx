@@ -2139,46 +2139,144 @@ export function MemoryPage() {
 }
 
 /* ===== 4. Tasks ===== */
+
+const TASK_PRIORITY_DOT: Record<string, string> = {
+  low: '#22c55e',
+  medium: '#3b82f6',
+  high: '#f59e0b',
+  urgent: '#ef4444',
+};
+
+const TASK_PRIORITY_BG: Record<string, string> = {
+  low: 'rgba(34,197,94,0.12)',
+  medium: 'rgba(59,130,246,0.12)',
+  high: 'rgba(245,158,11,0.12)',
+  urgent: 'rgba(239,68,68,0.12)',
+};
+
+const TASK_CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  work: { bg: 'rgba(168,85,247,0.12)', text: '#a855f7' },
+  personal: { bg: 'rgba(236,72,153,0.12)', text: '#ec4899' },
+  learning: { bg: 'rgba(14,165,233,0.12)', text: '#0ea5e9' },
+  project: { bg: 'rgba(245,158,11,0.12)', text: '#f59e0b' },
+};
+
+type TaskFilter = 'all' | 'today' | 'overdue' | 'completed';
+
+function isTaskOverdue(task: any): boolean {
+  if (!task.due_date || task.done || task.status === 'done') return false;
+  return task.due_date < new Date().toISOString().slice(0, 10);
+}
+
+function isTaskDueToday(task: any): boolean {
+  if (!task.due_date) return false;
+  return task.due_date === new Date().toISOString().slice(0, 10);
+}
+
+function formatTaskDate(dateStr: string | undefined): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
 export function TasksPage() {
   const connected = checkConnected();
-  const { data: rawTasks, loading, error } = useApiData<any[]>('/tasks', []);
+  const { data: rawTasks, loading, error, refetch } = useApiData<any>('/tasks', []);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [newTask, setNewTask] = useState('');
+  const [filter, setFilter] = useState<TaskFilter>('all');
+  const [showForm, setShowForm] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [hoverCardId, setHoverCardId] = useState<string | null>(null);
+  const [hoverDeleteId, setHoverDeleteId] = useState<string | null>(null);
+
+  // Form state
+  const [formTitle, setFormTitle] = useState('');
+  const [formPriority, setFormPriority] = useState('medium');
+  const [formDueDate, setFormDueDate] = useState('');
+  const [formCategory, setFormCategory] = useState('work');
 
   useEffect(() => {
-    if (Array.isArray(rawTasks) && rawTasks.length > 0) setTasks(rawTasks);
-  }, [rawTasks]);
+    const list = Array.isArray(rawTasks) ? rawTasks : rawTasks?.tasks || [];
+    if (list.length > 0 || !loading) setTasks(list);
+  }, [rawTasks, loading]);
 
-  const priorityColors: Record<string, string> = { high: '#f38ba8', medium: '#f9e2af', low: '#a6e3a1' };
+  const stats = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return {
+      all: tasks.filter((t: any) => !t.done && t.status !== 'done').length,
+      today: tasks.filter((t: any) => isTaskDueToday(t) && !t.done && t.status !== 'done').length,
+      overdue: tasks.filter((t: any) => isTaskOverdue(t)).length,
+      completed: tasks.filter((t: any) => t.done || t.status === 'done').length,
+    };
+  }, [tasks]);
+
+  const filtered = useMemo(() => {
+    switch (filter) {
+      case 'today': return tasks.filter((t: any) => isTaskDueToday(t) && !t.done && t.status !== 'done');
+      case 'overdue': return tasks.filter((t: any) => isTaskOverdue(t));
+      case 'completed': return tasks.filter((t: any) => t.done || t.status === 'done');
+      default: return tasks.filter((t: any) => !t.done && t.status !== 'done');
+    }
+  }, [tasks, filter]);
+
+  const resetForm = () => {
+    setFormTitle('');
+    setFormPriority('medium');
+    setFormDueDate('');
+    setFormCategory('work');
+    setShowForm(false);
+  };
 
   const addTask = async () => {
-    if (!newTask.trim()) return;
+    if (!formTitle.trim()) return;
+    const newTask: any = {
+      id: String(Date.now()),
+      title: formTitle.trim(),
+      priority: formPriority,
+      due_date: formDueDate || undefined,
+      category: formCategory,
+      done: false,
+      status: 'todo',
+    };
     if (!connected) {
-      setTasks((t) => [...t, { id: Date.now(), title: newTask, done: false, priority: 'medium' }]);
-      setNewTask('');
+      setTasks((t) => [...t, newTask]);
+      resetForm();
       return;
     }
     try {
       const created = await apiFetch('/tasks', {
         method: 'POST',
-        body: JSON.stringify({ title: newTask, priority: 'medium' }),
+        body: JSON.stringify({
+          title: formTitle.trim(),
+          priority: formPriority,
+          due_date: formDueDate || undefined,
+          category: formCategory,
+        }),
       });
       setTasks((t) => [...t, created]);
-      setNewTask('');
-    } catch (err: any) {
-      // Fallback to local
-      setTasks((t) => [...t, { id: Date.now(), title: newTask, done: false, priority: 'medium' }]);
-      setNewTask('');
+      resetForm();
+    } catch {
+      setTasks((t) => [...t, newTask]);
+      resetForm();
     }
   };
 
   const toggleTask = async (task: any) => {
     const id = task.id || task._id;
-    const newDone = !task.done;
-    setTasks((t) => t.map((tt) => (tt.id || tt._id) === id ? { ...tt, done: newDone } : tt));
+    const newDone = !(task.done || task.status === 'done');
+    setTasks((t) =>
+      t.map((tt) =>
+        (tt.id || tt._id) === id
+          ? { ...tt, done: newDone, status: newDone ? 'done' : 'todo' }
+          : tt
+      )
+    );
     if (connected) {
       try {
-        await apiFetch(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ done: newDone }) });
+        await apiFetch(`/tasks/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: newDone ? 'done' : 'todo', done: newDone }),
+        });
       } catch { /* local toggle stands */ }
     }
   };
@@ -2186,113 +2284,370 @@ export function TasksPage() {
   const deleteTask = async (task: any) => {
     const id = task.id || task._id;
     setTasks((t) => t.filter((tt) => (tt.id || tt._id) !== id));
+    setConfirmDeleteId(null);
     if (connected) {
       try { await apiFetch(`/tasks/${id}`, { method: 'DELETE' }); } catch { /* */ }
     }
   };
 
-  const pending = tasks.filter((t) => !t.done);
-  const completed = tasks.filter((t) => t.done);
+  const filterTabs: { key: TaskFilter; label: string; count: number }[] = [
+    { key: 'all', label: 'Active', count: stats.all },
+    { key: 'today', label: 'Today', count: stats.today },
+    { key: 'overdue', label: 'Overdue', count: stats.overdue },
+    { key: 'completed', label: 'Completed', count: stats.completed },
+  ];
 
   return (
     <div style={pageWrapper}>
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
-        <div style={pageTitle}>Tasks</div>
-        <div style={pageSubtitle}>{pending.length} pending, {completed.length} completed</div>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={pageTitle}>Tasks</div>
+          <button
+            onClick={() => { resetForm(); setShowForm(!showForm); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.4)',
+              borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500,
+              color: '#a855f7', cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.2)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Task
+          </button>
+        </div>
+        <div style={pageSubtitle}>Manage your tasks and track progress</div>
 
         {!connected && <NotConnectedBanner />}
 
-        {/* Add task */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-          <input
-            type="text"
-            placeholder="Add a new task..."
-            value={newTask}
-            onChange={(e) => setNewTask(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') addTask(); }}
-            style={{ ...inputStyle, flex: 1 }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
-          />
-          <button
-            onClick={addTask}
-            style={btnPrimary}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
-          >
-            Add
-          </button>
+        {/* Stats bar */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
+          {[
+            { label: 'Active', value: stats.all, color: '#3b82f6' },
+            { label: 'Today', value: stats.today, color: '#f59e0b' },
+            { label: 'Overdue', value: stats.overdue, color: stats.overdue > 0 ? '#ef4444' : '#6c7086' },
+            { label: 'Completed', value: stats.completed, color: '#22c55e' },
+          ].map((s) => (
+            <div key={s.label} style={{
+              background: '#181825', border: '1px solid #313244', borderRadius: 10,
+              padding: '14px 12px', textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{s.label}</div>
+            </div>
+          ))}
         </div>
 
-        {loading ? <LoadingSpinner /> : error ? <ErrorBanner message={error} /> : (
-          <>
-            {/* Pending */}
-            {pending.length > 0 && (
-              <>
-                <div style={sectionTitle}>Pending</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
-                  {pending.map((t) => (
-                    <div key={t.id || t._id} style={{ ...card, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px' }}>
-                      <div
-                        onClick={() => toggleTask(t)}
-                        style={{
-                          width: 20, height: 20, borderRadius: 4,
-                          border: '2px solid #313244', cursor: 'pointer', flexShrink: 0,
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
-                      />
-                      <span style={{ fontSize: 14, color: '#cdd6f4', flex: 1 }}>{t.title}</span>
-                      <span style={badge(priorityColors[t.priority] || '#a6adc8')}>{t.priority || 'medium'}</span>
-                      <button
-                        onClick={() => deleteTask(t)}
-                        style={{
-                          width: 24, height: 24, borderRadius: 4, background: 'transparent',
-                          border: 'none', color: '#6c7086', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = '#f38ba8'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; }}
-                        title="Delete"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    </div>
+        {/* Add Task Form */}
+        {showForm && (
+          <div style={{
+            background: '#181825', border: '1px solid #313244', borderRadius: 10,
+            padding: 20, marginBottom: 20,
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 14 }}>New Task</div>
+            <input
+              type="text"
+              placeholder="Task title..."
+              value={formTitle}
+              onChange={(e) => setFormTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addTask(); }}
+              style={{
+                ...inputStyle, marginBottom: 12, height: 40,
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+              {/* Priority */}
+              <div style={{ flex: 1, minWidth: 120 }}>
+                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>Priority</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['low', 'medium', 'high', 'urgent'] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setFormPriority(p)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        padding: '5px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                        border: formPriority === p ? `1px solid ${TASK_PRIORITY_DOT[p]}` : '1px solid #313244',
+                        background: formPriority === p ? TASK_PRIORITY_BG[p] : '#313244',
+                        color: formPriority === p ? TASK_PRIORITY_DOT[p] : '#a6adc8',
+                        fontWeight: formPriority === p ? 600 : 400,
+                      }}
+                    >
+                      <span style={{
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: TASK_PRIORITY_DOT[p], display: 'inline-block',
+                      }} />
+                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                    </button>
                   ))}
                 </div>
-              </>
-            )}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+              {/* Due date */}
+              <div style={{ minWidth: 160 }}>
+                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>Due Date</div>
+                <input
+                  type="date"
+                  value={formDueDate}
+                  onChange={(e) => setFormDueDate(e.target.value)}
+                  style={{
+                    ...inputStyle, height: 34, width: '100%',
+                    colorScheme: 'dark',
+                  }}
+                />
+              </div>
+              {/* Category */}
+              <div style={{ minWidth: 140 }}>
+                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>Category</div>
+                <select
+                  value={formCategory}
+                  onChange={(e) => setFormCategory(e.target.value)}
+                  style={{
+                    ...inputStyle, height: 34, width: '100%',
+                    appearance: 'auto' as any,
+                  }}
+                >
+                  <option value="work">Work</option>
+                  <option value="personal">Personal</option>
+                  <option value="learning">Learning</option>
+                  <option value="project">Project</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={addTask}
+                disabled={!formTitle.trim()}
+                style={{
+                  ...btnPrimary, opacity: formTitle.trim() ? 1 : 0.4,
+                  padding: '8px 18px', fontSize: 12,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
+              >
+                Add Task
+              </button>
+              <button
+                onClick={resetForm}
+                style={{ ...btnSecondary, padding: '8px 14px', fontSize: 12 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#45475a'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#313244'; }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
-            {/* Completed */}
-            {completed.length > 0 && (
-              <>
-                <div style={sectionTitle}>Completed</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {completed.map((t) => (
-                    <div key={t.id || t._id} style={{ ...card, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', opacity: 0.6 }}>
-                      <div
-                        onClick={() => toggleTask(t)}
-                        style={{
-                          width: 20, height: 20, borderRadius: 4,
-                          background: '#a855f7', border: '2px solid #a855f7', cursor: 'pointer', flexShrink: 0,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #313244', marginBottom: 20 }}>
+          {filterTabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setFilter(tab.key)}
+              style={{
+                padding: '10px 16px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                background: 'transparent', border: 'none',
+                borderBottom: filter === tab.key ? '2px solid #a855f7' : '2px solid transparent',
+                color: filter === tab.key ? '#cdd6f4' : '#6c7086',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span style={{
+                  fontSize: 10, fontWeight: 600, minWidth: 18, height: 18,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 9,
+                  background: tab.key === 'overdue' && tab.count > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)',
+                  color: tab.key === 'overdue' && tab.count > 0 ? '#ef4444' : '#a6adc8',
+                  padding: '0 5px',
+                }}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Task list */}
+        {loading ? <LoadingSpinner /> : error ? <ErrorBanner message={error} /> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {filtered.length === 0 ? (
+              <div style={{
+                ...card, textAlign: 'center', padding: '40px 20px',
+              }}>
+                <div style={{ fontSize: 13, color: '#6c7086' }}>
+                  {filter === 'all' ? 'No active tasks. Click "New Task" to get started!' :
+                   filter === 'today' ? 'No tasks due today.' :
+                   filter === 'overdue' ? 'No overdue tasks. Nice work!' :
+                   'No completed tasks yet.'}
+                </div>
+              </div>
+            ) : (
+              filtered.map((t: any) => {
+                const id = t.id || t._id;
+                const isDone = t.done || t.status === 'done';
+                const overdue = isTaskOverdue(t);
+                const dueToday = isTaskDueToday(t);
+                const catColors = TASK_CATEGORY_COLORS[t.category] || TASK_CATEGORY_COLORS.work;
+                const isHovered = hoverCardId === id;
+
+                return (
+                  <div
+                    key={id}
+                    style={{
+                      background: '#181825',
+                      border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : isHovered ? 'rgba(168,85,247,0.3)' : '#313244'}`,
+                      borderRadius: 10, padding: '16px 20px',
+                      display: 'flex', alignItems: 'flex-start', gap: 14,
+                      transition: 'border-color 0.15s',
+                      opacity: isDone ? 0.6 : 1,
+                    }}
+                    onMouseEnter={() => setHoverCardId(id)}
+                    onMouseLeave={() => { setHoverCardId(null); setHoverDeleteId(null); }}
+                  >
+                    {/* Checkbox */}
+                    <div
+                      onClick={() => toggleTask(t)}
+                      style={{
+                        width: 22, height: 22, borderRadius: 6, flexShrink: 0, marginTop: 1,
+                        border: isDone ? '2px solid #22c55e' : '2px solid #313244',
+                        background: isDone ? 'rgba(34,197,94,0.15)' : 'transparent',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {isDone && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                      </div>
-                      <span style={{ fontSize: 14, color: '#6c7086', flex: 1, textDecoration: 'line-through' }}>{t.title}</span>
-                      <span style={badge(priorityColors[t.priority] || '#a6adc8')}>{t.priority || 'medium'}</span>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </>
+
+                    {/* Content */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <span style={{
+                          fontSize: 14, fontWeight: 500,
+                          color: isDone ? '#6c7086' : '#cdd6f4',
+                          textDecoration: isDone ? 'line-through' : 'none',
+                        }}>
+                          {t.title}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                        {/* Priority badge */}
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 10, fontWeight: 600,
+                          color: TASK_PRIORITY_DOT[t.priority] || TASK_PRIORITY_DOT.medium,
+                          background: TASK_PRIORITY_BG[t.priority] || TASK_PRIORITY_BG.medium,
+                          padding: '2px 8px', borderRadius: 4,
+                        }}>
+                          <span style={{
+                            width: 6, height: 6, borderRadius: '50%', display: 'inline-block',
+                            background: TASK_PRIORITY_DOT[t.priority] || TASK_PRIORITY_DOT.medium,
+                          }} />
+                          {(t.priority || 'medium').charAt(0).toUpperCase() + (t.priority || 'medium').slice(1)}
+                        </span>
+
+                        {/* Category badge */}
+                        {t.category && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 500,
+                            color: catColors.text,
+                            background: catColors.bg,
+                            padding: '2px 8px', borderRadius: 4,
+                          }}>
+                            {t.category.charAt(0).toUpperCase() + t.category.slice(1)}
+                          </span>
+                        )}
+
+                        {/* Due date badge */}
+                        {t.due_date && (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 10,
+                            color: overdue ? '#ef4444' : dueToday ? '#f59e0b' : '#6c7086',
+                            fontWeight: overdue ? 600 : 400,
+                          }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            {overdue && 'Overdue: '}{dueToday ? 'Today' : formatTaskDate(t.due_date)}
+                          </span>
+                        )}
+
+                        {/* Overdue red label */}
+                        {overdue && !t.due_date && (
+                          <span style={{ fontSize: 10, fontWeight: 600, color: '#ef4444' }}>Overdue</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions — visible on hover */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                      opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s',
+                    }}>
+                      {confirmDeleteId === id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button
+                            onClick={() => deleteTask(t)}
+                            style={{
+                              background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                              borderRadius: 4, padding: '3px 8px', fontSize: 10, fontWeight: 600,
+                              color: '#ef4444', cursor: 'pointer',
+                            }}
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            style={{
+                              background: 'rgba(255,255,255,0.05)', border: '1px solid #313244',
+                              borderRadius: 4, padding: '3px 8px', fontSize: 10,
+                              color: '#6c7086', cursor: 'pointer',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteId(id)}
+                          onMouseEnter={() => setHoverDeleteId(id)}
+                          onMouseLeave={() => setHoverDeleteId(null)}
+                          style={{
+                            width: 28, height: 28, borderRadius: 6, background: 'transparent',
+                            border: 'none', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: hoverDeleteId === id ? '#ef4444' : '#6c7086',
+                            transition: 'color 0.15s',
+                          }}
+                          title="Delete task"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -2300,26 +2655,44 @@ export function TasksPage() {
 }
 
 /* ===== 5. Journal ===== */
+
+const MOOD_EMOJIS = ['', '\uD83D\uDE14', '\uD83D\uDE15', '\uD83D\uDE10', '\uD83D\uDE0A', '\uD83D\uDE04'];
+const MOOD_LABELS = ['', 'Rough', 'Low', 'Okay', 'Good', 'Great'];
+const MOOD_COLORS_MAP = ['', '#ef4444', '#f59e0b', '#6b7280', '#3b82f6', '#34d399'];
+
+type JournalTab = 'user' | 'ava';
+
 export function JournalPage() {
   const [dateOffset, setDateOffset] = useState(0);
+  const [tab, setTab] = useState<JournalTab>('user');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerDate, setPickerDate] = useState('');
   const connected = checkConnected();
 
-  const today = new Date();
-  today.setDate(today.getDate() + dateOffset);
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + dateOffset);
+  const yyyy = targetDate.getFullYear();
+  const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(targetDate.getDate()).padStart(2, '0');
   const isoDate = `${yyyy}-${mm}-${dd}`;
-  const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const dateStr = targetDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const isToday = dateOffset === 0;
 
   const { data: journalData, loading } = useApiData<any>(`/journal?date=${isoDate}`, null);
+
+  // Extract user/ava entries — handle both { user_entry, ava_entry } and flat formats
+  const userEntry = journalData?.user_entry || (journalData?.content ? journalData : null);
+  const avaEntry = journalData?.ava_entry || (journalData?.ava_observation ? { content: journalData.ava_observation } : null);
+
   const [entry, setEntry] = useState('');
+  const [mood, setMood] = useState<number | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
-    setEntry(journalData?.content || journalData?.entry || '');
+    const content = userEntry?.content || journalData?.content || journalData?.entry || '';
+    setEntry(content);
+    setMood(userEntry?.mood || journalData?.mood || undefined);
   }, [journalData]);
 
   const saveEntry = async () => {
@@ -2329,7 +2702,7 @@ export function JournalPage() {
     try {
       await apiFetch('/journal', {
         method: 'POST',
-        body: JSON.stringify({ date: isoDate, content: entry }),
+        body: JSON.stringify({ date: isoDate, content: entry, mood }),
       });
       setSaveMsg('Saved');
       setTimeout(() => setSaveMsg(''), 2000);
@@ -2337,6 +2710,18 @@ export function JournalPage() {
       setSaveMsg(`Error: ${err.message}`);
     }
     setSaving(false);
+  };
+
+  const handleDatePickerChange = (val: string) => {
+    setPickerDate(val);
+    setShowDatePicker(false);
+    if (!val) return;
+    const picked = new Date(val + 'T00:00:00');
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const diffMs = picked.getTime() - now.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    setDateOffset(diffDays);
   };
 
   return (
@@ -2347,26 +2732,97 @@ export function JournalPage() {
 
         {!connected && <NotConnectedBanner />}
 
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid #313244', marginBottom: 20 }}>
+          <button
+            onClick={() => setTab('user')}
+            style={{
+              padding: '10px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+              background: 'transparent', border: 'none',
+              borderBottom: tab === 'user' ? '2px solid #a855f7' : '2px solid transparent',
+              color: tab === 'user' ? '#cdd6f4' : '#6c7086',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            Your Journal
+            {userEntry && (
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%', background: '#cdd6f4', display: 'inline-block',
+              }} />
+            )}
+          </button>
+          <button
+            onClick={() => setTab('ava')}
+            style={{
+              padding: '10px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+              background: 'transparent', border: 'none',
+              borderBottom: tab === 'ava' ? '2px solid #a855f7' : '2px solid transparent',
+              color: tab === 'ava' ? '#a855f7' : '#6c7086',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            Ava's Journal
+            {avaEntry && (
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%', background: '#a855f7', display: 'inline-block',
+              }} />
+            )}
+          </button>
+          <div style={{ flex: 1 }} />
+          <span style={{ alignSelf: 'center', fontSize: 11, color: '#6c7086', paddingRight: 4 }}>
+            {dd}/{mm}/{yyyy}
+          </span>
+        </div>
+
         {/* Date navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <button
             onClick={() => setDateOffset((d) => d - 1)}
-            style={{ ...btnSecondary, display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ ...btnSecondary, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12 }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#45475a'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#313244'; }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            Previous
+            Prev
           </button>
-          <div style={{ fontSize: 15, fontWeight: 500, color: '#cdd6f4' }}>
-            {dateStr}
-            {isToday && <span style={{ ...badge('#a855f7'), marginLeft: 8 }}>Today</span>}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => { setPickerDate(isoDate); setShowDatePicker(!showDatePicker); }}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontSize: 14, fontWeight: 500, color: '#cdd6f4',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}
+            >
+              {dateStr}
+              {isToday && <span style={{ ...badge('#a855f7'), marginLeft: 4 }}>Today</span>}
+            </button>
+            {showDatePicker && (
+              <div style={{
+                position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                marginTop: 8, zIndex: 10,
+                background: '#181825', border: '1px solid #313244', borderRadius: 8,
+                padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+              }}>
+                <input
+                  type="date"
+                  value={pickerDate}
+                  onChange={(e) => handleDatePickerChange(e.target.value)}
+                  style={{ ...inputStyle, height: 32, colorScheme: 'dark' }}
+                  autoFocus
+                />
+              </div>
+            )}
           </div>
           <button
             onClick={() => setDateOffset((d) => Math.min(d + 1, 0))}
-            style={{ ...btnSecondary, display: 'flex', alignItems: 'center', gap: 6, opacity: isToday ? 0.4 : 1, pointerEvents: isToday ? 'none' : 'auto' }}
+            style={{
+              ...btnSecondary, display: 'flex', alignItems: 'center', gap: 6,
+              padding: '7px 14px', fontSize: 12,
+              opacity: isToday ? 0.4 : 1, pointerEvents: isToday ? 'none' : 'auto',
+            }}
             onMouseEnter={(e) => { if (!isToday) e.currentTarget.style.background = '#45475a'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#313244'; }}
           >
@@ -2379,70 +2835,130 @@ export function JournalPage() {
 
         {loading ? <LoadingSpinner /> : (
           <>
-            {/* Your entry */}
-            <div style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%',
-                  background: '#313244', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cdd6f4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
+            {/* Tab: Your Journal */}
+            {tab === 'user' && (
+              <div style={{ ...card, padding: 24 }}>
+                {/* Mood selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 16 }}>
+                  <span style={{ fontSize: 11, color: '#6c7086', marginRight: 8 }}>Mood:</span>
+                  {[1, 2, 3, 4, 5].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setMood(mood === m ? undefined : m)}
+                      style={{
+                        width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
+                        border: mood === m ? `2px solid ${MOOD_COLORS_MAP[m]}` : '2px solid transparent',
+                        background: mood === m ? `${MOOD_COLORS_MAP[m]}18` : 'transparent',
+                        fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.15s',
+                        filter: mood === m ? 'none' : 'grayscale(0.5)',
+                        opacity: mood === m ? 1 : 0.6,
+                      }}
+                      title={MOOD_LABELS[m]}
+                    >
+                      {MOOD_EMOJIS[m]}
+                    </button>
+                  ))}
+                  {mood && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, marginLeft: 8,
+                      color: MOOD_COLORS_MAP[mood],
+                    }}>
+                      {MOOD_LABELS[mood]}
+                    </span>
+                  )}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', flex: 1 }}>Your Entry</div>
+
+                {/* Textarea */}
+                <textarea
+                  value={entry}
+                  onChange={(e) => setEntry(e.target.value)}
+                  placeholder="How are you feeling? What happened today? Write freely..."
+                  style={{
+                    width: '100%', minHeight: 200, background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(168,85,247,0.15)',
+                    borderRadius: 8, padding: 16, fontSize: 14, color: '#cdd6f4', outline: 'none',
+                    resize: 'vertical', lineHeight: 1.7, fontFamily: 'inherit',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168,85,247,0.15)'; }}
+                />
+
+                {/* Save button */}
                 {connected && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {saveMsg && <span style={{ fontSize: 11, color: saveMsg.startsWith('Error') ? '#f38ba8' : '#a6e3a1' }}>{saveMsg}</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
                     <button
                       onClick={saveEntry}
                       disabled={saving}
-                      style={{ ...btnPrimary, padding: '5px 14px', fontSize: 12, opacity: saving ? 0.6 : 1 }}
+                      style={{
+                        ...btnPrimary, padding: '8px 20px', fontSize: 13,
+                        opacity: saving ? 0.6 : 1,
+                      }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
                     >
-                      {saving ? 'Saving...' : 'Save'}
+                      {saving ? 'Saving...' : 'Save Entry'}
                     </button>
+                    {saveMsg && (
+                      <span style={{
+                        fontSize: 12,
+                        color: saveMsg.startsWith('Error') ? '#f38ba8' : '#a6e3a1',
+                      }}>
+                        {saveMsg}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
-              <textarea
-                value={entry}
-                onChange={(e) => setEntry(e.target.value)}
-                placeholder="How was your day? What did you work on? What's on your mind?"
-                style={{
-                  width: '100%', minHeight: 120, background: '#313244', border: '1px solid #313244',
-                  borderRadius: 8, padding: 14, fontSize: 14, color: '#cdd6f4', outline: 'none',
-                  resize: 'vertical', lineHeight: 1.6, fontFamily: 'inherit',
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
-              />
-            </div>
+            )}
 
-            {/* Ava's entry */}
-            <div style={{ ...card, borderColor: 'rgba(168,85,247,0.2)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                  </svg>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#a855f7' }}>Ava's Observations</div>
-              </div>
-              <div style={{ fontSize: 14, color: '#a6adc8', lineHeight: 1.7 }}>
-                {journalData?.ava_observation || journalData?.ava_entry || (
-                  connected
-                    ? 'No observations for this date yet.'
-                    : 'Connect your account to see Ava\'s observations.'
+            {/* Tab: Ava's Journal */}
+            {tab === 'ava' && (
+              <div style={{
+                ...card, padding: 24,
+                borderColor: 'rgba(168,85,247,0.2)',
+              }}>
+                {avaEntry ? (
+                  <>
+                    <div style={{
+                      fontSize: 14, color: '#a6adc8', lineHeight: 1.8,
+                      fontStyle: 'italic', whiteSpace: 'pre-wrap',
+                      borderLeft: '3px solid rgba(168,85,247,0.3)',
+                      paddingLeft: 16,
+                    }}>
+                      {avaEntry.content || avaEntry}
+                    </div>
+                    {avaEntry.tags && avaEntry.tags.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 16 }}>
+                        {avaEntry.tags.map((tag: string) => (
+                          <span key={tag} style={{
+                            fontSize: 10, fontWeight: 500,
+                            color: '#a855f7', background: 'rgba(168,85,247,0.1)',
+                            padding: '2px 8px', borderRadius: 4,
+                          }}>
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '32px 20px' }}>
+                    <div style={{ marginBottom: 12 }}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="1.5" style={{ opacity: 0.3 }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                      </svg>
+                    </div>
+                    <div style={{ fontSize: 14, color: '#6c7086' }}>
+                      Ava hasn't written anything for this day
+                    </div>
+                    <div style={{ fontSize: 11, color: '#6c7086', marginTop: 6, opacity: 0.6 }}>
+                      Ava writes her thoughts at the end of sessions
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
+            )}
           </>
         )}
       </div>
