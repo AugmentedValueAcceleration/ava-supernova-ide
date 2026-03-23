@@ -26,12 +26,13 @@ export default function App() {
   const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => load('sidebarPos', 'left'));
   const [bottomPanelOpen, setBottomPanelOpen] = useState(() => load('panelOpen', false));
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>(() => load('panelTab', 'terminal'));
-  const [dashboardPage, setDashboardPage] = useState<DashboardPageId | null>(null);
+  const [dashboardPage, setDashboardPage] = useState<DashboardPageId | null>(() => load('dashPage', null));
 
   const toggleActivity = useCallback((item: ActivityItem) => {
     // When clicking a non-dashboard activity item, clear the dashboard page
     if (item !== 'dashboard') {
       setDashboardPage(null);
+      save('dashPage', null);
     }
 
     if (activeActivity === item && sidebarOpen) {
@@ -47,6 +48,7 @@ export default function App() {
 
   const handleDashboardSelect = useCallback((page: string) => {
     setDashboardPage(page as DashboardPageId);
+    save('dashPage', page);
   }, []);
 
   const toggleSidebarPosition = useCallback(() => {
