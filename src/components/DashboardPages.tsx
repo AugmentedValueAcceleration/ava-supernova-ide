@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, apiStreamUrl, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
+import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
 
@@ -1455,9 +1455,10 @@ export function AvaChatPage() {
     try { localStorage.setItem('ava-ide-chat-backend', chatBackend); } catch { /* */ }
   }, [chatBackend]);
 
-  // ── Sidecar lifecycle ──────────────────────────────────────────────────
+  // ── Sidecar lifecycle — always runs (both Local and Cloud need tools) ──
   useEffect(() => {
-    if (chatBackend !== 'local') {
+    // Sidecar runs in both modes — Cloud uses platform key, Local uses BYOK
+    if (!canChat) {
       setSidecarReady(false);
       setSidecarStatus('off');
       return;
@@ -1539,7 +1540,7 @@ export function AvaChatPage() {
       sidecar.removeAllListeners();
       sidecar.stop().catch(() => {});
     };
-  }, [chatBackend]); // Only restart sidecar when switching local/cloud — NOT on model/mode change
+  }, [canChat]); // Restart sidecar when chat ability changes (key added/removed, connect/disconnect)
 
   // ── Send model/mode changes to running sidecar (no restart) ────────────
   const prevModelRef = useRef(model);
@@ -1918,8 +1919,8 @@ export function AvaChatPage() {
     }
   }, []);
 
-  // ── Send message (cloud SSE) ───────────────────────────────────────────
-  const sendCloud = useCallback(async (_text: string, allMessages: ChatMessage[]) => {
+  /* ── Cloud SSE fallback — disabled, all messages go through sidecar ──
+  const _sendCloud_disabled = useCallback(async (_text: string, allMessages: ChatMessage[]) => {
     if (!connected) {
       setMessages((prev) => [...prev, {
         id: mkId(), role: 'error' as const,
@@ -2136,7 +2137,7 @@ export function AvaChatPage() {
     setStreaming(false);
     abortRef.current = null;
     textareaRef.current?.focus();
-  }, [mode, model, connected]);
+  }, [mode, model, connected]); */
 
   // ── Send dispatcher ──────────────────────────────────────────────────────
   const send = useCallback(async () => {
@@ -2155,12 +2156,9 @@ export function AvaChatPage() {
 
     trackMessage(model);
 
-    if (chatBackend === 'local') {
-      sendLocal(trimmed);
-    } else {
-      sendCloud(trimmed, updatedMessages);
-    }
-  }, [input, messages, chatBackend, sendLocal, sendCloud, pendingAttachments, model]);
+    // Always use sidecar — both Local and Cloud modes run the full agent
+    sendLocal(trimmed);
+  }, [input, messages, sendLocal, pendingAttachments, model]);
 
   // ── Tool confirmation handlers ─────────────────────────────────────────
   const approveConfirm = useCallback(async () => {

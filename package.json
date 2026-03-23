@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 1430",
     "build": "tsc && vite build",
+    "bundle-sidecar": "node scripts/bundle-sidecar.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

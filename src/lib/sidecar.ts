@@ -7,6 +7,7 @@
  */
 
 import { Command, type Child } from '@tauri-apps/plugin-shell';
+import { resolveResource } from '@tauri-apps/api/path';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -76,17 +77,25 @@ export class SidecarManager {
   private listeners = new Map<string, Set<EventListener>>();
   private wildcardListeners = new Set<EventListener>();
   private ready = false;
-  private sidecarPath: string;
+  private sidecarPath: string = '';
+  private isDev: boolean;
 
   constructor(sidecarPath?: string) {
-    // Default: resolve sidecar relative to IDE root
-    this.sidecarPath = sidecarPath || this.resolveSidecarPath();
+    // Detect dev vs production: dev uses localhost URL, production uses tauri://
+    this.isDev = window.location.hostname === 'localhost';
+    if (sidecarPath) this.sidecarPath = sidecarPath;
   }
 
-  private resolveSidecarPath(): string {
-    // Tauri process CWD is packages/ide/src-tauri/ during dev
-    // The sidecar is at packages/ide/sidecar/index.mjs — one level up
-    return '../sidecar/index.mjs';
+  private async resolveSidecarPath(): Promise<string> {
+    if (this.sidecarPath) return this.sidecarPath;
+    if (this.isDev) {
+      // Dev: use local sidecar script relative to src-tauri/
+      this.sidecarPath = '../sidecar/index.mjs';
+    } else {
+      // Production: use bundled resource
+      this.sidecarPath = await resolveResource('resources/sidecar-bundle.mjs');
+    }
+    return this.sidecarPath;
   }
 
   get isRunning(): boolean {
@@ -107,8 +116,15 @@ export class SidecarManager {
 
     this.ready = false;
 
+    // Resolve the sidecar script path
+    const scriptPath = await this.resolveSidecarPath();
+
     // Spawn node with the sidecar script
-    const command = Command.create('run-node', [this.sidecarPath]);
+    // Dev: uses system node via shell:allow-spawn "run-node"
+    // Production: uses bundled node.exe via externalBin
+    const command = this.isDev
+      ? Command.create('run-node', [scriptPath])
+      : Command.sidecar('binaries/node', [scriptPath]);
 
     // Listen for stdout (NDJSON events)
     command.stdout.on('data', (line: string) => {
