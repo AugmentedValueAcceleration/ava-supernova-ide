@@ -681,39 +681,72 @@ const sections = [
 ];
 
 function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?: (page: string) => void; activePage?: string | null }) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try { const s = localStorage.getItem('ava-ide-sidebar-collapsed'); return s ? JSON.parse(s) : {}; } catch { return {}; }
+  });
+
+  const toggleSection = (title: string) => {
+    setCollapsed(prev => {
+      const next = { ...prev, [title]: !prev[title] };
+      try { localStorage.setItem('ava-ide-sidebar-collapsed', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-        {sections.map((section, si) => (
-          <div key={si}>
-            {section.title && <div style={sectionLabelStyle}>{section.title}</div>}
-            {section.items.map((item) => {
-              const isActive = activePage === item.label;
-              return (
+        {sections.map((section, si) => {
+          const isCollapsed = section.title ? !!collapsed[section.title] : false;
+          const hasActive = section.items.some(item => activePage === item.label);
+          return (
+            <div key={si}>
+              {section.title && (
                 <button
-                  key={item.label}
-                  onClick={() => onDashboardSelect?.(item.label)}
+                  onClick={() => toggleSection(section.title!)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                    padding: '7px 10px', borderRadius: 6, border: 'none',
-                    background: isActive ? '#313244' : 'transparent',
-                    color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
-                    fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
-                    borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
+                    ...sectionLabelStyle,
+                    display: 'flex', alignItems: 'center', gap: 4, width: '100%',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: hasActive && isCollapsed ? '#a855f7' : '#585b70',
                   }}
-                  onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = '#313244'; }}
-                  onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
-                  <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</div>
-                    <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>
-                  </div>
+                  <span style={{
+                    fontSize: 7, transition: 'transform 0.15s',
+                    transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+                  }}>▶</span>
+                  {section.title}
+                  {hasActive && isCollapsed && <span style={{ fontSize: 7, color: '#a855f7' }}>●</span>}
                 </button>
-              );
-            })}
-          </div>
-        ))}
+              )}
+              {!isCollapsed && section.items.map((item) => {
+                const isActive = activePage === item.label;
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => onDashboardSelect?.(item.label)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                      padding: '7px 10px', borderRadius: 6, border: 'none',
+                      background: isActive ? '#313244' : 'transparent',
+                      color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
+                      fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
+                      borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
+                    }}
+                    onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = '#313244'; }}
+                    onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</div>
+                      <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
 
       {/* Auth + BYOK section at the bottom */}
