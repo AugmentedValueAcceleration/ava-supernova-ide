@@ -1584,8 +1584,8 @@ export function AvaChatPage() {
                   Platform 
                 </div>
                 {[
-                  { id: 'qwen-flash', name: 'Qwen Flash', tag: 'Free' },
-                  { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: 'Free' },
+                  { id: 'qwen-flash', name: 'Qwen Flash', tag: '' },
+                  { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: '' },
                 ].map((m) => (
                   <button
                     key={m.id}
