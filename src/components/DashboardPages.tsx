@@ -331,12 +331,6 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
-}
-
 function formatRelativeDate(dateStr: string): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -591,22 +585,6 @@ function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData
 }
 
 // ── Statistics Widget ───────────────────────────────────────────────────────
-
-function CCStatCard({ icon, value, label, subtext }: { icon: string; value: string; label: string; subtext?: string }) {
-  return (
-    <div style={{ background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: 16 }}>
-      <div style={{
-        width: 32, height: 32, borderRadius: 8, background: '#313244',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, fontSize: 16,
-      }}>
-        {icon}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4' }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#a6adc8' }}>{label}</div>
-      {subtext && <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{subtext}</div>}
-    </div>
-  );
-}
 
 // ── News Widget ─────────────────────────────────────────────────────────────
 
@@ -1021,8 +999,7 @@ export function CommandCentrePage() {
     loadNews(cat);
   };
 
-  // ── Platform API data (tasks, journal, learning, memory, usage, release) ──
-  const { data: usage, loading: usageLoading } = useApiData<any>('/usage/summary', null);
+  // ── Platform API data (tasks, journal, learning, memory, release) ──
   const { data: rawTasks2, loading: tasksLoading, refetch: refetchTasks } = useApiData<any>('/tasks', null);
   const tasks: TaskEntry[] = Array.isArray(rawTasks2) ? rawTasks2 : (rawTasks2?.tasks ?? rawTasks2?.data ?? []);
   const { data: journalDay, loading: journalLoading } = useApiData<JournalDay | null>(`/journal?date=${new Date().toISOString().slice(0, 10)}`, null);
@@ -1037,18 +1014,6 @@ export function CommandCentrePage() {
     if (Array.isArray(releaseData)) return releaseData[0] ?? null;
     return releaseData;
   }, [releaseData]);
-
-  // Live session stats
-  const [session, setSession] = useState<SessionStats>(getSessionStats);
-  useEffect(() => {
-    const handler = (e: Event) => setSession({ ...(e as CustomEvent).detail });
-    window.addEventListener('ava-session-stats', handler);
-    return () => window.removeEventListener('ava-session-stats', handler);
-  }, []);
-
-  // Stats — merge API + session
-  const tokensUsed = connected && usage ? (usage.tokens_used ?? usage.today?.total_tokens ?? 0) : session.totalTokens;
-  const requestsCount = connected && usage ? (usage.requests_count ?? usage.requests ?? 0) : session.messages;
 
   return (
     <div style={pageWrapper}>
