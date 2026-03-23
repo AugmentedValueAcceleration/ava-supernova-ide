@@ -1713,6 +1713,21 @@ export function AvaChatPage() {
         break;
 
       case 'done':
+        // Ensure the message has the full content — fallback if stream_delta missed anything
+        if (event.content) {
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last?.role === 'ava') {
+              // Only replace if the accumulated text is shorter (missed deltas)
+              const fullContent = event.content as string;
+              if (!last.text || last.text.length < fullContent.length * 0.8) {
+                copy[copy.length - 1] = { ...last, text: fullContent };
+              }
+            }
+            return copy;
+          });
+        }
         setStreaming(false);
         textareaRef.current?.focus();
         break;
