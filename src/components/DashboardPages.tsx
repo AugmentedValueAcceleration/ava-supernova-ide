@@ -1502,6 +1502,16 @@ export function AvaChatPage() {
           }
           return copy;
         });
+
+        // Update session tasks immediately when todo_write is called (args has the latest list)
+        if (event.toolName === 'todo_write' && event.args?.todos && Array.isArray(event.args.todos)) {
+          setSessionTasks(event.args.todos.map((t: any, idx: number) => ({
+            id: `session-${Date.now()}-${idx}`,
+            title: t.content || t.title || t.text || '',
+            status: t.status || 'pending',
+          })));
+          if (!tasksPanelOpen) setTasksPanelOpen(true);
+        }
         break;
 
       case 'tool_call_end':
