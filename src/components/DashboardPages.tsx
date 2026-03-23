@@ -1649,11 +1649,9 @@ export function AvaChatPage() {
         {/* Right: tokens + new chat */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* Token counter */}
-          (
-            <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used`}>
-              {tokenCount > 0 ? fmtTokens(tokenCount) + " tokens" : "0 tokens"}
-            </span>
-          )}
+          <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used`}>
+            {tokenCount > 0 ? fmtTokens(tokenCount) + ' tokens' : '0 tokens'}
+          </span>
 
           {/* Context usage ring */}
           {contextPercent > 0 && (() => {
