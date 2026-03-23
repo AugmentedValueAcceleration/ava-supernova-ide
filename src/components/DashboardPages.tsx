@@ -1581,7 +1581,7 @@ export function AvaChatPage() {
               }}>
                 {/* Platform models header */}
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                  Platform (Free)
+                  Platform 
                 </div>
                 {[
                   { id: 'qwen-flash', name: 'Qwen Flash', tag: 'Free' },
@@ -1649,9 +1649,9 @@ export function AvaChatPage() {
         {/* Right: tokens + new chat */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* Token counter */}
-          {tokenCount > 0 && (
+          (
             <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used`}>
-              {fmtTokens(tokenCount)} tokens
+              {tokenCount > 0 ? fmtTokens(tokenCount) + " tokens" : "0 tokens"}
             </span>
           )}
 
@@ -2962,8 +2962,8 @@ export function SettingsPage() {
               appearance: 'auto' as never,
             }}
           >
-            <option value="qwen-flash">Qwen Flash (Free)</option>
-            <option value="qwen-turbo">Qwen Turbo (Free)</option>
+            <option value="qwen-flash">Qwen Flash </option>
+            <option value="qwen-turbo">Qwen Turbo </option>
             <option value="deepseek-chat">DeepSeek Chat</option>
             <option value="deepseek-reasoner">DeepSeek Reasoner</option>
             <option value="qwen-plus">Qwen Plus</option>
