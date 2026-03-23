@@ -1051,72 +1051,371 @@ export function CommandCentrePage() {
 
 /* ===== 2. Ava Chat ===== */
 export function AvaChatPage() {
-  const [messages, setMessages] = useState<{ role: 'ava' | 'user'; text: string }[]>([
-    { role: 'ava', text: "Hey! I'm Ava, your AI assistant. This is the full-width chat \u2014 ask me anything, plan a feature, debug an issue, or just chat. I'm here for you." },
-    { role: 'ava', text: "Tip: Switch modes with >> (Work), :: (Plan), ?? (Teach), !! (Security), or ** (Brainstorm)." },
-  ]);
-  const [input, setInput] = useState('');
-  const [model, setModel] = useState('qwen-flash');
-  const [streaming, setStreaming] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // ── Types ──────────────────────────────────────────────────────────────────
+  type AvaMode = 'work' | 'plan' | 'chat' | 'teach' | 'security' | 'brainstorm';
+  interface ChatMessage {
+    id: string;
+    role: 'ava' | 'user' | 'error' | 'system';
+    text: string;
+    timestamp: number;
+    toolCalls?: { name: string; status: 'running' | 'done' | 'error' }[];
+  }
+  interface Conversation {
+    id: string;
+    title: string;
+    messages: ChatMessage[];
+    createdAt: number;
+    updatedAt: number;
+    model: string;
+  }
+
+  // ── Mode definitions ───────────────────────────────────────────────────────
+  const MODES: { id: AvaMode; label: string; icon: string; prefix: string; placeholder: string }[] = [
+    { id: 'work', label: 'Work', icon: '>>', prefix: '', placeholder: 'Build something amazing...' },
+    { id: 'plan', label: 'Plan', icon: '::', prefix: '[Plan Mode] ', placeholder: 'Plan an architecture, feature, or strategy...' },
+    { id: 'chat', label: 'Chat', icon: '..', prefix: '[Chat Mode] ', placeholder: 'Just chat with Ava...' },
+    { id: 'teach', label: 'Teach', icon: '??', prefix: '[Teach Mode] ', placeholder: 'What do you want to learn?' },
+    { id: 'security', label: 'Security', icon: '!!', prefix: '[Security Audit Mode] ', placeholder: 'Describe what to audit...' },
+    { id: 'brainstorm', label: 'Brainstorm', icon: '**', prefix: '[Brainstorm Mode] ', placeholder: 'Throw an idea at me...' },
+  ];
+
+  // ── BYOK model map per provider ────────────────────────────────────────────
+  const BYOK_MODELS: Record<string, { id: string; name: string }[]> = {
+    DeepSeek: [
+      { id: 'deepseek-chat', name: 'DeepSeek Chat' },
+      { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' },
+    ],
+    Qwen: [
+      { id: 'qwen-plus', name: 'Qwen Plus' },
+      { id: 'qwen-max', name: 'Qwen Max' },
+    ],
+    Moonshot: [
+      { id: 'moonshot-v1-128k', name: 'Moonshot v1 128K' },
+    ],
+    Zhipu: [
+      { id: 'glm-4-plus', name: 'GLM-4 Plus' },
+    ],
+    Mistral: [
+      { id: 'mistral-large', name: 'Mistral Large' },
+    ],
+  };
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const nextMsgId = useRef(0);
+  const mkId = () => `msg-${++nextMsgId.current}-${Date.now()}`;
+  const fmtTime = (ts: number) => {
+    const d = new Date(ts);
+    const h = d.getHours();
+    const m = d.getMinutes().toString().padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    return `${h % 12 || 12}:${m} ${ampm}`;
+  };
+  const fmtTokens = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
+
+  // ── State ──────────────────────────────────────────────────────────────────
   const connected = checkConnected();
 
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem('ava-ide-chat-current');
+      if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed) && parsed.length > 0) return parsed; }
+    } catch { /* */ }
+    return [
+      { id: mkId(), role: 'ava' as const, text: "Hey! I'm Ava, your AI assistant. Ask me anything, plan a feature, debug an issue, or just chat. I'm here for you.", timestamp: Date.now() },
+    ];
+  });
+  const [input, setInput] = useState('');
+  const [model, setModel] = useState<string>(() => localStorage.getItem('ava-ide-chat-model') || 'qwen-flash');
+  const [mode, setMode] = useState<AvaMode>(() => (localStorage.getItem('ava-ide-chat-mode') as AvaMode) || 'work');
+  const [streaming, setStreaming] = useState(false);
+  const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
+  const [copiedMsg, setCopiedMsg] = useState<string | null>(null);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [tokenCount, setTokenCount] = useState(0);
+  const [conversationTitle, setConversationTitle] = useState('New Chat');
+  const [contextPercent, setContextPercent] = useState(0);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+
+  // ── Derived: available BYOK models ────────────────────────────────────────
+  const byokModels = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('ava-ide-byok');
+      if (!raw) return [];
+      const keys: Record<string, string> = JSON.parse(raw);
+      const result: { id: string; name: string; provider: string }[] = [];
+      for (const [provider, key] of Object.entries(keys)) {
+        if (key && key.trim()) {
+          const models = BYOK_MODELS[provider] || [];
+          models.forEach((m) => result.push({ ...m, provider }));
+        }
+      }
+      return result;
+    } catch { return []; }
+  }, []);
+
+  // ── Persist model & mode ──────────────────────────────────────────────────
+  useEffect(() => { try { localStorage.setItem('ava-ide-chat-model', model); } catch { /* */ } }, [model]);
+  useEffect(() => { try { localStorage.setItem('ava-ide-chat-mode', mode); } catch { /* */ } }, [mode]);
+
+  // ── Persist messages ──────────────────────────────────────────────────────
+  useEffect(() => {
+    try { localStorage.setItem('ava-ide-chat-current', JSON.stringify(messages)); } catch { /* */ }
+    // Derive conversation title from first user message
+    const firstUser = messages.find((m) => m.role === 'user');
+    if (firstUser) {
+      setConversationTitle(firstUser.text.slice(0, 50) + (firstUser.text.length > 50 ? '...' : ''));
+    }
+  }, [messages]);
+
+  // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const send = async () => {
-    if (!input.trim()) return;
-    const userMsg = input.trim();
-    setInput('');
+  // ── Close dropdowns on outside click ──────────────────────────────────────
+  useEffect(() => {
+    if (!modeMenuOpen && !modelMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (modeMenuOpen && modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) setModeMenuOpen(false);
+      if (modelMenuOpen && modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) setModelMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [modeMenuOpen, modelMenuOpen]);
 
-    const updatedMessages = [...messages, { role: 'user' as const, text: userMsg }];
+  // ── Auto-resize textarea ──────────────────────────────────────────────────
+  const resizeTextarea = useCallback(() => {
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+    }
+  }, []);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
+        const idx = parseInt(e.key) - 1;
+        if (idx >= 0 && idx < MODES.length) {
+          e.preventDefault();
+          setMode(MODES[idx].id);
+          setModeMenuOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // ── New Chat ──────────────────────────────────────────────────────────────
+  const newChat = useCallback(() => {
+    // Save current conversation to history if it has user messages
+    const hasUserMsgs = messages.some((m) => m.role === 'user');
+    if (hasUserMsgs) {
+      try {
+        const historyRaw = localStorage.getItem('ava-ide-chat-history') || '[]';
+        const history: Conversation[] = JSON.parse(historyRaw);
+        const firstUser = messages.find((m) => m.role === 'user');
+        const conv: Conversation = {
+          id: `conv-${Date.now()}`,
+          title: firstUser ? firstUser.text.slice(0, 60) : 'Untitled',
+          messages,
+          createdAt: messages[0]?.timestamp || Date.now(),
+          updatedAt: Date.now(),
+          model,
+        };
+        history.unshift(conv);
+        // Keep max 50 conversations
+        localStorage.setItem('ava-ide-chat-history', JSON.stringify(history.slice(0, 50)));
+      } catch { /* */ }
+    }
+    setMessages([
+      { id: mkId(), role: 'ava', text: "Fresh conversation started. What would you like to do?", timestamp: Date.now() },
+    ]);
+    setConversationTitle('New Chat');
+    setTokenCount(0);
+    setContextPercent(0);
+    if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
+    setStreaming(false);
+    textareaRef.current?.focus();
+  }, [messages, model]);
+
+  // ── Copy message ──────────────────────────────────────────────────────────
+  const copyMessage = useCallback((msgId: string, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedMsg(msgId);
+      setTimeout(() => setCopiedMsg(null), 2000);
+    });
+  }, []);
+
+  // ── Cancel streaming ──────────────────────────────────────────────────────
+  const cancelStream = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setStreaming(false);
+  }, []);
+
+  // ── Render markdown (basic) ───────────────────────────────────────────────
+  const renderMarkdown = useCallback((text: string) => {
+    if (!text) return null;
+    const parts: React.ReactNode[] = [];
+    // Split on code blocks first
+    const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match;
+    let partKey = 0;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      // Text before code block
+      if (match.index > lastIndex) {
+        parts.push(<span key={partKey++}>{renderInlineMarkdown(text.slice(lastIndex, match.index))}</span>);
+      }
+      // Code block
+      const lang = match[1] || '';
+      const code = match[2] || '';
+      parts.push(
+        <div key={partKey++} style={{
+          background: '#11111b', border: '1px solid #313244', borderRadius: 8, margin: '8px 0',
+          overflow: 'hidden',
+        }}>
+          {lang && (
+            <div style={{
+              fontSize: 10, color: '#6c7086', padding: '4px 12px', background: '#181825',
+              borderBottom: '1px solid #313244', fontFamily: 'monospace',
+            }}>{lang}</div>
+          )}
+          <pre style={{
+            margin: 0, padding: '10px 12px', fontSize: 13, lineHeight: 1.5,
+            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+            color: '#cdd6f4', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          }}>{code}</pre>
+        </div>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    // Remaining text
+    if (lastIndex < text.length) {
+      parts.push(<span key={partKey++}>{renderInlineMarkdown(text.slice(lastIndex))}</span>);
+    }
+    return <>{parts}</>;
+  }, []);
+
+  const renderInlineMarkdown = (text: string): React.ReactNode[] => {
+    const nodes: React.ReactNode[] = [];
+    // Process inline code and bold
+    const inlineRegex = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+    let lastIdx = 0;
+    let m;
+    let key = 0;
+    while ((m = inlineRegex.exec(text)) !== null) {
+      if (m.index > lastIdx) nodes.push(text.slice(lastIdx, m.index));
+      const matched = m[0];
+      if (matched.startsWith('`') && matched.endsWith('`')) {
+        nodes.push(
+          <code key={`ic-${key++}`} style={{
+            background: '#313244', padding: '1px 6px', borderRadius: 4,
+            fontSize: '0.9em', fontFamily: "'JetBrains Mono', monospace", color: '#f5c2e7',
+          }}>{matched.slice(1, -1)}</code>
+        );
+      } else if (matched.startsWith('**') && matched.endsWith('**')) {
+        nodes.push(<strong key={`b-${key++}`} style={{ color: '#cdd6f4', fontWeight: 600 }}>{matched.slice(2, -2)}</strong>);
+      }
+      lastIdx = m.index + matched.length;
+    }
+    if (lastIdx < text.length) nodes.push(text.slice(lastIdx));
+    return nodes;
+  };
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  const send = useCallback(async () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    setInput('');
+    if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
+
+    const currentMode = MODES.find((m) => m.id === mode)!;
+    const userMsg: ChatMessage = { id: mkId(), role: 'user', text: trimmed, timestamp: Date.now() };
+    const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
 
     if (!connected) {
-      setMessages((m) => [...m, { role: 'ava' as const, text: "I'm not connected to the platform yet. Connect your account in the Dashboard sidebar to chat with me." }]);
+      setMessages((prev) => [...prev, {
+        id: mkId(), role: 'error' as const,
+        text: "I'm not connected to the platform yet. Connect your account in the Dashboard sidebar to chat with me.",
+        timestamp: Date.now(),
+      }]);
       return;
     }
 
     setStreaming(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    // Build the messages payload for the API
+    // Build API messages, applying mode prefix
     const apiMessages = updatedMessages.map((m) => ({
-      role: m.role === 'ava' ? 'assistant' : 'user',
+      role: m.role === 'user' ? 'user' : m.role === 'ava' ? 'assistant' : 'user',
       content: m.text,
     }));
+    // Add mode prefix to the latest user message
+    if (currentMode.prefix && apiMessages.length > 0) {
+      const last = apiMessages[apiMessages.length - 1];
+      apiMessages[apiMessages.length - 1] = { ...last, content: currentMode.prefix + last.content };
+    }
+
+    const avaMsg: ChatMessage = { id: mkId(), role: 'ava', text: '', timestamp: Date.now(), toolCalls: [] };
+    setMessages((prev) => [...prev, avaMsg]);
 
     try {
       const key = getPlatformKey();
       const response = await fetch(apiStreamUrl('/chat'), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, messages: apiMessages }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
         const errText = await response.text();
-        setMessages((m) => [...m, { role: 'ava' as const, text: `Error: ${response.status} \u2014 ${errText}` }]);
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === 'ava') {
+            copy[copy.length - 1] = { ...last, text: `Error: ${response.status} -- ${errText}`, role: 'error' };
+          }
+          return copy;
+        });
         setStreaming(false);
+        abortRef.current = null;
         return;
       }
 
-      // SSE streaming
       const reader = response.body?.getReader();
       if (!reader) {
-        setMessages((m) => [...m, { role: 'ava' as const, text: 'No response stream available.' }]);
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === 'ava') {
+            copy[copy.length - 1] = { ...last, text: 'No response stream available.', role: 'error' };
+          }
+          return copy;
+        });
         setStreaming(false);
+        abortRef.current = null;
         return;
       }
-
-      // Add empty ava message to stream into
-      setMessages((m) => [...m, { role: 'ava' as const, text: '' }]);
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let sessionTokens = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -1127,11 +1426,48 @@ export function AvaChatPage() {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (trimmed.startsWith('data: ')) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+          if (trimmedLine === 'data: [DONE]') continue;
+
+          if (trimmedLine.startsWith('data: ')) {
             try {
-              const json = JSON.parse(trimmed.slice(6));
+              const json = JSON.parse(trimmedLine.slice(6));
+
+              // Handle tool calls
+              if (json.choices?.[0]?.delta?.tool_calls || json.tool_calls) {
+                const toolCalls = json.choices?.[0]?.delta?.tool_calls || json.tool_calls || [];
+                for (const tc of toolCalls) {
+                  if (tc.function?.name) {
+                    setMessages((prev) => {
+                      const copy = [...prev];
+                      const last = copy[copy.length - 1];
+                      if (last && last.role === 'ava') {
+                        const existing = last.toolCalls || [];
+                        copy[copy.length - 1] = {
+                          ...last,
+                          toolCalls: [...existing, { name: tc.function.name, status: 'running' }],
+                        };
+                      }
+                      return copy;
+                    });
+                  }
+                }
+                continue;
+              }
+
+              // Handle usage info
+              if (json.usage) {
+                sessionTokens += json.usage.total_tokens || json.usage.completion_tokens || 0;
+                setTokenCount(sessionTokens);
+                if (json.usage.prompt_tokens && json.usage.completion_tokens) {
+                  const total = json.usage.prompt_tokens + json.usage.completion_tokens;
+                  const ctxWindow = 131072; // Default context window
+                  setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
+                }
+              }
+
+              // Handle content delta
               const content = json.choices?.[0]?.delta?.content
                 || json.delta?.content
                 || json.content
@@ -1147,146 +1483,532 @@ export function AvaChatPage() {
                   return copy;
                 });
               }
+
+              // Handle error events
+              if (json.error) {
+                setMessages((prev) => {
+                  const copy = [...prev];
+                  const last = copy[copy.length - 1];
+                  if (last && last.role === 'ava') {
+                    copy[copy.length - 1] = { ...last, text: `Error: ${json.error.message || json.error}`, role: 'error' };
+                  }
+                  return copy;
+                });
+              }
             } catch {
-              // Non-JSON SSE line, skip
+              // Non-JSON SSE line
             }
           }
         }
       }
     } catch (err: any) {
-      setMessages((m) => [...m, { role: 'ava' as const, text: `Connection error: ${err.message || 'unknown'}` }]);
+      if (err.name === 'AbortError') {
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === 'ava' && !last.text) {
+            copy[copy.length - 1] = { ...last, text: '(Cancelled)', role: 'system' };
+          }
+          return copy;
+        });
+      } else {
+        setMessages((prev) => [...prev, {
+          id: mkId(), role: 'error' as const,
+          text: `Connection error: ${err.message || 'unknown'}`,
+          timestamp: Date.now(),
+        }]);
+      }
     }
 
     setStreaming(false);
-  };
+    abortRef.current = null;
+    textareaRef.current?.focus();
+  }, [input, mode, model, messages, connected]);
+
+  // ── Active mode info ──────────────────────────────────────────────────────
+  const currentMode = MODES.find((m) => m.id === mode) || MODES[0];
+  const activeModelName = useMemo(() => {
+    if (model === 'qwen-flash') return 'Qwen Flash';
+    if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
+    const byok = byokModels.find((m) => m.id === model);
+    return byok ? byok.name : model;
+  }, [model, byokModels]);
+
+  // ── Keyframes style (injected once) ───────────────────────────────────────
+  const keyframesStyle = `
+    @keyframes avaPulse { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
+    @keyframes avaFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  `;
 
   return (
-    <div style={{ ...pageWrapper, padding: 0, display: 'flex', flexDirection: 'column' }}>
-      {/* Top bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 24px', borderBottom: '1px solid #313244', flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-          </div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>Ava</div>
-            <div style={{ fontSize: 11, color: connected ? '#a6e3a1' : '#6c7086' }}>
-              {connected ? (streaming ? 'Typing...' : 'Online') : 'Offline'}
-            </div>
-          </div>
-        </div>
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          style={{
-            height: 30, background: '#313244', border: '1px solid #313244',
-            borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
-          }}
-        >
-          <option value="qwen-flash">Qwen Flash (Free)</option>
-          <option value="qwen-turbo">Qwen Turbo (Free)</option>
-          <option value="deepseek-chat">DeepSeek Chat</option>
-          <option value="deepseek-reasoner">DeepSeek Reasoner</option>
-          <option value="qwen-plus">Qwen Plus</option>
-          <option value="qwen-max">Qwen Max</option>
-          <option value="moonshot-v1-128k">Moonshot v1 128K</option>
-          <option value="glm-4-plus">GLM-4 Plus</option>
-          <option value="mistral-large">Mistral Large</option>
-        </select>
-      </div>
+    <div style={{ ...pageWrapper, padding: 0, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <style>{keyframesStyle}</style>
 
-      {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 40px' }}>
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              marginBottom: 16,
-            }}
-          >
-            <div
+      {/* ── Header Bar (48px) ───────────────────────────────────────────── */}
+      <div style={{
+        height: 48, minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 16px', borderBottom: '1px solid #313244', background: '#181825', flexShrink: 0,
+      }}>
+        {/* Left: Model selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div ref={modelMenuRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setModelMenuOpen(!modelMenuOpen)}
               style={{
-                maxWidth: '70%',
-                padding: '12px 16px',
-                borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                background: msg.role === 'user' ? '#7c3aed' : '#181825',
-                color: '#cdd6f4',
-                fontSize: 14,
-                lineHeight: 1.6,
-                border: msg.role === 'ava' ? '1px solid #313244' : 'none',
-                whiteSpace: 'pre-wrap',
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
+                background: '#313244', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8,
+                color: '#cdd6f4', fontSize: 12, fontWeight: 500, cursor: 'pointer',
               }}
             >
-              {msg.role === 'ava' && (
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#a855f7', marginBottom: 4 }}>Ava</div>
-              )}
-              {msg.text || (streaming && i === messages.length - 1 ? '\u2588' : '')}
-            </div>
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%', background: connected ? '#a6e3a1' : '#6c7086',
+                flexShrink: 0,
+              }} />
+              {activeModelName}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                style={{ transform: modelMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+              </svg>
+            </button>
+
+            {/* Model dropdown */}
+            {modelMenuOpen && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 999,
+                background: '#1e1e2e', border: '1px solid #313244', borderRadius: 10,
+                padding: 6, minWidth: 240, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              }}>
+                {/* Platform models header */}
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Platform (Free)
+                </div>
+                {[
+                  { id: 'qwen-flash', name: 'Qwen Flash', tag: 'Free' },
+                  { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: 'Free' },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => { setModel(m.id); setModelMenuOpen(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                      padding: '8px 10px', background: model === m.id ? 'rgba(168,85,247,0.15)' : 'transparent',
+                      border: 'none', borderRadius: 6, color: model === m.id ? '#e0b0ff' : '#cdd6f4',
+                      fontSize: 12, cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => { if (model !== m.id) e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
+                    onMouseLeave={(e) => { if (model !== m.id) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {model === m.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a6e3a1' }} />}
+                      {m.name}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#a6e3a1', fontWeight: 500 }}>{m.tag}</span>
+                  </button>
+                ))}
+
+                {/* BYOK models */}
+                {byokModels.length > 0 && (
+                  <>
+                    <div style={{ height: 1, background: '#313244', margin: '6px 0' }} />
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                      Your API Keys
+                    </div>
+                    {byokModels.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => { setModel(m.id); setModelMenuOpen(false); }}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                          padding: '8px 10px', background: model === m.id ? 'rgba(168,85,247,0.15)' : 'transparent',
+                          border: 'none', borderRadius: 6, color: model === m.id ? '#e0b0ff' : '#cdd6f4',
+                          fontSize: 12, cursor: 'pointer', textAlign: 'left',
+                        }}
+                        onMouseEnter={(e) => { if (model !== m.id) e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
+                        onMouseLeave={(e) => { if (model !== m.id) e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {model === m.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a6e3a1' }} />}
+                          {m.name}
+                        </span>
+                        <span style={{ fontSize: 10, color: '#6c7086' }}>{m.provider}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
           </div>
-        ))}
+
+          {/* Conversation title */}
+          <span style={{ fontSize: 12, color: '#6c7086', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {conversationTitle}
+          </span>
+        </div>
+
+        {/* Right: tokens + new chat */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Token counter */}
+          {tokenCount > 0 && (
+            <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used`}>
+              {fmtTokens(tokenCount)} tokens
+            </span>
+          )}
+
+          {/* Context usage ring */}
+          {contextPercent > 0 && (() => {
+            const isWarning = contextPercent >= 80;
+            const isCritical = contextPercent >= 90;
+            const color = isCritical ? '#ef4444' : isWarning ? '#eab308' : '#a855f7';
+            const r = 9;
+            const circumference = 2 * Math.PI * r;
+            const dashOffset = circumference - (contextPercent / 100) * circumference;
+            return (
+              <div style={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={`Context: ${contextPercent}%`}>
+                <svg width="22" height="22" viewBox="0 0 22 22" style={{ transform: 'rotate(-90deg)' }}>
+                  <circle cx="11" cy="11" r={r} fill="none" stroke="#313244" strokeWidth="2.5" />
+                  <circle cx="11" cy="11" r={r} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+                    strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+                </svg>
+                <span style={{ position: 'absolute', fontSize: 7, fontWeight: 700, color, fontFamily: 'monospace' }}>{contextPercent}</span>
+              </div>
+            );
+          })()}
+
+          {/* New Chat button */}
+          <button
+            onClick={newChat}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+              background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.25)',
+              borderRadius: 8, color: '#a855f7', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.2)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+            title="New Chat"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Chat
+          </button>
+        </div>
+      </div>
+
+      {/* ── Messages Area (flex-1, scrollable) ──────────────────────────── */}
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '20px 24px',
+        display: 'flex', flexDirection: 'column', gap: 4,
+      }}>
+        {messages.map((msg) => {
+          const isUser = msg.role === 'user';
+          const isAva = msg.role === 'ava';
+          const isError = msg.role === 'error';
+          const isSystem = msg.role === 'system';
+
+          // System messages
+          if (isSystem) {
+            return (
+              <div key={msg.id} style={{
+                display: 'flex', justifyContent: 'center', margin: '8px 0',
+                animation: 'avaFadeIn 0.3s ease-out',
+              }}>
+                <span style={{
+                  fontSize: 11, color: '#6c7086', background: '#181825', border: '1px solid #313244',
+                  borderRadius: 12, padding: '4px 14px',
+                }}>{msg.text}</span>
+              </div>
+            );
+          }
+
+          return (
+            <div
+              key={msg.id}
+              style={{
+                display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start',
+                marginBottom: 8, animation: 'avaFadeIn 0.3s ease-out',
+              }}
+              onMouseEnter={() => setHoveredMsg(msg.id)}
+              onMouseLeave={() => setHoveredMsg(null)}
+            >
+              {/* Ava avatar */}
+              {(isAva || isError) && (
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0, marginRight: 10, marginTop: 4,
+                  background: isError ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #a855f7, #6366f1)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {isError ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  )}
+                </div>
+              )}
+
+              <div style={{ maxWidth: '75%', position: 'relative' }}>
+                {/* Name + timestamp */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4,
+                  justifyContent: isUser ? 'flex-end' : 'flex-start',
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: isUser ? '#b4befe' : isError ? '#ef4444' : '#a855f7' }}>
+                    {isUser ? 'You' : isError ? 'Error' : 'Ava'}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#45475a' }}>{fmtTime(msg.timestamp)}</span>
+                </div>
+
+                {/* Message bubble */}
+                <div style={{
+                  padding: '10px 16px',
+                  borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                  background: isUser ? '#7c3aed' : isError ? 'rgba(239,68,68,0.1)' : '#181825',
+                  color: isError ? '#fca5a5' : '#cdd6f4',
+                  fontSize: 14, lineHeight: 1.65,
+                  border: isUser ? 'none' : isError ? '1px solid rgba(239,68,68,0.25)' : '1px solid #313244',
+                  position: 'relative',
+                }}>
+                  {/* Rendered text with markdown */}
+                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {isAva || isError ? renderMarkdown(msg.text) : msg.text}
+                    {/* Blinking cursor while streaming empty message */}
+                    {isAva && streaming && !msg.text && msg === messages[messages.length - 1] && (
+                      <span style={{ opacity: 0.5 }}>{'\u2588'}</span>
+                    )}
+                  </div>
+
+                  {/* Tool calls timeline */}
+                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #313244', paddingTop: 8 }}>
+                      {msg.toolCalls.map((tc, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
+                          fontSize: 11, color: '#6c7086',
+                        }}>
+                          <span style={{
+                            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                            background: tc.status === 'running' ? '#eab308' : tc.status === 'done' ? '#a6e3a1' : '#ef4444',
+                            ...(tc.status === 'running' ? { animation: 'avaPulse 1.5s infinite' } : {}),
+                          }} />
+                          <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{tc.name}</span>
+                          <span style={{ fontSize: 10, color: '#45475a' }}>
+                            {tc.status === 'running' ? 'running...' : tc.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Copy button on hover for Ava messages */}
+                  {isAva && msg.text && hoveredMsg === msg.id && (
+                    <button
+                      onClick={() => copyMessage(msg.id, msg.text)}
+                      style={{
+                        position: 'absolute', top: 6, right: 6, padding: '4px 8px',
+                        background: '#313244', border: '1px solid #45475a', borderRadius: 6,
+                        color: copiedMsg === msg.id ? '#a6e3a1' : '#6c7086', fontSize: 10,
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                      }}
+                      title="Copy message"
+                    >
+                      {copiedMsg === msg.id ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                        </svg>
+                      )}
+                      {copiedMsg === msg.id ? 'Copied' : 'Copy'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Typing indicator */}
+        {streaming && messages.length > 0 && messages[messages.length - 1].role === 'ava' && !messages[messages.length - 1].text && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0 8px 42px' }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{
+                  width: 7, height: 7, borderRadius: '50%', background: '#a855f7',
+                  animation: 'avaPulse 1.4s infinite', animationDelay: `${i * 0.2}s`,
+                }} />
+              ))}
+            </div>
+            <span style={{ fontSize: 11, color: '#6c7086' }}>Ava is thinking...</span>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input bar */}
+      {/* ── Input Bar (fixed at bottom) ─────────────────────────────────── */}
       <div style={{
-        padding: '16px 40px',
-        borderTop: '1px solid #313244',
-        background: '#181825',
-        flexShrink: 0,
+        padding: '12px 24px 16px', borderTop: '1px solid #313244',
+        background: '#181825', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', gap: 10, maxWidth: 800, margin: '0 auto' }}>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !streaming) send(); }}
-            placeholder={connected ? 'Message Ava...' : 'Connect account to chat...'}
-            disabled={streaming}
-            style={{
-              ...inputStyle,
-              height: 44,
-              borderRadius: 10,
-              fontSize: 14,
-              padding: '0 16px',
-              opacity: streaming ? 0.6 : 1,
+        <div style={{ maxWidth: 860, margin: '0 auto' }}>
+          {/* Mode selector row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div ref={modeMenuRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setModeMenuOpen(!modeMenuOpen)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
+                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)', border: '1px solid rgba(168,85,247,0.6)',
+                  borderRadius: 8, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(168,85,247,0.3)',
+                }}
+                title="Switch mode (Ctrl+Shift+1-6)"
+              >
+                <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.7 }}>{currentMode.icon}</span>
+                {currentMode.label}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  style={{ transform: modeMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+
+              {/* Mode dropdown (opens upward) */}
+              {modeMenuOpen && (
+                <div style={{
+                  position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, zIndex: 999,
+                  background: '#1e1e2e', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 10,
+                  padding: 6, minWidth: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                }}>
+                  {MODES.map((m, idx) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                        padding: '8px 10px', background: mode === m.id ? 'rgba(168,85,247,0.2)' : 'transparent',
+                        border: 'none', borderRadius: 6, color: mode === m.id ? '#fff' : '#cdd6f4',
+                        fontSize: 12, fontWeight: mode === m.id ? 600 : 400, cursor: 'pointer', textAlign: 'left',
+                        opacity: mode === m.id ? 1 : 0.7,
+                      }}
+                      onMouseEnter={(e) => { if (mode !== m.id) { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; e.currentTarget.style.opacity = '1'; } }}
+                      onMouseLeave={(e) => { if (mode !== m.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0.7'; } }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.6, width: 16, textAlign: 'center' }}>{m.icon}</span>
+                        {m.label}
+                      </span>
+                      <span style={{ fontSize: 9, opacity: 0.4, fontFamily: 'monospace' }}>Ctrl+Shift+{idx + 1}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Character count */}
+            <span style={{ fontSize: 10, color: input.length > 4000 ? '#ef4444' : '#45475a', fontFamily: 'monospace' }}>
+              {input.length > 0 ? `${input.length.toLocaleString()} chars` : ''}
+            </span>
+          </div>
+
+          {/* Input container */}
+          <div style={{
+            display: 'flex', alignItems: 'flex-end', gap: 8,
+            background: 'rgba(0,0,0,0.35)', border: '1.5px solid rgba(168,85,247,0.15)',
+            borderRadius: 14, padding: '8px 8px 8px 16px',
+            transition: 'border-color 0.2s, box-shadow 0.2s',
+          }}
+            onFocus={(e) => {
+              const el = e.currentTarget;
+              el.style.borderColor = '#a855f7';
+              el.style.boxShadow = '0 0 12px rgba(168,85,247,0.2), 0 0 0 1px rgba(168,85,247,0.1)';
             }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
-          />
-          <button
-            onClick={send}
-            disabled={streaming}
-            style={{
-              ...btnPrimary,
-              width: 44,
-              height: 44,
-              padding: 0,
-              borderRadius: 10,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              opacity: streaming ? 0.6 : 1,
+            onBlur={(e) => {
+              // Only remove focus style if focus leaves the container entirely
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                const el = e.currentTarget;
+                el.style.borderColor = 'rgba(168,85,247,0.15)';
+                el.style.boxShadow = 'none';
+              }
             }}
-            onMouseEnter={(e) => { if (!streaming) e.currentTarget.style.background = '#9333ea'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
-          </button>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!streaming) send();
+                }
+              }}
+              placeholder={connected ? currentMode.placeholder : 'Connect account to chat...'}
+              disabled={!connected}
+              rows={1}
+              style={{
+                flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',
+                color: '#cdd6f4', fontSize: 14, lineHeight: 1.5, padding: '6px 0',
+                fontFamily: 'inherit', maxHeight: 160, minHeight: 24,
+                opacity: !connected ? 0.4 : 1,
+              }}
+            />
+
+            {/* Mic placeholder */}
+            <button
+              style={{
+                width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(168,85,247,0.15)',
+                background: 'rgba(168,85,247,0.05)', color: '#6c7086', cursor: 'not-allowed',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                opacity: 0.4,
+              }}
+              title="Voice input (coming soon)"
+              disabled
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+              </svg>
+            </button>
+
+            {/* Send / Stop button */}
+            {streaming ? (
+              <button
+                onClick={cancelStream}
+                style={{
+                  width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.5)',
+                  background: 'linear-gradient(135deg, #e53935, #c62828)', color: '#fff',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, boxShadow: '0 2px 8px rgba(229,57,53,0.35)',
+                }}
+                title="Stop generating"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <rect x="3" y="3" width="10" height="10" rx="1.5" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                onClick={send}
+                disabled={!input.trim() || !connected}
+                style={{
+                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                  border: input.trim() && connected ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.08)',
+                  background: input.trim() && connected ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'transparent',
+                  color: input.trim() && connected ? '#fff' : '#6c7086',
+                  cursor: input.trim() && connected ? 'pointer' : 'not-allowed',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: input.trim() && connected ? 1 : 0.15,
+                  boxShadow: input.trim() && connected ? '0 2px 8px rgba(168,85,247,0.4)' : 'none',
+                  transition: 'all 0.2s',
+                }}
+                title="Send (Enter)"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 3.5l-4.5 4.5.707.707L7.5 5.414V13h1V5.414l3.293 3.293.707-.707L8 3.5z" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
