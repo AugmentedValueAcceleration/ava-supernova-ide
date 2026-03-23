@@ -940,10 +940,13 @@ export function CommandCentrePage() {
 
   // ── Platform API data (tasks, journal, learning, memory, usage, release) ──
   const { data: usage, loading: usageLoading } = useApiData<any>('/usage/summary', null);
-  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useApiData<TaskEntry[]>('/tasks', []);
+  const { data: rawTasks2, loading: tasksLoading, refetch: refetchTasks } = useApiData<any>('/tasks', null);
+  const tasks: TaskEntry[] = Array.isArray(rawTasks2) ? rawTasks2 : (rawTasks2?.tasks ?? rawTasks2?.data ?? []);
   const { data: journalDay, loading: journalLoading } = useApiData<JournalDay | null>(`/journal?date=${new Date().toISOString().slice(0, 10)}`, null);
-  const { data: curriculums, loading: learningLoading } = useApiData<LearningCurriculum[]>('/learning', []);
-  const { data: memories, loading: memoriesLoading } = useApiData<MemoryEntry[]>('/memories', []);
+  const { data: rawLearning, loading: learningLoading } = useApiData<any>('/learning', null);
+  const curriculums: LearningCurriculum[] = Array.isArray(rawLearning) ? rawLearning : (rawLearning?.curriculums ?? rawLearning?.data ?? []);
+  const { data: rawMemories2, loading: memoriesLoading } = useApiData<any>('/memories', null);
+  const memories: MemoryEntry[] = Array.isArray(rawMemories2) ? rawMemories2 : (rawMemories2?.memories ?? rawMemories2?.entries ?? rawMemories2?.data ?? []);
   const { data: releaseData, loading: releaseLoading, refetch: refetchRelease } = useApiData<any>('/releases?limit=1', null);
 
   const latestRelease: ReleaseInfo | null = useMemo(() => {
