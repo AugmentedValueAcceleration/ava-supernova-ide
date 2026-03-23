@@ -6930,6 +6930,97 @@ export function DocumentationPage() {
         </div>
       ),
     },
+    {
+      id: 'tasks-panel', title: 'Tasks Panel',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            The collapsible Tasks Panel sits alongside the chat. Click the <strong>Tasks</strong> button in the chat header to toggle it.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ ...card, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 6 }}>Ava Tab</div>
+              <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>
+                Shows session tasks from <code style={{ color: '#f5c2e7' }}>todo_write</code> tool calls. Progress bar updates live as Ava completes steps. Auto-opens when tasks are created.
+              </div>
+            </div>
+            <div style={{ ...card, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 6 }}>My Tasks Tab</div>
+              <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>
+                Your personal tasks from the platform. Click a task to toggle completion. Filtered by Today or All. Requires a platform account.
+              </div>
+            </div>
+          </div>
+          <p style={{ color: '#6c7086', fontSize: 12 }}>
+            Drag the left edge to resize (200-500px). Press Escape to close. Width and state persist across sessions.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'dashboard', title: 'Dashboard Pages',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>16 pages organised into sections in the sidebar:</p>
+          {[
+            { section: 'Main', pages: 'Command Centre (landing page), Ava Chat' },
+            { section: 'Workspace', pages: 'Memory, Tasks, Journal, Learning, Library' },
+            { section: 'Personalise', pages: 'Personality, Cloud Sync' },
+            { section: 'Account', pages: 'Usage, Billing, Settings, Connections' },
+            { section: 'Help', pages: 'Support, Documentation, Release Notes' },
+          ].map(s => (
+            <div key={s.section} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid #313244' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#cba6f7', minWidth: 90 }}>{s.section}</span>
+              <span style={{ fontSize: 12, color: '#6c7086' }}>{s.pages}</span>
+            </div>
+          ))}
+          <p style={{ color: '#6c7086', fontSize: 12 }}>
+            Sections are collapsible with persistent state. A purple dot shows when the active page is inside a collapsed section.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'session-stats', title: 'Session Stats',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            Token usage, messages, tool calls, and per-model breakdown are tracked in real-time across the IDE.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            {['Chat header shows token count', 'Usage page — Session tab with live data', 'Command Centre stats update instantly'].map(item => (
+              <div key={item} style={{ ...card, padding: 12, fontSize: 12, color: '#6c7086', lineHeight: 1.5 }}>{item}</div>
+            ))}
+          </div>
+          <p style={{ color: '#6c7086', fontSize: 12 }}>
+            Stats reset on New Chat. All-Time tab reads from the platform API for connected users.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'release-notes', title: 'Release Notes',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            Release notes are tagged by platform and displayed across the entire ecosystem.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Core', color: '#89b4fa' },
+              { label: 'Extension', color: '#a855f7' },
+              { label: 'IDE', color: '#a6e3a1' },
+              { label: 'Companion', color: '#fab387' },
+            ].map(p => (
+              <span key={p.label} style={{ fontSize: 11, fontWeight: 600, color: p.color, background: `${p.color}18`, padding: '4px 12px', borderRadius: 6 }}>{p.label}</span>
+            ))}
+          </div>
+          <p style={{ color: '#6c7086', fontSize: 12 }}>
+            Filter by platform using the tabs. Each release card shows its platform badge. Month filter also available.
+          </p>
+        </div>
+      ),
+    },
   ];
 
   const filteredSections = searchQuery
