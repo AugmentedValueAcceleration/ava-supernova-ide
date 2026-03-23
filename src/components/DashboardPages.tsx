@@ -1243,9 +1243,12 @@ export function AvaChatPage() {
   const [contextPercent, setContextPercent] = useState(0);
 
   // ── Local sidecar state ─────────────────────────────────────────────────
-  const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() =>
-    (localStorage.getItem('ava-ide-chat-backend') as 'local' | 'cloud') || 'cloud'
-  );
+  const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() => {
+    const saved = localStorage.getItem('ava-ide-chat-backend') as 'local' | 'cloud' | null;
+    // Force local if not connected — Cloud needs a platform account
+    if (!checkConnected()) return 'local';
+    return saved || 'cloud';
+  });
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
   const [pendingConfirm, setPendingConfirm] = useState<{
@@ -1277,7 +1280,17 @@ export function AvaChatPage() {
   const modelMenuRef = useRef<HTMLDivElement>(null);
 
   // ── Derived: available BYOK models ────────────────────────────────────────
+  // ── BYOK models (reactive — updates when sidebar keys change) ────────────
+  const [byokRefresh, setByokRefresh] = useState(0);
+  useEffect(() => {
+    const handler = () => setByokRefresh(n => n + 1);
+    window.addEventListener('storage', handler);
+    window.addEventListener('ava-byok-changed', handler);
+    return () => { window.removeEventListener('storage', handler); window.removeEventListener('ava-byok-changed', handler); };
+  }, []);
+
   const byokModels = useMemo(() => {
+    void byokRefresh; // trigger recalc
     try {
       const raw = localStorage.getItem('ava-ide-byok');
       if (!raw) return [];
@@ -1291,7 +1304,18 @@ export function AvaChatPage() {
       }
       return result;
     } catch { return []; }
-  }, []);
+  }, [byokRefresh]);
+
+  // ── Derived: can the user actually chat? ────────────────────────────────
+  const hasByokKeys = byokModels.length > 0;
+  const canChat = chatBackend === 'local' ? (hasByokKeys || connected) : connected;
+  const chatInactiveReason = !canChat
+    ? (!connected && !hasByokKeys
+      ? 'Add a provider key in the sidebar or connect your account to start chatting.'
+      : chatBackend === 'cloud' && !connected
+        ? 'Connect your platform account to use Cloud mode.'
+        : '')
+    : '';
 
   // ── Persist model & mode ──────────────────────────────────────────────────
   useEffect(() => { try { localStorage.setItem('ava-ide-chat-model', model); } catch { /* */ } }, [model]);
@@ -2288,17 +2312,24 @@ export function AvaChatPage() {
           {/* Local/Cloud toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
-              onClick={() => setChatBackend(chatBackend === 'local' ? 'cloud' : 'local')}
+              onClick={() => {
+                if (!connected) return; // Can't switch to Cloud without an account
+                setChatBackend(chatBackend === 'local' ? 'cloud' : 'local');
+              }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
                 background: chatBackend === 'local' ? 'rgba(166,227,161,0.1)' : 'rgba(108,112,134,0.1)',
                 border: `1px solid ${chatBackend === 'local' ? 'rgba(166,227,161,0.3)' : 'rgba(108,112,134,0.2)'}`,
-                borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 600,
+                borderRadius: 6, fontSize: 10, fontWeight: 600,
+                cursor: connected ? 'pointer' : 'not-allowed',
                 color: chatBackend === 'local' ? '#a6e3a1' : '#6c7086',
+                opacity: connected ? 1 : 0.5,
               }}
-              title={chatBackend === 'local'
-                ? 'Local mode — full 54 tools, runs on your machine'
-                : 'Cloud mode — chat via platform API'}
+              title={!connected
+                ? 'Connect your account to enable Cloud mode'
+                : chatBackend === 'local'
+                  ? 'Local mode — full 54 tools, runs on your machine'
+                  : 'Cloud mode — chat via platform API'}
             >
               <span style={{
                 width: 6, height: 6, borderRadius: '50%',
@@ -2860,17 +2891,20 @@ export function AvaChatPage() {
                 }}
                 onPaste={handlePaste}
                 placeholder={
-                  chatBackend === 'local'
-                    ? (sidecarReady ? currentMode.placeholder : 'Starting local engine...')
-                    : (connected ? currentMode.placeholder : 'Connect your account in the sidebar, or switch to Local mode')
+                  !canChat
+                    ? chatInactiveReason
+                    : chatBackend === 'local'
+                      ? (sidecarReady ? currentMode.placeholder : 'Starting local engine...')
+                      : currentMode.placeholder
                 }
-                disabled={false}
+                disabled={!canChat}
                 rows={1}
                 style={{
                   flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',
                   color: '#cdd6f4', fontSize: 14, lineHeight: 1.5, padding: '6px 0',
                   fontFamily: 'inherit', maxHeight: 160, minHeight: 24,
-                  opacity: 1,
+                  opacity: canChat ? 1 : 0.4,
+                  cursor: canChat ? 'text' : 'not-allowed',
                 }}
               />
             </div>
@@ -2929,19 +2963,19 @@ export function AvaChatPage() {
             ) : (
               <button
                 onClick={send}
-                disabled={!input.trim() || (chatBackend === 'local' ? !sidecarReady : !connected)}
+                disabled={!canChat || !input.trim() || (chatBackend === 'local' ? !sidecarReady : !connected)}
                 style={{
                   width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                  border: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.08)',
-                  background: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'transparent',
-                  color: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? '#fff' : '#6c7086',
-                  cursor: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? 'pointer' : 'not-allowed',
+                  border: canChat && input.trim() ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.08)',
+                  background: canChat && input.trim() ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'transparent',
+                  color: canChat && input.trim() ? '#fff' : '#6c7086',
+                  cursor: canChat && input.trim() ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  opacity: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? 1 : 0.15,
-                  boxShadow: input.trim() && (chatBackend === 'local' ? sidecarReady : connected) ? '0 2px 8px rgba(168,85,247,0.4)' : 'none',
+                  opacity: canChat && input.trim() ? 1 : 0.15,
+                  boxShadow: canChat && input.trim() ? '0 2px 8px rgba(168,85,247,0.4)' : 'none',
                   transition: 'all 0.2s',
                 }}
-                title="Send (Enter)"
+                title={canChat ? 'Send (Enter)' : 'Add a provider key or connect your account'}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M8 3.5l-4.5 4.5.707.707L7.5 5.414V13h1V5.414l3.293 3.293.707-.707L8 3.5z" />

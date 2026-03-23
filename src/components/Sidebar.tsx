@@ -441,6 +441,7 @@ function AuthSection() {
     const next = { ...keys, [provider]: value };
     setKeys(next);
     try { localStorage.setItem('ava-ide-byok', JSON.stringify(next)); } catch { /* */ }
+    window.dispatchEvent(new CustomEvent('ava-byok-changed'));
   };
 
   const tierColors: Record<string, string> = {
