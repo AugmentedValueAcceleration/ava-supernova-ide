@@ -1503,7 +1503,7 @@ export function AvaChatPage() {
   const prevModelRef = useRef(model);
   const prevModeRef = useRef(mode);
   useEffect(() => {
-    if (chatBackend !== 'local' || !sidecarReady) return;
+    if (!sidecarReady) return;
     const sidecar = getSidecar();
     const modelMap: Record<string, string> = {
       'qwen-flash': 'platform:qwen-flash',
@@ -1522,7 +1522,7 @@ export function AvaChatPage() {
       prevModeRef.current = mode;
       sidecar.setMode(mode).catch(() => {});
     }
-  }, [model, mode, chatBackend, sidecarReady]);
+  }, [model, mode, sidecarReady]);
 
   // ── Sidecar event handler (for local mode streaming) ──────────────────
   const handleSidecarEvent = useCallback((event: SidecarEvent) => {
@@ -1761,14 +1761,12 @@ export function AvaChatPage() {
       setSessionTasks([]);
     }
     if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
-    if (chatBackend === 'local') {
-      const sidecar = getSidecar();
-      sidecar.clear().catch(() => {});
-      sidecar.removeAllListeners();
-    }
+    const sidecar = getSidecar();
+    sidecar.clear().catch(() => {});
+    sidecar.removeAllListeners();
     setStreaming(false);
     textareaRef.current?.focus();
-  }, [messages, model, chatBackend]);
+  }, [messages, model]);
 
   // ── Copy message ──────────────────────────────────────────────────────────
   const copyMessage = useCallback((msgId: string, text: string) => {
