@@ -586,6 +586,154 @@ function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData
 
 // ── Statistics Widget ───────────────────────────────────────────────────────
 
+// ── Working Hours Clock ──────────────────────────────────────────────────
+
+function WorkingHoursClock() {
+  const [start, setStart] = useState<number>(() => {
+    try { return Number(localStorage.getItem('ava-ide-work-start')) || 9; } catch { return 9; }
+  });
+  const [end, setEnd] = useState<number>(() => {
+    try { return Number(localStorage.getItem('ava-ide-work-end')) || 17; } catch { return 17; }
+  });
+  const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
+  const clockRef = useRef<SVGSVGElement>(null);
+
+  const save = useCallback((s: number, e: number) => {
+    try {
+      localStorage.setItem('ava-ide-work-start', String(s));
+      localStorage.setItem('ava-ide-work-end', String(e));
+      window.dispatchEvent(new CustomEvent('ava-working-hours-changed'));
+    } catch {}
+  }, []);
+
+  const angleForHour = (h: number) => ((h / 24) * 360 - 90) * (Math.PI / 180);
+  const hourFromAngle = (angleDeg: number) => {
+    let h = Math.round(((angleDeg + 90) / 360) * 24) % 24;
+    if (h < 0) h += 24;
+    return h;
+  };
+
+  const getAngleFromEvent = useCallback((e: MouseEvent) => {
+    if (!clockRef.current) return 0;
+    const rect = clockRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    return Math.atan2(dy, dx) * (180 / Math.PI);
+  }, []);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent) => {
+      const angle = getAngleFromEvent(e);
+      const hour = hourFromAngle(angle);
+      if (dragging === 'start') { setStart(hour); save(hour, end); }
+      else { setEnd(hour); save(start, hour); }
+    };
+    const onUp = () => setDragging(null);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+  }, [dragging, start, end, save, getAngleFromEvent]);
+
+  const size = 140;
+  const cx = size / 2, cy = size / 2, r = 54;
+
+  const pinPos = (h: number) => {
+    const a = angleForHour(h);
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  };
+
+  const startPos = pinPos(start);
+  const endPos = pinPos(end);
+
+  // Arc path for the active working period
+  const arcPath = () => {
+    const a1 = angleForHour(start);
+    const a2 = angleForHour(end);
+    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+    const x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
+    // Determine if the arc should be the long way around
+    let diff = ((end - start) % 24 + 24) % 24;
+    const largeArc = diff > 12 ? 1 : 0;
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
+  };
+
+  const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`;
+  const now = new Date().getHours();
+  const isWorking = start <= end ? (now >= start && now < end) : (now >= start || now < end);
+
+  return (
+    <WidgetCard title="Working Hours" icon="🕐">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        <svg ref={clockRef} width={size} height={size} style={{ flexShrink: 0 }}>
+          {/* Clock face */}
+          <circle cx={cx} cy={cy} r={r + 8} fill="#11111b" stroke="#313244" strokeWidth={1} />
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#313244" strokeWidth={2} />
+
+          {/* Hour markers */}
+          {Array.from({ length: 24 }, (_, i) => {
+            const a = angleForHour(i);
+            const inner = r - (i % 6 === 0 ? 10 : 5);
+            const outer = r - 2;
+            return (
+              <line key={i}
+                x1={cx + inner * Math.cos(a)} y1={cy + inner * Math.sin(a)}
+                x2={cx + outer * Math.cos(a)} y2={cy + outer * Math.sin(a)}
+                stroke={i % 6 === 0 ? '#585b70' : '#313244'} strokeWidth={i % 6 === 0 ? 1.5 : 0.8}
+              />
+            );
+          })}
+
+          {/* Hour labels */}
+          {[0, 6, 12, 18].map(h => {
+            const a = angleForHour(h);
+            const lr = r - 18;
+            return (
+              <text key={h} x={cx + lr * Math.cos(a)} y={cy + lr * Math.sin(a) + 3}
+                fontSize={9} fill="#585b70" textAnchor="middle" fontWeight={500}
+              >{h}</text>
+            );
+          })}
+
+          {/* Active arc */}
+          <path d={arcPath()} fill="none" stroke="#a855f7" strokeWidth={4} strokeLinecap="round" opacity={0.6} />
+
+          {/* Current time indicator */}
+          {(() => {
+            const a = angleForHour(now);
+            return <circle cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r={3} fill={isWorking ? '#a6e3a1' : '#6c7086'} />;
+          })()}
+
+          {/* Start pin */}
+          <circle cx={startPos.x} cy={startPos.y} r={7} fill="#a855f7" stroke="#1e1e2e" strokeWidth={2}
+            style={{ cursor: 'grab' }}
+            onMouseDown={(e) => { e.preventDefault(); setDragging('start'); }}
+          />
+          {/* End pin */}
+          <circle cx={endPos.x} cy={endPos.y} r={7} fill="#f5c2e7" stroke="#1e1e2e" strokeWidth={2}
+            style={{ cursor: 'grab' }}
+            onMouseDown={(e) => { e.preventDefault(); setDragging('end'); }}
+          />
+        </svg>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>
+            {fmt(start)} — {fmt(end)}
+          </div>
+          <div style={{ fontSize: 11, color: isWorking ? '#a6e3a1' : '#6c7086', marginBottom: 12 }}>
+            {isWorking ? '● Currently working' : '○ Outside working hours'}
+          </div>
+          <div style={{ fontSize: 10, color: '#585b70', lineHeight: 1.5 }}>
+            Drag the <span style={{ color: '#a855f7' }}>●</span> start and <span style={{ color: '#f5c2e7' }}>●</span> end pins to set your hours. Ava will respect your schedule.
+          </div>
+        </div>
+      </div>
+    </WidgetCard>
+  );
+}
+
 // ── News Widget ─────────────────────────────────────────────────────────────
 
 function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, onRefresh }: {
@@ -1052,7 +1200,10 @@ export function CommandCentrePage() {
           <CCWeatherWidget weather={weather} loading={weatherLoading} onRefresh={loadWeather} />
         </div>
 
-        {/* Statistics removed — available in Usage page */}
+        {/* ── Working Hours Clock ───────────────────────────────────────── */}
+        <div style={{ marginBottom: 16 }}>
+          <WorkingHoursClock />
+        </div>
 
         {/* ── News + Tasks (40/60 split, tasks gets more space) ─────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: '40% 1fr', gap: 16, marginBottom: 16 }}>
@@ -1475,6 +1626,10 @@ export function AvaChatPage() {
           'mistral-large': 'mistral:mistral-large-latest',
         };
 
+        // Read working hours from localStorage
+        const workStart = Number(localStorage.getItem('ava-ide-work-start')) || 9;
+        const workEnd = Number(localStorage.getItem('ava-ide-work-end')) || 17;
+
         const config: SidecarConfig = {
           providers,
           platformKey: getPlatformKey() || undefined,
@@ -1483,6 +1638,7 @@ export function AvaChatPage() {
           mode,
           permissionMode: 'balanced',
           autoMemory: true,
+          workingHours: { start: workStart, end: workEnd },
           _devPlatformFallback: true, // DEV ONLY — remove before 1.0.0
         } as SidecarConfig;
 

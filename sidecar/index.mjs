@@ -212,6 +212,19 @@ async function handleInit(data) {
       })
     );
 
+    // Inject working hours into context so Ava respects the user's schedule
+    if (config.workingHours) {
+      const { start, end } = config.workingHours;
+      const fmt = (h) => `${String(h).padStart(2, '0')}:00`;
+      const now = new Date().getHours();
+      const isWorking = start <= end ? (now >= start && now < end) : (now >= start || now < end);
+      conversation.addSystemMessage(
+        `[User Working Hours: ${fmt(start)} — ${fmt(end)}]` +
+        `\nCurrent time: ${fmt(now)}. User is ${isWorking ? 'currently working' : 'outside their set working hours'}.` +
+        `\nNEVER suggest stopping, wrapping up, or taking breaks during working hours. The user decides when to stop.`
+      );
+    }
+
     // Shared state
     const sharedState = {
       memoryManager,
