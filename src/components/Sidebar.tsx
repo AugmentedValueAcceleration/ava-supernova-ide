@@ -631,54 +631,89 @@ function AuthSection() {
 }
 
 /* ---------- Dashboard Panel ---------- */
-function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?: (page: string) => void; activePage?: string | null }) {
-  const items = [
-    { icon: '\u26A1', label: 'Command Centre', desc: 'Overview of everything' },
-    { icon: '\u2601\uFE0F', label: 'Ava Chat', desc: 'Full-width AI chat' },
-    { icon: '\uD83E\uDDE0', label: 'Memory', desc: 'View and manage memories' },
-    { icon: '\u2705', label: 'Tasks', desc: 'Your task list' },
-    { icon: '\uD83D\uDCD3', label: 'Journal', desc: 'Daily entries' },
-    { icon: '\uD83C\uDF93', label: 'Learning', desc: 'Curriculums and progress' },
-    { icon: '\uD83D\uDDBC\uFE0F', label: 'Library', desc: 'Images and documents' },
-    { icon: '\uD83C\uDFA8', label: 'Personality', desc: 'Design your AI' },
-    { icon: '\u2601\uFE0F', label: 'Cloud Sync', desc: 'Push to cloud' },
-    { icon: '\uD83D\uDCCA', label: 'Usage', desc: 'Token usage and stats' },
-    { icon: '\uD83D\uDCB3', label: 'Billing', desc: 'Plan and top-ups' },
-    { icon: '\u2699\uFE0F', label: 'Settings', desc: 'Preferences and keys' },
-    { icon: '\uD83D\uDD17', label: 'Connections', desc: 'GitHub, Slack, Discord' },
-    { icon: '\uD83C\uDD98', label: 'Support', desc: 'Get help' },
-    { icon: '\uD83D\uDCD6', label: 'Documentation', desc: 'Guides and reference' },
-    { icon: '\uD83D\uDCCB', label: 'Release Notes', desc: 'What\'s new' },
-  ];
 
+const sectionLabelStyle: React.CSSProperties = {
+  fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8,
+  color: '#585b70', padding: '10px 10px 4px', userSelect: 'none',
+};
+
+const sections = [
+  {
+    items: [
+      { icon: '\u26A1', label: 'Command Centre', desc: 'Overview of everything' },
+      { icon: '\uD83D\uDCAC', label: 'Ava Chat', desc: 'Full-width AI chat' },
+    ],
+  },
+  {
+    title: 'Workspace',
+    items: [
+      { icon: '\uD83E\uDDE0', label: 'Memory', desc: 'View and manage memories' },
+      { icon: '\u2705', label: 'Tasks', desc: 'Your task list' },
+      { icon: '\uD83D\uDCD3', label: 'Journal', desc: 'Daily entries' },
+      { icon: '\uD83C\uDF93', label: 'Learning', desc: 'Curriculums and progress' },
+      { icon: '\uD83D\uDDBC\uFE0F', label: 'Library', desc: 'Images and documents' },
+    ],
+  },
+  {
+    title: 'Personalise',
+    items: [
+      { icon: '\uD83C\uDFA8', label: 'Personality', desc: 'Design your AI' },
+      { icon: '\u2601\uFE0F', label: 'Cloud Sync', desc: 'Push to cloud' },
+    ],
+  },
+  {
+    title: 'Account',
+    items: [
+      { icon: '\uD83D\uDCCA', label: 'Usage', desc: 'Token usage and stats' },
+      { icon: '\uD83D\uDCB3', label: 'Billing', desc: 'Plan and top-ups' },
+      { icon: '\u2699\uFE0F', label: 'Settings', desc: 'Preferences and keys' },
+      { icon: '\uD83D\uDD17', label: 'Connections', desc: 'GitHub, Slack, Discord' },
+    ],
+  },
+  {
+    title: 'Help',
+    items: [
+      { icon: '\uD83C\uDD98', label: 'Support', desc: 'Get help' },
+      { icon: '\uD83D\uDCD6', label: 'Documentation', desc: 'Guides and reference' },
+      { icon: '\uD83D\uDCCB', label: 'Release Notes', desc: 'What\'s new' },
+    ],
+  },
+];
+
+function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?: (page: string) => void; activePage?: string | null }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
-        {items.map((item) => {
-          const isActive = activePage === item.label;
-          return (
-          <button
-            key={item.label}
-            onClick={() => onDashboardSelect?.(item.label)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              padding: '8px 10px', borderRadius: 6, border: 'none',
-              background: isActive ? '#313244' : 'transparent',
-              color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
-              fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
-              borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
-            }}
-            onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = '#313244'; }}
-            onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-          >
-            <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>{item.icon}</span>
-            <div>
-              <div style={{ fontWeight: 500 }}>{item.label}</div>
-              <div style={{ fontSize: 11, color: '#6c7086' }}>{item.desc}</div>
-            </div>
-          </button>
-          );
-        })}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+        {sections.map((section, si) => (
+          <div key={si}>
+            {section.title && <div style={sectionLabelStyle}>{section.title}</div>}
+            {section.items.map((item) => {
+              const isActive = activePage === item.label;
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => onDashboardSelect?.(item.label)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                    padding: '7px 10px', borderRadius: 6, border: 'none',
+                    background: isActive ? '#313244' : 'transparent',
+                    color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
+                    fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
+                    borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
+                  }}
+                  onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = '#313244'; }}
+                  onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</div>
+                    <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       {/* Auth + BYOK section at the bottom */}

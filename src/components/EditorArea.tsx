@@ -111,7 +111,7 @@ export default function EditorArea({ dashboardPage }: Props) {
         >
           <span style={{ fontSize: 14 }}>{dashboardIcons[activePage]}</span>
           <span style={{ fontSize: 13, color: '#cdd6f4', whiteSpace: 'nowrap' }}>
-            {tabLabel}
+            {activePage}
           </span>
           <button
             style={{
