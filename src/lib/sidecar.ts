@@ -120,8 +120,8 @@ export class SidecarManager {
     const scriptPath = await this.resolveSidecarPath();
 
     // Spawn node with the sidecar script
-    // Dev: uses system node via shell:allow-spawn "run-node"
-    // Production: uses bundled node.exe via externalBin
+    // Dev: system node via "run-node" command
+    // Production: bundled node.exe via Tauri sidecar API
     const command = this.isDev
       ? Command.create('run-node', [scriptPath])
       : Command.sidecar('binaries/node', [scriptPath]);

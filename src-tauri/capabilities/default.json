@@ -13,6 +13,11 @@
           "name": "run-node",
           "cmd": "node",
           "args": true
+        },
+        {
+          "name": "binaries/node",
+          "sidecar": true,
+          "args": true
         }
       ]
     },
