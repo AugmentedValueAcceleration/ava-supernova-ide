@@ -279,7 +279,19 @@ async function handleMessage(data) {
   currentAbort = abortController;
 
   try {
-    conversation.addUserMessage(data.content);
+    // Build multimodal content if attachments are present (images, files)
+    if (data.attachments && Array.isArray(data.attachments) && data.attachments.length > 0) {
+      const parts = [];
+      if (data.content) parts.push({ type: 'text', text: data.content });
+      for (const att of data.attachments) {
+        if (att.mimeType?.startsWith('image/') && att.dataUri) {
+          parts.push({ type: 'image_url', image_url: { url: att.dataUri } });
+        }
+      }
+      conversation.addUserMessage(parts.length > 0 ? parts : data.content);
+    } else {
+      conversation.addUserMessage(data.content);
+    }
     let messages = conversation.getMessages();
 
     // Proactive memory recall on first user message — Ava should know who you are

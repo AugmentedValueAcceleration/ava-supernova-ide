@@ -1884,7 +1884,7 @@ export function AvaChatPage() {
   };
 
   // ── Send message (local sidecar) ─────────────────────────────────────────
-  const sendLocal = useCallback(async (text: string) => {
+  const sendLocal = useCallback(async (text: string, attachments?: { name: string; dataUri: string; mimeType: string }[]) => {
     const sidecar = getSidecar();
     if (!sidecar.isReady) {
       setMessages((prev) => [...prev, {
@@ -1902,7 +1902,7 @@ export function AvaChatPage() {
     setMessages((prev) => [...prev, avaMsg]);
 
     try {
-      await sidecar.sendMessage(text);
+      await sidecar.sendMessage(text, attachments);
     } catch (err: any) {
       setMessages((prev) => [...prev, {
         id: mkId(), role: 'error' as const,
@@ -2151,7 +2151,7 @@ export function AvaChatPage() {
     trackMessage(model);
 
     // Always use sidecar — both Local and Cloud modes run the full agent
-    sendLocal(trimmed);
+    sendLocal(trimmed, userMsg.attachments);
   }, [input, messages, sendLocal, pendingAttachments, model]);
 
   // ── Tool confirmation handlers ─────────────────────────────────────────
