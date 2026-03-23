@@ -4119,10 +4119,10 @@ export function UsagePage() {
             ) : (
               <>
                 {/* Token Balance */}
-                {balance && (
+                {usage && (
                   <div style={{ ...card }}>
                     <div style={sectionTitle}>Token Balance</div>
-                    {balance.tier === 'admin' ? (
+                    {isUnlimited ? (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
                           <span style={{ color: '#a6adc8' }}>Admin tier</span>
