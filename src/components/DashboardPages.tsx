@@ -6927,43 +6927,51 @@ export function DocumentationPage() {
 }
 
 /* ===== 12. Release Notes ===== */
+const PLATFORM_COLOURS: Record<string, string> = {
+  core: '#89b4fa',
+  extension: '#a855f7',
+  ide: '#a6e3a1',
+  companion: '#fab387',
+};
+const PLATFORM_LABELS: Record<string, string> = {
+  core: 'Core',
+  extension: 'Extension',
+  ide: 'IDE',
+  companion: 'Companion',
+};
+
 export function ReleaseNotesPage() {
   const connected = checkConnected();
   const { data: apiReleases, loading } = useApiData<any[]>('/releases', []);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [platformTab, setPlatformTab] = useState<string>('all');
 
-  // Fallback releases if API doesn't have them
   const fallbackReleases = [
     {
       id: 'v0.21.4', version: '0.21.4', title: 'Docs Sync Publish', published_at: '2026-03-22',
-      tool_count: 54, body: 'Documentation sync and web submodule updates.',
+      tool_count: 54, body: 'Documentation sync and web submodule updates.', platform: 'extension',
       highlights: ['Docs sync publish', 'Web submodule updates', 'Bug fixes for billing page'],
     },
     {
       id: 'v0.21.0', version: '0.21.0', title: 'Qwen Free Models', published_at: '2026-03-20',
-      tool_count: 54, body: 'Added Qwen free models, pricing updates across all 12 models.',
-      highlights: ['Qwen free models added', 'Pricing updates \u2014 54 tools, 12 models', 'Companion sync improvements'],
+      tool_count: 54, body: 'Added Qwen free models, pricing updates across all 12 models.', platform: 'extension',
+      highlights: ['Qwen free models added', 'Pricing updates — 54 tools, 12 models', 'Companion sync improvements'],
+    },
+    {
+      id: 'v0.22.0', version: '0.22.0', title: 'Sidecar Integration', published_at: '2026-03-23',
+      tool_count: 54, body: 'Full local AI with 54 tools via Node.js sidecar.', platform: 'ide',
+      highlights: ['Node.js sidecar for local tool execution', '6 new dashboard pages', 'Chat media + avatars'],
     },
     {
       id: 'v0.20.0', version: '0.20.0', title: 'Persona System', published_at: '2026-03-17',
-      tool_count: 54, body: '24 specialist personas orchestrated across 5 modes.',
-      highlights: ['24 specialist personas across 5 modes', 'Persona orchestration via Conductor', 'Companion app overhaul', 'Demo redesign'],
+      tool_count: 54, body: '24 specialist personas orchestrated across 5 modes.', platform: 'core',
+      highlights: ['24 specialist personas across 5 modes', 'Persona orchestration via Conductor'],
     },
     {
-      id: 'v0.19.0', version: '0.19.0', title: 'Daily Briefing', published_at: '2026-03-15',
-      tool_count: 54, body: 'Daily briefing, smart reminders, and the JARVIS transition layer.',
-      highlights: ['Daily briefing and smart reminders', 'Health and wellness tracking', 'JARVIS transition layer'],
-    },
-    {
-      id: 'v0.18.0', version: '0.18.0', title: 'Plugin Marketplace', published_at: '2026-03-12',
-      tool_count: 54, body: 'Plugin marketplace and computer use capabilities.',
-      highlights: ['Plugin marketplace', 'Computer use (browser + desktop)', 'Capacitor wrapper for companion'],
-    },
-    {
-      id: 'v0.15.0', version: '0.15.0', title: 'Evolution Phase 2', published_at: '2026-03-08',
-      tool_count: 48, body: 'Evolution Phase 2 complete with all 6 pillars shipped.',
-      highlights: ['Evolution Phase 2 complete', 'Pillars 4-6 shipped', '6 modes fully operational'],
+      id: 'v0.19.0', version: '0.19.0', title: 'Companion Overhaul', published_at: '2026-03-15',
+      tool_count: 54, body: 'Full companion redesign with real-time sync.', platform: 'companion',
+      highlights: ['Companion app overhaul', 'Real-time sync', 'Mobile-optimised chat'],
     },
   ];
 
@@ -7000,18 +7008,22 @@ export function ReleaseNotesPage() {
   }, [releases]);
 
   const filtered = useMemo(() => {
-    if (!selectedMonth) return releases;
-    return releases.filter((r: any) => getMonthKey(r.published_at || r.date) === selectedMonth);
-  }, [releases, selectedMonth]);
+    let list = releases;
+    if (platformTab !== 'all') list = list.filter((r: any) => (r.platform || 'extension') === platformTab);
+    if (selectedMonth) list = list.filter((r: any) => getMonthKey(r.published_at || r.date) === selectedMonth);
+    return list;
+  }, [releases, selectedMonth, platformTab]);
+
+  const platformTabs = ['all', 'core', 'extension', 'ide', 'companion'];
 
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
             <div style={pageTitle}>Release Notes</div>
-            <div style={pageSubtitle}>What's new in each version of Ava | Supernova</div>
+            <div style={pageSubtitle}>What's new across the Ava | Supernova ecosystem</div>
           </div>
           <select
             value={selectedMonth}
@@ -7021,11 +7033,33 @@ export function ReleaseNotesPage() {
               appearance: 'auto' as any, flexShrink: 0,
             }}
           >
-            <option value="">All releases</option>
+            <option value="">All months</option>
             {months.map(([key, label]) => (
               <option key={key} value={key}>{label}</option>
             ))}
           </select>
+        </div>
+
+        {/* Platform tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>
+          {platformTabs.map(tab => {
+            const isActive = platformTab === tab;
+            const colour = tab === 'all' ? '#a855f7' : PLATFORM_COLOURS[tab];
+            return (
+              <button
+                key={tab}
+                onClick={() => setPlatformTab(tab)}
+                style={{
+                  padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  background: isActive ? colour : '#313244',
+                  color: isActive ? (tab === 'all' || tab === 'ide' || tab === 'companion' ? '#11111b' : '#fff') : '#6c7086',
+                }}
+              >
+                {tab === 'all' ? 'All' : PLATFORM_LABELS[tab]}
+              </button>
+            );
+          })}
         </div>
 
         {loading ? <LoadingSpinner /> : (
@@ -7069,6 +7103,19 @@ export function ReleaseNotesPage() {
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 14, fontWeight: 700, color: '#cdd6f4' }}>{version}</span>
+                          {(() => {
+                            const plat = r.platform || 'extension';
+                            const platColour = PLATFORM_COLOURS[plat] || '#6c7086';
+                            return (
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, color: platColour,
+                                background: `${platColour}18`, padding: '2px 8px',
+                                borderRadius: 4, letterSpacing: 0.5, textTransform: 'uppercase' as const,
+                              }}>
+                                {PLATFORM_LABELS[plat] || plat}
+                              </span>
+                            );
+                          })()}
                           {isLatest && (
                             <span style={{
                               fontSize: 9, fontWeight: 700, color: '#a855f7',
