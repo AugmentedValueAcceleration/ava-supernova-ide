@@ -53,6 +53,78 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
 };
 
+/* ===== Custom Dropdown (replaces native <select>) ===== */
+function CustomSelect({ value, onChange, options, placeholder, width, height }: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  width?: number | string;
+  height?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.value === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', width: width || '100%' }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          ...inputStyle,
+          width: '100%',
+          height: height || 36,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: 'pointer', textAlign: 'left',
+          borderColor: open ? '#a855f7' : '#313244',
+          borderRadius: 8,
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>
+          {selected?.label || placeholder || 'Select...'}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="2"
+          style={{ flexShrink: 0, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'rotate(0)' }}>
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+          background: '#181825', border: '1px solid #313244', borderRadius: 8,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 50,
+          maxHeight: 220, overflowY: 'auto',
+        }}>
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              style={{
+                display: 'block', width: '100%', padding: '8px 12px',
+                background: opt.value === value ? '#313244' : 'transparent',
+                border: 'none', color: opt.value === value ? '#cba6f7' : '#cdd6f4',
+                fontSize: 12, textAlign: 'left', cursor: 'pointer',
+              }}
+              onMouseOver={e => { if (opt.value !== value) e.currentTarget.style.background = '#313244'; }}
+              onMouseOut={e => { if (opt.value !== value) e.currentTarget.style.background = 'transparent'; }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const btnPrimary: React.CSSProperties = {
   background: '#a855f7',
   border: 'none',
@@ -3453,19 +3525,17 @@ export function TasksPage() {
               {/* Category */}
               <div style={{ minWidth: 140 }}>
                 <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>Category</div>
-                <select
+                <CustomSelect
                   value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value)}
-                  style={{
-                    ...inputStyle, height: 34, width: '100%',
-                    appearance: 'auto' as any,
-                  }}
-                >
-                  <option value="work">Work</option>
-                  <option value="personal">Personal</option>
-                  <option value="learning">Learning</option>
-                  <option value="project">Project</option>
-                </select>
+                  onChange={setFormCategory}
+                  height={34}
+                  options={[
+                    { value: 'work', label: 'Work' },
+                    { value: 'personal', label: 'Personal' },
+                    { value: 'learning', label: 'Learning' },
+                    { value: 'project', label: 'Project' },
+                  ]}
+                />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -5892,18 +5962,13 @@ export function SettingsPage() {
             <div style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4' }}>{modelLabel}</div>
             <div style={{ fontSize: 11, color: '#6c7086' }}>{providerForModel()}</div>
           </div>
-          <select
+          <CustomSelect
             value={settings.activeModel}
-            onChange={e => saveImmediate('activeModel', e.target.value)}
-            style={{
-              ...inputStyle, maxWidth: 340, height: 38, borderRadius: 8,
-              appearance: 'auto' as any,
-            }}
-          >
-            {MODEL_OPTIONS.map(m => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
+            onChange={v => saveImmediate('activeModel', v)}
+            width={340}
+            height={38}
+            options={MODEL_OPTIONS}
+          />
         </div>
 
         {/* 3. Privacy & Data */}
@@ -6012,15 +6077,13 @@ export function SettingsPage() {
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
         }}>
-          <select
+          <CustomSelect
             value={settings.language}
-            onChange={e => saveImmediate('language', e.target.value)}
-            style={{ ...inputStyle, maxWidth: 280, height: 38, borderRadius: 8, appearance: 'auto' as any }}
-          >
-            {LANGUAGES.map(l => (
-              <option key={l.value} value={l.value}>{l.label}</option>
-            ))}
-          </select>
+            onChange={v => saveImmediate('language', v)}
+            width={280}
+            height={38}
+            options={LANGUAGES}
+          />
         </div>
 
         {/* 6. API Keys (collapsible) */}
@@ -7025,19 +7088,13 @@ export function ReleaseNotesPage() {
             <div style={pageTitle}>Release Notes</div>
             <div style={pageSubtitle}>What's new across the Ava | Supernova ecosystem</div>
           </div>
-          <select
+          <CustomSelect
             value={selectedMonth}
-            onChange={e => setSelectedMonth(e.target.value)}
-            style={{
-              ...inputStyle, width: 180, height: 36, borderRadius: 8,
-              appearance: 'auto' as any, flexShrink: 0,
-            }}
-          >
-            <option value="">All months</option>
-            {months.map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
+            onChange={setSelectedMonth}
+            width={180}
+            placeholder="All months"
+            options={[{ value: '', label: 'All months' }, ...months.map(([key, label]) => ({ value: key, label }))]}
+          />
         </div>
 
         {/* Platform tabs */}
