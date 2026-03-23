@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { ActivityItem, SidebarPosition } from '../App';
+import { validateKey, getStoredEmail, getStoredTier } from '../lib/api';
 
 interface Props {
   activePanel: ActivityItem;
@@ -418,6 +419,8 @@ function AuthSection() {
   const [platformKey, setPlatformKey] = useState(() => {
     try { return localStorage.getItem('ava-ide-platform-key') || ''; } catch { return ''; }
   });
+  const [email, setEmail] = useState(() => getStoredEmail() || '');
+  const [tier, setTier] = useState(() => getStoredTier() || 'free');
   const [showConnect, setShowConnect] = useState(false);
   const [keyInput, setKeyInput] = useState('');
   const [error, setError] = useState('');
@@ -439,22 +442,47 @@ function AuthSection() {
     try { localStorage.setItem('ava-ide-byok', JSON.stringify(next)); } catch { /* */ }
   };
 
-  const handleConnect = () => {
+  const tierColors: Record<string, string> = {
+    free: '#a6adc8', pro: '#a855f7', ultra: '#f9e2af', enterprise: '#89b4fa', admin: '#f38ba8',
+  };
+
+  const handleConnect = async () => {
     const trimmed = keyInput.trim();
     if (!trimmed.startsWith('sk-ava-')) { setError('Key must start with sk-ava-'); return; }
     setError('');
     setLoading(true);
-    // TODO: validate key against platform API
-    setPlatformKey(trimmed);
-    try { localStorage.setItem('ava-ide-platform-key', trimmed); } catch { /* */ }
+    try {
+      const result = await validateKey(trimmed);
+      if (!result.valid) {
+        setError(result.error || 'Invalid API key');
+        setLoading(false);
+        return;
+      }
+      setPlatformKey(trimmed);
+      setEmail(result.email || '');
+      setTier(result.tier || 'free');
+      try {
+        localStorage.setItem('ava-ide-platform-key', trimmed);
+        if (result.email) localStorage.setItem('ava-ide-email', result.email);
+        if (result.tier) localStorage.setItem('ava-ide-tier', result.tier);
+      } catch { /* */ }
+      setShowConnect(false);
+      setKeyInput('');
+    } catch {
+      setError('Could not reach platform');
+    }
     setLoading(false);
-    setShowConnect(false);
-    setKeyInput('');
   };
 
   const handleDisconnect = () => {
     setPlatformKey('');
-    try { localStorage.removeItem('ava-ide-platform-key'); } catch { /* */ }
+    setEmail('');
+    setTier('free');
+    try {
+      localStorage.removeItem('ava-ide-platform-key');
+      localStorage.removeItem('ava-ide-email');
+      localStorage.removeItem('ava-ide-tier');
+    } catch { /* */ }
   };
 
   const inputStyle: React.CSSProperties = {
@@ -479,11 +507,11 @@ function AuthSection() {
               </svg>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500, fontFamily: 'monospace' }}>
-                {platformKey.slice(0, 12)}...
+              <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {email || platformKey.slice(0, 12) + '...'}
               </div>
-              <span style={{ fontSize: 9, fontWeight: 600, color: '#a6e3a1', background: 'rgba(166,227,161,0.15)', padding: '1px 6px', borderRadius: 3 }}>
-                Connected
+              <span style={{ fontSize: 9, fontWeight: 600, color: tierColors[tier] || '#a6e3a1', background: `${tierColors[tier] || '#a6e3a1'}18`, padding: '1px 6px', borderRadius: 3, textTransform: 'capitalize' as const }}>
+                {tier}
               </span>
             </div>
             <button
