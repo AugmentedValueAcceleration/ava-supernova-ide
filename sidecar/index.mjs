@@ -626,6 +626,25 @@ rl.on('line', async (line) => {
     case 'set_model':
       handleSetModel(data).catch((err) => emitError(err.message));
       break;
+    case 'set_working_hours':
+      if (conversation && data.start != null && data.end != null) {
+        const fmt = (h) => `${String(h).padStart(2, '0')}:00`;
+        const now = new Date().getHours();
+        const s = data.start, e = data.end;
+        const isWorking = s <= e ? (now >= s && now < e) : (now >= s || now < e);
+        const msgs = conversation.getMessages();
+        const sysMsgContent = msgs[0]?.role === 'system' ? String(msgs[0].content) : '';
+        // Strip old working hours block and append new one
+        const cleaned = sysMsgContent.replace(/\n\n\[User Working Hours:[\s\S]*?The user decides when to stop\./, '');
+        conversation.setSystemPrompt(
+          cleaned +
+          `\n\n[User Working Hours: ${fmt(s)} — ${fmt(e)}]` +
+          `\nCurrent time: ${fmt(now)}. User is ${isWorking ? 'currently working' : 'outside their set working hours'}.` +
+          `\nNEVER suggest stopping, wrapping up, or taking breaks during working hours. The user decides when to stop.`
+        );
+        emit({ event: 'info', message: `Working hours updated: ${fmt(s)} — ${fmt(e)}` });
+      }
+      break;
     default:
       emitError(`Unknown command: ${data.cmd}`);
   }

@@ -1408,6 +1408,19 @@ export function AvaChatPage() {
     return () => { window.removeEventListener('storage', handler); window.removeEventListener('ava-byok-changed', handler); };
   }, []);
 
+  // Forward working hours changes to sidecar (zero tokens — only fires on pin drag)
+  useEffect(() => {
+    const handler = () => {
+      const sidecar = getSidecar();
+      if (!sidecar.isReady) return;
+      const s = Number(localStorage.getItem('ava-ide-work-start')) || 9;
+      const e = Number(localStorage.getItem('ava-ide-work-end')) || 17;
+      sidecar.setWorkingHours(s, e).catch(() => {});
+    };
+    window.addEventListener('ava-working-hours-changed', handler);
+    return () => window.removeEventListener('ava-working-hours-changed', handler);
+  }, []);
+
   const byokModels = useMemo(() => {
     void byokRefresh; // trigger recalc
     try {

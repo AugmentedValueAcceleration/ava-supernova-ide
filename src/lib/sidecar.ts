@@ -199,6 +199,10 @@ export class SidecarManager {
     await this.send({ cmd: 'message', content, attachments: attachments?.length ? attachments : undefined, history: history?.length ? history : undefined });
   }
 
+  async setWorkingHours(start: number, end: number): Promise<void> {
+    await this.send({ cmd: 'set_working_hours', start, end });
+  }
+
   /**
    * Cancel the current agent run.
    */
