@@ -1,6 +1,7 @@
 import {
   CommandCentrePage,
   AvaChatPage,
+  ChatHistoryPage,
   MemoryPage,
   TasksPage,
   JournalPage,
@@ -20,6 +21,7 @@ import {
 export type DashboardPageId =
   | 'Command Centre'
   | 'Ava Chat'
+  | 'Chat History'
   | 'Memory'
   | 'Tasks'
   | 'Journal'
@@ -41,7 +43,8 @@ interface Props {
 
 const dashboardIcons: Record<DashboardPageId, string> = {
   'Command Centre': '\u26A1',
-  'Ava Chat': '\u2601\uFE0F',
+  'Ava Chat': '\uD83D\uDCAC',
+  'Chat History': '\uD83D\uDCDC',
   'Memory': '\uD83E\uDDE0',
   'Tasks': '\u2705',
   'Journal': '\uD83D\uDCD3',
@@ -61,6 +64,7 @@ const dashboardIcons: Record<DashboardPageId, string> = {
 const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'Command Centre': CommandCentrePage,
   'Ava Chat': AvaChatPage,
+  'Chat History': ChatHistoryPage,
   'Memory': MemoryPage,
   'Tasks': TasksPage,
   'Journal': JournalPage,

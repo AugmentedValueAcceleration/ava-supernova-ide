@@ -282,6 +282,18 @@ async function handleMessage(data) {
     conversation.addUserMessage(data.content);
     let messages = conversation.getMessages();
 
+    // Proactive memory recall on first user message — Ava should know who you are
+    if (memoryManager && messages.filter(m => m.role === 'user').length <= 1) {
+      try {
+        const memories = await memoryManager.recall(data.content, 5);
+        if (memories && memories.length > 0) {
+          const memoryContext = memories.map(m => `[${m.category || 'memory'}] ${m.content}`).join('\n');
+          conversation.addSystemMessage(`[Auto-recalled memories for context]\n${memoryContext}`);
+          messages = conversation.getMessages();
+        }
+      } catch { /* memory recall failed silently */ }
+    }
+
     // Check if conductor orchestration is needed (plan, teach, security, brainstorm modes)
     let conductorContext = null;
     if (conductor && conductor.needsOrchestration(data.content, currentMode)) {

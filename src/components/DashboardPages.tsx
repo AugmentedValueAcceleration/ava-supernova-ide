@@ -374,13 +374,29 @@ function getDayName(dateStr: string): string {
 // ── Weather fetching (direct HTTP, no platform) ────────────────────────────
 
 async function fetchWeatherDirect(): Promise<WeatherData> {
-  // Get location from ipwho.is
-  const geoRes = await fetch('https://ipwho.is/');
-  const geo = await geoRes.json();
-  const lat = geo.latitude;
-  const lon = geo.longitude;
-  const city = geo.city || geo.region || 'Unknown';
-  const country = geo.country_code || '';
+  // Get location — try multiple services with fallback
+  let lat: number | undefined, lon: number | undefined, city = 'Unknown', country = '';
+  try {
+    const geoRes = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(5000) });
+    if (geoRes.ok) {
+      const geo = await geoRes.json();
+      lat = geo.latitude; lon = geo.longitude;
+      city = geo.city || geo.region || 'Unknown';
+      country = geo.country_code || '';
+    }
+  } catch { /* fallback below */ }
+  if (!lat || !lon) {
+    try {
+      const geoRes2 = await fetch('https://ip-api.com/json/?fields=lat,lon,city,countryCode', { signal: AbortSignal.timeout(5000) });
+      if (geoRes2.ok) {
+        const geo2 = await geoRes2.json();
+        lat = geo2.lat; lon = geo2.lon;
+        city = geo2.city || 'Unknown';
+        country = geo2.countryCode || '';
+      }
+    } catch { /* use defaults */ }
+  }
+  if (!lat || !lon) { lat = 51.5; lon = -0.1; city = 'London'; country = 'GB'; } // Safe default
   const location = country ? `${city}, ${country}` : city;
 
   // Fetch weather from Open-Meteo
@@ -1071,34 +1087,7 @@ export function CommandCentrePage() {
           <CCWeatherWidget weather={weather} loading={weatherLoading} onRefresh={loadWeather} />
         </div>
 
-        {/* ── Statistics (2x2 grid) ─────────────────────────────────────── */}
-        <div style={{ marginBottom: 16 }}>
-          <h2 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, color: '#6c7086', marginBottom: 12 }}>
-            {connected ? 'Statistics' : 'Session'}
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: connected ? '1fr 1fr' : '1fr 1fr 1fr', gap: 12 }}>
-            <CCStatCard
-              icon={'\uD83D\uDCCA'}
-              value={formatNumber(tokensUsed)}
-              label="Tokens Used"
-              subtext={connected ? (usageLoading ? 'Loading...' : 'This period') : 'This session'}
-            />
-            <CCStatCard
-              icon={'\u26A1'}
-              value={String(requestsCount)}
-              label="Requests"
-              subtext={connected ? (usageLoading ? 'Loading...' : 'This period') : 'This session'}
-            />
-            {!connected && (
-              <CCStatCard
-                icon={'\uD83E\uDD16'}
-                value={localStorage.getItem('ava-ide-chat-backend') === 'local' ? 'Local' : 'Cloud'}
-                label="Engine"
-                subtext="Current mode"
-              />
-            )}
-          </div>
-        </div>
+        {/* Statistics removed — available in Usage page */}
 
         {/* ── News + Tasks (40/60 split, tasks gets more space) ─────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: '40% 1fr', gap: 16, marginBottom: 16 }}>
@@ -3030,6 +3019,105 @@ export function AvaChatPage() {
         onWidthChange={setTasksPanelWidth}
       />
     )}
+    </div>
+  );
+}
+
+/* ===== 2b. Chat History ===== */
+export function ChatHistoryPage() {
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('ava-ide-chat-history') || '[]';
+      setConversations(JSON.parse(raw));
+    } catch { setConversations([]); }
+  }, []);
+
+  const filtered = search
+    ? conversations.filter(c => c.title?.toLowerCase().includes(search.toLowerCase()))
+    : conversations;
+
+  const deleteConversation = (id: string) => {
+    const updated = conversations.filter(c => c.id !== id);
+    setConversations(updated);
+    try { localStorage.setItem('ava-ide-chat-history', JSON.stringify(updated)); } catch {}
+  };
+
+  return (
+    <div style={pageWrapper}>
+      <div style={{ width: '100%' }}>
+        <div style={pageTitle}>Chat History</div>
+        <div style={{ ...pageSubtitle, marginBottom: 16 }}>Past conversations with Ava</div>
+
+        {/* Search */}
+        <div style={{ marginBottom: 20 }}>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search conversations..."
+            style={{ ...inputStyle, maxWidth: 400, height: 38, borderRadius: 8 }}
+          />
+        </div>
+
+        {filtered.length === 0 ? (
+          <div style={{
+            background: '#181825', border: '1px dashed #313244', borderRadius: 12,
+            padding: '48px 20px', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>💬</div>
+            <div style={{ fontSize: 13, color: '#6c7086' }}>
+              {search ? 'No conversations match your search.' : 'No conversations yet. Start chatting with Ava!'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {filtered.map((conv: any) => {
+              const msgCount = conv.messages?.length || 0;
+              const date = conv.updatedAt ? new Date(conv.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+              const time = conv.updatedAt ? new Date(conv.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+              const preview = conv.messages?.find((m: any) => m.role === 'ava')?.text?.slice(0, 120) || '';
+
+              return (
+                <div key={conv.id} style={{
+                  background: '#181825', border: '1px solid #313244', borderRadius: 10,
+                  padding: '14px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
+                }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = '#313244')}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{conv.title || 'Untitled'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 10, color: '#585b70' }}>{date} {time}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
+                        style={{ background: 'none', border: 'none', color: '#585b70', cursor: 'pointer', fontSize: 12, padding: '2px 4px' }}
+                        title="Delete conversation"
+                      >✕</button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 10, color: '#6c7086', background: '#313244', padding: '2px 8px', borderRadius: 4 }}>
+                      {msgCount} messages
+                    </span>
+                    {conv.model && (
+                      <span style={{ fontSize: 10, color: '#585b70' }}>{conv.model}</span>
+                    )}
+                  </div>
+                  {preview && (
+                    <div style={{ fontSize: 12, color: '#585b70', marginTop: 8, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {preview}...
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

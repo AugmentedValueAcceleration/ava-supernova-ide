@@ -648,6 +648,7 @@ const sections = [
   {
     title: 'Workspace',
     items: [
+      { icon: '\uD83D\uDCDC', label: 'Chat History', desc: 'Past conversations' },
       { icon: '\uD83E\uDDE0', label: 'Memory', desc: 'View and manage memories' },
       { icon: '\u2705', label: 'Tasks', desc: 'Your task list' },
       { icon: '\uD83D\uDCD3', label: 'Journal', desc: 'Daily entries' },
