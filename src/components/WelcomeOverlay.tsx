@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { validateKey, getPlatformKey } from '../lib/api';
+import { validateKey } from '../lib/api';
 
 interface Props {
   onComplete: (navigateTo?: string) => void;
