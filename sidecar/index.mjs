@@ -62,6 +62,7 @@ let conductor = null;
 let conversation = null;
 let toolRegistry = null;
 let memoryManager = null;
+let journalManager = null;
 let currentAbort = null;
 let currentMode = 'work';
 let isRunning = false;
@@ -229,7 +230,7 @@ async function handleInit(data) {
     }
 
     // Journal manager (local-first, stored in ~/.ava/journal/)
-    const journalManager = new JournalManager({ globalDir: AVA_HOME, projectRoot: cwd });
+    journalManager = new JournalManager({ globalDir: AVA_HOME, projectRoot: cwd });
 
     // Shared state
     const sharedState = {
