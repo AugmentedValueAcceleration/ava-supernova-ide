@@ -1469,7 +1469,20 @@ export function AvaChatPage() {
 
   // ── Persist model & mode ──────────────────────────────────────────────────
   useEffect(() => { try { localStorage.setItem('ava-ide-chat-model', model); } catch { /* */ } }, [model]);
-  useEffect(() => { try { localStorage.setItem('ava-ide-chat-mode', mode); } catch { /* */ } }, [mode]);
+  useEffect(() => {
+    try { localStorage.setItem('ava-ide-chat-mode', mode); } catch { /* */ }
+    window.dispatchEvent(new CustomEvent('ava-mode-changed'));
+  }, [mode]);
+
+  // Listen for mode changes from status bar
+  useEffect(() => {
+    const handler = () => {
+      const newMode = localStorage.getItem('ava-ide-chat-mode') as AvaMode;
+      if (newMode && newMode !== mode) setMode(newMode);
+    };
+    window.addEventListener('ava-mode-changed', handler);
+    return () => window.removeEventListener('ava-mode-changed', handler);
+  }, [mode]);
 
   // ── Persist tasks panel state ───────────────────────────────────────────
   useEffect(() => { try { localStorage.setItem('ava-ide-tasks-open', String(tasksPanelOpen)); } catch {} }, [tasksPanelOpen]);

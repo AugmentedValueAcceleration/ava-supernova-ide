@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import TitleBar from './components/TitleBar';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
@@ -74,6 +74,25 @@ export default function App() {
     save('panelTab', tab);
   }, []);
 
+  // Mode state — synced with chat via localStorage + events
+  const MODES = ['work', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
+  const MODE_LABELS: Record<string, string> = { work: 'Work', plan: 'Plan', chat: 'Chat', teach: 'Teach', security: 'Security', brainstorm: 'Brainstorm' };
+  const [currentMode, setCurrentMode] = useState(() => localStorage.getItem('ava-ide-chat-mode') || 'work');
+
+  useEffect(() => {
+    const handler = () => setCurrentMode(localStorage.getItem('ava-ide-chat-mode') || 'work');
+    window.addEventListener('ava-mode-changed', handler);
+    return () => window.removeEventListener('ava-mode-changed', handler);
+  }, []);
+
+  const cycleMode = useCallback(() => {
+    const idx = MODES.indexOf(currentMode);
+    const next = MODES[(idx + 1) % MODES.length];
+    setCurrentMode(next);
+    localStorage.setItem('ava-ide-chat-mode', next);
+    window.dispatchEvent(new CustomEvent('ava-mode-changed'));
+  }, [currentMode]);
+
   const activityBar = (
     <ActivityBar active={activeActivity} onSelect={toggleActivity} sidebarOpen={sidebarOpen} />
   );
@@ -103,7 +122,7 @@ export default function App() {
         {sidebarPosition === 'right' && sidebar}
         {sidebarPosition === 'right' && activityBar}
       </div>
-      <StatusBar onToggleTerminal={toggleBottomPanel} mode="Work" />
+      <StatusBar onToggleTerminal={toggleBottomPanel} mode={MODE_LABELS[currentMode] || 'Work'} onCycleMode={cycleMode} />
       <UpdateChecker />
       {showWelcome && (
         <WelcomeOverlay onComplete={(navigateTo) => {
