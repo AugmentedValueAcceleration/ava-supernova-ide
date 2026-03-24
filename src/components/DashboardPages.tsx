@@ -6162,6 +6162,10 @@ export function SettingsPage() {
   const saveImmediate = (key: string, value: any) => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
+    if (key === 'language') {
+      localStorage.setItem('ava-ide-language', value);
+      import('../lib/i18n').then(({ initLocale }) => initLocale(value));
+    }
     if (connected) {
       apiFetch('/settings', {
         method: 'POST',

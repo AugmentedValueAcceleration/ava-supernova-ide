@@ -1,13 +1,16 @@
 /**
  * IDE i18n — English loaded synchronously (always available),
  * other locales lazy-loaded on demand.
+ * Dispatches 'ava-locale-changed' event to trigger React re-renders.
  */
+import { useState, useEffect } from 'react';
 
 // @ts-ignore — direct path import (Vite resolves via node_modules symlink)
 import { enStrings } from '../../../core/dist/i18n/locales/en.js';
 
 // ── In-process translation engine ──────────────────────────────────────
 let currentLocale = 'en';
+let localeVersion = 0; // bumped on every change to trigger re-renders
 const translations: Record<string, Record<string, string>> = {
   en: enStrings as Record<string, string>,
 };
@@ -30,6 +33,10 @@ export async function initLocale(locale?: string): Promise<void> {
       // Locale not found — falls back to English
     }
   }
+
+  // Notify all components to re-render
+  localeVersion++;
+  window.dispatchEvent(new CustomEvent('ava-locale-changed'));
 }
 
 /** Translate a key with optional interpolation */
@@ -42,6 +49,17 @@ export function t(key: string, params?: Record<string, string | number>): string
     const val = params[k];
     return val !== undefined ? String(val) : `{${k}}`;
   });
+}
+
+/** React hook — forces re-render when locale changes */
+export function useLocale(): string {
+  const [, setVersion] = useState(localeVersion);
+  useEffect(() => {
+    const handler = () => setVersion(++localeVersion);
+    window.addEventListener('ava-locale-changed', handler);
+    return () => window.removeEventListener('ava-locale-changed', handler);
+  }, []);
+  return currentLocale;
 }
 
 /** Get current locale code */
