@@ -6,6 +6,7 @@ import EditorArea from './components/EditorArea';
 import type { DashboardPageId } from './components/EditorArea';
 import BottomPanel from './components/BottomPanel';
 import StatusBar from './components/StatusBar';
+import WelcomeOverlay from './components/WelcomeOverlay';
 
 export type ActivityItem = 'explorer' | 'search' | 'git' | 'ava' | 'extensions' | 'debug' | 'dashboard';
 export type BottomTab = 'terminal' | 'problems' | 'output' | 'debug-console' | 'ava';
@@ -21,6 +22,7 @@ function save(key: string, value: unknown) {
 }
 
 export default function App() {
+  const [showWelcome, setShowWelcome] = useState(() => localStorage.getItem('ava-ide-onboarded') !== 'true');
   const [activeActivity, setActiveActivity] = useState<ActivityItem>(() => load('activity', 'dashboard'));
   const [sidebarOpen, setSidebarOpen] = useState(() => load('sidebarOpen', true));
   const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => load('sidebarPos', 'left'));
@@ -101,6 +103,17 @@ export default function App() {
         {sidebarPosition === 'right' && activityBar}
       </div>
       <StatusBar onToggleTerminal={toggleBottomPanel} mode="Work" />
+      {showWelcome && (
+        <WelcomeOverlay onComplete={(navigateTo) => {
+          setShowWelcome(false);
+          if (navigateTo) {
+            setDashboardPage(navigateTo as DashboardPageId);
+            save('dashPage', navigateTo);
+            setActiveActivity('dashboard');
+            setSidebarOpen(true);
+          }
+        }} />
+      )}
     </div>
   );
 }
