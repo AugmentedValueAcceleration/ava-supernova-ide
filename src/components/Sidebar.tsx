@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { ActivityItem, SidebarPosition } from '../App';
 import { validateKey, getStoredEmail, getStoredTier } from '../lib/api';
+import { t } from '../lib/i18n';
 
 interface Props {
   activePanel: ActivityItem;
@@ -643,43 +644,43 @@ const sectionLabelStyle: React.CSSProperties = {
 const sections = [
   {
     items: [
-      { icon: '\u26A1', label: 'Command Centre', desc: 'Overview of everything' },
-      { icon: '\uD83D\uDCAC', label: 'Ava Chat', desc: 'Full-width AI chat' },
+      { icon: '\u26A1', labelKey: 'dash.nav.command_centre', descKey: 'dash.nav.command_centre_desc' },
+      { icon: '\uD83D\uDCAC', labelKey: 'dash.nav.ava_chat', descKey: 'dash.nav.ava_chat_desc' },
     ],
   },
   {
-    title: 'Workspace',
+    titleKey: 'dash.section.workspace',
     items: [
-      { icon: '\uD83D\uDCDC', label: 'Chat History', desc: 'Past conversations' },
-      { icon: '\uD83E\uDDE0', label: 'Memory', desc: 'View and manage memories' },
-      { icon: '\u2705', label: 'Tasks', desc: 'Your task list' },
-      { icon: '\uD83D\uDCD3', label: 'Journal', desc: 'Daily entries' },
-      { icon: '\uD83C\uDF93', label: 'Learning', desc: 'Curriculums and progress' },
-      { icon: '\uD83D\uDDBC\uFE0F', label: 'Library', desc: 'Images and documents' },
+      { icon: '\uD83D\uDCDC', labelKey: 'dash.nav.chat_history', descKey: 'dash.nav.chat_history_desc' },
+      { icon: '\uD83E\uDDE0', labelKey: 'dash.nav.memory', descKey: 'dash.nav.memory_desc' },
+      { icon: '\u2705', labelKey: 'dash.nav.tasks', descKey: 'dash.nav.tasks_desc' },
+      { icon: '\uD83D\uDCD3', labelKey: 'dash.nav.journal', descKey: 'dash.nav.journal_desc' },
+      { icon: '\uD83C\uDF93', labelKey: 'dash.nav.learning', descKey: 'dash.nav.learning_desc' },
+      { icon: '\uD83D\uDDBC\uFE0F', labelKey: 'dash.nav.library', descKey: 'dash.nav.library_desc' },
     ],
   },
   {
-    title: 'Personalise',
+    titleKey: 'dash.section.personalise',
     items: [
-      { icon: '\uD83C\uDFA8', label: 'Personality', desc: 'Design your AI' },
-      { icon: '\u2601\uFE0F', label: 'Cloud Sync', desc: 'Push to cloud' },
+      { icon: '\uD83C\uDFA8', labelKey: 'dash.nav.personality', descKey: 'dash.nav.personality_desc' },
+      { icon: '\u2601\uFE0F', labelKey: 'dash.nav.cloud_sync', descKey: 'dash.nav.cloud_sync_desc' },
     ],
   },
   {
-    title: 'Account',
+    titleKey: 'dash.section.account',
     items: [
-      { icon: '\uD83D\uDCCA', label: 'Usage', desc: 'Token usage and stats' },
-      { icon: '\uD83D\uDCB3', label: 'Billing', desc: 'Plan and top-ups' },
-      { icon: '\u2699\uFE0F', label: 'Settings', desc: 'Preferences and keys' },
-      { icon: '\uD83D\uDD17', label: 'Connections', desc: 'GitHub, Slack, Discord' },
+      { icon: '\uD83D\uDCCA', labelKey: 'dash.nav.usage', descKey: 'dash.nav.usage_desc' },
+      { icon: '\uD83D\uDCB3', labelKey: 'dash.nav.billing', descKey: 'dash.nav.billing_desc' },
+      { icon: '\u2699\uFE0F', labelKey: 'dash.nav.settings', descKey: 'dash.nav.settings_desc' },
+      { icon: '\uD83D\uDD17', labelKey: 'dash.nav.connections', descKey: 'dash.nav.connections_desc' },
     ],
   },
   {
-    title: 'Help',
+    titleKey: 'dash.section.help',
     items: [
-      { icon: '\uD83C\uDD98', label: 'Support', desc: 'Get help' },
-      { icon: '\uD83D\uDCD6', label: 'Documentation', desc: 'Guides and reference' },
-      { icon: '\uD83D\uDCCB', label: 'Release Notes', desc: 'What\'s new' },
+      { icon: '\uD83C\uDD98', labelKey: 'dash.nav.support', descKey: 'dash.nav.support_desc' },
+      { icon: '\uD83D\uDCD6', labelKey: 'dash.nav.documentation', descKey: 'dash.nav.documentation_desc' },
+      { icon: '\uD83D\uDCCB', labelKey: 'dash.nav.release_notes', descKey: 'dash.nav.release_notes_desc' },
     ],
   },
 ];
@@ -701,13 +702,14 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
         {sections.map((section, si) => {
-          const isCollapsed = section.title ? !!collapsed[section.title] : false;
-          const hasActive = section.items.some(item => activePage === item.label);
+          const sectionTitle = section.titleKey ? t(section.titleKey) : undefined;
+          const isCollapsed = sectionTitle ? !!collapsed[sectionTitle] : false;
+          const hasActive = section.items.some(item => activePage === t(item.labelKey));
           return (
             <div key={si}>
-              {section.title && (
+              {sectionTitle && (
                 <button
-                  onClick={() => toggleSection(section.title!)}
+                  onClick={() => toggleSection(sectionTitle)}
                   style={{
                     ...sectionLabelStyle,
                     display: 'flex', alignItems: 'center', gap: 4, width: '100%',
@@ -719,16 +721,17 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
                     fontSize: 7, transition: 'transform 0.15s',
                     transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
                   }}>▶</span>
-                  {section.title}
+                  {sectionTitle}
                   {hasActive && isCollapsed && <span style={{ fontSize: 7, color: '#a855f7' }}>●</span>}
                 </button>
               )}
               {!isCollapsed && section.items.map((item) => {
-                const isActive = activePage === item.label;
+                const label = t(item.labelKey);
+                const isActive = activePage === label;
                 return (
                   <button
-                    key={item.label}
-                    onClick={() => onDashboardSelect?.(item.label)}
+                    key={item.labelKey}
+                    onClick={() => onDashboardSelect?.(label)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10, width: '100%',
                       padding: '7px 10px', borderRadius: 6, border: 'none',
@@ -742,8 +745,8 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
                   >
                     <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</div>
-                      <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>
+                      <div style={{ fontWeight: 500, fontSize: 12 }}>{label}</div>
+                      <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(item.descKey)}</div>
                     </div>
                   </button>
                 );

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { getPlatformKey, apiStreamUrl } from '../lib/api';
+import { t } from '../lib/i18n';
 
 interface Props {
   activeTab: BottomTab;
@@ -9,12 +10,12 @@ interface Props {
   onClose: () => void;
 }
 
-const tabs: { id: BottomTab; label: string }[] = [
-  { id: 'terminal', label: 'Terminal' },
-  { id: 'ava', label: 'Ava' },
-  { id: 'problems', label: 'Problems' },
-  { id: 'output', label: 'Output' },
-  { id: 'debug-console', label: 'Debug Console' },
+const tabKeys: { id: BottomTab; key: string }[] = [
+  { id: 'terminal', key: 'dash.panel.terminal' },
+  { id: 'ava', key: 'dash.panel.ava' },
+  { id: 'problems', key: 'dash.panel.problems' },
+  { id: 'output', key: 'dash.panel.output' },
+  { id: 'debug-console', key: 'dash.panel.debug' },
 ];
 
 function BlinkingCursor() {
@@ -263,7 +264,7 @@ function AvaCliPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-          placeholder={busy ? 'Ava is working...' : 'Ask Ava anything...'}
+          placeholder={busy ? t('dash.panel.ava_working') : t('dash.panel.ava_placeholder')}
           disabled={busy}
           style={{
             flex: 1, background: 'transparent', border: 'none', outline: 'none',
@@ -342,7 +343,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-          {tabs.map((tab) => {
+          {tabKeys.map((tab) => {
             const isActive = activeTab === tab.id;
             const isAva = tab.id === 'ava';
             return (
@@ -373,7 +374,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 )}
-                {tab.label}
+                {t(tab.key)}
               </button>
             );
           })}
@@ -425,7 +426,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
         {activeTab === 'terminal' && (
           <div style={{ padding: '8px 14px', height: '100%' }}>
             <div style={{ color: '#6c7086', marginBottom: 8, fontSize: 12 }}>
-              Ava Supernova IDE Terminal
+              {t('dash.panel.terminal_title')}
             </div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ color: '#a855f7' }}>ava</span>
@@ -441,19 +442,19 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
 
         {activeTab === 'problems' && (
           <div style={{ color: '#6c7086', fontSize: 12, textAlign: 'center', padding: '24px 0' }}>
-            No problems detected in workspace.
+            {t('dash.panel.no_problems')}
           </div>
         )}
 
         {activeTab === 'output' && (
           <div style={{ color: '#6c7086', fontSize: 12, textAlign: 'center', padding: '24px 0' }}>
-            No output to display.
+            {t('dash.panel.no_output')}
           </div>
         )}
 
         {activeTab === 'debug-console' && (
           <div style={{ color: '#6c7086', fontSize: 12, textAlign: 'center', padding: '24px 0' }}>
-            Debug console is available when a debug session is running.
+            {t('dash.panel.debug_hint')}
           </div>
         )}
       </div>

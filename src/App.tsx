@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { initLocale } from './lib/i18n';
 import TitleBar from './components/TitleBar';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
@@ -78,6 +79,9 @@ export default function App() {
   const MODES = ['work', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
   const MODE_LABELS: Record<string, string> = { work: 'Work', plan: 'Plan', chat: 'Chat', teach: 'Teach', security: 'Security', brainstorm: 'Brainstorm' };
   const [currentMode, setCurrentMode] = useState(() => localStorage.getItem('ava-ide-chat-mode') || 'work');
+
+  // Init i18n on mount
+  useEffect(() => { initLocale(); }, []);
 
   useEffect(() => {
     const handler = () => setCurrentMode(localStorage.getItem('ava-ide-chat-mode') || 'work');

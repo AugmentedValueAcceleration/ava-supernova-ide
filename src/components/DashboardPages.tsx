@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { t } from '../lib/i18n';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
@@ -294,30 +295,30 @@ const NEWS_CATEGORIES = [
 ] as const;
 
 const WMO_EMOJI: Record<number, { label: string; emoji: string }> = {
-  0: { label: 'Clear sky', emoji: '\u2600\uFE0F' },
-  1: { label: 'Mainly clear', emoji: '\uD83C\uDF24\uFE0F' },
-  2: { label: 'Partly cloudy', emoji: '\u26C5' },
-  3: { label: 'Overcast', emoji: '\u2601\uFE0F' },
-  45: { label: 'Fog', emoji: '\uD83C\uDF2B\uFE0F' },
-  48: { label: 'Rime fog', emoji: '\uD83C\uDF2B\uFE0F' },
-  51: { label: 'Light drizzle', emoji: '\uD83C\uDF26\uFE0F' },
-  53: { label: 'Drizzle', emoji: '\uD83C\uDF26\uFE0F' },
-  55: { label: 'Dense drizzle', emoji: '\uD83C\uDF27\uFE0F' },
-  61: { label: 'Light rain', emoji: '\uD83C\uDF26\uFE0F' },
-  63: { label: 'Rain', emoji: '\uD83C\uDF27\uFE0F' },
-  65: { label: 'Heavy rain', emoji: '\uD83C\uDF27\uFE0F' },
-  71: { label: 'Light snow', emoji: '\uD83C\uDF28\uFE0F' },
-  73: { label: 'Snow', emoji: '\u2744\uFE0F' },
-  75: { label: 'Heavy snow', emoji: '\u2744\uFE0F' },
-  77: { label: 'Snow grains', emoji: '\u2744\uFE0F' },
-  80: { label: 'Light showers', emoji: '\uD83C\uDF26\uFE0F' },
-  81: { label: 'Showers', emoji: '\uD83C\uDF27\uFE0F' },
-  82: { label: 'Heavy showers', emoji: '\uD83C\uDF27\uFE0F' },
-  85: { label: 'Snow showers', emoji: '\uD83C\uDF28\uFE0F' },
-  86: { label: 'Heavy snow showers', emoji: '\uD83C\uDF28\uFE0F' },
-  95: { label: 'Thunderstorm', emoji: '\u26A1' },
-  96: { label: 'Thunderstorm + hail', emoji: '\u26A1' },
-  99: { label: 'Thunderstorm + heavy hail', emoji: '\u26A1' },
+  0: { label: t('weather.clear_sky'), emoji: '\u2600\uFE0F' },
+  1: { label: t('weather.mainly_clear'), emoji: '\uD83C\uDF24\uFE0F' },
+  2: { label: t('weather.partly_cloudy'), emoji: '\u26C5' },
+  3: { label: t('weather.overcast'), emoji: '\u2601\uFE0F' },
+  45: { label: t('weather.fog'), emoji: '\uD83C\uDF2B\uFE0F' },
+  48: { label: t('weather.rime_fog'), emoji: '\uD83C\uDF2B\uFE0F' },
+  51: { label: t('weather.light_drizzle'), emoji: '\uD83C\uDF26\uFE0F' },
+  53: { label: t('weather.drizzle'), emoji: '\uD83C\uDF26\uFE0F' },
+  55: { label: t('weather.dense_drizzle'), emoji: '\uD83C\uDF27\uFE0F' },
+  61: { label: t('weather.light_rain'), emoji: '\uD83C\uDF26\uFE0F' },
+  63: { label: t('weather.rain'), emoji: '\uD83C\uDF27\uFE0F' },
+  65: { label: t('weather.heavy_rain'), emoji: '\uD83C\uDF27\uFE0F' },
+  71: { label: t('weather.light_snow'), emoji: '\uD83C\uDF28\uFE0F' },
+  73: { label: t('weather.snow'), emoji: '\u2744\uFE0F' },
+  75: { label: t('weather.heavy_snow'), emoji: '\u2744\uFE0F' },
+  77: { label: t('weather.snow_grains'), emoji: '\u2744\uFE0F' },
+  80: { label: t('weather.light_showers'), emoji: '\uD83C\uDF26\uFE0F' },
+  81: { label: t('weather.showers'), emoji: '\uD83C\uDF27\uFE0F' },
+  82: { label: t('weather.heavy_showers'), emoji: '\uD83C\uDF27\uFE0F' },
+  85: { label: t('weather.snow_showers'), emoji: '\uD83C\uDF28\uFE0F' },
+  86: { label: t('weather.heavy_snow_showers'), emoji: '\uD83C\uDF28\uFE0F' },
+  95: { label: t('weather.thunderstorm'), emoji: '\u26A1' },
+  96: { label: t('weather.thunderstorm_hail'), emoji: '\u26A1' },
+  99: { label: t('weather.thunderstorm_heavy_hail'), emoji: '\u26A1' },
 };
 
 const WEATHER_CACHE_KEY = 'ava-ide-weather-cache';
@@ -558,9 +559,9 @@ function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData
           <div style={{ fontSize: 12, color: '#a6adc8' }}>{weather.condition}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'grid', gridTemplateColumns: 'auto auto', gap: '4px 16px', fontSize: 12, color: '#6c7086' }}>
-          <span>Humidity</span>
+          <span>{t('weather.humidity')}</span>
           <span style={{ color: '#a6adc8' }}>{weather.humidity}%</span>
-          <span>Wind</span>
+          <span>{t('weather.wind')}</span>
           <span style={{ color: '#a6adc8' }}>{weather.wind_kmph} km/h</span>
         </div>
       </div>
@@ -679,7 +680,7 @@ function WorkingHoursClock() {
   const isWorking = start <= end ? (now >= start && now < end) : (now >= start || now < end);
 
   return (
-    <WidgetCard title="Working Hours" icon="🕐">
+    <WidgetCard title={t('dash.cc.working_hours')} icon="🕐">
       <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
         <svg ref={clockRef} width={size} height={size} style={{ flexShrink: 0 }}>
           {/* Clock face */}
@@ -740,7 +741,7 @@ function WorkingHoursClock() {
             {isWorking ? '● Currently working' : '○ Outside working hours'}
           </div>
           <div style={{ fontSize: 10, color: '#585b70', lineHeight: 1.5 }}>
-            Drag the <span style={{ color: '#a855f7' }}>●</span> start and <span style={{ color: '#f5c2e7' }}>●</span> end pins to set your hours. Ava will respect your schedule.
+            {t('dash.cc.working_hours_hint')}
           </div>
         </div>
       </div>
@@ -763,7 +764,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
   };
 
   return (
-    <WidgetCard title="Latest News" icon={'\uD83D\uDCF0'} onRefresh={onRefresh}>
+    <WidgetCard title={t('dash.cc.latest_news')} icon={'\uD83D\uDCF0'} onRefresh={onRefresh}>
       {/* Category carousel */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 12, scrollbarWidth: 'none' }}>
         <style>{`.cc-news-scroll::-webkit-scrollbar { display: none; }`}</style>
@@ -776,7 +777,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
               color: selectedCategory === null ? '#fff' : '#6c7086',
             }}
           >
-            All
+            {t('news.all')}
           </button>
           {NEWS_CATEGORIES.map(cat => (
             <button
@@ -788,7 +789,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
                 color: selectedCategory === cat ? '#fff' : '#6c7086',
               }}
             >
-              {formatCategoryLabel(cat)}
+              {t(`news.${cat.replace(/-/g, '_')}`) || formatCategoryLabel(cat)}
             </button>
           ))}
         </div>
@@ -819,7 +820,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
                   </span>
                 )}
                 {article.reading_time > 0 && (
-                  <span style={{ fontSize: 9, color: '#6c7086' }}>{article.reading_time} min read</span>
+                  <span style={{ fontSize: 9, color: '#6c7086' }}>{t('news.min_read', { n: article.reading_time })}</span>
                 )}
               </div>
               <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0, lineHeight: 1.4 }}>{article.title}</p>
@@ -865,9 +866,9 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
 
   return (
     <WidgetCard
-      title="Today's Tasks"
+      title={t('dash.cc.todays_tasks')}
       icon={'\u2705'}
-      action={tasks.length > 0 ? { label: 'View all', onClick: () => {} } : undefined}
+      action={tasks.length > 0 ? { label: t('dash.cc.view_all'), onClick: () => {} } : undefined}
       onRefresh={onRefresh}
     >
       {loading ? (
@@ -875,7 +876,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
       ) : todayTasks.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', textAlign: 'center' }}>
           <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83C\uDF89'}</span>
-          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>No tasks today. Enjoy the clear board!</p>
+          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_tasks')}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -934,24 +935,23 @@ function CCJournalWidget({ journalDay, loading }: { journalDay: JournalDay | nul
 
   return (
     <WidgetCard
-      title="Today's Journal"
+      title={t('dash.cc.todays_journal')}
       icon={'\uD83D\uDCD3'}
-      action={{ label: hasContent ? 'Open journal' : 'Write entry', onClick: () => {} }}
+      action={{ label: hasContent ? t('dash.cc.open_journal') : t('dash.cc.write_entry'), onClick: () => {} }}
     >
       {loading ? (
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading journal...</div>
       ) : !hasContent ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', textAlign: 'center' }}>
           <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83D\uDCDD'}</span>
-          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>No journal entries today.</p>
-          <p style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>Take a moment to reflect.</p>
+          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_journal')}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {userEntry && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 500, color: '#a6adc8' }}>Your entry</span>
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#a6adc8' }}>{t('dash.journal.your_entries')}</span>
                 {userEntry.mood && (
                   <span style={{ fontSize: 14 }}>{MOOD_EMOJI[userEntry.mood] ?? ''}</span>
                 )}
@@ -964,7 +964,7 @@ function CCJournalWidget({ journalDay, loading }: { journalDay: JournalDay | nul
           {avaEntry && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 500, color: '#a855f7' }}>Ava's entry</span>
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#a855f7' }}>{t('dash.journal.ava_entries')}</span>
               </div>
               <p style={{ fontSize: 12, color: '#6c7086', margin: 0, lineHeight: 1.6 }}>
                 {truncate(avaEntry.content, 120)}
@@ -986,17 +986,16 @@ function CCLearningWidget({ curriculums, loading }: { curriculums: LearningCurri
 
   return (
     <WidgetCard
-      title="Learning"
+      title={t('dash.cc.learning')}
       icon={'\uD83C\uDF93'}
-      action={curriculums.length > 0 ? { label: 'Continue learning', onClick: () => {} } : undefined}
+      action={curriculums.length > 0 ? { label: t('dash.cc.continue_learning'), onClick: () => {} } : undefined}
     >
       {loading ? (
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading learning...</div>
       ) : active.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', textAlign: 'center' }}>
           <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83D\uDCDA'}</span>
-          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>No active learning paths.</p>
-          <p style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>Tell Ava what you want to learn.</p>
+          <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_learning')}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1038,9 +1037,9 @@ function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loadin
 
   return (
     <WidgetCard
-      title="Memory"
+      title={t('dash.cc.memory')}
       icon={'\uD83E\uDDE0'}
-      action={{ label: 'View all', onClick: () => {} }}
+      action={{ label: t('dash.cc.view_all'), onClick: () => {} }}
     >
       {loading ? (
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading memories...</div>
@@ -1077,7 +1076,7 @@ function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loadin
 
 function CCReleaseWidget({ release, loading, onRefresh }: { release: ReleaseInfo | null; loading: boolean; onRefresh: () => void }) {
   return (
-    <WidgetCard title="Latest Release" icon={'\uD83D\uDE80'} onRefresh={onRefresh}>
+    <WidgetCard title={t('dash.cc.latest_release')} icon={'\uD83D\uDE80'} onRefresh={onRefresh}>
       {loading ? (
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading release info...</div>
       ) : !release ? (
@@ -1241,7 +1240,7 @@ export function CommandCentrePage() {
           {connected ? (
             <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
           ) : (
-            <WidgetCard title="Today's Tasks" icon={'\u2705'}>
+            <WidgetCard title={t('dash.cc.todays_tasks')} icon={'\u2705'}>
               <CCNotConnectedPlaceholder widgetName="tasks" />
             </WidgetCard>
           )}
@@ -1252,14 +1251,14 @@ export function CommandCentrePage() {
           {connected ? (
             <CCJournalWidget journalDay={journalDay} loading={journalLoading} />
           ) : (
-            <WidgetCard title="Today's Journal" icon={'\uD83D\uDCD3'}>
+            <WidgetCard title={t('dash.cc.todays_journal')} icon={'\uD83D\uDCD3'}>
               <CCNotConnectedPlaceholder widgetName="journal entries" />
             </WidgetCard>
           )}
           {connected ? (
             <CCLearningWidget curriculums={curriculums} loading={learningLoading} />
           ) : (
-            <WidgetCard title="Learning" icon={'\uD83C\uDF93'}>
+            <WidgetCard title={t('dash.cc.learning')} icon={'\uD83C\uDF93'}>
               <CCNotConnectedPlaceholder widgetName="learning paths" />
             </WidgetCard>
           )}
@@ -1270,7 +1269,7 @@ export function CommandCentrePage() {
           {connected ? (
             <CCMemoryWidget memories={memories} loading={memoriesLoading} />
           ) : (
-            <WidgetCard title="Memory" icon={'\uD83E\uDDE0'}>
+            <WidgetCard title={t('dash.cc.memory')} icon={'\uD83E\uDDE0'}>
               <CCNotConnectedPlaceholder widgetName="memories" />
             </WidgetCard>
           )}
@@ -1306,12 +1305,12 @@ export function AvaChatPage() {
 
   // ── Mode definitions ───────────────────────────────────────────────────────
   const MODES: { id: AvaMode; label: string; icon: string; prefix: string; placeholder: string }[] = [
-    { id: 'work', label: 'Work', icon: '>>', prefix: '', placeholder: 'Build something amazing...' },
-    { id: 'plan', label: 'Plan', icon: '::', prefix: '[Plan Mode] ', placeholder: 'Plan an architecture, feature, or strategy...' },
-    { id: 'chat', label: 'Chat', icon: '..', prefix: '[Chat Mode] ', placeholder: 'Just chat with Ava...' },
-    { id: 'teach', label: 'Teach', icon: '??', prefix: '[Teach Mode] ', placeholder: 'What do you want to learn?' },
-    { id: 'security', label: 'Security', icon: '!!', prefix: '[Security Audit Mode] ', placeholder: 'Describe what to audit...' },
-    { id: 'brainstorm', label: 'Brainstorm', icon: '**', prefix: '[Brainstorm Mode] ', placeholder: 'Throw an idea at me...' },
+    { id: 'work', label: t('mode.work'), icon: '>>', prefix: '', placeholder: t('mode.work.placeholder') },
+    { id: 'plan', label: t('mode.plan'), icon: '::', prefix: '[Plan Mode] ', placeholder: t('mode.plan.placeholder') },
+    { id: 'chat', label: t('mode.chat'), icon: '..', prefix: '[Chat Mode] ', placeholder: t('mode.chat.placeholder') },
+    { id: 'teach', label: t('mode.teach'), icon: '??', prefix: '[Teach Mode] ', placeholder: t('mode.teach.placeholder') },
+    { id: 'security', label: t('mode.security'), icon: '!!', prefix: '[Security Audit Mode] ', placeholder: t('mode.security.placeholder') },
+    { id: 'brainstorm', label: t('mode.brainstorm'), icon: '**', prefix: '[Brainstorm Mode] ', placeholder: t('mode.brainstorm.placeholder') },
   ];
 
   // ── BYOK model map per provider ────────────────────────────────────────────
@@ -1364,7 +1363,7 @@ export function AvaChatPage() {
       if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed) && parsed.length > 0) return parsed; }
     } catch { /* */ }
     return [
-      { id: mkId(), role: 'ava' as const, text: "Hey! I'm Ava, your AI assistant. Ask me anything, plan a feature, debug an issue, or just chat. I'm here for you.", timestamp: Date.now() },
+      { id: mkId(), role: 'ava' as const, text: t('dash.chat.welcome'), timestamp: Date.now() },
     ];
   });
   const [input, setInput] = useState('');
@@ -1376,7 +1375,7 @@ export function AvaChatPage() {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [tokenCount, setTokenCount] = useState(0);
-  const [conversationTitle, setConversationTitle] = useState('New Chat');
+  const [conversationTitle, setConversationTitle] = useState(t('dash.chat.new_chat'));
   const [contextPercent, setContextPercent] = useState(0);
 
   // ── Local sidecar state ─────────────────────────────────────────────────
@@ -1928,7 +1927,7 @@ export function AvaChatPage() {
           const copy = [...prev];
           const last = copy[copy.length - 1];
           if (last?.role === 'ava' && !last.text) {
-            copy[copy.length - 1] = { ...last, text: '(Cancelled)', role: 'system' };
+            copy[copy.length - 1] = { ...last, text: t('dash.chat.cancelled'), role: 'system' };
           }
           return copy;
         });
@@ -1980,9 +1979,9 @@ export function AvaChatPage() {
       } catch { /* */ }
     }
     setMessages([
-      { id: mkId(), role: 'ava', text: "Fresh conversation started. What would you like to do?", timestamp: Date.now() },
+      { id: mkId(), role: 'ava', text: t('dash.chat.fresh'), timestamp: Date.now() },
     ]);
-    setConversationTitle('New Chat');
+    setConversationTitle(t('dash.chat.new_chat'));
     setTokenCount(0);
     setContextPercent(0);
     resetSessionStats();
@@ -2045,7 +2044,7 @@ export function AvaChatPage() {
       const copy = [...prev];
       const last = copy[copy.length - 1];
       if (last?.role === 'ava' && !last.text) {
-        copy[copy.length - 1] = { ...last, text: '(Stopped)' };
+        copy[copy.length - 1] = { ...last, text: t('dash.chat.stopped') };
       }
       return copy;
     });
@@ -2134,7 +2133,7 @@ export function AvaChatPage() {
     if (!sidecar.isReady) {
       setMessages((prev) => [...prev, {
         id: mkId(), role: 'error' as const,
-        text: 'Local engine not ready. Wait for sidecar to start or switch to Cloud mode.',
+        text: t('dash.chat.local_not_ready'),
         timestamp: Date.now(),
       }]);
       return;
@@ -2390,7 +2389,7 @@ export function AvaChatPage() {
     if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
 
     const userMsg: ChatMessage = {
-      id: mkId(), role: 'user', text: trimmed || '(image attached)', timestamp: Date.now(),
+      id: mkId(), role: 'user', text: trimmed || t('dash.chat.image_attached'), timestamp: Date.now(),
       attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
     };
     const updatedMessages = [...messages, userMsg];
@@ -2579,13 +2578,13 @@ export function AvaChatPage() {
                   : (connected ? '#a6e3a1' : '#6c7086'),
                 ...(sidecarStatus === 'starting' ? { animation: 'avaPulse 1.5s infinite' } : {}),
               }} />
-              {chatBackend === 'local' ? 'Local' : 'Cloud'}
+              {chatBackend === 'local' ? t('dash.chat.local') : t('dash.chat.cloud')}
             </button>
           </div>
 
           {/* Token counter */}
           <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used`}>
-            {tokenCount > 0 ? fmtTokens(tokenCount) + ' tokens' : '0 tokens'}
+            {tokenCount > 0 ? fmtTokens(tokenCount) + ' ' + t('dash.chat.tokens') : '0 ' + t('dash.chat.tokens')}
           </span>
 
           {/* Context usage ring */}
@@ -2618,12 +2617,12 @@ export function AvaChatPage() {
               borderRadius: 8, color: tasksPanelOpen ? '#a855f7' : '#6c7086',
               fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
             }}
-            title="Toggle Tasks Panel"
+            title={t('dash.chat.toggle_tasks')}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
               <path d="M3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 3.5h8v1H6v-1Zm-2.25 5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 7.5h8v1H6v-1Zm-2.25 5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 11.5h8v1H6v-1Z"/>
             </svg>
-            Tasks
+            {t('dash.nav.tasks')}
             {sessionTasks.length > 0 && (
               <span style={{
                 fontSize: 9, padding: '1px 5px', borderRadius: 8,
@@ -2642,12 +2641,12 @@ export function AvaChatPage() {
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.2)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
-            title="New Chat"
+            title={t('dash.chat.new_chat')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            New Chat
+            {t('dash.chat.new_chat')}
           </button>
         </div>
       </div>
@@ -2903,7 +2902,7 @@ export function AvaChatPage() {
                         color: copiedMsg === msg.id ? '#a6e3a1' : '#6c7086', fontSize: 10,
                         cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                       }}
-                      title="Copy message"
+                      title={t('dash.chat.copy')}
                     >
                       {copiedMsg === msg.id ? (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -2912,7 +2911,7 @@ export function AvaChatPage() {
                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
                         </svg>
                       )}
-                      {copiedMsg === msg.id ? 'Copied' : 'Copy'}
+                      {copiedMsg === msg.id ? 'Copied' : t('dash.chat.copy')}
                     </button>
                   )}
                 </div>
@@ -2932,7 +2931,7 @@ export function AvaChatPage() {
                 }} />
               ))}
             </div>
-            <span style={{ fontSize: 11, color: '#6c7086' }}>Ava is thinking...</span>
+            <span style={{ fontSize: 11, color: '#6c7086' }}>{t('thinking.0')}</span>
           </div>
         )}
 
@@ -2961,7 +2960,7 @@ export function AvaChatPage() {
                   borderRadius: 6, color: '#6c7086', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                 }}
               >
-                Deny
+                {t('tool.deny')}
               </button>
               <button
                 onClick={approveConfirm}
@@ -2971,7 +2970,7 @@ export function AvaChatPage() {
                   fontWeight: 600, cursor: 'pointer',
                 }}
               >
-                Approve
+                {t('plan.approve')}
               </button>
             </div>
           </div>
@@ -3277,8 +3276,8 @@ export function ChatHistoryPage() {
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
-        <div style={pageTitle}>Chat History</div>
-        <div style={{ ...pageSubtitle, marginBottom: 16 }}>Past conversations with Ava</div>
+        <div style={pageTitle}>{t('dash.nav.chat_history')}</div>
+        <div style={{ ...pageSubtitle, marginBottom: 16 }}>{t('dash.nav.chat_history_desc')}</div>
 
         {/* Search */}
         <div style={{ marginBottom: 20 }}>
@@ -3286,7 +3285,7 @@ export function ChatHistoryPage() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search conversations..."
+            placeholder={t('history.search')}
             style={{ ...inputStyle, maxWidth: 400, height: 38, borderRadius: 8 }}
           />
         </div>
@@ -3426,8 +3425,8 @@ export function MemoryPage() {
       <div style={{ width: '100%' }}>
         {/* Header */}
         <div style={{ marginBottom: 8 }}>
-          <div style={pageTitle}>Memory</div>
-          <div style={pageSubtitle}>Smart, structured knowledge Ava remembers — patterns, preferences, decisions, and more.</div>
+          <div style={pageTitle}>{t('dash.memory.title')}</div>
+          <div style={pageSubtitle}>{t('dash.memory.subtitle')}</div>
         </div>
 
         {!connected && <NotConnectedBanner />}
@@ -3436,10 +3435,10 @@ export function MemoryPage() {
         {memories.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
             {[
-              { label: 'Total Memories', value: memories.length, color: '#a855f7' },
-              { label: 'Global', value: globalCount, color: '#60a5fa' },
-              { label: 'Project', value: projectCount, color: '#34d399' },
-              { label: 'Categories', value: Object.keys(categoryCounts).length, color: '#f59e0b' },
+              { label: t('dash.memory.total'), value: memories.length, color: '#a855f7' },
+              { label: t('dash.memory.global'), value: globalCount, color: '#60a5fa' },
+              { label: t('dash.memory.project'), value: projectCount, color: '#34d399' },
+              { label: t('dash.memory.categories'), value: Object.keys(categoryCounts).length, color: '#f59e0b' },
             ].map(s => (
               <div key={s.label} style={{
                 background: '#181825', border: '1px solid #313244', borderRadius: 10,
@@ -3460,7 +3459,7 @@ export function MemoryPage() {
           </svg>
           <input
             type="text"
-            placeholder="Search memories, tags..."
+            placeholder={t('dash.memory.search')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{
@@ -3517,7 +3516,7 @@ export function MemoryPage() {
                 <div style={{ fontSize: 13, color: '#6c7086' }}>
                   {search || categoryFilter
                     ? 'No memories match your filters.'
-                    : 'No memories yet. Ava will remember things as you work together — patterns, preferences, decisions, and more.'}
+                    : t('dash.cc.no_memories')}
                 </div>
               </div>
             ) : (
@@ -3791,10 +3790,10 @@ export function TasksPage() {
   };
 
   const filterTabs: { key: TaskFilter; label: string; count: number }[] = [
-    { key: 'all', label: 'Active', count: stats.all },
-    { key: 'today', label: 'Today', count: stats.today },
-    { key: 'overdue', label: 'Overdue', count: stats.overdue },
-    { key: 'completed', label: 'Completed', count: stats.completed },
+    { key: 'all', label: t('dash.tasks.active'), count: stats.all },
+    { key: 'today', label: t('dash.tasks.today'), count: stats.today },
+    { key: 'overdue', label: t('dash.tasks.overdue'), count: stats.overdue },
+    { key: 'completed', label: t('dash.tasks.completed'), count: stats.completed },
   ];
 
   return (
@@ -3802,7 +3801,7 @@ export function TasksPage() {
       <div style={{ width: '100%' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div style={pageTitle}>Tasks</div>
+          <div style={pageTitle}>{t('dash.tasks.title')}</div>
           <button
             onClick={() => { resetForm(); setShowForm(!showForm); }}
             style={{
@@ -3820,17 +3819,17 @@ export function TasksPage() {
             New Task
           </button>
         </div>
-        <div style={pageSubtitle}>Manage your tasks and track progress</div>
+        <div style={pageSubtitle}>{t('dash.tasks.subtitle')}</div>
 
         {!connected && <NotConnectedBanner />}
 
         {/* Stats bar */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
           {[
-            { label: 'Active', value: stats.all, color: '#3b82f6' },
-            { label: 'Today', value: stats.today, color: '#f59e0b' },
-            { label: 'Overdue', value: stats.overdue, color: stats.overdue > 0 ? '#ef4444' : '#6c7086' },
-            { label: 'Completed', value: stats.completed, color: '#22c55e' },
+            { label: t('dash.tasks.active'), value: stats.all, color: '#3b82f6' },
+            { label: t('dash.tasks.today'), value: stats.today, color: '#f59e0b' },
+            { label: t('dash.tasks.overdue'), value: stats.overdue, color: stats.overdue > 0 ? '#ef4444' : '#6c7086' },
+            { label: t('dash.tasks.completed'), value: stats.completed, color: '#22c55e' },
           ].map((s) => (
             <div key={s.label} style={{
               background: '#181825', border: '1px solid #313244', borderRadius: 10,
@@ -3912,10 +3911,10 @@ export function TasksPage() {
                   onChange={setFormCategory}
                   height={34}
                   options={[
-                    { value: 'work', label: 'Work' },
-                    { value: 'personal', label: 'Personal' },
-                    { value: 'learning', label: 'Learning' },
-                    { value: 'project', label: 'Project' },
+                    { value: 'work', label: t('dash.tasks.cat.work') },
+                    { value: 'personal', label: t('dash.tasks.cat.personal') },
+                    { value: 'learning', label: t('dash.tasks.cat.learning') },
+                    { value: 'project', label: t('dash.tasks.cat.project') },
                   ]}
                 />
               </div>
@@ -3931,7 +3930,7 @@ export function TasksPage() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
               >
-                Add Task
+                {t('dash.tasks.add')}
               </button>
               <button
                 onClick={resetForm}
@@ -4234,8 +4233,8 @@ export function JournalPage() {
     <div style={{ ...pageWrapper, display: 'flex', gap: 24 }}>
       {/* Main content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={pageTitle}>Journal</div>
-        <div style={pageSubtitle}>Your daily reflections and Ava's observations</div>
+        <div style={pageTitle}>{t('dash.journal.title')}</div>
+        <div style={pageSubtitle}>{t('dash.journal.subtitle')}</div>
 
         {!connected && <NotConnectedBanner />}
 
@@ -4251,7 +4250,7 @@ export function JournalPage() {
               display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            Your Journal
+            {t('dash.journal.your_entries')}
             {userEntry && (
               <span style={{
                 width: 6, height: 6, borderRadius: '50%', background: '#cdd6f4', display: 'inline-block',
@@ -4268,7 +4267,7 @@ export function JournalPage() {
               display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            Ava's Journal
+            {t('dash.journal.ava_entries')}
             {avaEntry && (
               <span style={{
                 width: 6, height: 6, borderRadius: '50%', background: '#a855f7', display: 'inline-block',
@@ -4380,7 +4379,7 @@ export function JournalPage() {
                 <textarea
                   value={entry}
                   onChange={(e) => setEntry(e.target.value)}
-                  placeholder="How are you feeling? What happened today? Write freely..."
+                  placeholder={t('dash.journal.write')}
                   style={{
                     width: '100%', minHeight: 200, background: 'rgba(255,255,255,0.03)',
                     border: '1px solid rgba(168,85,247,0.15)',
@@ -4694,18 +4693,18 @@ export function LearningPage() {
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
-        <div style={pageTitle}>Learning</div>
-        <div style={pageSubtitle}>Your learning paths, created by Ava through conversation.</div>
+        <div style={pageTitle}>{t('dash.learning.title')}</div>
+        <div style={pageSubtitle}>{t('dash.learning.subtitle')}</div>
 
         {!connected && <NotConnectedBanner />}
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 28 }}>
           {[
-            { label: 'Total Curricula', value: curricula.length, color: '#a855f7' },
-            { label: 'In Progress', value: inProgress, color: '#60a5fa' },
-            { label: 'Completed', value: completedCount, color: '#34d399' },
-            { label: 'Total Lessons', value: totalLessons, color: '#f59e0b' },
+            { label: t('dash.learning.total_curricula'), value: curricula.length, color: '#a855f7' },
+            { label: t('dash.learning.in_progress'), value: inProgress, color: '#60a5fa' },
+            { label: t('dash.learning.completed'), value: completedCount, color: '#34d399' },
+            { label: t('dash.learning.total_lessons'), value: totalLessons, color: '#f59e0b' },
           ].map(s => (
             <div key={s.label} style={{
               background: '#181825', border: '1px solid #313244', borderRadius: 10,
@@ -4723,12 +4722,12 @@ export function LearningPage() {
               <>
                 {/* How it works */}
                 <div style={{ ...card, marginBottom: 16 }}>
-                  <div style={{ ...sectionTitle, marginBottom: 14 }}>How it works</div>
+                  <div style={{ ...sectionTitle, marginBottom: 14 }}>{t('dash.learning.how_it_works')}</div>
                   {[
-                    { icon: '\uD83D\uDCAC', title: 'Tell Ava what you want to learn', desc: 'Say "I want to learn Rust" or "Teach me system design" in the chat.' },
-                    { icon: '\uD83E\uDDE0', title: 'Ava assesses your level', desc: "She'll ask about your background, goals, and available time." },
-                    { icon: '\uD83D\uDCDA', title: 'She builds your curriculum', desc: 'Structured modules with concepts, exercises, projects, and quizzes.' },
-                    { icon: '\uD83C\uDF93', title: 'Learn at your pace', desc: 'Tell Ava when you\'re ready. She teaches, quizzes, and adapts.' },
+                    { icon: '\uD83D\uDCAC', title: t('dash.learning.step1'), desc: t('dash.learning.step1_desc') },
+                    { icon: '\uD83E\uDDE0', title: t('dash.learning.step2'), desc: t('dash.learning.step2_desc') },
+                    { icon: '\uD83D\uDCDA', title: t('dash.learning.step3'), desc: t('dash.learning.step3_desc') },
+                    { icon: '\uD83C\uDF93', title: t('dash.learning.step4'), desc: t('dash.learning.step4_desc') },
                   ].map(step => (
                     <div key={step.title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
                       <span style={{ fontSize: 16, flexShrink: 0 }}>{step.icon}</span>
@@ -4744,7 +4743,7 @@ export function LearningPage() {
                   padding: '24px 20px', textAlign: 'center',
                 }}>
                   <div style={{ fontSize: 13, color: '#6c7086' }}>
-                    Ask Ava to teach you something \u2014 your learning paths will appear here.
+                    {t('dash.learning.empty')}
                   </div>
                 </div>
               </>
@@ -4792,8 +4791,8 @@ export function LearningPage() {
                         <span style={{ fontSize: 9, color: '#6c7086' }}>
                           {curr.status === 'completed' ? 'Completed' : `${Math.round(progress)}% complete`}
                         </span>
-                        {moduleCount > 0 && <span style={{ fontSize: 9, color: '#6c7086' }}>{moduleCount} modules</span>}
-                        {lessonCount > 0 && <span style={{ fontSize: 9, color: '#6c7086' }}>{lessonCount} lessons</span>}
+                        {moduleCount > 0 && <span style={{ fontSize: 9, color: '#6c7086' }}>{moduleCount} {t('dash.learning.modules')}</span>}
+                        {lessonCount > 0 && <span style={{ fontSize: 9, color: '#6c7086' }}>{lessonCount} {t('dash.learning.lessons')}</span>}
                       </div>
                     </button>
                   );
@@ -4897,18 +4896,18 @@ export function LibraryPage() {
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '24px 32px 0', flexShrink: 0 }}>
-        <h1 style={pageTitle}>Library</h1>
-        <p style={{ ...pageSubtitle, marginBottom: 20 }}>Images, documents, presentations, and spreadsheets created by Ava</p>
+        <h1 style={pageTitle}>{t('dash.library.title')}</h1>
+        <p style={{ ...pageSubtitle, marginBottom: 20 }}>{t('dash.library.subtitle')}</p>
 
         {/* Filter tabs + view toggle */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ display: 'flex', gap: 6 }}>
             {([
-              { id: 'all', label: 'All', count: typeCounts.all },
-              { id: 'image', label: 'Images', count: typeCounts.image },
-              { id: 'document', label: 'Docs', count: typeCounts.document },
-              { id: 'spreadsheet', label: 'Sheets', count: typeCounts.spreadsheet },
-              { id: 'presentation', label: 'Slides', count: typeCounts.presentation },
+              { id: 'all', label: t('dash.library.all'), count: typeCounts.all },
+              { id: 'image', label: t('dash.library.images'), count: typeCounts.image },
+              { id: 'document', label: t('dash.library.docs'), count: typeCounts.document },
+              { id: 'spreadsheet', label: t('dash.library.sheets'), count: typeCounts.spreadsheet },
+              { id: 'presentation', label: t('dash.library.slides'), count: typeCounts.presentation },
             ] as { id: LibraryFileType | 'all'; label: string; count: number }[]).map((tab) => (
               <button
                 key={tab.id}
@@ -4964,22 +4963,22 @@ export function LibraryPage() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 32px 32px' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>
-            <div style={{ fontSize: 13 }}>Scanning files...</div>
+            <div style={{ fontSize: 13 }}>{t('dash.library.scanning')}</div>
           </div>
         ) : !connected ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDDBC\uFE0F'}</div>
-            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>Connect to view your Library</div>
-            <div style={{ fontSize: 12, color: '#6c7086' }}>Your images, documents, and creations will appear here</div>
+            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>{t('dash.library.connect')}</div>
+            <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.library.empty')}</div>
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>{filter === 'all' ? '\uD83D\uDCC1' : FILE_TYPE_ICONS[filter as LibraryFileType]}</div>
             <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
-              {filter === 'all' ? 'No files yet' : `No ${filter}s yet`}
+              {t('dash.library.no_files')}
             </div>
             <div style={{ fontSize: 12, color: '#6c7086' }}>
-              Ask Ava to create images, documents, presentations, or spreadsheets
+              {t('dash.library.ask_ava')}
             </div>
           </div>
         ) : viewMode === 'grid' ? (
@@ -5118,7 +5117,7 @@ export function LibraryPage() {
                 textDecoration: 'none', flexShrink: 0,
               }}
             >
-              Open
+              {t('dash.library.open')}
             </a>
           )}
           <button
@@ -5128,7 +5127,7 @@ export function LibraryPage() {
               background: 'transparent', color: '#6c7086', fontSize: 12, cursor: 'pointer',
               flexShrink: 0,
             }}
-          >Close</button>
+          >{t('dash.library.close')}</button>
         </div>
       )}
     </div>
@@ -5149,31 +5148,31 @@ export function PersonalityPage() {
   const [saved, setSaved] = useState(false);
 
   const PRONOUNS = [
-    { value: 'she/her', label: 'she / her' },
-    { value: 'he/him', label: 'he / him' },
-    { value: 'they/them', label: 'they / them' },
+    { value: 'she/her', label: t('dash.personality.pronouns.she') },
+    { value: 'he/him', label: t('dash.personality.pronouns.he') },
+    { value: 'they/them', label: t('dash.personality.pronouns.they') },
   ];
 
   const TONES = [
-    { value: 'warm', label: 'Warm', desc: 'Warm and encouraging \u2014 celebrates wins, genuinely cares' },
-    { value: 'direct', label: 'Direct', desc: 'Direct and no-nonsense \u2014 straight to the point' },
-    { value: 'playful', label: 'Playful', desc: 'Playful and witty \u2014 uses humour naturally' },
-    { value: 'professional', label: 'Professional', desc: 'Professional and polished \u2014 clear, authoritative' },
-    { value: 'dry-wit', label: 'Dry Wit', desc: 'Dry wit \u2014 understated brilliance, bone dry humour' },
+    { value: 'warm', label: t('dash.personality.tone.warm'), desc: t('dash.personality.tone.warm_desc') },
+    { value: 'direct', label: t('dash.personality.tone.direct'), desc: t('dash.personality.tone.direct_desc') },
+    { value: 'playful', label: t('dash.personality.tone.playful'), desc: t('dash.personality.tone.playful_desc') },
+    { value: 'professional', label: t('dash.personality.tone.professional'), desc: t('dash.personality.tone.professional_desc') },
+    { value: 'dry-wit', label: t('dash.personality.tone.dry'), desc: t('dash.personality.tone.dry_desc') },
   ];
 
   const ENERGIES = [
-    { value: 'calm', label: 'Calm', desc: 'Calm and steady \u2014 reassuring, never rushes' },
-    { value: 'enthusiastic', label: 'Enthusiastic', desc: 'Enthusiastic \u2014 gets excited when plans come together' },
-    { value: 'measured', label: 'Measured', desc: 'Measured and deliberate \u2014 weighs every word' },
-    { value: 'excitable', label: 'Excitable', desc: 'Excitable \u2014 high energy, expressive, visibly excited' },
+    { value: 'calm', label: t('dash.personality.energy.calm'), desc: t('dash.personality.energy.calm_desc') },
+    { value: 'enthusiastic', label: t('dash.personality.energy.enthusiastic'), desc: t('dash.personality.energy.enthusiastic_desc') },
+    { value: 'measured', label: t('dash.personality.energy.measured'), desc: t('dash.personality.energy.measured_desc') },
+    { value: 'excitable', label: t('dash.personality.energy.excitable'), desc: t('dash.personality.energy.excitable_desc') },
   ];
 
   const STYLES = [
-    { value: 'concise', label: 'Concise', desc: 'Concise \u2014 sharp, no filler, one sentence over three' },
-    { value: 'detailed', label: 'Detailed', desc: 'Detailed \u2014 thorough, explains the why' },
-    { value: 'conversational', label: 'Conversational', desc: 'Conversational \u2014 natural, talks like a person' },
-    { value: 'structured', label: 'Structured', desc: 'Structured \u2014 headers, bullets, everything in its place' },
+    { value: 'concise', label: t('dash.personality.style.concise'), desc: t('dash.personality.style.concise_desc') },
+    { value: 'detailed', label: t('dash.personality.style.detailed'), desc: t('dash.personality.style.detailed_desc') },
+    { value: 'conversational', label: t('dash.personality.style.conversational'), desc: t('dash.personality.style.conversational_desc') },
+    { value: 'structured', label: t('dash.personality.style.structured'), desc: t('dash.personality.style.structured_desc') },
   ];
 
   useEffect(() => {
@@ -5256,9 +5255,9 @@ export function PersonalityPage() {
       <div style={{ width: '100%' }}>
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4' }}>Design Your AI</div>
+          <div style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.personality.title')}</div>
           <div style={{ fontSize: 13, color: '#6c7086', marginTop: 4 }}>
-            Make it yours \u2014 choose a name, personality, and communication style
+            {t('dash.personality.subtitle')}
           </div>
         </div>
 
@@ -5266,7 +5265,7 @@ export function PersonalityPage() {
 
         {/* Name */}
         <div style={{ marginBottom: 24 }}>
-          <div style={sectionLabelStyle}>Name</div>
+          <div style={sectionLabelStyle}>{t('dash.personality.name')}</div>
           <input
             type="text"
             value={name}
@@ -5283,7 +5282,7 @@ export function PersonalityPage() {
 
         {/* Pronouns */}
         <div style={{ marginBottom: 24 }}>
-          <div style={sectionLabelStyle}>Pronouns</div>
+          <div style={sectionLabelStyle}>{t('dash.personality.pronouns')}</div>
           <div style={{ display: 'flex', gap: 8 }}>
             {PRONOUNS.map(p => (
               <button
@@ -5308,7 +5307,7 @@ export function PersonalityPage() {
 
         {/* Tone */}
         <div style={{ marginBottom: 24 }}>
-          <div style={sectionLabelStyle}>Tone</div>
+          <div style={sectionLabelStyle}>{t('dash.personality.tone')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
             {TONES.map(t => (
               <button key={t.value} onClick={() => setTone(t.value)} style={optionCard(tone === t.value)}>
@@ -5332,7 +5331,7 @@ export function PersonalityPage() {
 
         {/* Energy */}
         <div style={{ marginBottom: 24 }}>
-          <div style={sectionLabelStyle}>Energy</div>
+          <div style={sectionLabelStyle}>{t('dash.personality.energy')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {ENERGIES.map(e => (
               <button key={e.value} onClick={() => setEnergy(e.value)} style={optionCard(energy === e.value)}>
@@ -5356,7 +5355,7 @@ export function PersonalityPage() {
 
         {/* Communication Style */}
         <div style={{ marginBottom: 24 }}>
-          <div style={sectionLabelStyle}>Communication Style</div>
+          <div style={sectionLabelStyle}>{t('dash.personality.style')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {STYLES.map(s => (
               <button key={s.value} onClick={() => setStyle(s.value)} style={optionCard(style === s.value)}>
@@ -5468,14 +5467,14 @@ export function CloudSyncPage() {
   const isSyncEnabled = (key: string) => syncPrefs[key] ?? (key === 'shared' ? false : true);
 
   const DATA_TYPES = [
-    { key: 'memory',      label: 'Memory',           icon: '\uD83E\uDDE0', description: 'Patterns, preferences, decisions, project knowledge',    endpoint: '/memories' },
-    { key: 'tasks',       label: 'Tasks',            icon: '\u2713',       description: 'Personal task list, priorities, due dates, subtasks',     endpoint: '/tasks' },
-    { key: 'journal',     label: 'Journal',          icon: '\uD83D\uDCD6', description: 'Daily entries \u2014 your reflections and Ava\'s observations', endpoint: '/journal' },
-    { key: 'learning',    label: 'Learning',         icon: '\uD83C\uDF93', description: 'Curriculums, lesson progress, quiz scores',              endpoint: '/learning' },
-    { key: 'history',     label: 'Chat History',     icon: '\uD83D\uDCAC', description: 'Conversation history with Ava',                          endpoint: '/history' },
-    { key: 'settings',    label: 'Settings',         icon: '\u2699',       description: 'Preferences, model selection, permission mode',           endpoint: '/settings' },
-    { key: 'personality', label: 'Personality',      icon: '\uD83C\uDFAD', description: 'Custom AI name, tone, energy, communication style',       endpoint: '/settings' },
-    { key: 'shared',      label: 'Shared Learnings', icon: '\uD83D\uDCA1', description: 'Community-confirmed improvements that help everyone',        endpoint: '/shared-learnings' },
+    { key: 'memory',      label: t('dash.sync.memory'),           icon: '\uD83E\uDDE0', description: t('dash.sync.memory_desc'),    endpoint: '/memories' },
+    { key: 'tasks',       label: t('dash.sync.tasks'),            icon: '\u2713',       description: t('dash.sync.tasks_desc'),     endpoint: '/tasks' },
+    { key: 'journal',     label: t('dash.sync.journal'),          icon: '\uD83D\uDCD6', description: t('dash.sync.journal_desc'), endpoint: '/journal' },
+    { key: 'learning',    label: t('dash.nav.learning'),         icon: '\uD83C\uDF93', description: t('dash.nav.learning_desc'),              endpoint: '/learning' },
+    { key: 'history',     label: t('dash.sync.chat_history'),     icon: '\uD83D\uDCAC', description: t('dash.sync.chat_history_desc'),                          endpoint: '/history' },
+    { key: 'settings',    label: t('dash.sync.settings'),         icon: '\u2699',       description: t('dash.sync.settings_desc'),           endpoint: '/settings' },
+    { key: 'personality', label: t('dash.sync.personality'),      icon: '\uD83C\uDFAD', description: t('dash.sync.personality_desc'),       endpoint: '/settings' },
+    { key: 'shared',      label: t('dash.sync.shared_learnings'), icon: '\uD83D\uDCA1', description: t('dash.sync.shared_learnings_desc'),        endpoint: '/shared-learnings' },
   ];
 
   const [counts, setCounts] = useState<Record<string, { local: number; cloud: number; lastSynced?: string }>>({});
@@ -5533,9 +5532,9 @@ export function CloudSyncPage() {
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 8 }}>
-          <div style={pageTitle}>Cloud Sync</div>
+          <div style={pageTitle}>{t('dash.sync.title')}</div>
           <div style={pageSubtitle}>
-            Everything is stored locally by default. Push to cloud to access your data from the companion app and other devices.
+            {t('dash.sync.subtitle')}
           </div>
         </div>
 
@@ -5544,7 +5543,7 @@ export function CloudSyncPage() {
             background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.20)',
             borderRadius: 10, padding: '12px 16px', fontSize: 12, color: '#f59e0b', marginBottom: 20,
           }}>
-            Connect a platform account to enable cloud sync. Your data stays local until you choose to push it.
+            {t('dash.sync.connect_to_sync')}
           </div>
         )}
 
@@ -5654,7 +5653,7 @@ export function CloudSyncPage() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
                         </svg>
-                        Push to Cloud
+                        {t('dash.sync.sync_now')}
                       </>
                     )}
                   </button>
@@ -5793,8 +5792,8 @@ export function UsagePage() {
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 8 }}>
-          <div style={pageTitle}>Usage Analytics</div>
-          <div style={pageSubtitle}>Track token usage, costs, and model performance.</div>
+          <div style={pageTitle}>{t('dash.usage.title')}</div>
+          <div style={pageSubtitle}>{t('dash.usage.subtitle')}</div>
         </div>
 
         {!connected && <NotConnectedBanner />}
@@ -5815,7 +5814,7 @@ export function UsagePage() {
                 transition: 'all 0.15s',
               }}
             >
-              {tab === 'session' ? 'Session' : 'All-Time'}
+              {tab === 'session' ? t('dash.usage.session') : t('dash.usage.all_time')}
             </button>
           ))}
         </div>
@@ -5827,12 +5826,12 @@ export function UsagePage() {
                 {/* Session Summary */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
                   {[
-                    { label: 'Input Tokens', value: formatTokens(inputTokens), color: '' },
-                    { label: 'Output Tokens', value: formatTokens(outputTokens), color: '' },
-                    { label: 'Total Tokens', value: formatTokens(totalTokens), color: '#a855f7', highlight: true },
-                    { label: 'Messages', value: String(messages), color: '' },
-                    { label: 'Tool Calls', value: String(toolCalls), color: '' },
-                    { label: 'Est. Cost', value: `$${totalCost.toFixed(4)}`, color: costColour(totalCost) },
+                    { label: t('dash.usage.input_tokens'), value: formatTokens(inputTokens), color: '' },
+                    { label: t('dash.usage.output_tokens'), value: formatTokens(outputTokens), color: '' },
+                    { label: t('dash.usage.total_tokens'), value: formatTokens(totalTokens), color: '#a855f7', highlight: true },
+                    { label: t('dash.usage.messages'), value: String(messages), color: '' },
+                    { label: t('dash.usage.tool_calls'), value: String(toolCalls), color: '' },
+                    { label: t('dash.usage.est_cost'), value: `$${totalCost.toFixed(4)}`, color: costColour(totalCost) },
                   ].map(s => (
                     <div key={s.label} style={{
                       background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: '16px',
@@ -5938,10 +5937,10 @@ export function UsagePage() {
                 {/* Overview Stats */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
                   {[
-                    { label: 'This Month', value: formatTokens(tokensMonth), sub: monthChange !== null ? `${Number(monthChange) >= 0 ? '+' : ''}${monthChange}% vs last` : 'first month' },
-                    { label: 'Last Month', value: formatTokens(tokensLastMonth) },
-                    { label: 'Avg / Session', value: formatTokens(avgPerSession) },
-                    { label: 'Total Sessions', value: String(totalSessions) },
+                    { label: t('dash.usage.this_month'), value: formatTokens(tokensMonth), sub: monthChange !== null ? `${Number(monthChange) >= 0 ? '+' : ''}${monthChange}% ${t('dash.usage.vs_last')}` : t('dash.usage.first_month') },
+                    { label: t('dash.usage.last_month'), value: formatTokens(tokensLastMonth) },
+                    { label: t('dash.usage.avg_session'), value: formatTokens(avgPerSession) },
+                    { label: t('dash.usage.total_sessions'), value: String(totalSessions) },
                   ].map(s => (
                     <div key={s.label} style={{
                       background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: '16px',
@@ -6241,9 +6240,9 @@ export function SettingsPage() {
     <div style={pageWrapper}>
       <div style={{ width: '100%', paddingBottom: 48 }}>
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4' }}>Settings</div>
+          <div style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.title')}</div>
           <div style={{ fontSize: 13, color: '#6c7086', marginTop: 4 }}>
-            Preferences and configuration for Ava | Supernova.
+            {t('dash.settings.subtitle')}
           </div>
         </div>
 
@@ -6734,11 +6733,11 @@ export function BillingPage() {
   const tier = localStorage.getItem('ava-ide-tier') || 'free';
 
   const tierConfig: Record<string, { label: string; color: string; bg: string; limit: string }> = {
-    free:       { label: 'Free', color: '#a6e3a1', bg: 'rgba(166,227,161,0.10)', limit: '3M tokens' },
-    pro:        { label: 'Pro', color: '#89b4fa', bg: 'rgba(137,180,250,0.10)', limit: '15M tokens' },
-    ultra:      { label: 'Ultra', color: '#cba6f7', bg: 'rgba(203,166,247,0.10)', limit: '40M tokens' },
-    enterprise: { label: 'Enterprise', color: '#f9e2af', bg: 'rgba(249,226,175,0.10)', limit: '100M tokens' },
-    admin:      { label: 'Admin', color: '#f38ba8', bg: 'rgba(243,139,168,0.10)', limit: 'Unlimited' },
+    free:       { label: t('dash.billing.plan.free'), color: '#a6e3a1', bg: 'rgba(166,227,161,0.10)', limit: t('dash.billing.tokens.free') },
+    pro:        { label: t('dash.billing.plan.pro'), color: '#89b4fa', bg: 'rgba(137,180,250,0.10)', limit: t('dash.billing.tokens.pro') },
+    ultra:      { label: t('dash.billing.plan.ultra'), color: '#cba6f7', bg: 'rgba(203,166,247,0.10)', limit: t('dash.billing.tokens.ultra') },
+    enterprise: { label: t('dash.billing.plan.enterprise'), color: '#f9e2af', bg: 'rgba(249,226,175,0.10)', limit: t('dash.billing.tokens.enterprise') },
+    admin:      { label: t('dash.billing.plan.admin'), color: '#f38ba8', bg: 'rgba(243,139,168,0.10)', limit: t('dash.billing.tokens.admin') },
   };
   const tc = tierConfig[tier] || tierConfig.free;
 
@@ -6753,8 +6752,8 @@ export function BillingPage() {
 
   return (
     <div style={pageWrapper}>
-      <h1 style={pageTitle}>Billing</h1>
-      <p style={pageSubtitle}>Your plan, token usage, and top-ups</p>
+      <h1 style={pageTitle}>{t('dash.billing.title')}</h1>
+      <p style={pageSubtitle}>{t('dash.billing.subtitle')}</p>
 
       {!connected ? (
         <div style={{ ...card, textAlign: 'center', padding: 60 }}>
@@ -6769,7 +6768,7 @@ export function BillingPage() {
           {/* Current Plan */}
           <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>Current Plan</div>
+              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>{t('dash.billing.current_plan')}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4' }}>{tc.label}</span>
                 <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, color: tc.color, background: tc.bg }}>{tc.limit}</span>
@@ -6848,20 +6847,20 @@ export function BillingPage() {
 /* ===== 12. Connections ===== */
 export function ConnectionsPage() {
   const services = [
-    { icon: '\uD83D\uDC19', name: 'GitHub', desc: 'Connect your GitHub account for PR creation and repo management.' },
-    { icon: '\u2709\uFE0F', name: 'Email (SMTP)', desc: 'Send emails through Ava using your SMTP server.' },
-    { icon: '\uD83D\uDCAC', name: 'Slack', desc: 'Post messages to Slack channels via incoming webhook.' },
-    { icon: '\uD83C\uDFAE', name: 'Discord', desc: 'Send notifications to Discord via webhook.' },
+    { icon: '\uD83D\uDC19', name: t('dash.connections.github'), desc: t('dash.connections.github_desc') },
+    { icon: '\u2709\uFE0F', name: t('dash.connections.email'), desc: t('dash.connections.email_desc') },
+    { icon: '\uD83D\uDCAC', name: t('dash.connections.slack'), desc: t('dash.connections.slack_desc') },
+    { icon: '\uD83C\uDFAE', name: t('dash.connections.discord'), desc: t('dash.connections.discord_desc') },
   ];
 
   return (
     <div style={pageWrapper}>
-      <h1 style={pageTitle}>Connections</h1>
-      <p style={pageSubtitle}>Connect external services for extended capabilities</p>
+      <h1 style={pageTitle}>{t('dash.connections.title')}</h1>
+      <p style={pageSubtitle}>{t('dash.connections.subtitle')}</p>
 
       <div style={{ ...card, textAlign: 'center', padding: '32px 20px', marginBottom: 24 }}>
         <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDD17'}</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Coming Soon</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.connections.coming_soon')}</div>
         <div style={{ fontSize: 12, color: '#6c7086' }}>Service connections are being built and will be available in a future update.</div>
       </div>
 
@@ -6964,7 +6963,7 @@ export function SupportPage() {
       {/* Header */}
       <div style={{ padding: '24px 32px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <h1 style={{ ...pageTitle, marginBottom: 0 }}>Support</h1>
+          <h1 style={{ ...pageTitle, marginBottom: 0 }}>{t('dash.support.title')}</h1>
           <button
             onClick={() => { setShowNewForm(!showNewForm); setSelectedTicket(null); }}
             style={{
@@ -6972,9 +6971,9 @@ export function SupportPage() {
               background: showNewForm ? '#313244' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
               color: showNewForm ? '#6c7086' : '#fff', border: 'none',
             }}
-          >{showNewForm ? 'Cancel' : 'New Ticket'}</button>
+          >{showNewForm ? 'Cancel' : t('dash.support.new_ticket')}</button>
         </div>
-        <p style={{ ...pageSubtitle, marginBottom: 16 }}>Get help or report issues</p>
+        <p style={{ ...pageSubtitle, marginBottom: 16 }}>{t('dash.support.subtitle')}</p>
 
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
@@ -7476,8 +7475,8 @@ export function DocumentationPage() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px' }}>
-        <h1 style={pageTitle}>Documentation</h1>
-        <p style={{ ...pageSubtitle, marginBottom: 32 }}>Everything you need to know about Ava | Supernova IDE</p>
+        <h1 style={pageTitle}>{t('dash.docs.title')}</h1>
+        <p style={{ ...pageSubtitle, marginBottom: 32 }}>{t('dash.docs.subtitle')}</p>
 
         {filteredSections.map((s) => (
           <div key={s.id} id={`doc-${s.id}`} style={{ marginBottom: 40 }}>
@@ -7498,10 +7497,10 @@ const PLATFORM_COLOURS: Record<string, string> = {
   companion: '#fab387',
 };
 const PLATFORM_LABELS: Record<string, string> = {
-  core: 'Core',
-  extension: 'Extension',
-  ide: 'IDE',
-  companion: 'Companion',
+  core: t('dash.releases.core'),
+  extension: t('dash.releases.extension'),
+  ide: t('dash.releases.ide'),
+  companion: t('dash.releases.companion'),
 };
 
 export function ReleaseNotesPage() {
@@ -7586,8 +7585,8 @@ export function ReleaseNotesPage() {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
-            <div style={pageTitle}>Release Notes</div>
-            <div style={pageSubtitle}>What's new across the Ava | Supernova ecosystem</div>
+            <div style={pageTitle}>{t('dash.releases.title')}</div>
+            <div style={pageSubtitle}>{t('dash.releases.subtitle')}</div>
           </div>
           <CustomSelect
             value={selectedMonth}
@@ -7614,7 +7613,7 @@ export function ReleaseNotesPage() {
                   color: isActive ? (tab === 'all' || tab === 'ide' || tab === 'companion' ? '#11111b' : '#fff') : '#6c7086',
                 }}
               >
-                {tab === 'all' ? 'All' : PLATFORM_LABELS[tab]}
+                {tab === 'all' ? t('dash.releases.all') : PLATFORM_LABELS[tab]}
               </button>
             );
           })}

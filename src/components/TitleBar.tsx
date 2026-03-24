@@ -1,4 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { t } from '../lib/i18n';
 
 export default function TitleBar() {
   const win = getCurrentWindow();
@@ -24,7 +25,7 @@ export default function TitleBar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <img src="/icon.png" width="18" height="18" style={{ borderRadius: 4 }} alt="Ava" />
         <span style={{ fontSize: 12, color: '#cdd6f4', fontWeight: 500, letterSpacing: 0.3 }}>
-          Ava | Supernova IDE
+          {t('dash.titlebar.title')}
         </span>
       </div>
 
@@ -39,7 +40,7 @@ export default function TitleBar() {
           color: '#a6adc8',
         }}
       >
-        Welcome
+        {t('dash.titlebar.welcome')}
       </div>
 
       {/* Right: Window controls */}
