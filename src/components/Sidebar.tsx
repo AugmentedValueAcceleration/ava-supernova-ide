@@ -467,6 +467,7 @@ function AuthSection() {
       try {
         localStorage.setItem('ava-ide-platform-key', trimmed);
         if (result.email) localStorage.setItem('ava-ide-email', result.email);
+        if ((result as any).name) localStorage.setItem('ava-ide-user-name', (result as any).name);
         if (result.tier) localStorage.setItem('ava-ide-tier', result.tier);
       } catch { /* */ }
       setShowConnect(false);
@@ -485,6 +486,7 @@ function AuthSection() {
     try {
       localStorage.removeItem('ava-ide-platform-key');
       localStorage.removeItem('ava-ide-email');
+      localStorage.removeItem('ava-ide-user-name');
       localStorage.removeItem('ava-ide-tier');
     } catch { /* */ }
     window.dispatchEvent(new CustomEvent('ava-auth-changed'));

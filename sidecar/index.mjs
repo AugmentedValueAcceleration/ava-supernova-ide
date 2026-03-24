@@ -213,6 +213,20 @@ async function handleInit(data) {
       })
     );
 
+    // Inject user identity so Ava knows who she's talking to
+    if (config.userName || config.userEmail) {
+      const msgs = conversation.getMessages();
+      const sysMsgContent = msgs[0]?.role === 'system' ? msgs[0].content : '';
+      const userInfo = [
+        config.userName ? `Name: ${config.userName}` : null,
+        config.userEmail ? `Email: ${config.userEmail}` : null,
+        config.userTier ? `Plan: ${config.userTier}` : null,
+      ].filter(Boolean).join(' | ');
+      conversation.setSystemPrompt(
+        sysMsgContent + `\n\n[User: ${userInfo}]\nAddress the user by their name when appropriate.`
+      );
+    }
+
     // Inject working hours into the system prompt so Ava respects the user's schedule
     if (config.workingHours) {
       const { start, end } = config.workingHours;

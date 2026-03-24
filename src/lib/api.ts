@@ -116,7 +116,7 @@ export async function validateKey(key: string): Promise<{ valid: boolean; email?
       return { valid: false, error: 'Invalid API key' };
     }
     const data = await res.json();
-    return { valid: true, email: data.email, tier: data.tier || data.plan || 'free' };
+    return { valid: true, email: data.email, name: data.name || data.display_name || data.email?.split('@')[0], tier: data.tier || data.plan || 'free' };
   } catch {
     return { valid: false, error: 'Could not reach platform' };
   }
