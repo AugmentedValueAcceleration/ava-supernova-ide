@@ -14,31 +14,37 @@ export default function UpdateChecker() {
   const [progress, setProgress] = useState(0);
   const [dismissed, setDismissed] = useState(false);
 
-  const checkForUpdate = useCallback(async () => {
+  const [showUpToDate, setShowUpToDate] = useState(false);
+
+  const checkForUpdate = useCallback(async (manual = false) => {
     setStatus('checking');
+    setShowUpToDate(false);
     try {
       const result = await check();
       if (result?.available) {
         setUpdate({ version: result.version, body: result.body || '' });
+        setDismissed(false);
         setStatus('idle');
       } else {
         setStatus('idle');
+        if (manual) { setShowUpToDate(true); setTimeout(() => setShowUpToDate(false), 3000); }
       }
     } catch {
       setStatus('idle');
+      if (manual) { setShowUpToDate(true); setTimeout(() => setShowUpToDate(false), 3000); }
     }
   }, []);
 
   // Check on launch + every 30 minutes
   useEffect(() => {
-    const timer = setTimeout(checkForUpdate, 5000); // 5s after launch
-    const interval = setInterval(checkForUpdate, 30 * 60 * 1000);
+    const timer = setTimeout(() => checkForUpdate(false), 5000); // 5s after launch
+    const interval = setInterval(() => checkForUpdate(false), 30 * 60 * 1000);
     return () => { clearTimeout(timer); clearInterval(interval); };
   }, [checkForUpdate]);
 
   // Listen for manual check requests
   useEffect(() => {
-    const handler = () => checkForUpdate();
+    const handler = () => checkForUpdate(true);
     window.addEventListener('ava-check-updates', handler);
     return () => window.removeEventListener('ava-check-updates', handler);
   }, [checkForUpdate]);
@@ -77,6 +83,39 @@ export default function UpdateChecker() {
       window.location.reload();
     }
   }, []);
+
+  // Checking spinner
+  if (status === 'checking') {
+    return (
+      <div style={{
+        position: 'fixed', bottom: 16, right: 16, zIndex: 9998,
+        background: '#1e1e2e', border: '1px solid #313244',
+        borderRadius: 10, padding: '12px 18px',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 14, animation: 'spin 1s linear infinite' }}>⟳</span>
+        <span style={{ fontSize: 12, color: '#a6adc8' }}>Checking for updates...</span>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // Up to date toast
+  if (showUpToDate && !update) {
+    return (
+      <div style={{
+        position: 'fixed', bottom: 16, right: 16, zIndex: 9998,
+        background: '#1e1e2e', border: '1px solid rgba(166,227,161,0.3)',
+        borderRadius: 10, padding: '12px 18px',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 14 }}>✓</span>
+        <span style={{ fontSize: 12, color: '#a6e3a1' }}>You're up to date — v{APP_VERSION}</span>
+      </div>
+    );
+  }
 
   if (!update || dismissed) return null;
 
