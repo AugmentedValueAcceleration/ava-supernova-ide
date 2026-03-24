@@ -83,7 +83,7 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
 
 export default function EditorArea({ dashboardPage }: Props) {
   const activePage = dashboardPage || 'Command Centre';
-  const DashboardComponent = dashboardComponents[activePage];
+  const DashboardComponent = dashboardComponents[activePage] || CommandCentrePage;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

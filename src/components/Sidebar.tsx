@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import type { ActivityItem, SidebarPosition } from '../App';
-import { validateKey, getStoredEmail, getStoredTier } from '../lib/api';
-import { t } from '../lib/i18n';
+import { validateKey, getStoredEmail, getStoredTier, isConnected } from '../lib/api';
+import { t, useLocale } from '../lib/i18n';
 
 interface Props {
   activePanel: ActivityItem;
@@ -687,7 +687,18 @@ const sections = [
   },
 ];
 
+// Pages hidden when user is not connected (BYOK mode)
+const CONNECTED_ONLY_PAGES = ['dash.nav.billing', 'dash.nav.cloud_sync'];
+
 function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?: (page: string) => void; activePage?: string | null }) {
+  useLocale(); // re-render on language change
+  const [, setAuthVersion] = useState(0);
+  useEffect(() => {
+    const handler = () => setAuthVersion(v => v + 1);
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
+  const connected = isConnected();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     try { const s = localStorage.getItem('ava-ide-sidebar-collapsed'); return s ? JSON.parse(s) : {}; } catch { return {}; }
   });
@@ -706,7 +717,8 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
         {sections.map((section, si) => {
           const sectionTitle = section.titleKey ? t(section.titleKey) : undefined;
           const isCollapsed = sectionTitle ? !!collapsed[sectionTitle] : false;
-          const hasActive = section.items.some(item => activePage === t(item.labelKey));
+          const visibleItems = section.items.filter(item => connected || !CONNECTED_ONLY_PAGES.includes(item.labelKey));
+          const hasActive = visibleItems.some(item => activePage === t(item.labelKey));
           return (
             <div key={si}>
               {sectionTitle && (
@@ -727,7 +739,9 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
                   {hasActive && isCollapsed && <span style={{ fontSize: 7, color: '#a855f7' }}>●</span>}
                 </button>
               )}
-              {!isCollapsed && section.items.map((item) => {
+              {!isCollapsed && section.items
+                .filter(item => connected || !CONNECTED_ONLY_PAGES.includes(item.labelKey))
+                .map((item) => {
                 const label = t(item.labelKey);
                 const isActive = activePage === label;
                 return (
