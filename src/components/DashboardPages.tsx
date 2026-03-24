@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { t } from '../lib/i18n';
+import { t, useLocale } from '../lib/i18n';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
@@ -1118,6 +1118,7 @@ function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
 // ── Main Command Centre Page ────────────────────────────────────────────────
 
 export function CommandCentrePage() {
+  useLocale();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -1282,6 +1283,7 @@ export function CommandCentrePage() {
 
 /* ===== 2. Ava Chat ===== */
 export function AvaChatPage() {
+  useLocale();
   // ── Types ──────────────────────────────────────────────────────────────────
   type AvaMode = 'work' | 'plan' | 'chat' | 'teach' | 'security' | 'brainstorm';
   interface ChatMessage {
@@ -3256,6 +3258,7 @@ export function AvaChatPage() {
 
 /* ===== 2b. Chat History ===== */
 export function ChatHistoryPage() {
+  useLocale();
   const [conversations, setConversations] = useState<any[]>([]);
   const [search, setSearch] = useState('');
 
@@ -3355,6 +3358,7 @@ export function ChatHistoryPage() {
 
 /* ===== 3. Memory ===== */
 export function MemoryPage() {
+  useLocale();
   const connected = checkConnected();
   const { data: rawMemories, loading, error } = useApiData<any[]>('/memories', []);
   const [memories, setMemories] = useState<any[]>([]);
@@ -3683,6 +3687,7 @@ function formatTaskDate(dateStr: string | undefined): string {
 }
 
 export function TasksPage() {
+  useLocale();
   const connected = checkConnected();
   const { data: rawTasks, loading, error } = useApiData<any>('/tasks', []);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -4163,6 +4168,7 @@ const MOOD_COLORS_MAP = ['', '#ef4444', '#f59e0b', '#6b7280', '#3b82f6', '#34d39
 type JournalTab = 'user' | 'ava';
 
 export function JournalPage() {
+  useLocale();
   const [dateOffset, setDateOffset] = useState(0);
   const [tab, setTab] = useState<JournalTab>('user');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -4531,6 +4537,7 @@ export function JournalPage() {
 
 /* ===== 6. Learning ===== */
 export function LearningPage() {
+  useLocale();
   const connected = checkConnected();
   const { data: rawData, loading, error } = useApiData<any>('/learning', null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -4851,6 +4858,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export function LibraryPage() {
+  useLocale();
   const connected = checkConnected();
   const [files, setFiles] = useState<LibraryFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -5139,6 +5147,7 @@ export function LibraryPage() {
 
 /* ===== 8. Personality ===== */
 export function PersonalityPage() {
+  useLocale();
   const connected = checkConnected();
   const [name, setName] = useState('Ava');
   const [pronouns, setPronouns] = useState('she/her');
@@ -5452,6 +5461,7 @@ export function PersonalityPage() {
 
 /* ===== 8. Cloud Sync ===== */
 export function CloudSyncPage() {
+  useLocale();
   const connected = checkConnected();
   const [syncingTypes, setSyncingTypes] = useState<Set<string>>(new Set());
   const [syncResults, setSyncResults] = useState<Record<string, { success: boolean; count?: number; error?: string }>>({});
@@ -5714,6 +5724,7 @@ export function CloudSyncPage() {
 
 /* ===== 9. Usage ===== */
 export function UsagePage() {
+  useLocale();
   const connected = checkConnected();
   const [activeTab, setActiveTab] = useState<'session' | 'alltime'>('session');
   const { data: usage, loading, error } = useApiData<any>('/usage/summary', null);
@@ -6041,6 +6052,7 @@ export function UsagePage() {
 
 /* ===== 10. Settings ===== */
 export function SettingsPage() {
+  useLocale();
   const connected = checkConnected();
   const [settings, setSettings] = useState<any>({
     activeModel: '',
@@ -6735,6 +6747,7 @@ export function SettingsPage() {
 
 /* ===== 11. Billing ===== */
 export function BillingPage() {
+  useLocale();
   const connected = checkConnected();
   const { data: usage, loading } = useApiData<any>('/usage/summary', null);
   const tier = localStorage.getItem('ava-ide-tier') || 'free';
@@ -6853,6 +6866,7 @@ export function BillingPage() {
 
 /* ===== 12. Connections ===== */
 export function ConnectionsPage() {
+  useLocale();
   const services = [
     { icon: '\uD83D\uDC19', name: t('dash.connections.github'), desc: t('dash.connections.github_desc') },
     { icon: '\u2709\uFE0F', name: t('dash.connections.email'), desc: t('dash.connections.email_desc') },
@@ -6891,6 +6905,7 @@ export function ConnectionsPage() {
 
 /* ===== 13. Support ===== */
 export function SupportPage() {
+  useLocale();
   const connected = checkConnected();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -7133,6 +7148,7 @@ interface DocSection {
 }
 
 export function DocumentationPage() {
+  useLocale();
   const [activeSection, setActiveSection] = useState<string>('getting-started');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -7511,6 +7527,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 
 export function ReleaseNotesPage() {
+  useLocale();
   const connected = checkConnected();
   const { data: apiReleases, loading } = useApiData<any[]>('/releases', []);
   const [expanded, setExpanded] = useState<string | null>(null);

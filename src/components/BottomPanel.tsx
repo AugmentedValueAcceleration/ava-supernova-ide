@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { getPlatformKey, apiStreamUrl } from '../lib/api';
-import { t } from '../lib/i18n';
+import { t, useLocale } from '../lib/i18n';
 
 interface Props {
   activeTab: BottomTab;
@@ -280,6 +280,7 @@ function AvaCliPanel() {
 // ── Main Bottom Panel ──────────────────────────────────────────────────────
 
 export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) {
+  useLocale();
   const [panelHeight, setPanelHeight] = useState(250);
   const resizing = useRef(false);
   const startY = useRef(0);

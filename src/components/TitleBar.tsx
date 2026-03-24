@@ -1,7 +1,8 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { t } from '../lib/i18n';
+import { t, useLocale } from '../lib/i18n';
 
 export default function TitleBar() {
+  useLocale();
   const win = getCurrentWindow();
 
   return (

@@ -1,5 +1,5 @@
 import { APP_VERSION } from './UpdateChecker';
-import { t } from '../lib/i18n';
+import { t, useLocale } from '../lib/i18n';
 
 interface Props {
   onToggleTerminal: () => void;
@@ -12,7 +12,7 @@ const MODE_SYMBOLS: Record<string, string> = {
 };
 
 export default function StatusBar({ onToggleTerminal, mode, onCycleMode }: Props) {
-
+  useLocale();
   return (
     <div
       style={{
