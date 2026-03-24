@@ -3,8 +3,8 @@
  * other locales lazy-loaded on demand.
  */
 
-// @ts-ignore — import from core dist (resolved by Vite)
-import { enStrings } from '@ava/core/dist/i18n/locales/en.js';
+// @ts-ignore — direct path import (Vite resolves via node_modules symlink)
+import { enStrings } from '../../../core/dist/i18n/locales/en.js';
 
 // ── In-process translation engine ──────────────────────────────────────
 let currentLocale = 'en';
