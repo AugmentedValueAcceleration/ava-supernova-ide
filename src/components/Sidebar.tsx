@@ -470,6 +470,7 @@ function AuthSection() {
       } catch { /* */ }
       setShowConnect(false);
       setKeyInput('');
+      window.dispatchEvent(new CustomEvent('ava-auth-changed'));
     } catch {
       setError('Could not reach platform');
     }
@@ -485,6 +486,7 @@ function AuthSection() {
       localStorage.removeItem('ava-ide-email');
       localStorage.removeItem('ava-ide-tier');
     } catch { /* */ }
+    window.dispatchEvent(new CustomEvent('ava-auth-changed'));
   };
 
   const inputStyle: React.CSSProperties = {

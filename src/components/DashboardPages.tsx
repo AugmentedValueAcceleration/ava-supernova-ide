@@ -1121,6 +1121,16 @@ function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
 export function CommandCentrePage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
+  // Re-render on auth changes (login/logout)
+  const [authRefresh, setAuthRefresh] = useState(0);
+  useEffect(() => {
+    const handler = () => setAuthRefresh(n => n + 1);
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
+  void authRefresh;
+
   const connected = checkConnected();
   const email = getStoredEmail();
   const dateStr = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -1338,6 +1348,14 @@ export function AvaChatPage() {
   const fmtTokens = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
 
   // ── State ──────────────────────────────────────────────────────────────────
+  // Re-render on auth changes
+  const [authRefreshChat, setAuthRefreshChat] = useState(0);
+  useEffect(() => {
+    const handler = () => setAuthRefreshChat(n => n + 1);
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
+  void authRefreshChat;
   const connected = checkConnected();
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
