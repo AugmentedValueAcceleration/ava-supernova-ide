@@ -5441,6 +5441,19 @@ export function CloudSyncPage() {
   const [syncingTypes, setSyncingTypes] = useState<Set<string>>(new Set());
   const [syncResults, setSyncResults] = useState<Record<string, { success: boolean; count?: number; error?: string }>>({});
 
+  // Per-section sync toggles (local-first, persisted to localStorage)
+  const [syncPrefs, setSyncPrefs] = useState<Record<string, boolean>>(() => {
+    try { const raw = localStorage.getItem('ava-ide-sync-prefs'); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+  });
+  const togglePref = (key: string) => {
+    setSyncPrefs(prev => {
+      const next = { ...prev, [key]: !(prev[key] ?? (key === 'shared' ? false : true)) };
+      try { localStorage.setItem('ava-ide-sync-prefs', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const isSyncEnabled = (key: string) => syncPrefs[key] ?? (key === 'shared' ? false : true);
+
   const DATA_TYPES = [
     { key: 'memory',      label: 'Memory',           icon: '\uD83E\uDDE0', description: 'Patterns, preferences, decisions, project knowledge',    endpoint: '/memories' },
     { key: 'tasks',       label: 'Tasks',            icon: '\u2713',       description: 'Personal task list, priorities, due dates, subtasks',     endpoint: '/tasks' },
@@ -5495,6 +5508,7 @@ export function CloudSyncPage() {
 
   const handlePushAll = () => {
     for (const dt of DATA_TYPES) {
+      if (!isSyncEnabled(dt.key)) continue; // Respect toggles
       const c = counts[dt.key];
       if (c && c.local > 0) {
         handlePush(dt.key, dt.endpoint);
@@ -5535,8 +5549,22 @@ export function CloudSyncPage() {
                 background: '#181825', border: '1px solid #313244', borderRadius: 10,
                 padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 20, flexShrink: 0, width: 28, textAlign: 'center' }}>{icon}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                  {/* Sync toggle */}
+                  <button
+                    onClick={() => togglePref(key)}
+                    style={{
+                      width: 32, height: 18, borderRadius: 9, flexShrink: 0, position: 'relative', cursor: 'pointer', border: 'none',
+                      background: isSyncEnabled(key) ? '#a855f7' : '#313244', transition: 'background 0.2s',
+                    }}
+                    title={isSyncEnabled(key) ? `Disable ${label} sync` : `Enable ${label} sync`}
+                  >
+                    <div style={{
+                      width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2,
+                      left: isSyncEnabled(key) ? 16 : 2, transition: 'left 0.2s',
+                    }} />
+                  </button>
+                  <span style={{ fontSize: 20, flexShrink: 0, width: 28, textAlign: 'center', opacity: isSyncEnabled(key) ? 1 : 0.3 }}>{icon}</span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 13, fontWeight: 500, color: '#cdd6f4' }}>{label}</span>
@@ -5582,7 +5610,7 @@ export function CloudSyncPage() {
                   )}
                   <button
                     onClick={() => handlePush(key, endpoint)}
-                    disabled={!connected || isSyncing || c.local === 0}
+                    disabled={!connected || isSyncing || c.local === 0 || !isSyncEnabled(key)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6,
                       background: '#a855f7', border: 'none', borderRadius: 8,
