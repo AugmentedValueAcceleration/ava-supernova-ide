@@ -6,7 +6,6 @@ interface Props {
   onCycleMode?: () => void;
 }
 
-const MODES = ['Work', 'Plan', 'Chat', 'Teach', 'Security', 'Brainstorm'];
 const MODE_SYMBOLS: Record<string, string> = {
   Work: '>>', Plan: '::', Chat: '..', Teach: '??', Security: '!!', Brainstorm: '**',
 };

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { check } from '@tauri-apps/plugin-updater';
-import { relaunch } from '@tauri-apps/plugin-updater';
 
 export const APP_VERSION = '0.1.0';
 
@@ -70,7 +69,13 @@ export default function UpdateChecker() {
   }, []);
 
   const handleRelaunch = useCallback(async () => {
-    await relaunch();
+    // Tauri v2: relaunch via getCurrentWindow or process exit + auto-restart
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().close();
+    } catch {
+      window.location.reload();
+    }
   }, []);
 
   if (!update || dismissed) return null;
