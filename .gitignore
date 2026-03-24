@@ -11,3 +11,6 @@ src-tauri/journal/
 # Bundled binaries (built at release time, not committed)
 src-tauri/binaries/
 src-tauri/resources/sidecar-bundle.mjs
+
+# Updater signing key (NEVER commit the private key)
+src-tauri/.tauri-updater-key

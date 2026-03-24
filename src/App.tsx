@@ -7,6 +7,7 @@ import type { DashboardPageId } from './components/EditorArea';
 import BottomPanel from './components/BottomPanel';
 import StatusBar from './components/StatusBar';
 import WelcomeOverlay from './components/WelcomeOverlay';
+import UpdateChecker from './components/UpdateChecker';
 
 export type ActivityItem = 'explorer' | 'search' | 'git' | 'ava' | 'extensions' | 'debug' | 'dashboard';
 export type BottomTab = 'terminal' | 'problems' | 'output' | 'debug-console' | 'ava';
@@ -103,6 +104,7 @@ export default function App() {
         {sidebarPosition === 'right' && activityBar}
       </div>
       <StatusBar onToggleTerminal={toggleBottomPanel} mode="Work" />
+      <UpdateChecker />
       {showWelcome && (
         <WelcomeOverlay onComplete={(navigateTo) => {
           setShowWelcome(false);

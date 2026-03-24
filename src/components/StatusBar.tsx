@@ -1,3 +1,5 @@
+import { APP_VERSION } from './UpdateChecker';
+
 interface Props {
   onToggleTerminal: () => void;
   mode: string;
@@ -28,6 +30,17 @@ export default function StatusBar({ onToggleTerminal, mode }: Props) {
     >
       {/* Left section */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {/* Version */}
+        <span
+          onClick={() => window.dispatchEvent(new CustomEvent('ava-check-updates'))}
+          style={{ fontSize: 11, color: '#fff', cursor: 'pointer', fontWeight: 500, opacity: 0.9 }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+          title="Click to check for updates"
+        >
+          v{APP_VERSION}
+        </span>
+
         {/* Git branch */}
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
