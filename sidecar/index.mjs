@@ -228,9 +228,13 @@ async function handleInit(data) {
       );
     }
 
+    // Journal manager (local-first, stored in ~/.ava/journal/)
+    const journalManager = new JournalManager({ globalDir: AVA_HOME, projectRoot: cwd });
+
     // Shared state
     const sharedState = {
       memoryManager,
+      journalManager,
       platformKey: config.platformKey,
     };
 
@@ -459,6 +463,21 @@ async function handleMessage(data) {
     );
 
     conversation.setMessages(updated);
+
+    // Auto-journal: every 5th user message, Ava writes a brief observation
+    const userMsgCount = updated.filter(m => m.role === 'user').length;
+    if (journalManager && userMsgCount > 0 && userMsgCount % 5 === 0) {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const lastFew = updated.slice(-10).map(m => {
+          const text = typeof m.content === 'string' ? m.content : (m.content?.[0]?.text || '');
+          return `[${m.role}] ${text.slice(0, 200)}`;
+        }).join('\n');
+        const observation = `Session observation (${userMsgCount} messages):\n${lastFew}`;
+        await journalManager.appendAvaEntry(today, observation, ['auto', 'session']);
+        emit({ event: 'info', message: 'Auto-journal: Ava observation saved' });
+      } catch { /* non-critical */ }
+    }
   } catch (err) {
     if (err.name === 'AbortError') {
       emit({ event: 'cancelled' });
