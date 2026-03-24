@@ -1980,11 +1980,21 @@ export function AvaChatPage() {
   }, []);
 
   // ── Cancel streaming ──────────────────────────────────────────────────────
-  const cancelStream = useCallback(() => {
+  // Soft interrupt — tap to get Ava's attention
+  const interruptStream = useCallback(() => {
     const sidecar = getSidecar();
-    // Send cancel command and also kill + restart the sidecar if it's stuck
+    sidecar.interrupt().catch(() => {
+      // Interrupt not supported or failed — fall back to hard cancel
+      sidecar.cancel().catch(() => {});
+    });
+    setPendingConfirm(null);
+    // Don't set streaming to false — Ava will respond to the interrupt
+  }, []);
+
+  // Hard stop — long press or fallback
+  const hardStop = useCallback(() => {
+    const sidecar = getSidecar();
     sidecar.cancel().catch(() => {
-      // If cancel fails (already processing / stuck), force stop and restart
       sidecar.stop().then(() => {
         sidecar.start({
           providers: {},
@@ -1998,14 +2008,8 @@ export function AvaChatPage() {
         } as SidecarConfig).catch(() => {});
       }).catch(() => {});
     });
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
-    }
-    // Clear pending state
     setPendingConfirm(null);
     setStreaming(false);
-    // Mark last ava message as complete if empty
     setMessages((prev) => {
       const copy = [...prev];
       const last = copy[copy.length - 1];
@@ -2015,6 +2019,12 @@ export function AvaChatPage() {
       return copy;
     });
   }, [model, mode]);
+
+  // Stop button: single click = soft interrupt, hold 800ms = hard stop
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelStream = useCallback(() => {
+    interruptStream();
+  }, [interruptStream]);
 
   // ── Render markdown (basic) ───────────────────────────────────────────────
   const renderMarkdown = useCallback((text: string) => {
@@ -3149,20 +3159,23 @@ export function AvaChatPage() {
               </svg>
             </button>
 
-            {/* Send / Stop button */}
+            {/* Send / Interrupt button */}
             {streaming ? (
               <button
                 onClick={cancelStream}
+                onMouseDown={() => { stopTimerRef.current = setTimeout(hardStop, 800); }}
+                onMouseUp={() => { if (stopTimerRef.current) { clearTimeout(stopTimerRef.current); stopTimerRef.current = null; } }}
+                onMouseLeave={() => { if (stopTimerRef.current) { clearTimeout(stopTimerRef.current); stopTimerRef.current = null; } }}
                 style={{
-                  width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.5)',
-                  background: 'linear-gradient(135deg, #e53935, #c62828)', color: '#fff',
+                  width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(168,85,247,0.5)',
+                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0, boxShadow: '0 2px 8px rgba(229,57,53,0.35)',
+                  flexShrink: 0, boxShadow: '0 2px 8px rgba(168,85,247,0.35)',
                 }}
-                title="Stop generating"
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <rect x="3" y="3" width="10" height="10" rx="1.5" />
+                  <rect x="3" y="3" width="4" height="10" rx="1" />
+                  <rect x="9" y="3" width="4" height="10" rx="1" />
                 </svg>
               </button>
             ) : (

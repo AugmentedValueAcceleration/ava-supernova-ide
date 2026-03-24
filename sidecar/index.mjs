@@ -496,6 +496,65 @@ function handleCancel() {
   }
 }
 
+async function handleInterrupt() {
+  // Soft interrupt — stop current generation, then have Ava check in
+  if (currentAbort) {
+    currentAbort.abort();
+  }
+
+  // Wait for isRunning to clear
+  await new Promise(resolve => {
+    const check = () => { if (!isRunning) resolve(); else setTimeout(check, 50); };
+    check();
+  });
+
+  // Inject an interrupt context and get Ava to respond naturally
+  if (conversation) {
+    const msgs = conversation.getMessages();
+    // Add a system note about the interruption
+    const sysContent = msgs[0]?.role === 'system' ? String(msgs[0].content) : '';
+    conversation.setSystemPrompt(
+      sysContent.replace(/\n\n\[INTERRUPT:[\s\S]*?\]/, '') +
+      '\n\n[INTERRUPT: The user just interrupted you. They tapped the pause button to get your attention. ' +
+      'Stop what you were doing, acknowledge the interruption politely, and ask what they need. ' +
+      'Be warm — they interrupted because something is on their mind, not because you did anything wrong. ' +
+      'Keep it brief — one or two sentences.]'
+    );
+
+    // Send a synthetic message to trigger Ava's response
+    isRunning = true;
+    currentAbort = new AbortController();
+    try {
+      conversation.addUserMessage('[User interrupted — wants your attention]');
+      const updated = await agent.run(
+        conversation.getMessages(),
+        (agentEvent) => {
+          switch (agentEvent.type) {
+            case 'stream_start': emit({ event: 'stream_start' }); break;
+            case 'stream_delta': emit({ event: 'stream_delta', content: agentEvent.content }); break;
+            case 'stream_end': emit({ event: 'stream_end' }); break;
+            default: break;
+          }
+        },
+        currentAbort.signal,
+      );
+      conversation.setMessages(updated);
+
+      const lastAssistant = updated.filter(m => m.role === 'assistant').pop();
+      const content = typeof lastAssistant?.content === 'string' ? lastAssistant.content : '';
+      emit({ event: 'done', content });
+    } catch { /* interrupt response failed — not critical */ }
+    finally {
+      isRunning = false;
+      currentAbort = null;
+      // Clean up the interrupt note from system prompt
+      const cleanMsgs = conversation.getMessages();
+      const cleanSys = cleanMsgs[0]?.role === 'system' ? String(cleanMsgs[0].content) : '';
+      conversation.setSystemPrompt(cleanSys.replace(/\n\n\[INTERRUPT:[\s\S]*?\]/, ''));
+    }
+  }
+}
+
 function handleConfirm(data) {
   const pending = pendingConfirmations.get(data.id);
   if (!pending) {
@@ -629,6 +688,9 @@ rl.on('line', async (line) => {
       break;
     case 'cancel':
       handleCancel();
+      break;
+    case 'interrupt':
+      handleInterrupt().catch((err) => emitError(err.message));
       break;
     case 'confirm':
       handleConfirm(data);

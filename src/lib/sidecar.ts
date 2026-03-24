@@ -204,7 +204,14 @@ export class SidecarManager {
   }
 
   /**
-   * Cancel the current agent run.
+   * Soft interrupt — pause generation and ask Ava to check in.
+   */
+  async interrupt(): Promise<void> {
+    await this.send({ cmd: 'interrupt' });
+  }
+
+  /**
+   * Hard cancel — kill the current agent run completely.
    */
   async cancel(): Promise<void> {
     await this.send({ cmd: 'cancel' });
