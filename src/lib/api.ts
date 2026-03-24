@@ -107,7 +107,7 @@ export function useSessionStats(): SessionStats {
   return loadStats();
 }
 
-export async function validateKey(key: string): Promise<{ valid: boolean; email?: string; tier?: string; error?: string }> {
+export async function validateKey(key: string): Promise<{ valid: boolean; email?: string; name?: string; tier?: string; error?: string }> {
   try {
     const res = await fetch(`${PLATFORM_URL}/account-info`, {
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },

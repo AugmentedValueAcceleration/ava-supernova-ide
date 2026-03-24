@@ -467,7 +467,7 @@ function AuthSection() {
       try {
         localStorage.setItem('ava-ide-platform-key', trimmed);
         if (result.email) localStorage.setItem('ava-ide-email', result.email);
-        if ((result as any).name) localStorage.setItem('ava-ide-user-name', (result as any).name);
+        if (result.name) localStorage.setItem('ava-ide-user-name', result.name);
         if (result.tier) localStorage.setItem('ava-ide-tier', result.tier);
       } catch { /* */ }
       setShowConnect(false);
