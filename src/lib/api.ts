@@ -107,6 +107,51 @@ export function useSessionStats(): SessionStats {
   return loadStats();
 }
 
+/* ── Platform Models ──────────────────────────────────────────────────── */
+
+export interface PlatformModel {
+  id: string;
+  name: string;
+  provider: string;
+  section: 'platform' | 'byok';
+  context_window: number;
+  max_output: number;
+  supports_vision: boolean;
+  supports_tools: boolean;
+  supports_thinking: boolean;
+}
+
+const MODELS_CACHE_KEY = 'ava-ide-platform-models';
+const MODELS_CACHE_TTL = 3600000; // 1 hour
+
+export async function fetchPlatformModels(): Promise<PlatformModel[] | null> {
+  try {
+    const cached = localStorage.getItem(MODELS_CACHE_KEY);
+    if (cached) {
+      const { data, ts } = JSON.parse(cached);
+      if (Date.now() - ts < MODELS_CACHE_TTL) return data;
+    }
+    const res = await fetch(`${PLATFORM_URL}/models`);
+    if (!res.ok) return null;
+    const data: PlatformModel[] = await res.json();
+    localStorage.setItem(MODELS_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export function getCachedModels(): PlatformModel[] | null {
+  try {
+    const cached = localStorage.getItem(MODELS_CACHE_KEY);
+    if (!cached) return null;
+    const { data } = JSON.parse(cached);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export async function validateKey(key: string): Promise<{ valid: boolean; email?: string; name?: string; tier?: string; error?: string }> {
   try {
     const res = await fetch(`${PLATFORM_URL}/account-info`, {

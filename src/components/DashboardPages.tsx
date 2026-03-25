@@ -1315,26 +1315,38 @@ export function AvaChatPage() {
     { id: 'brainstorm', label: t('mode.brainstorm'), icon: '**', prefix: '[Brainstorm Mode] ', placeholder: t('mode.brainstorm.placeholder') },
   ];
 
-  // ── BYOK model map per provider ────────────────────────────────────────────
-  const BYOK_MODELS: Record<string, { id: string; name: string }[]> = {
-    DeepSeek: [
-      { id: 'deepseek-chat', name: 'DeepSeek Chat' },
-      { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' },
-    ],
-    Qwen: [
-      { id: 'qwen-plus', name: 'Qwen Plus' },
-      { id: 'qwen-max', name: 'Qwen Max' },
-    ],
-    Moonshot: [
-      { id: 'moonshot-v1-128k', name: 'Moonshot v1 128K' },
-    ],
-    Zhipu: [
-      { id: 'glm-4-plus', name: 'GLM-4 Plus' },
-    ],
-    Mistral: [
-      { id: 'mistral-large', name: 'Mistral Large' },
-    ],
+  // ── BYOK model map — fetched from platform, fallback to hardcoded ──────────
+  const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
+    DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
+    Qwen: [{ id: 'qwen-plus', name: 'Qwen Plus' }, { id: 'qwen-max', name: 'Qwen Max' }],
+    Moonshot: [{ id: 'kimi-k2.5', name: 'Kimi K2.5' }],
+    Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
+    Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'codestral-latest', name: 'Codestral' }],
+    Anthropic: [{ id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-opus-4-6', name: 'Claude Opus 4.6' }],
   };
+
+  const [platformModels, setPlatformModels] = useState<Record<string, { id: string; name: string }[]> | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { fetchPlatformModels } = await import('../lib/api');
+        const models = await fetchPlatformModels();
+        if (models && models.length > 0) {
+          const byokMap: Record<string, { id: string; name: string }[]> = {};
+          for (const m of models) {
+            if (m.section !== 'byok') continue;
+            const providerName = m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
+            if (!byokMap[providerName]) byokMap[providerName] = [];
+            byokMap[providerName].push({ id: m.id, name: m.name });
+          }
+          setPlatformModels(byokMap);
+        }
+      } catch { /* fallback to hardcoded */ }
+    })();
+  }, []);
+
+  const BYOK_MODELS = platformModels || BYOK_MODELS_FALLBACK;
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const nextMsgId = useRef(0);
