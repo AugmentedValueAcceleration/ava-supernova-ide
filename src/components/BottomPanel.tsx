@@ -248,7 +248,7 @@ function AvaCliPanel() {
       {/* Input */}
       <div style={{
         display: 'flex', alignItems: 'center', padding: '6px 14px',
-        borderTop: '1px solid #313244', background: '#181825',
+        borderTop: '1px solid rgba(168, 85, 247, 0.12)', background: 'rgba(15, 10, 26, 0.95)',
       }}>
         <span style={{
           color: '#a855f7', fontFamily: "'Cascadia Code', 'Fira Code', monospace",
@@ -312,8 +312,8 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
     <div
       style={{
         height: panelHeight,
-        background: '#181825',
-        borderTop: '1px solid #313244',
+        background: 'rgba(15, 10, 26, 0.95)',
+        borderTop: '1px solid rgba(168, 85, 247, 0.12)',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -389,7 +389,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
               color: '#6c7086', display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', borderRadius: 4,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; e.currentTarget.style.background = '#313244'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; e.currentTarget.style.background = 'transparent'; }}
           >
             <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
@@ -403,7 +403,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
               color: '#6c7086', display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', borderRadius: 4,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; e.currentTarget.style.background = '#313244'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; e.currentTarget.style.background = 'transparent'; }}
           >
             <svg width="10" height="10" viewBox="0 0 10 10">
@@ -417,7 +417,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
       <div
         style={{
           flex: 1,
-          background: '#11111b',
+          background: 'rgba(10, 6, 18, 0.8)',
           overflow: 'hidden',
           fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', 'Courier New', monospace",
           fontSize: 13,

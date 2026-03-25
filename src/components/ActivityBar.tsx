@@ -72,7 +72,7 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
     <div
       style={{
         width: 48,
-        background: '#181825',
+        background: 'rgba(15, 10, 26, 0.95)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -80,7 +80,7 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
         paddingTop: 4,
         paddingBottom: 4,
         flexShrink: 0,
-        borderRight: '1px solid #313244',
+        borderRight: '1px solid rgba(168, 85, 247, 0.12)',
       }}
     >
       {/* Top icons */}

@@ -10,7 +10,7 @@ export default function TitleBar() {
       data-tauri-drag-region
       style={{
         height: 32,
-        background: '#11111b',
+        background: 'rgba(10, 6, 18, 0.98)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -18,7 +18,7 @@ export default function TitleBar() {
         userSelect: 'none',
         // @ts-expect-error Tauri window drag region CSS property
         WebkitAppRegion: 'drag',
-        borderBottom: '1px solid #313244',
+        borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
         flexShrink: 0,
       }}
     >
@@ -61,7 +61,7 @@ export default function TitleBar() {
             justifyContent: 'center',
             cursor: 'pointer',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#313244'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <svg width="10" height="1" viewBox="0 0 10 1">
@@ -83,7 +83,7 @@ export default function TitleBar() {
             justifyContent: 'center',
             cursor: 'pointer',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#313244'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">

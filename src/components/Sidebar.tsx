@@ -80,7 +80,7 @@ function ExplorerPanel() {
             color: '#cdd6f4',
             cursor: 'pointer',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#313244'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           {item.type === 'folder' ? (
@@ -113,8 +113,8 @@ function SearchPanel() {
           style={{
             width: '100%',
             height: 28,
-            background: '#313244',
-            border: '1px solid #313244',
+            background: 'rgba(49, 34, 68, 0.5)',
+            border: '1px solid rgba(168, 85, 247, 0.12)',
             borderRadius: 4,
             padding: '0 8px',
             fontSize: 13,
@@ -122,7 +122,7 @@ function SearchPanel() {
             outline: 'none',
           }}
           onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
         />
       </div>
       <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
@@ -132,8 +132,8 @@ function SearchPanel() {
           style={{
             flex: 1,
             height: 28,
-            background: '#313244',
-            border: '1px solid #313244',
+            background: 'rgba(49, 34, 68, 0.5)',
+            border: '1px solid rgba(168, 85, 247, 0.12)',
             borderRadius: 4,
             padding: '0 8px',
             fontSize: 13,
@@ -141,7 +141,7 @@ function SearchPanel() {
             outline: 'none',
           }}
           onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
         />
       </div>
       <div style={{ marginTop: 16, fontSize: 12, color: '#6c7086', textAlign: 'center' }}>
@@ -161,8 +161,8 @@ function GitPanel() {
           style={{
             flex: 1,
             height: 28,
-            background: '#313244',
-            border: '1px solid #313244',
+            background: 'rgba(49, 34, 68, 0.5)',
+            border: '1px solid rgba(168, 85, 247, 0.12)',
             borderRadius: 4,
             padding: '0 8px',
             fontSize: 13,
@@ -170,7 +170,7 @@ function GitPanel() {
             outline: 'none',
           }}
           onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
         />
       </div>
       <div style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
@@ -216,7 +216,7 @@ function AvaPanel() {
                   width: 22,
                   height: 22,
                   borderRadius: '50%',
-                  background: '#313244',
+                  background: 'rgba(49, 34, 68, 0.5)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -240,7 +240,7 @@ function AvaPanel() {
       </div>
 
       {/* Input bar */}
-      <div style={{ padding: '8px 12px', borderTop: '1px solid #313244' }}>
+      <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(168, 85, 247, 0.12)' }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <input
             type="text"
@@ -250,8 +250,8 @@ function AvaPanel() {
             style={{
               flex: 1,
               height: 32,
-              background: '#313244',
-              border: '1px solid #313244',
+              background: 'rgba(49, 34, 68, 0.5)',
+              border: '1px solid rgba(168, 85, 247, 0.12)',
               borderRadius: 6,
               padding: '0 10px',
               fontSize: 13,
@@ -259,7 +259,7 @@ function AvaPanel() {
               outline: 'none',
             }}
             onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
           />
           <button
             style={{
@@ -306,8 +306,8 @@ function ExtensionsPanel() {
         style={{
           width: '100%',
           height: 28,
-          background: '#313244',
-          border: '1px solid #313244',
+          background: 'rgba(49, 34, 68, 0.5)',
+          border: '1px solid rgba(168, 85, 247, 0.12)',
           borderRadius: 4,
           padding: '0 8px',
           fontSize: 13,
@@ -316,7 +316,7 @@ function ExtensionsPanel() {
           marginBottom: 12,
         }}
         onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
       />
       <div style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
         Installed
@@ -332,14 +332,14 @@ function ExtensionsPanel() {
             cursor: 'pointer',
             borderRadius: 4,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#313244'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <div style={{
             width: 32,
             height: 32,
             borderRadius: 4,
-            background: ext.name === 'Ava Intelligence' ? 'linear-gradient(135deg, #a855f7, #6366f1)' : '#313244',
+            background: ext.name === 'Ava Intelligence' ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'rgba(49, 34, 68, 0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -379,8 +379,8 @@ function DebugPanel() {
           style={{
             flex: 1,
             height: 28,
-            background: '#313244',
-            border: '1px solid #313244',
+            background: 'rgba(49, 34, 68, 0.5)',
+            border: '1px solid rgba(168, 85, 247, 0.12)',
             borderRadius: 4,
             padding: '0 8px',
             fontSize: 13,
@@ -493,12 +493,12 @@ function AuthSection() {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', height: 28, background: '#313244', border: '1px solid #313244',
+    width: '100%', height: 28, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
     borderRadius: 4, padding: '0 8px', fontSize: 12, color: '#cdd6f4', outline: 'none',
   };
 
   return (
-    <div style={{ borderTop: '1px solid #313244', padding: '10px 12px' }}>
+    <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.12)', padding: '10px 12px' }}>
       {isConnected ? (
         <>
           {/* Connected state */}
@@ -533,9 +533,9 @@ function AuthSection() {
             </div>
             <button
               onClick={handleDisconnect}
-              style={{ background: 'transparent', border: '1px solid #313244', borderRadius: 4, padding: '3px 8px', fontSize: 10, color: '#6c7086', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 4, padding: '3px 8px', fontSize: 10, color: '#6c7086', cursor: 'pointer' }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#f38ba8'; e.currentTarget.style.color = '#f38ba8'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#313244'; e.currentTarget.style.color = '#6c7086'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; e.currentTarget.style.color = '#6c7086'; }}
             >
               {t('dash.settings.disconnect')}
             </button>
@@ -547,7 +547,7 @@ function AuthSection() {
               const active = key === 'Platform' ? usePlatform : !usePlatform;
               return (
                 <button key={key} onClick={() => setUsePlatform(key === 'Platform')}
-                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer', background: active ? '#a855f7' : '#313244', color: active ? '#fff' : '#6c7086' }}>
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer', background: active ? '#a855f7' : 'rgba(49, 34, 68, 0.5)', color: active ? '#fff' : '#6c7086' }}>
                   {t(labelKey)}
                 </button>
               );
@@ -585,7 +585,7 @@ function AuthSection() {
                 onKeyDown={(e) => { if (e.key === 'Enter') handleConnect(); }}
                 style={{ ...inputStyle, marginBottom: 4, fontFamily: 'monospace', fontSize: 11 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
               />
               {error && <div style={{ fontSize: 10, color: '#f38ba8', marginBottom: 4 }}>{error}</div>}
               <div style={{ display: 'flex', gap: 6 }}>
@@ -594,7 +594,7 @@ function AuthSection() {
                   {loading ? t('dash.auth.connecting') : t('dash.auth.connect')}
                 </button>
                 <button onClick={() => { setShowConnect(false); setKeyInput(''); setError(''); }}
-                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: '1px solid #313244', background: 'transparent', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: '1px solid rgba(168, 85, 247, 0.12)', background: 'transparent', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>
                   {t('dash.support.cancel')}
                 </button>
               </div>
@@ -626,7 +626,7 @@ function AuthSection() {
                 onChange={(e) => saveKey(p, e.target.value)}
                 style={{ ...inputStyle, height: 24, fontSize: 11 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
               />
             </div>
           ))}
@@ -751,12 +751,12 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10, width: '100%',
                       padding: '7px 10px', borderRadius: 6, border: 'none',
-                      background: isActive ? '#313244' : 'transparent',
+                      background: isActive ? 'rgba(49, 34, 68, 0.5)' : 'transparent',
                       color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
                       fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
                       borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
                     }}
-                    onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = '#313244'; }}
+                    onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
                     onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                   >
                     <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
@@ -795,9 +795,9 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
     <div
       style={{
         width: 260,
-        background: '#181825',
-        borderRight: position === 'left' ? '1px solid #313244' : 'none',
-        borderLeft: position === 'right' ? '1px solid #313244' : 'none',
+        background: 'rgba(15, 10, 26, 0.95)',
+        borderRight: position === 'left' ? '1px solid rgba(168, 85, 247, 0.12)' : 'none',
+        borderLeft: position === 'right' ? '1px solid rgba(168, 85, 247, 0.12)' : 'none',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,

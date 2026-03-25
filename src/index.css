@@ -1,16 +1,16 @@
 :root {
-  --bg-page: #1e1e2e;
-  --bg-sidebar: #181825;
-  --bg-editor: #1e1e2e;
-  --bg-panel: #181825;
-  --bg-titlebar: #11111b;
-  --bg-tab-active: #1e1e2e;
-  --bg-tab-inactive: #181825;
-  --bg-input: #313244;
+  --bg-page: #0f0a1a;
+  --bg-sidebar: rgba(15, 10, 26, 0.95);
+  --bg-editor: #0f0a1a;
+  --bg-panel: rgba(15, 10, 26, 0.95);
+  --bg-titlebar: rgba(10, 6, 18, 0.98);
+  --bg-tab-active: #150d22;
+  --bg-tab-inactive: rgba(15, 10, 26, 0.95);
+  --bg-input: rgba(49, 34, 68, 0.5);
   --text-primary: #cdd6f4;
   --text-secondary: #a6adc8;
   --text-muted: #6c7086;
-  --border: #313244;
+  --border: rgba(168, 85, 247, 0.12);
   --accent: #a855f7;
   --accent-hover: #9333ea;
   --success: #a6e3a1;
@@ -21,7 +21,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  background: var(--bg-page);
+  background: linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%);
   color: var(--text-primary);
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   overflow: hidden;

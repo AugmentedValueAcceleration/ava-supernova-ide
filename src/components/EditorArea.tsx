@@ -114,11 +114,11 @@ export default function EditorArea({ dashboardPage }: Props) {
       <div
         style={{
           height: 36,
-          background: '#181825',
+          background: 'rgba(15, 10, 26, 0.95)',
           display: 'flex',
           alignItems: 'stretch',
           flexShrink: 0,
-          borderBottom: '1px solid #313244',
+          borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
         }}
       >
         {/* Active tab */}
@@ -128,9 +128,9 @@ export default function EditorArea({ dashboardPage }: Props) {
             alignItems: 'center',
             gap: 6,
             padding: '0 12px',
-            background: '#1e1e2e',
+            background: 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)',
             borderTop: '1px solid #a855f7',
-            borderRight: '1px solid #313244',
+            borderRight: '1px solid rgba(168, 85, 247, 0.12)',
             cursor: 'pointer',
             minWidth: 0,
           }}
@@ -153,7 +153,7 @@ export default function EditorArea({ dashboardPage }: Props) {
               borderRadius: 4,
               marginLeft: 4,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#313244'; e.currentTarget.style.color = '#cdd6f4'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; e.currentTarget.style.color = '#cdd6f4'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6c7086'; }}
           >
             <svg width="8" height="8" viewBox="0 0 10 10">

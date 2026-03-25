@@ -174,7 +174,7 @@ function AvaTab({ sessionTasks, completedTasks }: { sessionTasks: SessionTaskUI[
                 <span style={{ fontSize: 10, color: '#6c7086' }}>{done}/{total} done</span>
                 <span style={{ fontSize: 10, color: '#6c7086' }}>{total > 0 ? Math.round((done / total) * 100) : 0}%</span>
               </div>
-              <div style={{ height: 4, background: '#313244', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ height: 4, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', borderRadius: 2,
                   width: `${total > 0 ? (done / total) * 100 : 0}%`,
@@ -226,7 +226,7 @@ function PersonalTab({ todayTasks, allTasks, onToggle }: {
             style={{
               padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500,
               border: 'none', cursor: 'pointer',
-              background: filter === f ? '#313244' : 'transparent',
+              background: filter === f ? 'rgba(49, 34, 68, 0.5)' : 'transparent',
               color: filter === f ? '#cdd6f4' : '#585b70',
             }}
           >
@@ -313,7 +313,7 @@ export default function IdeTasksPanel({
   return (
     <div style={{
       width, flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100%',
-      background: '#181825', borderLeft: '1px solid #313244', position: 'relative',
+      background: 'rgba(15, 10, 26, 0.95)', borderLeft: '1px solid rgba(168, 85, 247, 0.12)', position: 'relative',
     }}>
       {/* Drag handle */}
       <div
@@ -329,7 +329,7 @@ export default function IdeTasksPanel({
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 12px', borderBottom: '1px solid #313244', flexShrink: 0,
+        padding: '8px 12px', borderBottom: '1px solid rgba(168, 85, 247, 0.12)', flexShrink: 0,
       }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
           Tasks
@@ -345,7 +345,7 @@ export default function IdeTasksPanel({
 
       {/* Tabs */}
       <div style={{
-        display: 'flex', gap: 0, borderBottom: '1px solid #313244', flexShrink: 0,
+        display: 'flex', gap: 0, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', flexShrink: 0,
       }}>
         {([
           { id: 'ava' as const, label: 'Ava', badge: sessionTasks.length },
@@ -366,7 +366,7 @@ export default function IdeTasksPanel({
             {tab.badge > 0 && (
               <span style={{
                 marginLeft: 5, fontSize: 9, padding: '1px 5px', borderRadius: 8,
-                background: activeTab === tab.id ? 'rgba(168,85,247,0.2)' : '#313244',
+                background: activeTab === tab.id ? 'rgba(168,85,247,0.2)' : 'rgba(49, 34, 68, 0.5)',
                 color: activeTab === tab.id ? '#a855f7' : '#6c7086',
               }}>
                 {tab.badge}

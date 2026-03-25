@@ -89,7 +89,7 @@ export default function UpdateChecker() {
     return (
       <div style={{
         position: 'fixed', bottom: 16, right: 16, zIndex: 9998,
-        background: '#1e1e2e', border: '1px solid #313244',
+        background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168, 85, 247, 0.12)',
         borderRadius: 10, padding: '12px 18px',
         boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
         display: 'flex', alignItems: 'center', gap: 10,
@@ -106,7 +106,7 @@ export default function UpdateChecker() {
     return (
       <div style={{
         position: 'fixed', bottom: 16, right: 16, zIndex: 9998,
-        background: '#1e1e2e', border: '1px solid rgba(166,227,161,0.3)',
+        background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(166,227,161,0.3)',
         borderRadius: 10, padding: '12px 18px',
         boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
         display: 'flex', alignItems: 'center', gap: 10,
@@ -122,7 +122,7 @@ export default function UpdateChecker() {
   return (
     <div style={{
       position: 'fixed', bottom: 16, right: 16, zIndex: 9998,
-      background: '#1e1e2e', border: '1px solid rgba(168,85,247,0.3)',
+      background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168,85,247,0.3)',
       borderRadius: 12, padding: '16px 20px', width: 320,
       boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     }}>
@@ -151,7 +151,7 @@ export default function UpdateChecker() {
       {/* Progress bar */}
       {status === 'downloading' && (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ height: 4, background: '#313244', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: 4, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden' }}>
             <div style={{
               height: '100%', borderRadius: 2, width: `${progress}%`,
               background: 'linear-gradient(90deg, #a855f7, #6366f1)',
@@ -168,7 +168,7 @@ export default function UpdateChecker() {
           <>
             <button
               onClick={() => setDismissed(true)}
-              style={{ padding: '6px 14px', background: 'none', border: '1px solid #313244', borderRadius: 6, color: '#6c7086', fontSize: 11, cursor: 'pointer' }}
+              style={{ padding: '6px 14px', background: 'none', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 6, color: '#6c7086', fontSize: 11, cursor: 'pointer' }}
             >Later</button>
             <button
               onClick={handleUpdate}

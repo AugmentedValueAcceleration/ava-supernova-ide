@@ -75,7 +75,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
   const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', height: 38, background: '#313244', border: '1px solid #313244',
+    width: '100%', height: 38, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
     borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#cdd6f4', outline: 'none',
   };
 
@@ -86,7 +86,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: '#1e1e2e', borderRadius: 16, maxWidth: 560, width: '90%',
+        background: 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)', borderRadius: 16, maxWidth: 560, width: '90%',
         padding: '40px 36px', boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
         border: '1px solid rgba(168,85,247,0.15)',
       }}>
@@ -95,7 +95,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
           {Array.from({ length: totalSteps }, (_, i) => (
             <div key={i} style={{
               width: i === step ? 24 : 8, height: 8, borderRadius: 4,
-              background: i === step ? '#a855f7' : i < step ? '#7c3aed' : '#313244',
+              background: i === step ? '#a855f7' : i < step ? '#7c3aed' : 'rgba(49, 34, 68, 0.5)',
               transition: 'all 0.3s',
             }} />
           ))}
@@ -128,7 +128,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {/* Platform */}
-              <div style={{ background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: 16 }}>
+              <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 4 }}>Platform Account</div>
                 <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>Cloud mode, managed tokens, sync</div>
                 <input
@@ -155,7 +155,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
 
               {/* Name input — shown after platform connect */}
               {platformStatus === 'valid' && (
-                <div style={{ background: '#181825', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 12, padding: 16, marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#cba6f7', marginBottom: 4 }}>What should Ava call you?</div>
                   <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 8 }}>So Ava knows who she's working with</div>
                   <input
@@ -168,13 +168,13 @@ export default function WelcomeOverlay({ onComplete }: Props) {
                     }}
                     style={{ ...inputStyle, height: 34, fontSize: 12 }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                    onBlur={e => { e.currentTarget.style.borderColor = '#313244'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
                   />
                 </div>
               )}
 
               {/* BYOK */}
-              <div style={{ background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: 16 }}>
+              <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#a6e3a1', marginBottom: 4 }}>BYOK — No Account</div>
                 <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>Your keys, full local AI</div>
                 <select
@@ -266,11 +266,11 @@ export default function WelcomeOverlay({ onComplete }: Props) {
                   key={a.label}
                   onClick={() => finish(a.nav)}
                   style={{
-                    background: '#181825', border: '1px solid #313244', borderRadius: 10,
+                    background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
                     padding: '16px 8px', cursor: 'pointer', transition: 'border-color 0.15s',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = '#313244')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)')}
                 >
                   <div style={{ fontSize: 24, marginBottom: 6 }}>{a.icon}</div>
                   <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500 }}>{a.label}</div>

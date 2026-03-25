@@ -7,7 +7,7 @@ import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayT
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
   flex: 1,
-  background: '#1e1e2e',
+  background: 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)',
   overflowY: 'auto',
   padding: '40px',
 };
@@ -26,8 +26,8 @@ const pageSubtitle: React.CSSProperties = {
 };
 
 const card: React.CSSProperties = {
-  background: '#181825',
-  border: '1px solid #313244',
+  background: 'rgba(26, 16, 40, 0.6)',
+  border: '1px solid rgba(168, 85, 247, 0.12)',
   borderRadius: 10,
   padding: '20px',
   marginBottom: 16,
@@ -45,8 +45,8 @@ const sectionTitle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: '100%',
   height: 36,
-  background: '#313244',
-  border: '1px solid #313244',
+  background: 'rgba(49, 34, 68, 0.5)',
+  border: '1px solid rgba(168, 85, 247, 0.12)',
   borderRadius: 6,
   padding: '0 12px',
   fontSize: 13,
@@ -85,7 +85,7 @@ function CustomSelect({ value, onChange, options, placeholder, width, height }: 
           height: height || 36,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           cursor: 'pointer', textAlign: 'left',
-          borderColor: open ? '#a855f7' : '#313244',
+          borderColor: open ? '#a855f7' : 'rgba(49, 34, 68, 0.5)',
           borderRadius: 8,
         }}
       >
@@ -100,7 +100,7 @@ function CustomSelect({ value, onChange, options, placeholder, width, height }: 
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
-          background: '#181825', border: '1px solid #313244', borderRadius: 8,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
           boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 50,
           maxHeight: 220, overflowY: 'auto',
         }}>
@@ -110,11 +110,11 @@ function CustomSelect({ value, onChange, options, placeholder, width, height }: 
               onClick={() => { onChange(opt.value); setOpen(false); }}
               style={{
                 display: 'block', width: '100%', padding: '8px 12px',
-                background: opt.value === value ? '#313244' : 'transparent',
+                background: opt.value === value ? 'rgba(49, 34, 68, 0.5)' : 'transparent',
                 border: 'none', color: opt.value === value ? '#cba6f7' : '#cdd6f4',
                 fontSize: 12, textAlign: 'left', cursor: 'pointer',
               }}
-              onMouseOver={e => { if (opt.value !== value) e.currentTarget.style.background = '#313244'; }}
+              onMouseOver={e => { if (opt.value !== value) e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
               onMouseOut={e => { if (opt.value !== value) e.currentTarget.style.background = 'transparent'; }}
             >
               {opt.label}
@@ -138,8 +138,8 @@ const btnPrimary: React.CSSProperties = {
 };
 
 const btnSecondary: React.CSSProperties = {
-  background: '#313244',
-  border: '1px solid #313244',
+  background: 'rgba(49, 34, 68, 0.5)',
+  border: '1px solid rgba(168, 85, 247, 0.12)',
   borderRadius: 6,
   padding: '8px 16px',
   fontSize: 13,
@@ -164,7 +164,7 @@ function LoadingSpinner() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
       <div style={{
-        width: 28, height: 28, border: '3px solid #313244', borderTopColor: '#a855f7',
+        width: 28, height: 28, border: '3px solid rgba(168, 85, 247, 0.12)', borderTopColor: '#a855f7',
         borderRadius: '50%', animation: 'spin 0.8s linear infinite',
       }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -462,8 +462,8 @@ async function fetchNewsDirect(category?: string): Promise<NewsArticle[]> {
 // ── Reusable WidgetCard ─────────────────────────────────────────────────────
 
 const widgetCardStyle: React.CSSProperties = {
-  background: '#181825',
-  border: '1px solid #313244',
+  background: 'rgba(26, 16, 40, 0.6)',
+  border: '1px solid rgba(168, 85, 247, 0.12)',
   borderRadius: 12,
   padding: 16,
   minWidth: 0,
@@ -568,7 +568,7 @@ function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData
 
       {/* 3-day forecast */}
       {weather.forecast.length > 0 && (
-        <div style={{ display: 'flex', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid #313244' }}>
+        <div style={{ display: 'flex', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(168, 85, 247, 0.12)' }}>
           {weather.forecast.map(day => (
             <div key={day.date} style={{ flex: 1, textAlign: 'center' }}>
               <div style={{ fontSize: 10, color: '#6c7086' }}>{day.day}</div>
@@ -684,8 +684,8 @@ function WorkingHoursClock() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
         <svg ref={clockRef} width={size} height={size} style={{ flexShrink: 0 }}>
           {/* Clock face */}
-          <circle cx={cx} cy={cy} r={r + 8} fill="#11111b" stroke="#313244" strokeWidth={1} />
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#313244" strokeWidth={2} />
+          <circle cx={cx} cy={cy} r={r + 8} fill="rgba(10, 6, 18, 0.8)" stroke="rgba(168, 85, 247, 0.12)" strokeWidth={1} />
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(168, 85, 247, 0.12)" strokeWidth={2} />
 
           {/* Hour markers */}
           {Array.from({ length: 24 }, (_, i) => {
@@ -696,7 +696,7 @@ function WorkingHoursClock() {
               <line key={i}
                 x1={cx + inner * Math.cos(a)} y1={cy + inner * Math.sin(a)}
                 x2={cx + outer * Math.cos(a)} y2={cy + outer * Math.sin(a)}
-                stroke={i % 6 === 0 ? '#585b70' : '#313244'} strokeWidth={i % 6 === 0 ? 1.5 : 0.8}
+                stroke={i % 6 === 0 ? '#585b70' : 'rgba(168, 85, 247, 0.12)'} strokeWidth={i % 6 === 0 ? 1.5 : 0.8}
               />
             );
           })}
@@ -722,12 +722,12 @@ function WorkingHoursClock() {
           })()}
 
           {/* Start pin */}
-          <circle cx={startPos.x} cy={startPos.y} r={7} fill="#a855f7" stroke="#1e1e2e" strokeWidth={2}
+          <circle cx={startPos.x} cy={startPos.y} r={7} fill="#a855f7" stroke="#0f0a1a" strokeWidth={2}
             style={{ cursor: 'grab' }}
             onMouseDown={(e) => { e.preventDefault(); setDragging('start'); }}
           />
           {/* End pin */}
-          <circle cx={endPos.x} cy={endPos.y} r={7} fill="#f5c2e7" stroke="#1e1e2e" strokeWidth={2}
+          <circle cx={endPos.x} cy={endPos.y} r={7} fill="#f5c2e7" stroke="#0f0a1a" strokeWidth={2}
             style={{ cursor: 'grab' }}
             onMouseDown={(e) => { e.preventDefault(); setDragging('end'); }}
           />
@@ -773,7 +773,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
             onClick={() => onCategoryChange(null)}
             style={{
               ...catBtnBase,
-              background: selectedCategory === null ? '#a855f7' : '#313244',
+              background: selectedCategory === null ? '#a855f7' : 'rgba(49, 34, 68, 0.5)',
               color: selectedCategory === null ? '#fff' : '#6c7086',
             }}
           >
@@ -785,7 +785,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
               onClick={() => onCategoryChange(cat)}
               style={{
                 ...catBtnBase,
-                background: selectedCategory === cat ? '#a855f7' : '#313244',
+                background: selectedCategory === cat ? '#a855f7' : 'rgba(49, 34, 68, 0.5)',
                 color: selectedCategory === cat ? '#fff' : '#6c7086',
               }}
             >
@@ -807,7 +807,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
               onClick={() => window.open(`https://ava-supernova.com/news/${article.slug}`, '_blank')}
               style={{
                 display: 'block', width: '100%', textAlign: 'left', padding: 12,
-                background: 'rgba(49,50,68,0.3)', border: '1px solid #313244', borderRadius: 8, cursor: 'pointer',
+                background: 'rgba(49,50,68,0.3)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8, cursor: 'pointer',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -887,7 +887,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
                 key={task.id}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: 10, borderRadius: 8,
-                  border: isOverdue ? '1px solid rgba(243,139,168,0.2)' : '1px solid #313244',
+                  border: isOverdue ? '1px solid rgba(243,139,168,0.2)' : '1px solid rgba(168, 85, 247, 0.12)',
                   background: isOverdue ? 'rgba(243,139,168,0.05)' : 'rgba(49,50,68,0.3)',
                 }}
               >
@@ -896,7 +896,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
                   onClick={() => handleComplete(task.id)}
                   title={t('dash.cc.complete_task')}
                   style={{
-                    width: 20, height: 20, borderRadius: '50%', border: '1px solid #313244',
+                    width: 20, height: 20, borderRadius: '50%', border: '1px solid rgba(168, 85, 247, 0.12)',
                     background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
                     justifyContent: 'center', flexShrink: 0, color: '#6c7086', fontSize: 10,
                   }}
@@ -1007,7 +1007,7 @@ function CCLearningWidget({ curriculums, loading }: { curriculums: LearningCurri
                   {Math.round(curr.progress_percent)}%
                 </span>
               </div>
-              <div style={{ height: 6, borderRadius: 9999, background: '#313244', overflow: 'hidden' }}>
+              <div style={{ height: 6, borderRadius: 9999, background: 'rgba(49, 34, 68, 0.5)', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', borderRadius: 9999, transition: 'width 0.3s',
                   width: `${curr.progress_percent}%`,
@@ -1056,7 +1056,7 @@ function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loadin
             </div>
           </div>
           {lastMemory && (
-            <div style={{ background: 'rgba(49,50,68,0.3)', border: '1px solid #313244', borderRadius: 8, padding: 10 }}>
+            <div style={{ background: 'rgba(49,50,68,0.3)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8, padding: 10 }}>
               <p style={{ fontSize: 10, color: '#6c7086', margin: '0 0 2px 0' }}>{t('dash.cc.last_saved')}</p>
               <p style={{ fontSize: 12, color: '#a6adc8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {lastMemory.key || truncate(lastMemory.content, 60)}
@@ -2168,13 +2168,13 @@ export function AvaChatPage() {
       const code = match[2] || '';
       parts.push(
         <div key={partKey++} style={{
-          background: '#11111b', border: '1px solid #313244', borderRadius: 8, margin: '8px 0',
+          background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8, margin: '8px 0',
           overflow: 'hidden',
         }}>
           {lang && (
             <div style={{
-              fontSize: 10, color: '#6c7086', padding: '4px 12px', background: '#181825',
-              borderBottom: '1px solid #313244', fontFamily: 'monospace',
+              fontSize: 10, color: '#6c7086', padding: '4px 12px', background: 'rgba(26, 16, 40, 0.6)',
+              borderBottom: '1px solid rgba(168, 85, 247, 0.12)', fontFamily: 'monospace',
             }}>{lang}</div>
           )}
           <pre style={{
@@ -2206,7 +2206,7 @@ export function AvaChatPage() {
       if (matched.startsWith('`') && matched.endsWith('`')) {
         nodes.push(
           <code key={`ic-${key++}`} style={{
-            background: '#313244', padding: '1px 6px', borderRadius: 4,
+            background: 'rgba(49, 34, 68, 0.5)', padding: '1px 6px', borderRadius: 4,
             fontSize: '0.9em', fontFamily: "'JetBrains Mono', monospace", color: '#f5c2e7',
           }}>{matched.slice(1, -1)}</code>
         );
@@ -2558,7 +2558,7 @@ export function AvaChatPage() {
       {/* ── Header Bar (48px) ───────────────────────────────────────────── */}
       <div style={{
         height: 48, minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 16px', borderBottom: '1px solid #313244', background: '#181825', flexShrink: 0,
+        padding: '0 16px', borderBottom: '1px solid rgba(168, 85, 247, 0.12)', background: 'rgba(26, 16, 40, 0.6)', flexShrink: 0,
       }}>
         {/* Left: Model selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -2567,7 +2567,7 @@ export function AvaChatPage() {
               onClick={() => setModelMenuOpen(!modelMenuOpen)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
-                background: '#313244', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8,
+                background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8,
                 color: '#cdd6f4', fontSize: 12, fontWeight: 500, cursor: 'pointer',
               }}
             >
@@ -2586,7 +2586,7 @@ export function AvaChatPage() {
             {modelMenuOpen && (
               <div style={{
                 position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 999,
-                background: '#1e1e2e', border: '1px solid #313244', borderRadius: 10,
+                background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
                 padding: 6, minWidth: 240, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               }}>
                 {/* Platform models header */}
@@ -2620,7 +2620,7 @@ export function AvaChatPage() {
                 {/* BYOK models */}
                 {byokModels.length > 0 && (
                   <>
-                    <div style={{ height: 1, background: '#313244', margin: '6px 0' }} />
+                    <div style={{ height: 1, background: 'rgba(49, 34, 68, 0.5)', margin: '6px 0' }} />
                     <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
                       {t('dash.chat.your_api_keys')}
                     </div>
@@ -2707,7 +2707,7 @@ export function AvaChatPage() {
             return (
               <div style={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={t('dash.chat.context').replace('{n}', String(contextPercent))}>
                 <svg width="22" height="22" viewBox="0 0 22 22" style={{ transform: 'rotate(-90deg)' }}>
-                  <circle cx="11" cy="11" r={r} fill="none" stroke="#313244" strokeWidth="2.5" />
+                  <circle cx="11" cy="11" r={r} fill="none" stroke="rgba(168, 85, 247, 0.12)" strokeWidth="2.5" />
                   <circle cx="11" cy="11" r={r} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
                     strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
                 </svg>
@@ -2779,7 +2779,7 @@ export function AvaChatPage() {
                 animation: 'avaFadeIn 0.3s ease-out',
               }}>
                 <span style={{
-                  fontSize: 11, color: '#6c7086', background: '#181825', border: '1px solid #313244',
+                  fontSize: 11, color: '#6c7086', background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)',
                   borderRadius: 12, padding: '4px 14px',
                 }}>{msg.text}</span>
               </div>
@@ -2855,7 +2855,7 @@ export function AvaChatPage() {
                   background: isUser ? '#7c3aed' : isError ? 'rgba(239,68,68,0.1)' : '#181825',
                   color: isError ? '#fca5a5' : '#cdd6f4',
                   fontSize: 14, lineHeight: 1.65,
-                  border: isUser ? 'none' : isError ? '1px solid rgba(239,68,68,0.25)' : '1px solid #313244',
+                  border: isUser ? 'none' : isError ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(168, 85, 247, 0.12)',
                   position: 'relative',
                 }}>
                   {/* Rendered text with markdown + inline secret reveal */}
@@ -2930,7 +2930,7 @@ export function AvaChatPage() {
 
                   {/* Tool calls timeline */}
                   {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div style={{ marginTop: 10, borderTop: '1px solid #313244', paddingTop: 8 }}>
+                    <div style={{ marginTop: 10, borderTop: '1px solid rgba(168, 85, 247, 0.12)', paddingTop: 8 }}>
                       {msg.toolCalls.map((tc, idx) => (
                         <div key={idx} style={{
                           display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
@@ -2956,12 +2956,12 @@ export function AvaChatPage() {
                     const done = todos.filter((t: any) => t.status === 'completed').length;
                     return (
                       <div key={`todo-${idx}`} style={{
-                        marginTop: 8, background: '#11111b', border: '1px solid #313244',
+                        marginTop: 8, background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)',
                         borderRadius: 8, padding: '8px 12px', fontSize: 12,
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                           <span style={{ fontWeight: 600, color: '#cba6f7', fontSize: 11 }}>{t('dash.chat.tasks_progress').replace('{done}', String(done)).replace('{total}', String(todos.length))}</span>
-                          <div style={{ height: 3, flex: 1, marginLeft: 10, background: '#313244', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: 3, flex: 1, marginLeft: 10, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${todos.length > 0 ? (done / todos.length) * 100 : 0}%`, background: '#a855f7', borderRadius: 2 }} />
                           </div>
                         </div>
@@ -2989,7 +2989,7 @@ export function AvaChatPage() {
                   {msg.images && msg.images.length > 0 && (
                     <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                       {msg.images.map((img, idx) => (
-                        <div key={idx} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid #313244' }}>
+                        <div key={idx} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(168, 85, 247, 0.12)' }}>
                           <img
                             src={img.src}
                             alt={img.alt || t('dash.chat.generated_image')}
@@ -3021,7 +3021,7 @@ export function AvaChatPage() {
                       {msg.files.map((file, idx) => (
                         <div key={idx} style={{
                           display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                          background: '#11111b', border: '1px solid #313244', borderRadius: 8,
+                          background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
                         }}>
                           <span style={{ fontSize: 18 }}>
                             {file.name?.endsWith('.pptx') ? '\uD83D\uDCBB' :
@@ -3051,12 +3051,12 @@ export function AvaChatPage() {
                       {msg.attachments.map((att, idx) => (
                         att.mimeType.startsWith('image/') ? (
                           <img key={idx} src={att.dataUri} alt={att.name} style={{
-                            maxWidth: 200, maxHeight: 150, borderRadius: 8, border: '1px solid #313244',
+                            maxWidth: 200, maxHeight: 150, borderRadius: 8, border: '1px solid rgba(168, 85, 247, 0.12)',
                           }} />
                         ) : (
                           <div key={idx} style={{
                             display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-                            background: '#11111b', border: '1px solid #313244', borderRadius: 8,
+                            background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
                             fontSize: 11, color: '#6c7086',
                           }}>
                             {'\uD83D\uDCCE'} {att.name}
@@ -3072,7 +3072,7 @@ export function AvaChatPage() {
                       onClick={() => copyMessage(msg.id, msg.text)}
                       style={{
                         position: 'absolute', top: 6, right: 6, padding: '4px 8px',
-                        background: '#313244', border: '1px solid #45475a', borderRadius: 6,
+                        background: 'rgba(49, 34, 68, 0.5)', border: '1px solid #45475a', borderRadius: 6,
                         color: copiedMsg === msg.id ? '#a6e3a1' : '#6c7086', fontSize: 10,
                         cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                       }}
@@ -3116,7 +3116,7 @@ export function AvaChatPage() {
       {pendingConfirm && (
         <div style={{
           margin: '0 16px', padding: '12px 16px',
-          background: '#181825', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 10,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 10,
           borderBottom: 'none', borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -3155,7 +3155,7 @@ export function AvaChatPage() {
             <pre style={{
               fontSize: 10, color: '#6c7086', fontFamily: 'monospace',
               whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '6px 0 0',
-              maxHeight: 120, overflowY: 'auto', background: '#11111b',
+              maxHeight: 120, overflowY: 'auto', background: 'rgba(10, 6, 18, 0.8)',
               padding: '8px 10px', borderRadius: 6,
             }}>
               {JSON.stringify(pendingConfirm.args, null, 2)}
@@ -3172,8 +3172,8 @@ export function AvaChatPage() {
               placeholder={pendingConfirm.toolName === 'ask_user' ? t('dash.chat.type_your_answer') : t('dash.chat.comment_optional')}
               autoFocus
               style={{
-                width: '100%', padding: '6px 10px', background: '#11111b',
-                border: '1px solid #313244', borderRadius: 6, color: '#cdd6f4',
+                width: '100%', padding: '6px 10px', background: 'rgba(10, 6, 18, 0.8)',
+                border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 6, color: '#cdd6f4',
                 fontSize: 12, outline: 'none',
               }}
             />
@@ -3183,8 +3183,8 @@ export function AvaChatPage() {
 
       {/* ── Input Bar (fixed at bottom) ─────────────────────────────────── */}
       <div style={{
-        padding: '12px 24px 16px', borderTop: '1px solid #313244',
-        background: '#181825', flexShrink: 0,
+        padding: '12px 24px 16px', borderTop: '1px solid rgba(168, 85, 247, 0.12)',
+        background: 'rgba(26, 16, 40, 0.6)', flexShrink: 0,
       }}>
         <div style={{ width: '100%', position: 'relative' }}>
           {/* ── Secret Vault Panel (slides up from input) ─────────────────── */}
@@ -3192,7 +3192,7 @@ export function AvaChatPage() {
             ref={vaultPanelRef}
             style={{
               position: 'absolute', bottom: '100%', left: 0, right: 0,
-              background: '#181825', border: '1px solid #313244', borderBottom: 'none',
+              background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderBottom: 'none',
               borderRadius: '12px 12px 0 0',
               boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
               maxHeight: showVault ? 340 : 0,
@@ -3239,7 +3239,7 @@ export function AvaChatPage() {
                   {secrets.map(s => (
                     <div key={s.id} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                      background: '#11111b', border: '1px solid #313244', borderRadius: 8,
+                      background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
                       marginBottom: 6,
                     }}>
                       <span style={{ fontSize: 12, fontWeight: 500, color: '#cba6f7', minWidth: 80 }}>{s.label}</span>
@@ -3292,7 +3292,7 @@ export function AvaChatPage() {
                 {/* Add secret row */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '10px 12px', background: '#11111b', border: '1px solid rgba(168,85,247,0.2)',
+                  padding: '10px 12px', background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168,85,247,0.2)',
                   borderRadius: 8,
                 }}>
                   <input
@@ -3301,11 +3301,11 @@ export function AvaChatPage() {
                     onChange={e => setVaultNewLabel(e.target.value)}
                     placeholder={t('dash.chat.secret_label')}
                     style={{
-                      width: 100, height: 30, background: '#313244', border: '1px solid #313244',
+                      width: 100, height: 30, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
                       borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
                     }}
                     onFocus={e => e.currentTarget.style.borderColor = '#a855f7'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#313244'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'}
                     onKeyDown={e => { if (e.key === 'Enter') addSecret(); }}
                   />
                   <input
@@ -3314,11 +3314,11 @@ export function AvaChatPage() {
                     onChange={e => setVaultNewValue(e.target.value)}
                     placeholder={t('dash.chat.secret_value')}
                     style={{
-                      flex: 1, height: 30, background: '#313244', border: '1px solid #313244',
+                      flex: 1, height: 30, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
                       borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
                     }}
                     onFocus={e => e.currentTarget.style.borderColor = '#a855f7'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#313244'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'}
                     onKeyDown={e => { if (e.key === 'Enter') addSecret(); }}
                   />
                   <button
@@ -3326,7 +3326,7 @@ export function AvaChatPage() {
                     disabled={!vaultNewLabel.trim() || !vaultNewValue.trim()}
                     style={{
                       height: 30, padding: '0 14px', borderRadius: 6, border: 'none',
-                      background: vaultNewLabel.trim() && vaultNewValue.trim() ? '#a855f7' : '#313244',
+                      background: vaultNewLabel.trim() && vaultNewValue.trim() ? '#a855f7' : 'rgba(49, 34, 68, 0.5)',
                       color: vaultNewLabel.trim() && vaultNewValue.trim() ? '#fff' : '#585b70',
                       fontSize: 12, fontWeight: 600, cursor: vaultNewLabel.trim() && vaultNewValue.trim() ? 'pointer' : 'not-allowed',
                       flexShrink: 0,
@@ -3382,7 +3382,7 @@ export function AvaChatPage() {
               {modeMenuOpen && (
                 <div style={{
                   position: 'absolute', bottom: '100%', left: 0, marginBottom: 8, zIndex: 999,
-                  background: '#1e1e2e', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 10,
+                  background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 10,
                   padding: 6, minWidth: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                 }}>
                   {MODES.map((m, idx) => (
@@ -3417,7 +3417,7 @@ export function AvaChatPage() {
                   {pendingAttachments.map((att, idx) => (
                     <div key={idx} style={{
                       position: 'relative', borderRadius: 8, overflow: 'hidden',
-                      border: '1px solid rgba(168,85,247,0.3)', background: '#181825',
+                      border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(26, 16, 40, 0.6)',
                     }}>
                       {att.mimeType.startsWith('image/') && att.dataUri?.startsWith('data:') ? (
                         <div style={{ position: 'relative', height: 48, minWidth: 48, maxWidth: 100, overflow: 'hidden' }}>
@@ -3648,7 +3648,7 @@ export function ChatHistoryPage() {
 
         {filtered.length === 0 ? (
           <div style={{
-            background: '#181825', border: '1px dashed #313244', borderRadius: 12,
+            background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12,
             padding: '48px 20px', textAlign: 'center',
           }}>
             <div style={{ fontSize: 28, marginBottom: 12 }}>💬</div>
@@ -3666,11 +3666,11 @@ export function ChatHistoryPage() {
 
               return (
                 <div key={conv.id} style={{
-                  background: '#181825', border: '1px solid #313244', borderRadius: 10,
+                  background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
                   padding: '14px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
                 }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = '#313244')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)')}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{conv.title || 'Untitled'}</div>
@@ -3684,7 +3684,7 @@ export function ChatHistoryPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 10, color: '#6c7086', background: '#313244', padding: '2px 8px', borderRadius: 4 }}>
+                    <span style={{ fontSize: 10, color: '#6c7086', background: 'rgba(49, 34, 68, 0.5)', padding: '2px 8px', borderRadius: 4 }}>
                       {msgCount} messages
                     </span>
                     {conv.model && (
@@ -3798,7 +3798,7 @@ export function MemoryPage() {
               { label: t('dash.memory.categories'), value: Object.keys(categoryCounts).length, color: '#f59e0b' },
             ].map(s => (
               <div key={s.label} style={{
-                background: '#181825', border: '1px solid #313244', borderRadius: 10,
+                background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
                 padding: '14px 12px', textAlign: 'center',
               }}>
                 <div style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.value}</div>
@@ -3821,10 +3821,10 @@ export function MemoryPage() {
             onChange={e => setSearch(e.target.value)}
             style={{
               ...inputStyle, paddingLeft: 38, height: 40, borderRadius: 10,
-              background: '#313244', border: '1px solid #313244',
+              background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
             }}
             onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
-            onBlur={e => { e.currentTarget.style.borderColor = '#313244'; }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
           />
         </div>
 
@@ -3834,7 +3834,7 @@ export function MemoryPage() {
             onClick={() => setCategoryFilter(null)}
             style={{
               padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-              border: categoryFilter === null ? '1px solid #a855f7' : '1px solid #313244',
+              border: categoryFilter === null ? '1px solid #a855f7' : '1px solid rgba(168, 85, 247, 0.12)',
               background: categoryFilter === null ? 'rgba(168,85,247,0.15)' : 'transparent',
               color: categoryFilter === null ? '#a855f7' : '#6c7086',
             }}
@@ -3850,7 +3850,7 @@ export function MemoryPage() {
                 onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
                 style={{
                   padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                  border: isActive ? `1px solid ${cs.border}` : '1px solid #313244',
+                  border: isActive ? `1px solid ${cs.border}` : '1px solid rgba(168, 85, 247, 0.12)',
                   background: isActive ? cs.bg : 'transparent',
                   color: isActive ? cs.text : '#6c7086',
                   textTransform: 'capitalize' as const,
@@ -3867,7 +3867,7 @@ export function MemoryPage() {
           <>
             {filtered.length === 0 ? (
               <div style={{
-                background: '#181825', border: '1px dashed #313244', borderRadius: 12,
+                background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12,
                 padding: '40px 20px', textAlign: 'center',
               }}>
                 <div style={{ fontSize: 13, color: '#6c7086' }}>
@@ -3891,12 +3891,12 @@ export function MemoryPage() {
                     <div
                       key={id}
                       style={{
-                        background: '#181825', border: '1px solid #313244', borderRadius: 12,
+                        background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
                         padding: '18px 20px', cursor: 'pointer', transition: 'border-color 0.15s',
                       }}
                       onClick={() => setExpandedId(isExpanded ? null : id)}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,0.3)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#313244'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
                     >
                       {/* Header row: category badge + tags + actions */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -3931,7 +3931,7 @@ export function MemoryPage() {
                               <button
                                 onClick={() => setConfirmDeleteId(null)}
                                 style={{
-                                  background: 'transparent', border: '1px solid #313244', borderRadius: 4,
+                                  background: 'transparent', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 4,
                                   padding: '3px 10px', fontSize: 10, color: '#6c7086', cursor: 'pointer',
                                 }}
                               >
@@ -4190,7 +4190,7 @@ export function TasksPage() {
             { label: t('dash.tasks.completed'), value: stats.completed, color: '#22c55e' },
           ].map((s) => (
             <div key={s.label} style={{
-              background: '#181825', border: '1px solid #313244', borderRadius: 10,
+              background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
               padding: '14px 12px', textAlign: 'center',
             }}>
               <div style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.value}</div>
@@ -4202,7 +4202,7 @@ export function TasksPage() {
         {/* Add Task Form */}
         {showForm && (
           <div style={{
-            background: '#181825', border: '1px solid #313244', borderRadius: 10,
+            background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
             padding: 20, marginBottom: 20,
           }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 14 }}>{t('dash.tasks.new_task')}</div>
@@ -4216,7 +4216,7 @@ export function TasksPage() {
                 ...inputStyle, marginBottom: 12, height: 40,
               }}
               onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#313244'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
               autoFocus
             />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
@@ -4231,8 +4231,8 @@ export function TasksPage() {
                       style={{
                         display: 'flex', alignItems: 'center', gap: 5,
                         padding: '5px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                        border: formPriority === p ? `1px solid ${TASK_PRIORITY_DOT[p]}` : '1px solid #313244',
-                        background: formPriority === p ? TASK_PRIORITY_BG[p] : '#313244',
+                        border: formPriority === p ? `1px solid ${TASK_PRIORITY_DOT[p]}` : '1px solid rgba(168, 85, 247, 0.12)',
+                        background: formPriority === p ? TASK_PRIORITY_BG[p] : 'rgba(49, 34, 68, 0.5)',
                         color: formPriority === p ? TASK_PRIORITY_DOT[p] : '#a6adc8',
                         fontWeight: formPriority === p ? 600 : 400,
                       }}
@@ -4294,7 +4294,7 @@ export function TasksPage() {
                 onClick={resetForm}
                 style={{ ...btnSecondary, padding: '8px 14px', fontSize: 12 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#45475a'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = '#313244'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
               >
                 {t('dash.tasks.cancel')}
               </button>
@@ -4303,7 +4303,7 @@ export function TasksPage() {
         )}
 
         {/* Filter tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #313244', marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 20 }}>
           {filterTabs.map((tab) => (
             <button
               key={tab.key}
@@ -4360,8 +4360,8 @@ export function TasksPage() {
                   <div
                     key={id}
                     style={{
-                      background: '#181825',
-                      border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : isHovered ? 'rgba(168,85,247,0.3)' : '#313244'}`,
+                      background: 'rgba(26, 16, 40, 0.6)',
+                      border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : isHovered ? 'rgba(168,85,247,0.3)' : 'rgba(168, 85, 247, 0.12)'}`,
                       borderRadius: 10, padding: '16px 20px',
                       display: 'flex', alignItems: 'flex-start', gap: 14,
                       transition: 'border-color 0.15s',
@@ -4375,7 +4375,7 @@ export function TasksPage() {
                       onClick={() => toggleTask(task)}
                       style={{
                         width: 22, height: 22, borderRadius: 6, flexShrink: 0, marginTop: 1,
-                        border: isDone ? '2px solid #22c55e' : '2px solid #313244',
+                        border: isDone ? '2px solid #22c55e' : '2px solid rgba(168, 85, 247, 0.12)',
                         background: isDone ? 'rgba(34,197,94,0.15)' : 'transparent',
                         cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -4470,7 +4470,7 @@ export function TasksPage() {
                           <button
                             onClick={() => setConfirmDeleteId(null)}
                             style={{
-                              background: 'rgba(255,255,255,0.05)', border: '1px solid #313244',
+                              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(168, 85, 247, 0.12)',
                               borderRadius: 4, padding: '3px 8px', fontSize: 10,
                               color: '#6c7086', cursor: 'pointer',
                             }}
@@ -4598,7 +4598,7 @@ export function JournalPage() {
         {!connected && <NotConnectedBanner />}
 
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #313244', marginBottom: 20 }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 20 }}>
           <button
             onClick={() => setTab('user')}
             style={{
@@ -4645,7 +4645,7 @@ export function JournalPage() {
             onClick={() => setDateOffset((d) => d - 1)}
             style={{ ...btnSecondary, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12 }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#45475a'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#313244'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
@@ -4668,7 +4668,7 @@ export function JournalPage() {
               <div style={{
                 position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
                 marginTop: 8, zIndex: 10,
-                background: '#181825', border: '1px solid #313244', borderRadius: 8,
+                background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
                 padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
               }}>
                 <input
@@ -4689,7 +4689,7 @@ export function JournalPage() {
               opacity: isToday ? 0.4 : 1, pointerEvents: isToday ? 'none' : 'auto',
             }}
             onMouseEnter={(e) => { if (!isToday) e.currentTarget.style.background = '#45475a'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#313244'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           >
             {t('dash.journal.next')}
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -4969,7 +4969,7 @@ export function LearningPage() {
                 <span style={{ fontSize: 10, color: '#6c7086' }}>Progress</span>
                 <span style={{ fontSize: 10, fontWeight: 600, color: '#cdd6f4' }}>{Math.round(progress)}%</span>
               </div>
-              <div style={{ height: 6, background: '#313244', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{
                   width: `${progress}%`, height: '100%', borderRadius: 3,
                   background: 'linear-gradient(90deg, #a855f7, #6366f1)',
@@ -4989,7 +4989,7 @@ export function LearningPage() {
 
               return (
                 <div key={modId} style={{
-                  background: '#181825', border: '1px solid #313244', borderRadius: 10, overflow: 'hidden',
+                  background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10, overflow: 'hidden',
                 }}>
                   <button
                     onClick={() => toggleModule(modId)}
@@ -4997,7 +4997,7 @@ export function LearningPage() {
                       width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
                     }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#313244'; }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(49, 34, 68, 0.5)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -5016,7 +5016,7 @@ export function LearningPage() {
                   </button>
 
                   {isOpen && lessons.length > 0 && (
-                    <div style={{ borderTop: '1px solid #313244' }}>
+                    <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.12)' }}>
                       {lessons.map((lesson: any) => (
                         <div
                           key={lesson.id || lesson.title}
@@ -5067,7 +5067,7 @@ export function LearningPage() {
             { label: t('dash.learning.total_lessons'), value: totalLessons, color: '#f59e0b' },
           ].map(s => (
             <div key={s.label} style={{
-              background: '#181825', border: '1px solid #313244', borderRadius: 10,
+              background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
               padding: '14px 12px', textAlign: 'center',
             }}>
               <div style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.value}</div>
@@ -5099,7 +5099,7 @@ export function LearningPage() {
                   ))}
                 </div>
                 <div style={{
-                  background: '#181825', border: '1px dashed #313244', borderRadius: 12,
+                  background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12,
                   padding: '24px 20px', textAlign: 'center',
                 }}>
                   <div style={{ fontSize: 13, color: '#6c7086' }}>
@@ -5122,11 +5122,11 @@ export function LearningPage() {
                       key={id}
                       onClick={() => { setSelectedId(id); setExpandedModules(new Set()); }}
                       style={{
-                        width: '100%', background: '#181825', border: '1px solid #313244', borderRadius: 12,
+                        width: '100%', background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
                         padding: '16px 20px', textAlign: 'left', cursor: 'pointer', transition: 'border-color 0.15s',
                       }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,0.3)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#313244'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                         <span style={{
@@ -5140,7 +5140,7 @@ export function LearningPage() {
                       <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 8 }}>{curr.title}</div>
 
                       {/* Progress bar */}
-                      <div style={{ height: 4, background: '#313244', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
+                      <div style={{ height: 4, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
                         <div style={{
                           width: `${progress}%`, height: '100%', borderRadius: 2,
                           background: 'linear-gradient(90deg, #a855f7, #6366f1)',
@@ -5276,7 +5276,7 @@ export function LibraryPage() {
                 style={{
                   padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
                   fontSize: 12, fontWeight: filter === tab.id ? 600 : 400,
-                  background: filter === tab.id ? 'rgba(168,85,247,0.2)' : '#181825',
+                  background: filter === tab.id ? 'rgba(168,85,247,0.2)' : 'rgba(26, 16, 40, 0.6)',
                   color: filter === tab.id ? '#e0b0ff' : '#6c7086',
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}
@@ -5284,7 +5284,7 @@ export function LibraryPage() {
                 {tab.label}
                 <span style={{
                   fontSize: 10, padding: '1px 6px', borderRadius: 10,
-                  background: filter === tab.id ? 'rgba(168,85,247,0.3)' : '#313244',
+                  background: filter === tab.id ? 'rgba(168,85,247,0.3)' : 'rgba(49, 34, 68, 0.5)',
                   color: filter === tab.id ? '#fff' : '#6c7086',
                 }}>{tab.count}</span>
               </button>
@@ -5292,7 +5292,7 @@ export function LibraryPage() {
           </div>
 
           {/* View toggle */}
-          <div style={{ display: 'flex', gap: 4, background: '#181825', borderRadius: 8, padding: 3 }}>
+          <div style={{ display: 'flex', gap: 4, background: 'rgba(26, 16, 40, 0.6)', borderRadius: 8, padding: 3 }}>
             {(['grid', 'list'] as const).map((v) => (
               <button
                 key={v}
@@ -5353,7 +5353,7 @@ export function LibraryPage() {
                   key={i}
                   onClick={() => setSelectedFile(isSelected ? null : file)}
                   style={{
-                    background: '#181825', border: `1px solid ${isSelected ? colors.border : '#313244'}`,
+                    background: 'rgba(26, 16, 40, 0.6)', border: `1px solid ${isSelected ? colors.border : 'rgba(168, 85, 247, 0.12)'}`,
                     borderRadius: 10, overflow: 'hidden', cursor: 'pointer',
                     transition: 'border-color 0.2s, transform 0.15s',
                   }}
@@ -5392,7 +5392,7 @@ export function LibraryPage() {
           </div>
         ) : (
           /* List view */
-          <div style={{ background: '#181825', border: '1px solid #313244', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10, overflow: 'hidden' }}>
             {filtered.map((file, i) => {
               const colors = FILE_TYPE_COLORS[file.type];
               const isSelected = selectedFile?.path === file.path;
@@ -5402,7 +5402,7 @@ export function LibraryPage() {
                   onClick={() => setSelectedFile(isSelected ? null : file)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
-                    borderBottom: i < filtered.length - 1 ? '1px solid #313244' : 'none',
+                    borderBottom: i < filtered.length - 1 ? '1px solid rgba(168, 85, 247, 0.12)' : 'none',
                     background: isSelected ? 'rgba(168,85,247,0.08)' : 'transparent',
                     cursor: 'pointer', transition: 'background 0.15s',
                   }}
@@ -5449,7 +5449,7 @@ export function LibraryPage() {
       {/* Selected file detail panel */}
       {selectedFile && (
         <div style={{
-          borderTop: '1px solid #313244', background: '#181825', padding: '16px 32px',
+          borderTop: '1px solid rgba(168, 85, 247, 0.12)', background: 'rgba(26, 16, 40, 0.6)', padding: '16px 32px',
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: 16,
         }}>
           <div style={{
@@ -5604,8 +5604,8 @@ export function PersonalityPage() {
   const optionCard = (selected: boolean): React.CSSProperties => ({
     display: 'flex', flexDirection: 'column', alignItems: 'flex-start', position: 'relative',
     padding: '14px 16px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
-    border: selected ? '1px solid #a855f7' : '1px solid #313244',
-    background: selected ? 'rgba(168,85,247,0.08)' : '#313244',
+    border: selected ? '1px solid #a855f7' : '1px solid rgba(168, 85, 247, 0.12)',
+    background: selected ? 'rgba(168,85,247,0.08)' : 'rgba(49, 34, 68, 0.5)',
     boxShadow: selected ? '0 0 16px rgba(168,85,247,0.15)' : 'none',
     transition: 'all 0.15s',
   });
@@ -5635,10 +5635,10 @@ export function PersonalityPage() {
             placeholder="Ava"
             style={{
               ...inputStyle, maxWidth: 280, height: 40, borderRadius: 10,
-              border: '1px solid #313244',
+              border: '1px solid rgba(168, 85, 247, 0.12)',
             }}
             onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
-            onBlur={e => { e.currentTarget.style.borderColor = '#313244'; }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
           />
         </div>
 
@@ -5652,14 +5652,14 @@ export function PersonalityPage() {
                 onClick={() => setPronouns(p.value)}
                 style={{
                   padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                  border: pronouns === p.value ? '1px solid #a855f7' : '1px solid #313244',
-                  background: pronouns === p.value ? 'rgba(168,85,247,0.15)' : '#313244',
+                  border: pronouns === p.value ? '1px solid #a855f7' : '1px solid rgba(168, 85, 247, 0.12)',
+                  background: pronouns === p.value ? 'rgba(168,85,247,0.15)' : 'rgba(49, 34, 68, 0.5)',
                   color: pronouns === p.value ? '#fff' : '#a6adc8',
                   boxShadow: pronouns === p.value ? '0 0 12px rgba(168,85,247,0.25)' : 'none',
                   transition: 'all 0.15s',
                 }}
                 onMouseEnter={e => { if (pronouns !== p.value) (e.currentTarget as HTMLElement).style.borderColor = '#6c7086'; }}
-                onMouseLeave={e => { if (pronouns !== p.value) (e.currentTarget as HTMLElement).style.borderColor = '#313244'; }}
+                onMouseLeave={e => { if (pronouns !== p.value) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
               >
                 {p.label}
               </button>
@@ -5748,12 +5748,12 @@ export function PersonalityPage() {
             placeholder="e.g. Like a patient older brother who's been coding for 20 years"
             rows={3}
             style={{
-              width: '100%', background: '#313244', border: '1px solid #313244', borderRadius: 10,
+              width: '100%', background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
               padding: '12px 14px', fontSize: 13, color: '#cdd6f4', outline: 'none', resize: 'none',
               lineHeight: 1.6, fontFamily: 'inherit',
             }}
             onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
-            onBlur={e => { e.currentTarget.style.borderColor = '#313244'; }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
           />
           <div style={{ fontSize: 11, color: '#6c7086', marginTop: 6 }}>
             Optional. Describe the vibe in your own words and your AI will embody it.
@@ -5762,7 +5762,7 @@ export function PersonalityPage() {
 
         {/* Live Preview */}
         <div style={{
-          background: '#313244', border: '1px solid #313244', borderRadius: 12,
+          background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '20px', marginBottom: 28,
         }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', textTransform: 'uppercase' as const, letterSpacing: 1.2, marginBottom: 8 }}>
@@ -5799,7 +5799,7 @@ export function PersonalityPage() {
               ...btnSecondary, padding: '10px 20px', fontSize: 13, borderRadius: 10,
             }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#6c7086'; (e.currentTarget as HTMLElement).style.color = '#cdd6f4'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#313244'; (e.currentTarget as HTMLElement).style.color = '#a6adc8'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168, 85, 247, 0.12)'; (e.currentTarget as HTMLElement).style.color = '#a6adc8'; }}
           >
             {t('dash.personality.reset')}
           </button>
@@ -5921,7 +5921,7 @@ export function CloudSyncPage() {
 
             return (
               <div key={key} style={{
-                background: '#181825', border: '1px solid #313244', borderRadius: 10,
+                background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
                 padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
@@ -5930,7 +5930,7 @@ export function CloudSyncPage() {
                     onClick={() => togglePref(key)}
                     style={{
                       width: 32, height: 18, borderRadius: 9, flexShrink: 0, position: 'relative', cursor: 'pointer', border: 'none',
-                      background: isSyncEnabled(key) ? '#a855f7' : '#313244', transition: 'background 0.2s',
+                      background: isSyncEnabled(key) ? '#a855f7' : 'rgba(49, 34, 68, 0.5)', transition: 'background 0.2s',
                     }}
                     title={isSyncEnabled(key) ? `Disable ${label} sync` : `Enable ${label} sync`}
                   >
@@ -5954,13 +5954,13 @@ export function CloudSyncPage() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                       <span style={{
-                        fontSize: 10, color: '#6c7086', background: '#313244',
+                        fontSize: 10, color: '#6c7086', background: 'rgba(49, 34, 68, 0.5)',
                         padding: '2px 8px', borderRadius: 4,
                       }}>
                         Your device: {c.local}
                       </span>
                       <span style={{
-                        fontSize: 10, color: '#6c7086', background: '#313244',
+                        fontSize: 10, color: '#6c7086', background: 'rgba(49, 34, 68, 0.5)',
                         padding: '2px 8px', borderRadius: 4,
                       }}>
                         Cloud: {c.cloud}
@@ -6052,7 +6052,7 @@ export function CloudSyncPage() {
 
         {/* How it works */}
         <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 10,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
           padding: '16px 20px', marginTop: 28,
         }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>How it works</div>
@@ -6164,7 +6164,7 @@ export function UsagePage() {
 
         {/* Tab Toggle */}
         <div style={{
-          display: 'inline-flex', gap: 2, background: '#313244', borderRadius: 10, padding: 3, marginBottom: 24,
+          display: 'inline-flex', gap: 2, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 10, padding: 3, marginBottom: 24,
         }}>
           {(['session', 'alltime'] as const).map(tab => (
             <button
@@ -6198,7 +6198,7 @@ export function UsagePage() {
                     { label: t('dash.usage.est_cost'), value: `$${totalCost.toFixed(4)}`, color: costColour(totalCost) },
                   ].map(s => (
                     <div key={s.label} style={{
-                      background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: '16px',
+                      background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px',
                     }}>
                       <div style={{ fontSize: 10, color: '#6c7086' }}>{s.label}</div>
                       <div style={{
@@ -6229,7 +6229,7 @@ export function UsagePage() {
                         const cost = estimateCost(m.input_tokens || 0, m.output_tokens || 0, m.model || m.name || '');
                         return (
                           <div key={m.model || m.name || i} style={{
-                            background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: '16px',
+                            background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px',
                           }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                               <span style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>{m.model || m.name}</span>
@@ -6238,7 +6238,7 @@ export function UsagePage() {
                                 <span style={{ fontSize: 10, color: '#6c7086' }}>{m.requests || 0} reqs</span>
                               </div>
                             </div>
-                            <div style={{ height: 8, background: '#313244', borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
+                            <div style={{ height: 8, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
                               <div style={{
                                 width: `${pct}%`, height: '100%', borderRadius: 4,
                                 background: 'linear-gradient(90deg, #a855f7, #6366f1)',
@@ -6258,7 +6258,7 @@ export function UsagePage() {
 
                 {!models.length && connected && (
                   <div style={{
-                    background: '#181825', border: '1px solid #313244', borderRadius: 12,
+                    background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
                     padding: '32px 20px', textAlign: 'center',
                   }}>
                     <div style={{ fontSize: 13, color: '#6c7086' }}>No usage this session yet. Start chatting with Ava!</div>
@@ -6277,7 +6277,7 @@ export function UsagePage() {
                           <span style={{ color: '#a6adc8' }}>Admin tier</span>
                           <span style={{ fontWeight: 500, color: '#a855f7' }}>Unlimited</span>
                         </div>
-                        <div style={{ height: 12, background: '#313244', borderRadius: 6, overflow: 'hidden' }}>
+                        <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
                           <div style={{ width: '100%', height: '100%', borderRadius: 6, background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
                         </div>
                       </>
@@ -6287,7 +6287,7 @@ export function UsagePage() {
                           <span style={{ color: '#a6adc8' }}>{formatTokens(balanceUsed)} / {formatTokens(balanceLimit)} used</span>
                           <span style={{ color: '#6c7086' }}>{balancePct.toFixed(0)}%</span>
                         </div>
-                        <div style={{ height: 12, background: '#313244', borderRadius: 6, overflow: 'hidden' }}>
+                        <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
                           <div style={{
                             width: `${balancePct}%`, height: '100%', borderRadius: 6,
                             background: balancePct > 90 ? '#f87171' : balancePct > 70 ? '#f59e0b' : 'linear-gradient(90deg, #a855f7, #6366f1)',
@@ -6307,7 +6307,7 @@ export function UsagePage() {
                     { label: t('dash.usage.total_sessions'), value: String(totalSessions) },
                   ].map(s => (
                     <div key={s.label} style={{
-                      background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: '16px',
+                      background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px',
                     }}>
                       <div style={{ fontSize: 10, color: '#6c7086' }}>{s.label}</div>
                       <div style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginTop: 4 }}>{s.value}</div>
@@ -6335,7 +6335,7 @@ export function UsagePage() {
                                 width: '100%', borderRadius: '3px 3px 0 0', transition: 'all 0.2s',
                                 height: `${Math.max(heightPct, tokens > 0 ? 4 : 2)}%`, minHeight: 2,
                                 background: isToday ? '#a855f7'
-                                  : tokens > 0 ? 'linear-gradient(180deg, #a855f7, #6366f1)' : '#313244',
+                                  : tokens > 0 ? 'linear-gradient(180deg, #a855f7, #6366f1)' : 'rgba(49, 34, 68, 0.5)',
                                 opacity: isToday ? 1 : tokens > 0 ? 0.7 : 1,
                               }} />
                             </div>
@@ -6368,7 +6368,7 @@ export function UsagePage() {
                               <span style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>{m.model || m.name}</span>
                               <span style={{ fontSize: 10, color: '#6c7086' }}>{formatTokens(mTokens)}</span>
                             </div>
-                            <div style={{ height: 8, background: '#313244', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ height: 8, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 4, overflow: 'hidden' }}>
                               <div style={{
                                 width: `${pct}%`, height: '100%', borderRadius: 4,
                                 background: 'linear-gradient(90deg, #a855f7, #6366f1)',
@@ -6383,7 +6383,7 @@ export function UsagePage() {
 
                 {!daily.length && !models.length && connected && (
                   <div style={{
-                    background: '#181825', border: '1px dashed #313244', borderRadius: 12,
+                    background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12,
                     padding: '32px 20px', textAlign: 'center',
                   }}>
                     <div style={{ fontSize: 13, color: '#6c7086' }}>
@@ -6557,7 +6557,7 @@ export function SettingsPage() {
       role="switch"
       style={{
         width: 44, height: 24, borderRadius: 12,
-        background: value ? '#a855f7' : '#313244',
+        background: value ? '#a855f7' : 'rgba(49, 34, 68, 0.5)',
         cursor: 'pointer', position: 'relative', flexShrink: 0,
         transition: 'background 0.2s',
       }}
@@ -6576,7 +6576,7 @@ export function SettingsPage() {
   };
 
   const divider: React.CSSProperties = {
-    borderTop: '1px solid #313244', margin: '16px 0',
+    borderTop: '1px solid rgba(168, 85, 247, 0.12)', margin: '16px 0',
   };
 
   return (
@@ -6592,7 +6592,7 @@ export function SettingsPage() {
         {/* 1. Your AI */}
         <div style={sLabel}>{t('dash.settings.section.your_ai')}</div>
         <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 12,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -6617,7 +6617,7 @@ export function SettingsPage() {
         {/* 2. Avatars */}
         <div style={sLabel}>{t('dash.settings.section.avatars')}</div>
         <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 12,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
         }}>
           <div style={{ display: 'flex', gap: 32 }}>
@@ -6641,7 +6641,7 @@ export function SettingsPage() {
                 style={{
                   width: 64, height: 64, borderRadius: '50%', cursor: 'pointer',
                   border: '2px dashed rgba(168,85,247,0.3)',
-                  background: userAvatar ? 'transparent' : '#11111b',
+                  background: userAvatar ? 'transparent' : 'rgba(10, 6, 18, 0.8)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   overflow: 'hidden', position: 'relative',
                 }}
@@ -6708,7 +6708,7 @@ export function SettingsPage() {
         {/* 3. Privacy & Data */}
         <div style={sLabel}>{t('dash.settings.section.privacy')}</div>
         <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 12,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
         }}>
           {/* Auto Memory */}
@@ -6759,7 +6759,7 @@ export function SettingsPage() {
         {/* 4. Behavior */}
         <div style={sLabel}>{t('dash.settings.section.behavior')}</div>
         <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 12,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
         }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>{t('dash.settings.permission')}</div>
@@ -6777,14 +6777,14 @@ export function SettingsPage() {
                   key={pm.key}
                   onClick={() => saveImmediate('permissionMode', pm.key)}
                   style={{
-                    background: sel ? 'rgba(168,85,247,0.08)' : '#181825',
-                    border: sel ? '1px solid rgba(168,85,247,0.6)' : '1px solid #313244',
+                    background: sel ? 'rgba(168,85,247,0.08)' : 'rgba(26, 16, 40, 0.6)',
+                    border: sel ? '1px solid rgba(168,85,247,0.6)' : '1px solid rgba(168, 85, 247, 0.12)',
                     borderRadius: 10, padding: '12px', textAlign: 'left', cursor: 'pointer',
                     boxShadow: sel ? '0 0 12px rgba(168,85,247,0.15)' : 'none',
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLElement).style.borderColor = '#45475a'; }}
-                  onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLElement).style.borderColor = '#313244'; }}
+                  onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
                 >
                   <div style={{ fontSize: 18, marginBottom: 6 }}>{pm.icon}</div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: sel ? '#a855f7' : '#a6adc8' }}>{pm.label}</div>
@@ -6808,7 +6808,7 @@ export function SettingsPage() {
         {/* 5. Language */}
         <div style={sLabel}>{t('dash.settings.language')}</div>
         <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 12,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
         }}>
           <CustomSelect
@@ -6823,7 +6823,7 @@ export function SettingsPage() {
         {/* 6. API Keys (collapsible) */}
         <div style={sLabel}>{t('dash.settings.section.api_keys')}</div>
         <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 12,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           marginBottom: 16, overflow: 'hidden',
         }}>
           <button
@@ -6846,7 +6846,7 @@ export function SettingsPage() {
           </button>
 
           {apiKeysOpen && (
-            <div style={{ borderTop: '1px solid #313244', padding: '0 20px 20px' }}>
+            <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.12)', padding: '0 20px 20px' }}>
               {PROVIDERS.map((provider, i) => (
                 <div key={provider.id}>
                   {i > 0 && <div style={divider} />}
@@ -6884,12 +6884,12 @@ export function SettingsPage() {
                           onChange={e => setProviderInputs(prev => ({ ...prev, [provider.id]: e.target.value }))}
                           placeholder={provider.placeholder}
                           style={{
-                            width: 180, height: 30, background: '#313244', border: '1px solid #313244',
+                            width: 180, height: 30, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
                             borderRadius: 6, padding: '0 10px', fontFamily: 'monospace', fontSize: 11,
                             color: '#cdd6f4', outline: 'none',
                           }}
                           onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                          onBlur={e => { e.currentTarget.style.borderColor = '#313244'; }}
+                          onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
                           autoFocus
                         />
                         <button
@@ -6918,7 +6918,7 @@ export function SettingsPage() {
                             ...btnSecondary, padding: '5px 12px', fontSize: 10, borderRadius: 6,
                           }}
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#a855f7'; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#313244'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
                         >
                           {t('dash.settings.edit')}
                         </button>
@@ -6945,7 +6945,7 @@ export function SettingsPage() {
         {/* 7. Advanced (collapsible) */}
         <div style={sLabel}>{t('dash.settings.section.advanced')}</div>
         <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 12,
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           marginBottom: 16, overflow: 'hidden',
         }}>
           <button
@@ -6966,13 +6966,13 @@ export function SettingsPage() {
           </button>
 
           {advancedOpen && (
-            <div style={{ borderTop: '1px solid #313244', padding: '20px' }}>
+            <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.12)', padding: '20px' }}>
               {/* Temperature */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.temperature')}</div>
                   <span style={{
-                    background: '#313244', padding: '2px 10px', borderRadius: 6,
+                    background: 'rgba(49, 34, 68, 0.5)', padding: '2px 10px', borderRadius: 6,
                     fontFamily: 'monospace', fontSize: 12, color: '#a6adc8',
                   }}>
                     {settings.temperature.toFixed(1)}
@@ -7005,7 +7005,7 @@ export function SettingsPage() {
                     fontFamily: 'monospace',
                   }}
                   onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = '#313244'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
                 />
               </div>
             </div>
@@ -7017,7 +7017,7 @@ export function SettingsPage() {
           <>
             <div style={sLabel}>{t('dash.settings.section.danger_zone')}</div>
             <div style={{
-              background: '#181825', border: '1px solid rgba(248,113,113,0.30)',
+              background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(248,113,113,0.30)',
               borderRadius: 12, padding: '18px 20px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -7113,7 +7113,7 @@ export function BillingPage() {
               <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Free Tokens</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: '#a6e3a1', marginBottom: 4 }}>{fmtTokens(freeLimit - freeUsed)}</div>
               <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>of {fmtTokens(freeLimit)} remaining</div>
-              <div style={{ height: 6, background: '#313244', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pct(freeUsed, freeLimit)}%`, background: 'linear-gradient(90deg, #a6e3a1, #94e2d5)', borderRadius: 3, transition: 'width 0.5s' }} />
               </div>
             </div>
@@ -7122,7 +7122,7 @@ export function BillingPage() {
               <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Plan Tokens</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: '#89b4fa', marginBottom: 4 }}>{planLimit > 0 ? fmtTokens(planLimit - planUsed) : '—'}</div>
               <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>{planLimit > 0 ? `of ${fmtTokens(planLimit)} remaining` : 'Upgrade for plan tokens'}</div>
-              <div style={{ height: 6, background: '#313244', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pct(planUsed, planLimit)}%`, background: 'linear-gradient(90deg, #89b4fa, #74c7ec)', borderRadius: 3, transition: 'width 0.5s' }} />
               </div>
             </div>
@@ -7149,7 +7149,7 @@ export function BillingPage() {
             ].map((pkg) => (
               <div key={pkg.tokens} style={{
                 ...card, textAlign: 'center', padding: '20px 16px', position: 'relative',
-                borderColor: pkg.popular ? 'rgba(168,85,247,0.4)' : '#313244',
+                borderColor: pkg.popular ? 'rgba(168,85,247,0.4)' : 'rgba(49, 34, 68, 0.5)',
               }}>
                 {pkg.popular && <span style={{ position: 'absolute', top: -8, right: 12, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#a855f7', color: '#fff' }}>POPULAR</span>}
                 <div style={{ fontSize: 24, fontWeight: 700, color: '#cdd6f4', marginBottom: 2 }}>{pkg.tokens}</div>
@@ -7296,7 +7296,7 @@ export function SupportPage() {
             onClick={() => { setShowNewForm(!showNewForm); setSelectedTicket(null); }}
             style={{
               padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: showNewForm ? '#313244' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              background: showNewForm ? 'rgba(49, 34, 68, 0.5)' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
               color: showNewForm ? '#6c7086' : '#fff', border: 'none',
             }}
           >{showNewForm ? t('dash.support.cancel') : t('dash.support.new_ticket')}</button>
@@ -7316,7 +7316,7 @@ export function SupportPage() {
             return (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11,
-              background: filter === f ? 'rgba(168,85,247,0.2)' : '#181825',
+              background: filter === f ? 'rgba(168,85,247,0.2)' : 'rgba(26, 16, 40, 0.6)',
               color: filter === f ? '#e0b0ff' : '#6c7086', fontWeight: filter === f ? 600 : 400,
             }}>{filterLabels[f]}</button>
             );
@@ -7351,7 +7351,7 @@ export function SupportPage() {
                   return (
                   <button key={c} onClick={() => setNewCategory(c)} style={{
                     padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11,
-                    background: newCategory === c ? (catColors[c]?.bg || '#313244') : '#181825',
+                    background: newCategory === c ? (catColors[c]?.bg || 'rgba(49, 34, 68, 0.5)') : 'rgba(26, 16, 40, 0.6)',
                     color: newCategory === c ? (catColors[c]?.text || '#cdd6f4') : '#6c7086',
                     fontWeight: newCategory === c ? 600 : 400,
                   }}>{catLabels[c]}</button>
@@ -7365,7 +7365,7 @@ export function SupportPage() {
               placeholder={t('dash.support.describe_placeholder')}
               rows={5}
               style={{
-                width: '100%', padding: '10px 14px', background: '#11111b', border: '1px solid #313244',
+                width: '100%', padding: '10px 14px', background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)',
                 borderRadius: 8, color: '#cdd6f4', fontSize: 13, resize: 'vertical', outline: 'none',
                 fontFamily: 'inherit', marginBottom: 12,
               }}
@@ -7393,7 +7393,7 @@ export function SupportPage() {
               {/* Messages */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                 {(selectedTicket.messages || [{ sender: t('dash.support.you'), body: selectedTicket.message, timestamp: selectedTicket.created_at }]).map((msg: any, i: number) => (
-                  <div key={i} style={{ background: '#11111b', borderRadius: 8, padding: '10px 14px', border: '1px solid #313244' }}>
+                  <div key={i} style={{ background: 'rgba(10, 6, 18, 0.8)', borderRadius: 8, padding: '10px 14px', border: '1px solid rgba(168, 85, 247, 0.12)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: msg.sender === 'Support' ? '#a855f7' : '#89b4fa' }}>{msg.sender || t('dash.support.you')}</span>
                       <span style={{ fontSize: 10, color: '#45475a' }}>{msg.timestamp ? new Date(msg.timestamp).toLocaleDateString() : ''}</span>
@@ -7412,7 +7412,7 @@ export function SupportPage() {
                   onKeyDown={(e) => { if (e.key === 'Enter') sendReply(); }}
                   placeholder={t('dash.support.reply_input_placeholder')}
                   style={{
-                    flex: 1, padding: '8px 14px', background: '#11111b', border: '1px solid #313244',
+                    flex: 1, padding: '8px 14px', background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)',
                     borderRadius: 8, color: '#cdd6f4', fontSize: 13, outline: 'none',
                   }}
                 />
@@ -7677,8 +7677,8 @@ export function DocumentationPage() {
             { keys: 'Ctrl+V', action: t('dash.docs.shortcuts_paste') },
             { keys: 'F12', action: t('dash.docs.shortcuts_devtools') },
           ].map((s) => (
-            <div key={s.keys} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid #313244' }}>
-              <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#f5c2e7', background: '#313244', padding: '3px 10px', borderRadius: 6, flexShrink: 0 }}>{s.keys}</span>
+            <div key={s.keys} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid rgba(168, 85, 247, 0.12)' }}>
+              <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#f5c2e7', background: 'rgba(49, 34, 68, 0.5)', padding: '3px 10px', borderRadius: 6, flexShrink: 0 }}>{s.keys}</span>
               <span style={{ fontSize: 12, color: '#6c7086' }}>{s.action}</span>
             </div>
           ))}
@@ -7724,7 +7724,7 @@ export function DocumentationPage() {
             { section: t('dash.docs.dashboard_account'), pages: t('dash.docs.dashboard_account_pages') },
             { section: t('dash.docs.dashboard_help'), pages: t('dash.docs.dashboard_help_pages') },
           ].map(s => (
-            <div key={s.section} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid #313244' }}>
+            <div key={s.section} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid rgba(168, 85, 247, 0.12)' }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#cba6f7', minWidth: 90 }}>{s.section}</span>
               <span style={{ fontSize: 12, color: '#6c7086' }}>{s.pages}</span>
             </div>
@@ -7786,7 +7786,7 @@ export function DocumentationPage() {
     <div style={{ ...pageWrapper, display: 'flex', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
       {/* Sidebar nav */}
       <div style={{
-        width: 200, flexShrink: 0, borderRight: '1px solid #313244', background: '#181825',
+        width: 200, flexShrink: 0, borderRight: '1px solid rgba(168, 85, 247, 0.12)', background: 'rgba(26, 16, 40, 0.6)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{ padding: '16px 12px 8px' }}>
@@ -7796,7 +7796,7 @@ export function DocumentationPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('dash.docs.search_placeholder')}
             style={{
-              width: '100%', padding: '6px 10px', background: '#11111b', border: '1px solid #313244',
+              width: '100%', padding: '6px 10px', background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)',
               borderRadius: 6, color: '#cdd6f4', fontSize: 12, outline: 'none',
             }}
           />
@@ -7826,7 +7826,7 @@ export function DocumentationPage() {
 
         {filteredSections.map((s) => (
           <div key={s.id} id={`doc-${s.id}`} style={{ marginBottom: 40 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 16, paddingBottom: 8, borderBottom: '1px solid #313244' }}>{s.title}</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 16, paddingBottom: 8, borderBottom: '1px solid rgba(168, 85, 247, 0.12)' }}>{s.title}</h2>
             {s.content}
           </div>
         ))}
@@ -7956,7 +7956,7 @@ export function ReleaseNotesPage() {
                 style={{
                   padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                   border: 'none', cursor: 'pointer', transition: 'all 0.15s',
-                  background: isActive ? colour : '#313244',
+                  background: isActive ? colour : 'rgba(49, 34, 68, 0.5)',
                   color: isActive ? (tab === 'all' || tab === 'ide' || tab === 'companion' ? '#11111b' : '#fff') : '#6c7086',
                 }}
               >
@@ -7970,7 +7970,7 @@ export function ReleaseNotesPage() {
           <>
             {filtered.length === 0 ? (
               <div style={{
-                background: '#181825', border: '1px dashed #313244', borderRadius: 12,
+                background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12,
                 padding: '40px 20px', textAlign: 'center',
               }}>
                 <div style={{ fontSize: 13, color: '#6c7086' }}>{t('dash.releases.no_releases')}</div>
@@ -7990,8 +7990,8 @@ export function ReleaseNotesPage() {
 
                   return (
                     <div key={releaseId} style={{
-                      background: '#181825',
-                      border: `1px solid ${isLatest ? 'rgba(168,85,247,0.30)' : '#313244'}`,
+                      background: 'rgba(26, 16, 40, 0.6)',
+                      border: `1px solid ${isLatest ? 'rgba(168,85,247,0.30)' : 'rgba(168, 85, 247, 0.12)'}`,
                       borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.15s',
                     }}>
                       {/* Header button */}
@@ -8002,7 +8002,7 @@ export function ReleaseNotesPage() {
                           padding: '14px 18px', background: 'transparent', border: 'none',
                           cursor: 'pointer', textAlign: 'left',
                         }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#313244'; }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(49, 34, 68, 0.5)'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -8034,7 +8034,7 @@ export function ReleaseNotesPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           {toolCount && (
                             <span style={{
-                              fontSize: 10, color: '#6c7086', background: '#313244',
+                              fontSize: 10, color: '#6c7086', background: 'rgba(49, 34, 68, 0.5)',
                               padding: '2px 8px', borderRadius: 4,
                             }}>
                               {t('dash.releases.tools_count').replace('{count}', String(toolCount))}
@@ -8052,11 +8052,11 @@ export function ReleaseNotesPage() {
 
                       {/* Expanded content */}
                       {isExpanded && (
-                        <div style={{ padding: '0 18px 18px', borderTop: '1px solid #313244' }}>
+                        <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(168, 85, 247, 0.12)' }}>
                           {/* Highlights */}
                           {highlights.length > 0 && (
                             <div style={{
-                              background: '#313244', borderRadius: 8, padding: '12px 14px',
+                              background: 'rgba(49, 34, 68, 0.5)', borderRadius: 8, padding: '12px 14px',
                               marginTop: 12, marginBottom: 14,
                             }}>
                               <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{t('dash.releases.highlights')}</div>
