@@ -1780,7 +1780,7 @@ export function AvaChatPage() {
           userName: localStorage.getItem('ava-ide-user-name') || localStorage.getItem('ava-ide-email')?.split('@')[0] || undefined,
           userEmail: localStorage.getItem('ava-ide-email') || undefined,
           userTier: localStorage.getItem('ava-ide-tier') || undefined,
-          _devPlatformFallback: true, // DEV ONLY — remove before 1.0.0
+          _devPlatformFallback: false,
         } as SidecarConfig;
 
         await sidecar.start(config);
@@ -2098,7 +2098,7 @@ export function AvaChatPage() {
     navigator.clipboard.writeText(text).then(() => {
       setCopiedMsg(msgId);
       setTimeout(() => setCopiedMsg(null), 2000);
-    });
+    }).catch(() => {});
   }, []);
 
   // ── Cancel streaming ──────────────────────────────────────────────────────
@@ -2844,7 +2844,7 @@ export function AvaChatPage() {
                   <span style={{ fontSize: 10, color: '#45475a' }}>{fmtTime(msg.timestamp)}</span>
                   {/* Secret lock indicator */}
                   {secretMsgIds.current.has(msg.id) && (
-                    <span style={{ fontSize: 11, lineHeight: 1 }} title="This message used secrets">{'\uD83D\uDD12'}</span>
+                    <span style={{ fontSize: 11, lineHeight: 1 }} title={t('dash.chat.secret_used')}>{'\uD83D\uDD12'}</span>
                   )}
                 </div>
 
@@ -3210,7 +3210,7 @@ export function AvaChatPage() {
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0110 0v4" />
                     </svg>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Secret Vault</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.chat.secret_vault')}</span>
                     <span style={{ fontSize: 10, color: '#6c7086' }}>Use @secret:Label in messages</span>
                   </div>
                   <button
@@ -3278,7 +3278,7 @@ export function AvaChatPage() {
                         }}
                         onMouseEnter={e => e.currentTarget.style.color = '#f38ba8'}
                         onMouseLeave={e => e.currentTarget.style.color = '#585b70'}
-                        title="Delete secret"
+                        title={t('dash.chat.delete_secret')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="3 6 5 6 21 6" />
@@ -3299,7 +3299,7 @@ export function AvaChatPage() {
                     type="text"
                     value={vaultNewLabel}
                     onChange={e => setVaultNewLabel(e.target.value)}
-                    placeholder="Label"
+                    placeholder={t('dash.chat.secret_label')}
                     style={{
                       width: 100, height: 30, background: '#313244', border: '1px solid #313244',
                       borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
@@ -3312,7 +3312,7 @@ export function AvaChatPage() {
                     type="password"
                     value={vaultNewValue}
                     onChange={e => setVaultNewValue(e.target.value)}
-                    placeholder="Secret value"
+                    placeholder={t('dash.chat.secret_value')}
                     style={{
                       flex: 1, height: 30, background: '#313244', border: '1px solid #313244',
                       borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
@@ -3527,7 +3527,7 @@ export function AvaChatPage() {
                 transition: 'all 0.2s',
                 position: 'relative',
               }}
-              title="Secret Vault"
+              title={t('dash.chat.secret_vault')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -6513,7 +6513,7 @@ export function SettingsPage() {
     setSettings(updated);
     if (key === 'language') {
       localStorage.setItem('ava-ide-language', value);
-      import('../lib/i18n').then(({ initLocale }) => initLocale(value));
+      import('../lib/i18n').then(({ initLocale }) => initLocale(value)).catch(() => {});
     }
     if (connected) {
       apiFetch('/settings', {

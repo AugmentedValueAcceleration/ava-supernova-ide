@@ -537,18 +537,18 @@ function AuthSection() {
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#f38ba8'; e.currentTarget.style.color = '#f38ba8'; }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#313244'; e.currentTarget.style.color = '#6c7086'; }}
             >
-              Disconnect
+              {t('dash.settings.disconnect')}
             </button>
           </div>
 
           {/* Platform / API Key toggle */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-            {['Platform', 'API Key'].map((label) => {
-              const active = label === 'Platform' ? usePlatform : !usePlatform;
+            {[{ key: 'Platform', labelKey: 'dash.auth.platform' }, { key: 'API Key', labelKey: 'dash.auth.api_key' }].map(({ key, labelKey }) => {
+              const active = key === 'Platform' ? usePlatform : !usePlatform;
               return (
-                <button key={label} onClick={() => setUsePlatform(label === 'Platform')}
+                <button key={key} onClick={() => setUsePlatform(key === 'Platform')}
                   style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer', background: active ? '#a855f7' : '#313244', color: active ? '#fff' : '#6c7086' }}>
-                  {label}
+                  {t(labelKey)}
                 </button>
               );
             })}
@@ -564,18 +564,18 @@ function AuthSection() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
               >
-                Connect Account
+                {t('dash.auth.connect')}
               </button>
               <div style={{ fontSize: 10, color: '#6c7086', textAlign: 'center', marginBottom: 8 }}>
-                Using your own API keys
+                {t('dash.auth.byok_hint')}
               </div>
             </>
           ) : (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 10, color: '#a6adc8', marginBottom: 6 }}>
-                1. Sign up at ava-supernova.com<br/>
-                2. Dashboard → API Keys<br/>
-                3. Paste your sk-ava-... key below
+                {t('dash.auth.step1')}<br/>
+                {t('dash.auth.step2')}<br/>
+                {t('dash.auth.step3')}
               </div>
               <input
                 type="password"
@@ -591,11 +591,11 @@ function AuthSection() {
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={handleConnect} disabled={loading}
                   style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', background: '#a855f7', color: '#fff', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>
-                  {loading ? 'Connecting...' : 'Connect'}
+                  {loading ? t('dash.auth.connecting') : t('dash.auth.connect')}
                 </button>
                 <button onClick={() => { setShowConnect(false); setKeyInput(''); setError(''); }}
                   style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: '1px solid #313244', background: 'transparent', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>
-                  Cancel
+                  {t('dash.support.cancel')}
                 </button>
               </div>
             </div>
@@ -610,7 +610,7 @@ function AuthSection() {
         onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; }}
         onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; }}
       >
-        <span style={{ fontWeight: 600 }}>API Keys (BYOK)</span>
+        <span style={{ fontWeight: 600 }}>{t('dash.settings.section.api_keys')}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: showKeys ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
           <polyline points="6 9 12 15 18 9" />
