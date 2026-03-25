@@ -1792,7 +1792,7 @@ export function AvaChatPage() {
           userName: localStorage.getItem('ava-ide-user-name') || localStorage.getItem('ava-ide-email')?.split('@')[0] || undefined,
           userEmail: localStorage.getItem('ava-ide-email') || undefined,
           userTier: localStorage.getItem('ava-ide-tier') || undefined,
-          _devPlatformFallback: false,
+          _devPlatformFallback: !!getPlatformKey(),
         } as SidecarConfig;
 
         await sidecar.start(config);
