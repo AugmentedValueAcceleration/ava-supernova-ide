@@ -24,6 +24,9 @@ export default function WelcomeOverlay({ onComplete }: Props) {
   const [byokKey, setByokKey] = useState('');
   const [byokSaved, setByokSaved] = useState(false);
 
+  // Name state (shown after platform connect)
+  const [userName, setUserName] = useState('');
+
   // Step 3 state
   const [workStart, setWorkStart] = useState(9);
   const [workEnd, setWorkEnd] = useState(17);
@@ -40,6 +43,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
       if (result.tier) localStorage.setItem('ava-ide-tier', result.tier);
       setPlatformStatus('valid');
       setPlatformEmail(result.email || '');
+      if (result.name) { setUserName(result.name); localStorage.setItem('ava-ide-user-name', result.name); }
     } else {
       setPlatformStatus('invalid');
     }
@@ -148,6 +152,26 @@ export default function WelcomeOverlay({ onComplete }: Props) {
                   {platformStatus === 'validating' ? 'Checking...' : platformStatus === 'valid' ? `Connected as ${platformEmail}` : platformStatus === 'invalid' ? 'Invalid key' : 'Connect'}
                 </button>
               </div>
+
+              {/* Name input — shown after platform connect */}
+              {platformStatus === 'valid' && (
+                <div style={{ background: '#181825', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#cba6f7', marginBottom: 4 }}>What should Ava call you?</div>
+                  <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 8 }}>So Ava knows who she's working with</div>
+                  <input
+                    type="text"
+                    placeholder="Your name"
+                    value={userName}
+                    onChange={e => {
+                      setUserName(e.target.value);
+                      if (e.target.value.trim()) localStorage.setItem('ava-ide-user-name', e.target.value.trim());
+                    }}
+                    style={{ ...inputStyle, height: 34, fontSize: 12 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '#313244'; }}
+                  />
+                </div>
+              )}
 
               {/* BYOK */}
               <div style={{ background: '#181825', border: '1px solid #313244', borderRadius: 12, padding: 16 }}>

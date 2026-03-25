@@ -1179,7 +1179,7 @@ export function CommandCentrePage() {
   const curriculums: LearningCurriculum[] = Array.isArray(rawLearning) ? rawLearning : (rawLearning?.curriculums ?? rawLearning?.data ?? []);
   const { data: rawMemories2, loading: memoriesLoading } = useApiData<any>('/memories', null);
   const memories: MemoryEntry[] = Array.isArray(rawMemories2) ? rawMemories2 : (rawMemories2?.memories ?? rawMemories2?.entries ?? rawMemories2?.data ?? []);
-  const { data: releaseData, loading: releaseLoading, refetch: refetchRelease } = useApiData<any>('/releases?limit=1', null);
+  const { data: releaseData, loading: releaseLoading, refetch: refetchRelease } = useApiData<any>(`/releases?limit=1&locale=${getLocale()}`, null);
 
   const latestRelease: ReleaseInfo | null = useMemo(() => {
     if (!releaseData) return null;
@@ -1394,6 +1394,85 @@ export function AvaChatPage() {
   } | null>(null);
   const [confirmInput, setConfirmInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<{ name: string; dataUri: string; mimeType: string }[]>([]);
+
+  // ── Secret Vault state ────────────────────────────────────────────────
+  const [secrets, setSecrets] = useState<{ id: string; label: string; value: string }[]>([]);
+  const [showVault, setShowVault] = useState(false);
+  const [vaultNewLabel, setVaultNewLabel] = useState('');
+  const [vaultNewValue, setVaultNewValue] = useState('');
+  const [vaultRevealIds, setVaultRevealIds] = useState<Set<string>>(new Set());
+  // Track which message IDs used secrets (for the lock icon)
+  const secretMsgIds = useRef<Set<string>>(new Set());
+  // Track inline reveal toggles per message: msgId -> set of character offsets
+  const [inlineReveals, setInlineReveals] = useState<Record<string, Set<number>>>({});
+  const vaultPanelRef = useRef<HTMLDivElement>(null);
+
+  // Load secrets from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('ava-ide-secrets');
+      if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) setSecrets(parsed); }
+    } catch { /* */ }
+  }, []);
+
+  // Persist secrets to localStorage
+  useEffect(() => {
+    try { localStorage.setItem('ava-ide-secrets', JSON.stringify(secrets)); } catch { /* */ }
+  }, [secrets]);
+
+  // Close vault on outside click
+  useEffect(() => {
+    if (!showVault) return;
+    const handler = (e: MouseEvent) => {
+      if (vaultPanelRef.current && !vaultPanelRef.current.contains(e.target as Node)) setShowVault(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showVault]);
+
+  const addSecret = useCallback(() => {
+    const label = vaultNewLabel.trim();
+    const value = vaultNewValue.trim();
+    if (!label || !value) return;
+    setSecrets(prev => [...prev, { id: `secret-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, label, value }]);
+    setVaultNewLabel('');
+    setVaultNewValue('');
+  }, [vaultNewLabel, vaultNewValue]);
+
+  const deleteSecret = useCallback((id: string) => {
+    setSecrets(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  const toggleVaultReveal = useCallback((id: string) => {
+    setVaultRevealIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Replace @secret:Label references with actual values, returns { text, usedSecrets }
+  const injectSecrets = useCallback((text: string): { text: string; usedSecrets: boolean } => {
+    let usedSecrets = false;
+    const result = text.replace(/@secret:(\S+)/g, (_match, label) => {
+      const s = secrets.find(sec => sec.label === label);
+      if (s) { usedSecrets = true; return s.value; }
+      return _match; // leave unchanged if not found
+    });
+    return { text: result, usedSecrets };
+  }, [secrets]);
+
+  // Redact any raw secret values from text
+  const redactSecrets = useCallback((text: string): string => {
+    let result = text;
+    for (const s of secrets) {
+      if (s.value && result.includes(s.value)) {
+        result = result.split(s.value).join('\u2022\u2022\u2022\u2022\u2022\u2022');
+      }
+    }
+    return result;
+  }, [secrets]);
+
   const chatUserAvatar = useMemo(() => localStorage.getItem('ava-ide-user-avatar') || '', []);
   const chatAiAvatar = useMemo(() => localStorage.getItem('ava-ide-ai-avatar') || '', []);
 
@@ -1774,7 +1853,14 @@ export function AvaChatPage() {
             const copy = [...prev];
             const last = copy[copy.length - 1];
             if (last?.role === 'ava') {
-              copy[copy.length - 1] = { ...last, text: last.text + event.content };
+              const newText = redactSecrets(last.text + event.content);
+              // Track if redaction happened — mark previous user msg
+              if (newText !== last.text + event.content) {
+                const prevUser = copy.filter(m => m.role === 'user').pop();
+                if (prevUser) secretMsgIds.current.add(prevUser.id);
+                secretMsgIds.current.add(last.id);
+              }
+              copy[copy.length - 1] = { ...last, text: newText };
             }
             return copy;
           });
@@ -1915,8 +2001,9 @@ export function AvaChatPage() {
             const last = copy[copy.length - 1];
             if (last?.role === 'ava') {
               // Only replace if the accumulated text is shorter (missed deltas)
-              const fullContent = event.content as string;
+              const fullContent = redactSecrets(event.content as string);
               if (!last.text || last.text.length < fullContent.length * 0.8) {
+                if (fullContent !== event.content) secretMsgIds.current.add(last.id);
                 copy[copy.length - 1] = { ...last, text: fullContent };
               }
             }
@@ -1949,7 +2036,7 @@ export function AvaChatPage() {
         setStreaming(false);
         break;
     }
-  }, []);
+  }, [redactSecrets]);
 
   // ── Attach sidecar event listener (both Local and Cloud use sidecar) ──
   useEffect(() => {
@@ -2393,10 +2480,26 @@ export function AvaChatPage() {
     setInput('');
     if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
 
+    // Inject secrets — replace @secret:Label with actual values before sending
+    const { text: injectedText, usedSecrets } = injectSecrets(trimmed);
+
+    // Show the raw user text (with @secret:Label visible as masked) in the chat UI
+    // Replace @secret:Label with masked dots for display
+    const displayText = trimmed.replace(/@secret:(\S+)/g, (_m, label) => {
+      const s = secrets.find(sec => sec.label === label);
+      return s ? '\u2022\u2022\u2022\u2022\u2022\u2022' : _m;
+    });
+
     const userMsg: ChatMessage = {
-      id: mkId(), role: 'user', text: trimmed || t('dash.chat.image_attached'), timestamp: Date.now(),
+      id: mkId(), role: 'user', text: displayText || t('dash.chat.image_attached'), timestamp: Date.now(),
       attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
     };
+
+    // Track this message as having used secrets
+    if (usedSecrets) {
+      secretMsgIds.current.add(userMsg.id);
+    }
+
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setPendingAttachments([]);
@@ -2404,8 +2507,9 @@ export function AvaChatPage() {
     trackMessage(model);
 
     // Always use sidecar — both Local and Cloud modes run the full agent
-    sendLocal(trimmed, userMsg.attachments);
-  }, [input, messages, sendLocal, pendingAttachments, model]);
+    // Send the injected text (with real secret values) to the sidecar
+    sendLocal(injectedText, userMsg.attachments);
+  }, [input, messages, sendLocal, pendingAttachments, model, injectSecrets, secrets]);
 
   // ── Tool confirmation handlers ─────────────────────────────────────────
   const approveConfirm = useCallback(async () => {
@@ -2738,6 +2842,10 @@ export function AvaChatPage() {
                     {isUser ? t('dash.chat.you') : isError ? t('dash.chat.error') : t('dash.chat.ava')}
                   </span>
                   <span style={{ fontSize: 10, color: '#45475a' }}>{fmtTime(msg.timestamp)}</span>
+                  {/* Secret lock indicator */}
+                  {secretMsgIds.current.has(msg.id) && (
+                    <span style={{ fontSize: 11, lineHeight: 1 }} title="This message used secrets">{'\uD83D\uDD12'}</span>
+                  )}
                 </div>
 
                 {/* Message bubble */}
@@ -2750,9 +2858,70 @@ export function AvaChatPage() {
                   border: isUser ? 'none' : isError ? '1px solid rgba(239,68,68,0.25)' : '1px solid #313244',
                   position: 'relative',
                 }}>
-                  {/* Rendered text with markdown */}
+                  {/* Rendered text with markdown + inline secret reveal */}
                   <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {isAva || isError ? renderMarkdown(msg.text) : msg.text}
+                    {(() => {
+                      const MASK = '\u2022\u2022\u2022\u2022\u2022\u2022';
+                      const hasMask = msg.text.includes(MASK);
+                      if (!hasMask) {
+                        return isAva || isError ? renderMarkdown(msg.text) : msg.text;
+                      }
+                      // Split text on mask sequences and render with inline eye toggles
+                      const parts = msg.text.split(MASK);
+                      const reveals = inlineReveals[msg.id] || new Set<number>();
+                      // Find original secret values for this message
+                      const matchedSecretValues = secrets.map(s => s.value);
+                      let maskIdx = 0;
+                      const nodes: React.ReactNode[] = [];
+                      for (let i = 0; i < parts.length; i++) {
+                        if (i > 0) {
+                          const currentMaskIdx = maskIdx++;
+                          const isRevealed = reveals.has(currentMaskIdx);
+                          const secretVal = matchedSecretValues[currentMaskIdx % matchedSecretValues.length] || MASK;
+                          nodes.push(
+                            <span key={`mask-${currentMaskIdx}`} style={{ position: 'relative', display: 'inline' }}>
+                              <span style={{
+                                background: 'rgba(168,85,247,0.15)', borderRadius: 4, padding: '1px 4px',
+                                fontFamily: 'monospace', fontSize: 12, color: isRevealed ? '#f9e2af' : '#6c7086',
+                              }}>
+                                {isRevealed ? secretVal : MASK}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setInlineReveals(prev => {
+                                    const s = new Set(prev[msg.id] || []);
+                                    if (s.has(currentMaskIdx)) s.delete(currentMaskIdx); else s.add(currentMaskIdx);
+                                    return { ...prev, [msg.id]: s };
+                                  });
+                                }}
+                                style={{
+                                  background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+                                  verticalAlign: 'middle', lineHeight: 1, color: '#6c7086', fontSize: 10,
+                                }}
+                                title={isRevealed ? 'Hide secret' : 'Reveal secret'}
+                              >
+                                {isRevealed ? (
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                                    <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                                    <line x1="1" y1="1" x2="23" y2="23" />
+                                  </svg>
+                                ) : (
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                )}
+                              </button>
+                            </span>
+                          );
+                        }
+                        if (parts[i]) {
+                          nodes.push(isAva || isError ? <span key={`t-${i}`}>{renderMarkdown(parts[i])}</span> : parts[i]);
+                        }
+                      }
+                      return nodes;
+                    })()}
                     {/* Blinking cursor while streaming empty message */}
                     {isAva && streaming && !msg.text && msg === messages[messages.length - 1] && (
                       <span style={{ opacity: 0.5 }}>{'\u2588'}</span>
@@ -3017,7 +3186,159 @@ export function AvaChatPage() {
         padding: '12px 24px 16px', borderTop: '1px solid #313244',
         background: '#181825', flexShrink: 0,
       }}>
-        <div style={{ width: '100%' }}>
+        <div style={{ width: '100%', position: 'relative' }}>
+          {/* ── Secret Vault Panel (slides up from input) ─────────────────── */}
+          <div
+            ref={vaultPanelRef}
+            style={{
+              position: 'absolute', bottom: '100%', left: 0, right: 0,
+              background: '#181825', border: '1px solid #313244', borderBottom: 'none',
+              borderRadius: '12px 12px 0 0',
+              boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
+              maxHeight: showVault ? 340 : 0,
+              overflow: 'hidden',
+              transition: 'max-height 0.3s ease-in-out',
+              zIndex: 100,
+            }}
+          >
+            {showVault && (
+              <div style={{ padding: '16px 20px' }}>
+                {/* Vault header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0110 0v4" />
+                    </svg>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Secret Vault</span>
+                    <span style={{ fontSize: 10, color: '#6c7086' }}>Use @secret:Label in messages</span>
+                  </div>
+                  <button
+                    onClick={() => setShowVault(false)}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', color: '#6c7086',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 24, height: 24, borderRadius: 6,
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#cdd6f4'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#6c7086'}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Secrets list */}
+                <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12 }}>
+                  {secrets.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '16px 0', color: '#585b70', fontSize: 12 }}>
+                      No secrets stored yet. Add one below.
+                    </div>
+                  )}
+                  {secrets.map(s => (
+                    <div key={s.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                      background: '#11111b', border: '1px solid #313244', borderRadius: 8,
+                      marginBottom: 6,
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: '#cba6f7', minWidth: 80 }}>{s.label}</span>
+                      <span style={{
+                        flex: 1, fontSize: 12, fontFamily: 'monospace', color: '#6c7086',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {vaultRevealIds.has(s.id) ? s.value : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}
+                      </span>
+                      <button
+                        onClick={() => toggleVaultReveal(s.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', color: '#6c7086',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4,
+                        }}
+                        title={vaultRevealIds.has(s.id) ? 'Hide value' : 'Reveal value'}
+                      >
+                        {vaultRevealIds.has(s.id) ? (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                            <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => deleteSecret(s.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', color: '#585b70',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4,
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#f38ba8'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#585b70'}
+                        title="Delete secret"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add secret row */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 12px', background: '#11111b', border: '1px solid rgba(168,85,247,0.2)',
+                  borderRadius: 8,
+                }}>
+                  <input
+                    type="text"
+                    value={vaultNewLabel}
+                    onChange={e => setVaultNewLabel(e.target.value)}
+                    placeholder="Label"
+                    style={{
+                      width: 100, height: 30, background: '#313244', border: '1px solid #313244',
+                      borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
+                    }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#a855f7'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#313244'}
+                    onKeyDown={e => { if (e.key === 'Enter') addSecret(); }}
+                  />
+                  <input
+                    type="password"
+                    value={vaultNewValue}
+                    onChange={e => setVaultNewValue(e.target.value)}
+                    placeholder="Secret value"
+                    style={{
+                      flex: 1, height: 30, background: '#313244', border: '1px solid #313244',
+                      borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
+                    }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#a855f7'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#313244'}
+                    onKeyDown={e => { if (e.key === 'Enter') addSecret(); }}
+                  />
+                  <button
+                    onClick={addSecret}
+                    disabled={!vaultNewLabel.trim() || !vaultNewValue.trim()}
+                    style={{
+                      height: 30, padding: '0 14px', borderRadius: 6, border: 'none',
+                      background: vaultNewLabel.trim() && vaultNewValue.trim() ? '#a855f7' : '#313244',
+                      color: vaultNewLabel.trim() && vaultNewValue.trim() ? '#fff' : '#585b70',
+                      fontSize: 12, fontWeight: 600, cursor: vaultNewLabel.trim() && vaultNewValue.trim() ? 'pointer' : 'not-allowed',
+                      flexShrink: 0,
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Input container with mode selector inside */}
           <div style={{
             display: 'flex', alignItems: 'flex-end', gap: 8,
@@ -3192,6 +3513,35 @@ export function AvaChatPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
               </svg>
+            </button>
+
+            {/* Secret Vault button */}
+            <button
+              onClick={() => setShowVault(!showVault)}
+              style={{
+                width: 36, height: 36, borderRadius: 8,
+                border: showVault ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.15)',
+                background: showVault ? 'rgba(168,85,247,0.2)' : 'rgba(168,85,247,0.05)',
+                color: showVault ? '#a855f7' : '#6c7086', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                transition: 'all 0.2s',
+                position: 'relative',
+              }}
+              title="Secret Vault"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0110 0v4" />
+              </svg>
+              {secrets.length > 0 && (
+                <span style={{
+                  position: 'absolute', top: -4, right: -4, width: 14, height: 14,
+                  borderRadius: '50%', background: '#a855f7', color: '#fff',
+                  fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {secrets.length}
+                </span>
+              )}
             </button>
 
             {/* Send / Interrupt button */}
@@ -6055,7 +6405,6 @@ export function SettingsPage() {
   useLocale();
   const connected = checkConnected();
   const [settings, setSettings] = useState<any>({
-    activeModel: '',
     autoMemory: true,
     memoryLocalOnly: false,
     contributeSharedLearning: false,
@@ -6142,18 +6491,6 @@ export function SettingsPage() {
     { value: 'ar', label: '\u0627\u0644\u0639\u0631\u0628\u064a\u0629' }, { value: 'hi', label: '\u0939\u093f\u0928\u094d\u0926\u0940' },
   ];
 
-  const MODEL_OPTIONS = [
-    { value: '', label: t('dash.settings.auto_recommended') },
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
-    { value: 'claude-opus-4-20250514', label: 'Claude Opus 4' },
-    { value: 'deepseek-chat', label: 'DeepSeek V3' },
-    { value: 'deepseek-reasoner', label: 'DeepSeek R1' },
-    { value: 'kimi-k2-0711', label: 'Kimi K2' },
-    { value: 'glm-4-plus', label: 'GLM-4 Plus' },
-    { value: 'qwen-plus', label: 'Qwen Plus' },
-    { value: 'mistral-large-latest', label: 'Mistral Large' },
-    { value: 'codestral-latest', label: 'Codestral' },
-  ];
 
   useEffect(() => {
     if (!connected) return;
@@ -6213,19 +6550,6 @@ export function SettingsPage() {
   };
 
   const configuredCount = Object.values(providerKeys).filter(Boolean).length;
-  const modelLabel = MODEL_OPTIONS.find(m => m.value === settings.activeModel)?.label ?? (settings.activeModel || t('dash.settings.auto_recommended'));
-
-  const providerForModel = (): string => {
-    const m = settings.activeModel;
-    if (!m) return t('dash.settings.auto_selected');
-    if (m.startsWith('claude')) return 'Anthropic';
-    if (m.startsWith('deepseek')) return 'DeepSeek';
-    if (m.startsWith('kimi')) return 'Moonshot';
-    if (m.startsWith('glm')) return 'Zhipu AI';
-    if (m.startsWith('qwen')) return 'Alibaba';
-    if (m.startsWith('mistral') || m.startsWith('codestral')) return 'Mistral AI';
-    return '';
-  };
 
   const ToggleSwitch = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (
     <div
@@ -6380,24 +6704,6 @@ export function SettingsPage() {
           <div style={{ fontSize: 11, color: '#45475a', marginTop: 10 }}>{t('dash.settings.avatar_stored_locally')}</div>
         </div>
 
-        {/* 3. Model */}
-        <div style={sLabel}>{t('dash.settings.section.model')}</div>
-        <div style={{
-          background: '#181825', border: '1px solid #313244', borderRadius: 12,
-          padding: '18px 20px', marginBottom: 16,
-        }}>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4' }}>{modelLabel}</div>
-            <div style={{ fontSize: 11, color: '#6c7086' }}>{providerForModel()}</div>
-          </div>
-          <CustomSelect
-            value={settings.activeModel}
-            onChange={v => saveImmediate('activeModel', v)}
-            width={340}
-            height={38}
-            options={MODEL_OPTIONS}
-          />
-        </div>
 
         {/* 3. Privacy & Data */}
         <div style={sLabel}>{t('dash.settings.section.privacy')}</div>
@@ -7546,7 +7852,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 export function ReleaseNotesPage() {
   useLocale();
   const connected = checkConnected();
-  const { data: apiReleases, loading } = useApiData<any[]>('/releases', []);
+  const { data: apiReleases, loading } = useApiData<any[]>(`/releases?locale=${getLocale()}`, []);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [platformTab, setPlatformTab] = useState<string>('all');
