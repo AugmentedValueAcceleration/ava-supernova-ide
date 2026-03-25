@@ -646,49 +646,49 @@ const sectionLabelStyle: React.CSSProperties = {
 const sections = [
   {
     items: [
-      { icon: '\u26A1', labelKey: 'dash.nav.command_centre', descKey: 'dash.nav.command_centre_desc' },
-      { icon: '\uD83D\uDCAC', labelKey: 'dash.nav.ava_chat', descKey: 'dash.nav.ava_chat_desc' },
+      { id: 'command-centre', icon: '\u26A1', labelKey: 'dash.nav.command_centre', descKey: 'dash.nav.command_centre_desc' },
+      { id: 'ava-chat', icon: '\uD83D\uDCAC', labelKey: 'dash.nav.ava_chat', descKey: 'dash.nav.ava_chat_desc' },
     ],
   },
   {
     titleKey: 'dash.section.workspace',
     items: [
-      { icon: '\uD83D\uDCDC', labelKey: 'dash.nav.chat_history', descKey: 'dash.nav.chat_history_desc' },
-      { icon: '\uD83E\uDDE0', labelKey: 'dash.nav.memory', descKey: 'dash.nav.memory_desc' },
-      { icon: '\u2705', labelKey: 'dash.nav.tasks', descKey: 'dash.nav.tasks_desc' },
-      { icon: '\uD83D\uDCD3', labelKey: 'dash.nav.journal', descKey: 'dash.nav.journal_desc' },
-      { icon: '\uD83C\uDF93', labelKey: 'dash.nav.learning', descKey: 'dash.nav.learning_desc' },
-      { icon: '\uD83D\uDDBC\uFE0F', labelKey: 'dash.nav.library', descKey: 'dash.nav.library_desc' },
+      { id: 'chat-history', icon: '\uD83D\uDCDC', labelKey: 'dash.nav.chat_history', descKey: 'dash.nav.chat_history_desc' },
+      { id: 'memory', icon: '\uD83E\uDDE0', labelKey: 'dash.nav.memory', descKey: 'dash.nav.memory_desc' },
+      { id: 'tasks', icon: '\u2705', labelKey: 'dash.nav.tasks', descKey: 'dash.nav.tasks_desc' },
+      { id: 'journal', icon: '\uD83D\uDCD3', labelKey: 'dash.nav.journal', descKey: 'dash.nav.journal_desc' },
+      { id: 'learning', icon: '\uD83C\uDF93', labelKey: 'dash.nav.learning', descKey: 'dash.nav.learning_desc' },
+      { id: 'library', icon: '\uD83D\uDDBC\uFE0F', labelKey: 'dash.nav.library', descKey: 'dash.nav.library_desc' },
     ],
   },
   {
     titleKey: 'dash.section.personalise',
     items: [
-      { icon: '\uD83C\uDFA8', labelKey: 'dash.nav.personality', descKey: 'dash.nav.personality_desc' },
-      { icon: '\u2601\uFE0F', labelKey: 'dash.nav.cloud_sync', descKey: 'dash.nav.cloud_sync_desc' },
+      { id: 'personality', icon: '\uD83C\uDFA8', labelKey: 'dash.nav.personality', descKey: 'dash.nav.personality_desc' },
+      { id: 'cloud-sync', icon: '\u2601\uFE0F', labelKey: 'dash.nav.cloud_sync', descKey: 'dash.nav.cloud_sync_desc' },
     ],
   },
   {
     titleKey: 'dash.section.account',
     items: [
-      { icon: '\uD83D\uDCCA', labelKey: 'dash.nav.usage', descKey: 'dash.nav.usage_desc' },
-      { icon: '\uD83D\uDCB3', labelKey: 'dash.nav.billing', descKey: 'dash.nav.billing_desc' },
-      { icon: '\u2699\uFE0F', labelKey: 'dash.nav.settings', descKey: 'dash.nav.settings_desc' },
-      { icon: '\uD83D\uDD17', labelKey: 'dash.nav.connections', descKey: 'dash.nav.connections_desc' },
+      { id: 'usage', icon: '\uD83D\uDCCA', labelKey: 'dash.nav.usage', descKey: 'dash.nav.usage_desc' },
+      { id: 'billing', icon: '\uD83D\uDCB3', labelKey: 'dash.nav.billing', descKey: 'dash.nav.billing_desc' },
+      { id: 'settings', icon: '\u2699\uFE0F', labelKey: 'dash.nav.settings', descKey: 'dash.nav.settings_desc' },
+      { id: 'connections', icon: '\uD83D\uDD17', labelKey: 'dash.nav.connections', descKey: 'dash.nav.connections_desc' },
     ],
   },
   {
     titleKey: 'dash.section.help',
     items: [
-      { icon: '\uD83C\uDD98', labelKey: 'dash.nav.support', descKey: 'dash.nav.support_desc' },
-      { icon: '\uD83D\uDCD6', labelKey: 'dash.nav.documentation', descKey: 'dash.nav.documentation_desc' },
-      { icon: '\uD83D\uDCCB', labelKey: 'dash.nav.release_notes', descKey: 'dash.nav.release_notes_desc' },
+      { id: 'support', icon: '\uD83C\uDD98', labelKey: 'dash.nav.support', descKey: 'dash.nav.support_desc' },
+      { id: 'documentation', icon: '\uD83D\uDCD6', labelKey: 'dash.nav.documentation', descKey: 'dash.nav.documentation_desc' },
+      { id: 'release-notes', icon: '\uD83D\uDCCB', labelKey: 'dash.nav.release_notes', descKey: 'dash.nav.release_notes_desc' },
     ],
   },
 ];
 
 // Pages hidden when user is not connected (BYOK mode)
-const CONNECTED_ONLY_PAGES = ['dash.nav.billing', 'dash.nav.cloud_sync'];
+const CONNECTED_ONLY_PAGES = ['billing', 'cloud-sync'];
 
 function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?: (page: string) => void; activePage?: string | null }) {
   useLocale(); // re-render on language change
@@ -717,8 +717,8 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
         {sections.map((section, si) => {
           const sectionTitle = section.titleKey ? t(section.titleKey) : undefined;
           const isCollapsed = sectionTitle ? !!collapsed[sectionTitle] : false;
-          const visibleItems = section.items.filter(item => connected || !CONNECTED_ONLY_PAGES.includes(item.labelKey));
-          const hasActive = visibleItems.some(item => activePage === t(item.labelKey));
+          const visibleItems = section.items.filter(item => connected || !CONNECTED_ONLY_PAGES.includes(item.id));
+          const hasActive = visibleItems.some(item => activePage === item.id);
           return (
             <div key={si}>
               {sectionTitle && (
@@ -740,14 +740,14 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
                 </button>
               )}
               {!isCollapsed && section.items
-                .filter(item => connected || !CONNECTED_ONLY_PAGES.includes(item.labelKey))
+                .filter(item => connected || !CONNECTED_ONLY_PAGES.includes(item.id))
                 .map((item) => {
                 const label = t(item.labelKey);
-                const isActive = activePage === label;
+                const isActive = activePage === item.id;
                 return (
                   <button
-                    key={item.labelKey}
-                    onClick={() => onDashboardSelect?.(label)}
+                    key={item.id}
+                    onClick={() => onDashboardSelect?.(item.id)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10, width: '100%',
                       padding: '7px 10px', borderRadius: 6, border: 'none',

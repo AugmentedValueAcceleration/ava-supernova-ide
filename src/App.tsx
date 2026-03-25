@@ -30,7 +30,7 @@ export default function App() {
   const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => load('sidebarPos', 'left'));
   const [bottomPanelOpen, setBottomPanelOpen] = useState(() => load('panelOpen', false));
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>(() => load('panelTab', 'terminal'));
-  const [dashboardPage, setDashboardPage] = useState<DashboardPageId | null>(() => load('dashPage', 'Command Centre'));
+  const [dashboardPage, setDashboardPage] = useState<DashboardPageId | null>(() => load('dashPage', 'command-centre'));
 
   const toggleActivity = useCallback((item: ActivityItem) => {
     // When clicking a non-dashboard activity item, clear the dashboard page

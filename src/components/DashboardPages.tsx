@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { t, useLocale } from '../lib/i18n';
+import { t, useLocale, getLocale } from '../lib/i18n';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
@@ -183,8 +183,8 @@ function NotConnectedBanner() {
         <polyline points="10 17 15 12 10 7" />
         <line x1="15" y1="12" x2="3" y2="12" />
       </svg>
-      <div style={{ fontSize: 15, fontWeight: 500, color: '#cdd6f4' }}>Connect your account to see live data</div>
-      <div style={{ fontSize: 12, color: '#6c7086' }}>Open the Dashboard sidebar and click Connect Account</div>
+      <div style={{ fontSize: 15, fontWeight: 500, color: '#cdd6f4' }}>{t('dash.cc.connect_title')}</div>
+      <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.cc.connect_hint')}</div>
     </div>
   );
 }
@@ -338,10 +338,10 @@ function formatRelativeDate(dateStr: string): string {
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  if (diffDays === 0) return t('dash.cc.today');
+  if (diffDays === 1) return t('dash.cc.yesterday');
+  if (diffDays < 7) return t('dash.cc.days_ago', { n: diffDays });
+  return d.toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' });
 }
 
 function truncate(str: string, len: number): string {
@@ -361,9 +361,9 @@ function getDayName(dateStr: string): string {
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
-  return d.toLocaleDateString('en-GB', { weekday: 'short' });
+  if (d.toDateString() === today.toDateString()) return t('dash.cc.today');
+  if (d.toDateString() === tomorrow.toDateString()) return t('dash.cc.tomorrow');
+  return d.toLocaleDateString(getLocale(), { weekday: 'short' });
 }
 
 // ── Weather fetching (direct HTTP, no platform) ────────────────────────────
@@ -401,14 +401,14 @@ async function fetchWeatherDirect(): Promise<WeatherData> {
   const w = await weatherRes.json();
 
   const currentCode = w.current?.weather_code ?? 0;
-  const wmo = WMO_EMOJI[currentCode] || { label: 'Unknown', emoji: '\uD83C\uDF24\uFE0F' };
+  const wmo = WMO_EMOJI[currentCode] || { label: t('weather.unknown'), emoji: '\uD83C\uDF24\uFE0F' };
 
   const forecast: WeatherData['forecast'] = [];
   if (w.daily?.time) {
     // Skip today (index 0), take next 3 days
     for (let i = 1; i < Math.min(w.daily.time.length, 4); i++) {
       const dayCode = w.daily.weather_code?.[i] ?? 0;
-      const dayWmo = WMO_EMOJI[dayCode] || { label: 'Unknown', emoji: '\uD83C\uDF24\uFE0F' };
+      const dayWmo = WMO_EMOJI[dayCode] || { label: t('weather.unknown'), emoji: '\uD83C\uDF24\uFE0F' };
       forecast.push({
         date: w.daily.time[i],
         day: getDayName(w.daily.time[i]),
@@ -533,9 +533,9 @@ function WidgetCard({
 function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData | null; loading: boolean; onRefresh: () => void }) {
   if (loading) {
     return (
-      <WidgetCard title="Weather" icon={'\uD83C\uDF24\uFE0F'}>
+      <WidgetCard title={t('dash.cc.weather')} icon={'\uD83C\uDF24\uFE0F'}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0', fontSize: 12, color: '#6c7086' }}>
-          Loading weather...
+          {t('dash.cc.loading_weather')}
         </div>
       </WidgetCard>
     );
@@ -543,14 +543,14 @@ function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData
 
   if (!weather) {
     return (
-      <WidgetCard title="Weather" icon={'\uD83C\uDF24\uFE0F'} onRefresh={onRefresh}>
-        <p style={{ padding: '8px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>Unable to load weather data.</p>
+      <WidgetCard title={t('dash.cc.weather')} icon={'\uD83C\uDF24\uFE0F'} onRefresh={onRefresh}>
+        <p style={{ padding: '8px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.weather_error')}</p>
       </WidgetCard>
     );
   }
 
   return (
-    <WidgetCard title="Weather" icon={'\uD83C\uDF24\uFE0F'} subtitle={weather.location} onRefresh={onRefresh}>
+    <WidgetCard title={t('dash.cc.weather')} icon={'\uD83C\uDF24\uFE0F'} subtitle={weather.location} onRefresh={onRefresh}>
       {/* Current conditions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <span style={{ fontSize: 36 }}>{weather.emoji}</span>
@@ -738,7 +738,7 @@ function WorkingHoursClock() {
             {fmt(start)} — {fmt(end)}
           </div>
           <div style={{ fontSize: 11, color: isWorking ? '#a6e3a1' : '#6c7086', marginBottom: 12 }}>
-            {isWorking ? '● Currently working' : '○ Outside working hours'}
+            {isWorking ? `● ${t('dash.cc.currently_working')}` : `○ ${t('dash.cc.outside_hours')}`}
           </div>
           <div style={{ fontSize: 10, color: '#585b70', lineHeight: 1.5 }}>
             {t('dash.cc.working_hours_hint')}
@@ -796,9 +796,9 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
       </div>
 
       {loading ? (
-        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading news...</div>
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_news')}</div>
       ) : articles.length === 0 ? (
-        <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>No news articles available.</p>
+        <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_news')}</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {articles.map((article, idx) => (
@@ -872,7 +872,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
       onRefresh={onRefresh}
     >
       {loading ? (
-        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading tasks...</div>
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_tasks')}</div>
       ) : todayTasks.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', textAlign: 'center' }}>
           <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83C\uDF89'}</span>
@@ -894,7 +894,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
                 {/* Complete button */}
                 <button
                   onClick={() => handleComplete(task.id)}
-                  title="Complete task"
+                  title={t('dash.cc.complete_task')}
                   style={{
                     width: 20, height: 20, borderRadius: '50%', border: '1px solid #313244',
                     background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
@@ -913,7 +913,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
                     }} />
                     <span style={{ fontSize: 9, color: '#6c7086' }}>{task.priority}</span>
                     {isOverdue && (
-                      <span style={{ fontSize: 9, fontWeight: 500, color: '#f38ba8' }}>Overdue</span>
+                      <span style={{ fontSize: 9, fontWeight: 500, color: '#f38ba8' }}>{t('dash.cc.overdue')}</span>
                     )}
                   </div>
                 </div>
@@ -940,7 +940,7 @@ function CCJournalWidget({ journalDay, loading }: { journalDay: JournalDay | nul
       action={{ label: hasContent ? t('dash.cc.open_journal') : t('dash.cc.write_entry'), onClick: () => {} }}
     >
       {loading ? (
-        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading journal...</div>
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_journal')}</div>
       ) : !hasContent ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', textAlign: 'center' }}>
           <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83D\uDCDD'}</span>
@@ -991,7 +991,7 @@ function CCLearningWidget({ curriculums, loading }: { curriculums: LearningCurri
       action={curriculums.length > 0 ? { label: t('dash.cc.continue_learning'), onClick: () => {} } : undefined}
     >
       {loading ? (
-        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading learning...</div>
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_learning')}</div>
       ) : active.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', textAlign: 'center' }}>
           <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83D\uDCDA'}</span>
@@ -1042,22 +1042,22 @@ function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loadin
       action={{ label: t('dash.cc.view_all'), onClick: () => {} }}
     >
       {loading ? (
-        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading memories...</div>
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_memories')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div>
               <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>{activeCount}</div>
-              <div style={{ fontSize: 10, color: '#6c7086' }}>Active memories</div>
+              <div style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.cc.active_memories')}</div>
             </div>
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
               <div style={{ fontSize: 20, fontWeight: 600, color: '#a6adc8' }}>{memories.length}</div>
-              <div style={{ fontSize: 10, color: '#6c7086' }}>Total</div>
+              <div style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.cc.total')}</div>
             </div>
           </div>
           {lastMemory && (
             <div style={{ background: 'rgba(49,50,68,0.3)', border: '1px solid #313244', borderRadius: 8, padding: 10 }}>
-              <p style={{ fontSize: 10, color: '#6c7086', margin: '0 0 2px 0' }}>Last saved</p>
+              <p style={{ fontSize: 10, color: '#6c7086', margin: '0 0 2px 0' }}>{t('dash.cc.last_saved')}</p>
               <p style={{ fontSize: 12, color: '#a6adc8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {lastMemory.key || truncate(lastMemory.content, 60)}
               </p>
@@ -1078,9 +1078,9 @@ function CCReleaseWidget({ release, loading, onRefresh }: { release: ReleaseInfo
   return (
     <WidgetCard title={t('dash.cc.latest_release')} icon={'\uD83D\uDE80'} onRefresh={onRefresh}>
       {loading ? (
-        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>Loading release info...</div>
+        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_release')}</div>
       ) : !release ? (
-        <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>No release info available.</p>
+        <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_release_info')}</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1097,7 +1097,7 @@ function CCReleaseWidget({ release, loading, onRefresh }: { release: ReleaseInfo
             onClick={() => window.open('https://ava-supernova.com/releases', '_blank')}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#a855f7', padding: 0, textAlign: 'left' }}
           >
-            View release notes &rarr;
+            {t('dash.cc.view_release_notes')} &rarr;
           </button>
         </div>
       )}
@@ -1110,7 +1110,7 @@ function CCReleaseWidget({ release, loading, onRefresh }: { release: ReleaseInfo
 function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
   return (
     <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', textAlign: 'center' }}>
-      Connect your account to see {widgetName.toLowerCase()}
+      {t('dash.cc.connect_to_see', { widget: widgetName })}
     </div>
   );
 }
@@ -1120,7 +1120,7 @@ function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
 export function CommandCentrePage() {
   useLocale();
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const greeting = hour < 12 ? t('dash.cc.greeting_morning') : hour < 18 ? t('dash.cc.greeting_afternoon') : t('dash.cc.greeting_evening');
 
   // Re-render on auth changes (login/logout)
   const [authRefresh, setAuthRefresh] = useState(0);
@@ -1133,7 +1133,7 @@ export function CommandCentrePage() {
 
   const connected = checkConnected();
   const email = getStoredEmail();
-  const dateStr = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateStr = new Date().toLocaleDateString(getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   // ── Weather state (direct fetch, cached) ──────────────────────────────
   const [weather, setWeather] = useState<WeatherData | null>(getCachedWeather());
@@ -1210,9 +1210,9 @@ export function CommandCentrePage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ fontSize: 24 }}>{'\uD83D\uDD11'}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>BYOK Mode</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.cc.byok_mode')}</div>
                 <div style={{ fontSize: 11, color: '#6c7086' }}>
-                  You're using your own API keys. Connect a platform account in the sidebar for cloud sync, usage tracking, and managed tokens.
+                  {t('dash.cc.byok_desc')}
                 </div>
               </div>
             </div>
@@ -1242,7 +1242,7 @@ export function CommandCentrePage() {
             <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
           ) : (
             <WidgetCard title={t('dash.cc.todays_tasks')} icon={'\u2705'}>
-              <CCNotConnectedPlaceholder widgetName="tasks" />
+              <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_tasks')} />
             </WidgetCard>
           )}
         </div>
@@ -1253,14 +1253,14 @@ export function CommandCentrePage() {
             <CCJournalWidget journalDay={journalDay} loading={journalLoading} />
           ) : (
             <WidgetCard title={t('dash.cc.todays_journal')} icon={'\uD83D\uDCD3'}>
-              <CCNotConnectedPlaceholder widgetName="journal entries" />
+              <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_journal')} />
             </WidgetCard>
           )}
           {connected ? (
             <CCLearningWidget curriculums={curriculums} loading={learningLoading} />
           ) : (
             <WidgetCard title={t('dash.cc.learning')} icon={'\uD83C\uDF93'}>
-              <CCNotConnectedPlaceholder widgetName="learning paths" />
+              <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_learning')} />
             </WidgetCard>
           )}
         </div>
@@ -1271,7 +1271,7 @@ export function CommandCentrePage() {
             <CCMemoryWidget memories={memories} loading={memoriesLoading} />
           ) : (
             <WidgetCard title={t('dash.cc.memory')} icon={'\uD83E\uDDE0'}>
-              <CCNotConnectedPlaceholder widgetName="memories" />
+              <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_memories')} />
             </WidgetCard>
           )}
           <CCReleaseWidget release={latestRelease} loading={releaseLoading} onRefresh={refetchRelease} />
@@ -1462,9 +1462,9 @@ export function AvaChatPage() {
   const canChat = chatBackend === 'local' ? (hasByokKeys || connected) : connected;
   const chatInactiveReason = !canChat
     ? (!connected && !hasByokKeys
-      ? 'Add a provider key in the sidebar or connect your account to start chatting.'
+      ? t('dash.chat.inactive_no_keys')
       : chatBackend === 'cloud' && !connected
-        ? 'Connect your platform account to use Cloud mode.'
+        ? t('dash.chat.inactive_no_cloud')
         : '')
     : '';
 
@@ -1943,7 +1943,7 @@ export function AvaChatPage() {
       case 'agent_error':
         setMessages((prev) => [...prev, {
           id: mkId(), role: 'error' as const,
-          text: event.message || 'Unknown error',
+          text: event.message || t('dash.chat.unknown_error'),
           timestamp: Date.now(),
         }]);
         setStreaming(false);
@@ -1972,7 +1972,7 @@ export function AvaChatPage() {
         const firstUser = messages.find((m) => m.role === 'user');
         const conv: Conversation = {
           id: `conv-${Date.now()}`,
-          title: firstUser ? firstUser.text.slice(0, 60) : 'Untitled',
+          title: firstUser ? firstUser.text.slice(0, 60) : t('dash.chat.untitled'),
           messages,
           createdAt: messages[0]?.timestamp || Date.now(),
           updatedAt: Date.now(),
@@ -2159,7 +2159,7 @@ export function AvaChatPage() {
     } catch (err: any) {
       setMessages((prev) => [...prev, {
         id: mkId(), role: 'error' as const,
-        text: `Sidecar error: ${err.message || 'unknown'}`,
+        text: t('dash.chat.sidecar_error').replace('{msg}', err.message || t('dash.chat.unknown_error')),
         timestamp: Date.now(),
       }]);
       setStreaming(false);
@@ -2171,7 +2171,7 @@ export function AvaChatPage() {
     if (!connected) {
       setMessages((prev) => [...prev, {
         id: mkId(), role: 'error' as const,
-        text: "Not connected to platform. Connect your account or switch to Local mode.",
+        text: t('dash.chat.not_connected'),
         timestamp: Date.now(),
       }]);
       return;
@@ -2267,7 +2267,7 @@ export function AvaChatPage() {
             const copy = [...prev];
             const last = copy[copy.length - 1];
             if (last && last.role === 'ava') {
-              copy[copy.length - 1] = { ...last, text: 'No response stream available.', role: 'error' };
+              copy[copy.length - 1] = { ...last, text: t('dash.chat.no_stream'), role: 'error' };
             }
             return copy;
           });
@@ -2368,14 +2368,14 @@ export function AvaChatPage() {
           const copy = [...prev];
           const last = copy[copy.length - 1];
           if (last && last.role === 'ava' && !last.text) {
-            copy[copy.length - 1] = { ...last, text: '(Cancelled)', role: 'system' };
+            copy[copy.length - 1] = { ...last, text: t('dash.chat.cancelled'), role: 'system' };
           }
           return copy;
         });
       } else {
         setMessages((prev) => [...prev, {
           id: mkId(), role: 'error' as const,
-          text: `Connection error: ${err.message || 'unknown'}`,
+          text: t('dash.chat.connection_error').replace('{msg}', err.message || t('dash.chat.unknown_error')),
           timestamp: Date.now(),
         }]);
       }
@@ -2487,7 +2487,7 @@ export function AvaChatPage() {
               }}>
                 {/* Platform models header */}
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                  Platform 
+                  {t('dash.chat.platform')}
                 </div>
                 {[
                   { id: 'qwen-flash', name: 'Qwen Flash', tag: '' },
@@ -2518,7 +2518,7 @@ export function AvaChatPage() {
                   <>
                     <div style={{ height: 1, background: '#313244', margin: '6px 0' }} />
                     <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                      Your API Keys
+                      {t('dash.chat.your_api_keys')}
                     </div>
                     {byokModels.map((m) => (
                       <button
@@ -2571,10 +2571,10 @@ export function AvaChatPage() {
                 opacity: connected ? 1 : 0.5,
               }}
               title={!connected
-                ? 'Connect your account to enable Cloud mode'
+                ? t('dash.chat.connect_for_cloud')
                 : chatBackend === 'local'
-                  ? 'Local mode — full 54 tools, runs on your machine'
-                  : 'Cloud mode — chat via platform API'}
+                  ? t('dash.chat.local_mode_desc')
+                  : t('dash.chat.cloud_mode_desc')}
             >
               <span style={{
                 width: 6, height: 6, borderRadius: '50%',
@@ -2588,7 +2588,7 @@ export function AvaChatPage() {
           </div>
 
           {/* Token counter */}
-          <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used`}>
+          <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={t('dash.chat.tokens_used').replace('{n}', tokenCount.toLocaleString())}>
             {tokenCount > 0 ? fmtTokens(tokenCount) + ' ' + t('dash.chat.tokens') : '0 ' + t('dash.chat.tokens')}
           </span>
 
@@ -2601,7 +2601,7 @@ export function AvaChatPage() {
             const circumference = 2 * Math.PI * r;
             const dashOffset = circumference - (contextPercent / 100) * circumference;
             return (
-              <div style={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={`Context: ${contextPercent}%`}>
+              <div style={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={t('dash.chat.context').replace('{n}', String(contextPercent))}>
                 <svg width="22" height="22" viewBox="0 0 22 22" style={{ transform: 'rotate(-90deg)' }}>
                   <circle cx="11" cy="11" r={r} fill="none" stroke="#313244" strokeWidth="2.5" />
                   <circle cx="11" cy="11" r={r} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
@@ -2703,7 +2703,7 @@ export function AvaChatPage() {
                   {isError ? (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                   ) : chatAiAvatar ? (
-                    <img src={chatAiAvatar} alt="Ava" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={chatAiAvatar} alt={t('dash.chat.ava')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -2719,7 +2719,7 @@ export function AvaChatPage() {
                   overflow: 'hidden', order: 1,
                 }}>
                   {chatUserAvatar ? (
-                    <img src={chatUserAvatar} alt="You" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={chatUserAvatar} alt={t('dash.chat.you')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
@@ -2735,7 +2735,7 @@ export function AvaChatPage() {
                   justifyContent: isUser ? 'flex-end' : 'flex-start',
                 }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: isUser ? '#b4befe' : isError ? '#ef4444' : '#a855f7' }}>
-                    {isUser ? 'You' : isError ? 'Error' : 'Ava'}
+                    {isUser ? t('dash.chat.you') : isError ? t('dash.chat.error') : t('dash.chat.ava')}
                   </span>
                   <span style={{ fontSize: 10, color: '#45475a' }}>{fmtTime(msg.timestamp)}</span>
                 </div>
@@ -2774,7 +2774,7 @@ export function AvaChatPage() {
                           }} />
                           <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{tc.name}</span>
                           <span style={{ fontSize: 10, color: '#45475a' }}>
-                            {tc.status === 'running' ? 'running...' : tc.status}
+                            {tc.status === 'running' ? t('dash.chat.tool_running') : tc.status === 'done' ? t('dash.chat.tool_done') : t('dash.chat.tool_error')}
                           </span>
                         </div>
                       ))}
@@ -2791,7 +2791,7 @@ export function AvaChatPage() {
                         borderRadius: 8, padding: '8px 12px', fontSize: 12,
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <span style={{ fontWeight: 600, color: '#cba6f7', fontSize: 11 }}>Tasks ({done}/{todos.length})</span>
+                          <span style={{ fontWeight: 600, color: '#cba6f7', fontSize: 11 }}>{t('dash.chat.tasks_progress').replace('{done}', String(done)).replace('{total}', String(todos.length))}</span>
                           <div style={{ height: 3, flex: 1, marginLeft: 10, background: '#313244', borderRadius: 2, overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${todos.length > 0 ? (done / todos.length) * 100 : 0}%`, background: '#a855f7', borderRadius: 2 }} />
                           </div>
@@ -2823,7 +2823,7 @@ export function AvaChatPage() {
                         <div key={idx} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid #313244' }}>
                           <img
                             src={img.src}
-                            alt={img.alt || 'Generated image'}
+                            alt={img.alt || t('dash.chat.generated_image')}
                             style={{ maxWidth: '100%', maxHeight: 300, display: 'block', borderRadius: 10 }}
                           />
                           <div style={{
@@ -2839,7 +2839,7 @@ export function AvaChatPage() {
                                 background: 'rgba(168,85,247,0.8)', color: '#fff', textDecoration: 'none',
                                 backdropFilter: 'blur(4px)',
                               }}
-                            >Download</a>
+                            >{t('dash.chat.download')}</a>
                           </div>
                         </div>
                       ))}
@@ -2869,7 +2869,7 @@ export function AvaChatPage() {
                               padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
                               background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)',
                               textDecoration: 'none',
-                            }}>Open</a>
+                            }}>{t('dash.chat.open')}</a>
                           )}
                         </div>
                       ))}
@@ -2916,7 +2916,7 @@ export function AvaChatPage() {
                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
                         </svg>
                       )}
-                      {copiedMsg === msg.id ? 'Copied' : t('dash.chat.copy')}
+                      {copiedMsg === msg.id ? t('dash.chat.copied') : t('dash.chat.copy')}
                     </button>
                   )}
                 </div>
@@ -2954,7 +2954,7 @@ export function AvaChatPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#eab308', animation: 'avaPulse 1.5s infinite' }} />
               <span style={{ fontSize: 12, color: '#cdd6f4' }}>
-                Ava wants to run <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span>
+                {t('dash.chat.ava_wants_to_run')} <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span>
               </span>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -2982,7 +2982,7 @@ export function AvaChatPage() {
 
           {/* Collapsible args preview */}
           <details style={{ marginBottom: (pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan') ? 8 : 0 }}>
-            <summary style={{ fontSize: 10, color: '#585b70', cursor: 'pointer', userSelect: 'none' }}>View arguments</summary>
+            <summary style={{ fontSize: 10, color: '#585b70', cursor: 'pointer', userSelect: 'none' }}>{t('dash.chat.view_arguments')}</summary>
             <pre style={{
               fontSize: 10, color: '#6c7086', fontFamily: 'monospace',
               whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '6px 0 0',
@@ -3000,7 +3000,7 @@ export function AvaChatPage() {
               value={confirmInput}
               onChange={(e) => setConfirmInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') approveConfirm(); }}
-              placeholder={pendingConfirm.toolName === 'ask_user' ? 'Type your answer...' : 'Comment (optional)...'}
+              placeholder={pendingConfirm.toolName === 'ask_user' ? t('dash.chat.type_your_answer') : t('dash.chat.comment_optional')}
               autoFocus
               style={{
                 width: '100%', padding: '6px 10px', background: '#11111b',
@@ -3049,7 +3049,7 @@ export function AvaChatPage() {
                   borderRadius: 8, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                   whiteSpace: 'nowrap',
                 }}
-                title="Switch mode"
+                title={t('dash.chat.switch_mode')}
               >
                 <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.7 }}>{currentMode.icon}</span>
                 {currentMode.label}
@@ -3144,7 +3144,7 @@ export function AvaChatPage() {
                   !canChat
                     ? chatInactiveReason
                     : chatBackend === 'local'
-                      ? (sidecarReady ? currentMode.placeholder : 'Starting local engine...')
+                      ? (sidecarReady ? currentMode.placeholder : t('dash.chat.starting_local'))
                       : currentMode.placeholder
                 }
                 disabled={!canChat}
@@ -3187,7 +3187,7 @@ export function AvaChatPage() {
                 background: 'rgba(168,85,247,0.05)', color: '#6c7086', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}
-              title="Attach image or file"
+              title={t('dash.chat.attach_file')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
@@ -3228,7 +3228,7 @@ export function AvaChatPage() {
                   boxShadow: canChat && input.trim() ? '0 2px 8px rgba(168,85,247,0.4)' : 'none',
                   transition: 'all 0.2s',
                 }}
-                title={canChat ? 'Send (Enter)' : 'Add a provider key or connect your account'}
+                title={canChat ? t('dash.chat.send_enter') : t('dash.chat.add_key_or_connect')}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M8 3.5l-4.5 4.5.707.707L7.5 5.414V13h1V5.414l3.293 3.293.707-.707L8 3.5z" />
@@ -3489,7 +3489,7 @@ export function MemoryPage() {
               color: categoryFilter === null ? '#a855f7' : '#6c7086',
             }}
           >
-            All ({memories.length})
+            {t('dash.memory.all')} ({memories.length})
           </button>
           {ALL_CATEGORIES.filter(c => categoryCounts[c]).map(cat => {
             const cs = getCatStyle(cat);
@@ -3506,7 +3506,7 @@ export function MemoryPage() {
                   textTransform: 'capitalize' as const,
                 }}
               >
-                {cat.replace('-', ' ')} ({categoryCounts[cat]})
+                {t(`dash.memory.cat.${cat.replace('-', '_')}`)} ({categoryCounts[cat]})
               </button>
             );
           })}
@@ -3522,7 +3522,7 @@ export function MemoryPage() {
               }}>
                 <div style={{ fontSize: 13, color: '#6c7086' }}>
                   {search || categoryFilter
-                    ? 'No memories match your filters.'
+                    ? t('dash.memory.no_match')
                     : t('dash.cc.no_memories')}
                 </div>
               </div>
@@ -3555,7 +3555,7 @@ export function MemoryPage() {
                           color: cs.text, background: cs.bg, border: `1px solid ${cs.border}`,
                           padding: '2px 10px', borderRadius: 12, textTransform: 'capitalize' as const,
                         }}>
-                          {cat.replace('-', ' ')}
+                          {t(`dash.memory.cat.${cat.replace('-', '_')}`)}
                         </span>
                         {tags.map(tag => (
                           <span key={tag} style={{
@@ -3576,7 +3576,7 @@ export function MemoryPage() {
                                   padding: '3px 10px', fontSize: 10, fontWeight: 600, color: '#fff', cursor: 'pointer',
                                 }}
                               >
-                                Confirm
+                                {t('dash.memory.confirm')}
                               </button>
                               <button
                                 onClick={() => setConfirmDeleteId(null)}
@@ -3585,7 +3585,7 @@ export function MemoryPage() {
                                   padding: '3px 10px', fontSize: 10, color: '#6c7086', cursor: 'pointer',
                                 }}
                               >
-                                Cancel
+                                {t('dash.memory.cancel')}
                               </button>
                             </>
                           ) : (
@@ -3599,7 +3599,7 @@ export function MemoryPage() {
                               }}
                               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f87171'; }}
                               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#6c7086'; }}
-                              title="Delete memory"
+                              title={t('dash.memory.delete_title')}
                             >
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" />
@@ -3617,16 +3617,16 @@ export function MemoryPage() {
                       {/* Footer metadata */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, flexWrap: 'wrap' }}>
                         {m.created_at && (
-                          <span style={{ fontSize: 10, color: '#6c7086' }}>Created {formatDate(m.created_at)}</span>
+                          <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.memory.created').replace('{date}', formatDate(m.created_at))}</span>
                         )}
                         {m.updated_at && m.updated_at !== m.created_at && (
-                          <span style={{ fontSize: 10, color: '#6c7086' }}>Updated {formatDate(m.updated_at)}</span>
+                          <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.memory.updated').replace('{date}', formatDate(m.updated_at))}</span>
                         )}
                         {(m.recall_count || m.recallCount || 0) > 0 && (
-                          <span style={{ fontSize: 10, color: '#6c7086' }}>Recalled {m.recall_count || m.recallCount}x</span>
+                          <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.memory.recalled').replace('{n}', String(m.recall_count || m.recallCount))}</span>
                         )}
                         {m.scope && (
-                          <span style={{ fontSize: 10, color: '#45475a' }}>{m.scope}</span>
+                          <span style={{ fontSize: 10, color: '#45475a' }}>{m.scope === 'global' ? t('dash.memory.global') : m.scope === 'project' ? t('dash.memory.project') : m.scope}</span>
                         )}
                       </div>
                     </div>
@@ -3636,7 +3636,7 @@ export function MemoryPage() {
             )}
 
             <div style={{ fontSize: 12, color: '#6c7086', marginTop: 16, textAlign: 'center' }}>
-              {filtered.length} {filtered.length === 1 ? 'memory' : 'memories'}{search ? ` matching "${search}"` : ''}{categoryFilter ? ` in ${categoryFilter}` : ''}
+              {(filtered.length === 1 ? t('dash.memory.count_one') : t('dash.memory.count_other')).replace('{n}', String(filtered.length))}{search ? ` ${t('dash.memory.matching').replace('{query}', search)}` : ''}{categoryFilter ? ` ${t('dash.memory.in_category').replace('{category}', categoryFilter)}` : ''}
             </div>
           </>
         )}
@@ -3824,7 +3824,7 @@ export function TasksPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            New Task
+            {t('dash.tasks.new_task')}
           </button>
         </div>
         <div style={pageSubtitle}>{t('dash.tasks.subtitle')}</div>
@@ -3855,10 +3855,10 @@ export function TasksPage() {
             background: '#181825', border: '1px solid #313244', borderRadius: 10,
             padding: 20, marginBottom: 20,
           }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 14 }}>New Task</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 14 }}>{t('dash.tasks.new_task')}</div>
             <input
               type="text"
-              placeholder="Task title..."
+              placeholder={t('dash.tasks.title_placeholder')}
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') addTask(); }}
@@ -3872,7 +3872,7 @@ export function TasksPage() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
               {/* Priority */}
               <div style={{ flex: 1, minWidth: 120 }}>
-                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>Priority</div>
+                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{t('dash.tasks.label_priority')}</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {(['low', 'medium', 'high', 'urgent'] as const).map((p) => (
                     <button
@@ -3891,7 +3891,7 @@ export function TasksPage() {
                         width: 8, height: 8, borderRadius: '50%',
                         background: TASK_PRIORITY_DOT[p], display: 'inline-block',
                       }} />
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                      {t(`dash.tasks.priority_${p}`)}
                     </button>
                   ))}
                 </div>
@@ -3900,7 +3900,7 @@ export function TasksPage() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
               {/* Due date */}
               <div style={{ minWidth: 160 }}>
-                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>Due Date</div>
+                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{t('dash.tasks.label_due_date')}</div>
                 <input
                   type="date"
                   value={formDueDate}
@@ -3913,7 +3913,7 @@ export function TasksPage() {
               </div>
               {/* Category */}
               <div style={{ minWidth: 140 }}>
-                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>Category</div>
+                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{t('dash.tasks.label_category')}</div>
                 <CustomSelect
                   value={formCategory}
                   onChange={setFormCategory}
@@ -3946,7 +3946,7 @@ export function TasksPage() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#45475a'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#313244'; }}
               >
-                Cancel
+                {t('dash.tasks.cancel')}
               </button>
             </div>
           </div>
@@ -3991,19 +3991,19 @@ export function TasksPage() {
                 ...card, textAlign: 'center', padding: '40px 20px',
               }}>
                 <div style={{ fontSize: 13, color: '#6c7086' }}>
-                  {filter === 'all' ? 'No active tasks. Click "New Task" to get started!' :
-                   filter === 'today' ? 'No tasks due today.' :
-                   filter === 'overdue' ? 'No overdue tasks. Nice work!' :
-                   'No completed tasks yet.'}
+                  {filter === 'all' ? t('dash.tasks.empty_active') :
+                   filter === 'today' ? t('dash.tasks.empty_today') :
+                   filter === 'overdue' ? t('dash.tasks.empty_overdue') :
+                   t('dash.tasks.empty_completed')}
                 </div>
               </div>
             ) : (
-              filtered.map((t: any) => {
-                const id = t.id || t._id;
-                const isDone = t.done || t.status === 'done';
-                const overdue = isTaskOverdue(t);
-                const dueToday = isTaskDueToday(t);
-                const catColors = TASK_CATEGORY_COLORS[t.category] || TASK_CATEGORY_COLORS.work;
+              filtered.map((task: any) => {
+                const id = task.id || task._id;
+                const isDone = task.done || task.status === 'done';
+                const overdue = isTaskOverdue(task);
+                const dueToday = isTaskDueToday(task);
+                const catColors = TASK_CATEGORY_COLORS[task.category] || TASK_CATEGORY_COLORS.work;
                 const isHovered = hoverCardId === id;
 
                 return (
@@ -4022,7 +4022,7 @@ export function TasksPage() {
                   >
                     {/* Checkbox */}
                     <div
-                      onClick={() => toggleTask(t)}
+                      onClick={() => toggleTask(task)}
                       style={{
                         width: 22, height: 22, borderRadius: 6, flexShrink: 0, marginTop: 1,
                         border: isDone ? '2px solid #22c55e' : '2px solid #313244',
@@ -4047,7 +4047,7 @@ export function TasksPage() {
                           color: isDone ? '#6c7086' : '#cdd6f4',
                           textDecoration: isDone ? 'line-through' : 'none',
                         }}>
-                          {t.title}
+                          {task.title}
                         </span>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
@@ -4055,31 +4055,31 @@ export function TasksPage() {
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 4,
                           fontSize: 10, fontWeight: 600,
-                          color: TASK_PRIORITY_DOT[t.priority] || TASK_PRIORITY_DOT.medium,
-                          background: TASK_PRIORITY_BG[t.priority] || TASK_PRIORITY_BG.medium,
+                          color: TASK_PRIORITY_DOT[task.priority] || TASK_PRIORITY_DOT.medium,
+                          background: TASK_PRIORITY_BG[task.priority] || TASK_PRIORITY_BG.medium,
                           padding: '2px 8px', borderRadius: 4,
                         }}>
                           <span style={{
                             width: 6, height: 6, borderRadius: '50%', display: 'inline-block',
-                            background: TASK_PRIORITY_DOT[t.priority] || TASK_PRIORITY_DOT.medium,
+                            background: TASK_PRIORITY_DOT[task.priority] || TASK_PRIORITY_DOT.medium,
                           }} />
-                          {(t.priority || 'medium').charAt(0).toUpperCase() + (t.priority || 'medium').slice(1)}
+                          {t(`dash.tasks.priority_${task.priority || 'medium'}`)}
                         </span>
 
                         {/* Category badge */}
-                        {t.category && (
+                        {task.category && (
                           <span style={{
                             fontSize: 10, fontWeight: 500,
                             color: catColors.text,
                             background: catColors.bg,
                             padding: '2px 8px', borderRadius: 4,
                           }}>
-                            {t.category.charAt(0).toUpperCase() + t.category.slice(1)}
+                            {t(`dash.tasks.cat.${task.category}`)}
                           </span>
                         )}
 
                         {/* Due date badge */}
-                        {t.due_date && (
+                        {task.due_date && (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
                             fontSize: 10,
@@ -4089,13 +4089,13 @@ export function TasksPage() {
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                             </svg>
-                            {overdue && 'Overdue: '}{dueToday ? 'Today' : formatTaskDate(t.due_date)}
+                            {overdue && t('dash.tasks.overdue_prefix')}{dueToday ? t('dash.tasks.due_today') : formatTaskDate(task.due_date)}
                           </span>
                         )}
 
                         {/* Overdue red label */}
-                        {overdue && !t.due_date && (
-                          <span style={{ fontSize: 10, fontWeight: 600, color: '#ef4444' }}>Overdue</span>
+                        {overdue && !task.due_date && (
+                          <span style={{ fontSize: 10, fontWeight: 600, color: '#ef4444' }}>{t('dash.tasks.overdue')}</span>
                         )}
                       </div>
                     </div>
@@ -4108,14 +4108,14 @@ export function TasksPage() {
                       {confirmDeleteId === id ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <button
-                            onClick={() => deleteTask(t)}
+                            onClick={() => deleteTask(task)}
                             style={{
                               background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
                               borderRadius: 4, padding: '3px 8px', fontSize: 10, fontWeight: 600,
                               color: '#ef4444', cursor: 'pointer',
                             }}
                           >
-                            Delete
+                            {t('dash.tasks.delete')}
                           </button>
                           <button
                             onClick={() => setConfirmDeleteId(null)}
@@ -4125,7 +4125,7 @@ export function TasksPage() {
                               color: '#6c7086', cursor: 'pointer',
                             }}
                           >
-                            Cancel
+                            {t('dash.tasks.cancel')}
                           </button>
                         </div>
                       ) : (
@@ -4140,7 +4140,7 @@ export function TasksPage() {
                             color: hoverDeleteId === id ? '#ef4444' : '#6c7086',
                             transition: 'color 0.15s',
                           }}
-                          title="Delete task"
+                          title={t('dash.tasks.delete_task_title')}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
@@ -4162,7 +4162,7 @@ export function TasksPage() {
 /* ===== 5. Journal ===== */
 
 const MOOD_EMOJIS = ['', '\uD83D\uDE14', '\uD83D\uDE15', '\uD83D\uDE10', '\uD83D\uDE0A', '\uD83D\uDE04'];
-const MOOD_LABELS = ['', 'Rough', 'Low', 'Okay', 'Good', 'Great'];
+const MOOD_LABEL_KEYS = ['', 'dash.journal.mood_rough', 'dash.journal.mood_low', 'dash.journal.mood_okay', 'dash.journal.mood_good', 'dash.journal.mood_great'];
 const MOOD_COLORS_MAP = ['', '#ef4444', '#f59e0b', '#6b7280', '#3b82f6', '#34d399'];
 
 type JournalTab = 'user' | 'ava';
@@ -4210,7 +4210,7 @@ export function JournalPage() {
         method: 'POST',
         body: JSON.stringify({ date: isoDate, content: entry, mood }),
       });
-      setSaveMsg('Saved');
+      setSaveMsg(t('dash.journal.saved'));
       setTimeout(() => setSaveMsg(''), 2000);
     } catch (err: any) {
       setSaveMsg(`Error: ${err.message}`);
@@ -4300,7 +4300,7 @@ export function JournalPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            Prev
+            {t('dash.journal.prev')}
           </button>
           <div style={{ position: 'relative' }}>
             <button
@@ -4312,7 +4312,7 @@ export function JournalPage() {
               }}
             >
               {dateStr}
-              {isToday && <span style={{ ...badge('#a855f7'), marginLeft: 4 }}>Today</span>}
+              {isToday && <span style={{ ...badge('#a855f7'), marginLeft: 4 }}>{t('dash.journal.today')}</span>}
             </button>
             {showDatePicker && (
               <div style={{
@@ -4341,7 +4341,7 @@ export function JournalPage() {
             onMouseEnter={(e) => { if (!isToday) e.currentTarget.style.background = '#45475a'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#313244'; }}
           >
-            Next
+            {t('dash.journal.next')}
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
@@ -4355,7 +4355,7 @@ export function JournalPage() {
               <div style={{ ...card, padding: 24 }}>
                 {/* Mood selector */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 16 }}>
-                  <span style={{ fontSize: 11, color: '#6c7086', marginRight: 8 }}>Mood:</span>
+                  <span style={{ fontSize: 11, color: '#6c7086', marginRight: 8 }}>{t('dash.journal.mood')}</span>
                   {[1, 2, 3, 4, 5].map((m) => (
                     <button
                       key={m}
@@ -4369,7 +4369,7 @@ export function JournalPage() {
                         filter: mood === m ? 'none' : 'grayscale(0.5)',
                         opacity: mood === m ? 1 : 0.6,
                       }}
-                      title={MOOD_LABELS[m]}
+                      title={t(MOOD_LABEL_KEYS[m])}
                     >
                       {MOOD_EMOJIS[m]}
                     </button>
@@ -4379,7 +4379,7 @@ export function JournalPage() {
                       fontSize: 11, fontWeight: 600, marginLeft: 8,
                       color: MOOD_COLORS_MAP[mood],
                     }}>
-                      {MOOD_LABELS[mood]}
+                      {t(MOOD_LABEL_KEYS[mood])}
                     </span>
                   )}
                 </div>
@@ -4412,7 +4412,7 @@ export function JournalPage() {
                       onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
                     >
-                      {saving ? 'Saving...' : 'Save Entry'}
+                      {saving ? t('dash.journal.saving') : t('dash.journal.save_entry')}
                     </button>
                     {saveMsg && (
                       <span style={{
@@ -4465,10 +4465,10 @@ export function JournalPage() {
                       </svg>
                     </div>
                     <div style={{ fontSize: 14, color: '#6c7086' }}>
-                      Ava hasn't written anything for this day
+                      {t('dash.journal.ava_no_entry')}
                     </div>
                     <div style={{ fontSize: 11, color: '#6c7086', marginTop: 6, opacity: 0.6 }}>
-                      Ava writes her thoughts at the end of sessions
+                      {t('dash.journal.ava_session_note')}
                     </div>
                   </div>
                 )}
@@ -4489,7 +4489,7 @@ export function JournalPage() {
           </div>
           {/* Day headers */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', marginBottom: 4 }}>
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+            {[t('dash.journal.day_su'), t('dash.journal.day_mo'), t('dash.journal.day_tu'), t('dash.journal.day_we'), t('dash.journal.day_th'), t('dash.journal.day_fr'), t('dash.journal.day_sa')].map((d) => (
               <span key={d} style={{ fontSize: 9, color: '#45475a', fontWeight: 600 }}>{d}</span>
             ))}
           </div>
@@ -4523,10 +4523,10 @@ export function JournalPage() {
           {/* Legend */}
           <div style={{ display: 'flex', gap: 12, marginTop: 10, justifyContent: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6c7086' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#cdd6f4' }} /> Your entry
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#cdd6f4' }} /> {t('dash.journal.your_entry_legend')}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6c7086' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }} /> Ava's entry
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }} /> {t('dash.journal.ava_entry_legend')}
             </div>
           </div>
         </div>
@@ -5441,7 +5441,7 @@ export function PersonalityPage() {
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#9333ea'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#a855f7'; }}
           >
-            {saved ? 'Saved!' : saving ? 'Saving...' : 'Save Personality'}
+            {saved ? t('dash.personality.saved') : saving ? t('dash.personality.saving') : t('dash.personality.save')}
           </button>
           <button
             onClick={handleReset}
@@ -5451,7 +5451,7 @@ export function PersonalityPage() {
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#6c7086'; (e.currentTarget as HTMLElement).style.color = '#cdd6f4'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#313244'; (e.currentTarget as HTMLElement).style.color = '#a6adc8'; }}
           >
-            Reset to Default
+            {t('dash.personality.reset')}
           </button>
         </div>
       </div>
@@ -6134,7 +6134,7 @@ export function SettingsPage() {
   ];
 
   const LANGUAGES = [
-    { value: 'auto', label: 'Auto-detect' }, { value: 'en', label: 'English' },
+    { value: 'auto', label: t('dash.settings.auto_detect') }, { value: 'en', label: 'English' },
     { value: 'zh-CN', label: '\u4e2d\u6587\uff08\u7b80\u4f53\uff09' }, { value: 'es', label: 'Espa\u00f1ol' },
     { value: 'fr', label: 'Fran\u00e7ais' }, { value: 'de', label: 'Deutsch' },
     { value: 'ja', label: '\u65e5\u672c\u8a9e' }, { value: 'ko', label: '\ud55c\uad6d\uc5b4' },
@@ -6143,7 +6143,7 @@ export function SettingsPage() {
   ];
 
   const MODEL_OPTIONS = [
-    { value: '', label: 'Auto (recommended)' },
+    { value: '', label: t('dash.settings.auto_recommended') },
     { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
     { value: 'claude-opus-4-20250514', label: 'Claude Opus 4' },
     { value: 'deepseek-chat', label: 'DeepSeek V3' },
@@ -6213,11 +6213,11 @@ export function SettingsPage() {
   };
 
   const configuredCount = Object.values(providerKeys).filter(Boolean).length;
-  const modelLabel = MODEL_OPTIONS.find(m => m.value === settings.activeModel)?.label ?? (settings.activeModel || 'Auto');
+  const modelLabel = MODEL_OPTIONS.find(m => m.value === settings.activeModel)?.label ?? (settings.activeModel || t('dash.settings.auto_recommended'));
 
   const providerForModel = (): string => {
     const m = settings.activeModel;
-    if (!m) return 'Auto-selected';
+    if (!m) return t('dash.settings.auto_selected');
     if (m.startsWith('claude')) return 'Anthropic';
     if (m.startsWith('deepseek')) return 'DeepSeek';
     if (m.startsWith('kimi')) return 'Moonshot';
@@ -6266,7 +6266,7 @@ export function SettingsPage() {
         </div>
 
         {/* 1. Your AI */}
-        <div style={sLabel}>Your AI</div>
+        <div style={sLabel}>{t('dash.settings.section.your_ai')}</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
@@ -6283,7 +6283,7 @@ export function SettingsPage() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{personality?.name || 'Ava'}</div>
                 <div style={{ fontSize: 11, color: '#6c7086' }}>
-                  {personality ? `${personality.tone} / ${personality.energy} / ${personality.style}` : 'Default personality'}
+                  {personality ? `${personality.tone} / ${personality.energy} / ${personality.style}` : t('dash.settings.default_personality')}
                 </div>
               </div>
             </div>
@@ -6291,7 +6291,7 @@ export function SettingsPage() {
         </div>
 
         {/* 2. Avatars */}
-        <div style={sLabel}>Avatars</div>
+        <div style={sLabel}>{t('dash.settings.section.avatars')}</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
@@ -6299,7 +6299,7 @@ export function SettingsPage() {
           <div style={{ display: 'flex', gap: 32 }}>
             {/* User Avatar */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>You</div>
+              <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>{t('dash.settings.avatar_you')}</div>
               <div
                 onClick={() => {
                   const input = document.createElement('input');
@@ -6321,10 +6321,10 @@ export function SettingsPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   overflow: 'hidden', position: 'relative',
                 }}
-                title="Click to upload your avatar"
+                title={t('dash.settings.avatar_upload_hint')}
               >
                 {userAvatar ? (
-                  <img src={userAvatar} alt="You" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={userAvatar} alt={t('dash.settings.avatar_you')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
@@ -6333,7 +6333,7 @@ export function SettingsPage() {
               </div>
               {userAvatar && (
                 <button onClick={() => removeAvatar('user')}
-                  style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>Remove</button>
+                  style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>{t('dash.settings.remove')}</button>
               )}
             </div>
 
@@ -6361,7 +6361,7 @@ export function SettingsPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   overflow: 'hidden',
                 }}
-                title="Click to upload AI avatar"
+                title={t('dash.settings.avatar_upload_ai_hint')}
               >
                 {aiAvatar ? (
                   <img src={aiAvatar} alt="Ava" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -6373,15 +6373,15 @@ export function SettingsPage() {
               </div>
               {aiAvatar && (
                 <button onClick={() => removeAvatar('ai')}
-                  style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>Remove</button>
+                  style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>{t('dash.settings.remove')}</button>
               )}
             </div>
           </div>
-          <div style={{ fontSize: 11, color: '#45475a', marginTop: 10 }}>Click to upload. Images are stored locally.</div>
+          <div style={{ fontSize: 11, color: '#45475a', marginTop: 10 }}>{t('dash.settings.avatar_stored_locally')}</div>
         </div>
 
         {/* 3. Model */}
-        <div style={sLabel}>Model</div>
+        <div style={sLabel}>{t('dash.settings.section.model')}</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
@@ -6400,7 +6400,7 @@ export function SettingsPage() {
         </div>
 
         {/* 3. Privacy & Data */}
-        <div style={sLabel}>Privacy & Data</div>
+        <div style={sLabel}>{t('dash.settings.section.privacy')}</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
@@ -6410,8 +6410,8 @@ export function SettingsPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 16 }}>{'\uD83E\uDDE0'}</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Auto Memory</div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Automatically save important details from conversations</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.auto_memory')}</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.settings.auto_memory_desc')}</div>
               </div>
             </div>
             <ToggleSwitch value={settings.autoMemory} onChange={v => saveImmediate('autoMemory', v)} />
@@ -6422,8 +6422,8 @@ export function SettingsPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 16 }}>{'\uD83D\uDD12'}</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Local Only</div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Keep all data on your machine. Disable to enable cloud sync.</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.local_only')}</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.settings.local_only_desc')}</div>
               </div>
             </div>
             <ToggleSwitch value={settings.memoryLocalOnly} onChange={v => saveImmediate('memoryLocalOnly', v)} />
@@ -6435,8 +6435,8 @@ export function SettingsPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Shared Learning</div>
-                  <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Help improve Ava for everyone. Anonymised technical patterns only.</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.shared_learning')}</div>
+                  <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.settings.shared_learning_desc')}</div>
                 </div>
               </div>
               <ToggleSwitch value={settings.contributeSharedLearning} onChange={v => saveImmediate('contributeSharedLearning', v)} />
@@ -6445,25 +6445,25 @@ export function SettingsPage() {
               fontSize: 11, marginTop: 8, paddingLeft: 32,
               color: settings.contributeSharedLearning ? '#34d399' : '#6c7086',
             }}>
-              {settings.contributeSharedLearning ? 'Contributing to shared learning' : 'Off \u2014 your learnings stay local'}
+              {settings.contributeSharedLearning ? t('dash.settings.contributing') : t('dash.settings.learnings_local')}
             </div>
           </div>
         </div>
 
         {/* 4. Behavior */}
-        <div style={sLabel}>Behavior</div>
+        <div style={sLabel}>{t('dash.settings.section.behavior')}</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>Permission Mode</div>
-          <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 14 }}>Controls when Ava asks before running tools.</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>{t('dash.settings.permission')}</div>
+          <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 14 }}>{t('dash.settings.permission_desc')}</div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
             {([
-              { key: 'strict', icon: '\uD83D\uDEE1\uFE0F', label: 'Strict', desc: 'Confirms before file writes, shell commands, and git operations' },
-              { key: 'balanced', icon: '\u2696\uFE0F', label: 'Balanced', desc: 'Confirms dangerous operations only. Recommended.' },
-              { key: 'autonomous', icon: '\uD83D\uDE80', label: 'Autonomous', desc: 'Minimal confirmations. For experienced users.' },
+              { key: 'strict', icon: '\uD83D\uDEE1\uFE0F', label: t('dash.settings.permission.strict'), desc: t('dash.settings.permission.strict_desc') },
+              { key: 'balanced', icon: '\u2696\uFE0F', label: t('dash.settings.permission.balanced'), desc: t('dash.settings.permission.balanced_desc') },
+              { key: 'autonomous', icon: '\uD83D\uDE80', label: t('dash.settings.permission.autonomous'), desc: t('dash.settings.permission.autonomous_desc') },
             ] as const).map(pm => {
               const sel = settings.permissionMode === pm.key;
               return (
@@ -6492,15 +6492,15 @@ export function SettingsPage() {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Stream Responses</div>
-              <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Show tokens as they arrive instead of waiting for completion.</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.stream_responses')}</div>
+              <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.settings.stream_responses_desc')}</div>
             </div>
             <ToggleSwitch value={settings.streamResponses} onChange={v => saveImmediate('streamResponses', v)} />
           </div>
         </div>
 
         {/* 5. Language */}
-        <div style={sLabel}>Language</div>
+        <div style={sLabel}>{t('dash.settings.language')}</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
@@ -6515,7 +6515,7 @@ export function SettingsPage() {
         </div>
 
         {/* 6. API Keys (collapsible) */}
-        <div style={sLabel}>API Keys</div>
+        <div style={sLabel}>{t('dash.settings.section.api_keys')}</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           marginBottom: 16, overflow: 'hidden',
@@ -6528,9 +6528,9 @@ export function SettingsPage() {
             }}
           >
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Provider API Keys</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.provider_api_keys')}</div>
               <div style={{ fontSize: 11, color: '#6c7086' }}>
-                {configuredCount === 0 ? 'No providers configured' : `${configuredCount}/${PROVIDERS.length} providers configured`}
+                {configuredCount === 0 ? t('dash.settings.no_providers') : t('dash.settings.providers_configured', { count: configuredCount, total: PROVIDERS.length })}
               </div>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -6552,7 +6552,7 @@ export function SettingsPage() {
                     {providerKeys[provider.id] ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {savingProvider === provider.id ? (
-                          <span style={{ fontSize: 11, color: '#34d399' }}>Saved</span>
+                          <span style={{ fontSize: 11, color: '#34d399' }}>{t('dash.settings.saved')}</span>
                         ) : (
                           <>
                             <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#6c7086' }}>&bull;&bull;&bull;&bull;&bull;&bull;</span>
@@ -6565,7 +6565,7 @@ export function SettingsPage() {
                               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(248,113,113,0.1)'; }}
                               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                             >
-                              Remove
+                              {t('dash.settings.remove')}
                             </button>
                           </>
                         )}
@@ -6594,18 +6594,18 @@ export function SettingsPage() {
                             opacity: providerInputs[provider.id]?.trim() ? 1 : 0.4,
                           }}
                         >
-                          Save
+                          {t('dash.settings.save')}
                         </button>
                         <button
                           onClick={() => { setEditingProvider(null); setProviderInputs(prev => ({ ...prev, [provider.id]: '' })); }}
                           style={{ background: 'transparent', border: 'none', fontSize: 10, color: '#6c7086', cursor: 'pointer' }}
                         >
-                          Cancel
+                          {t('dash.settings.cancel')}
                         </button>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 11, color: '#6c7086' }}>Not set</span>
+                        <span style={{ fontSize: 11, color: '#6c7086' }}>{t('dash.settings.not_set')}</span>
                         <button
                           onClick={() => setEditingProvider(provider.id)}
                           style={{
@@ -6614,7 +6614,7 @@ export function SettingsPage() {
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#a855f7'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#313244'; }}
                         >
-                          Edit
+                          {t('dash.settings.edit')}
                         </button>
                       </div>
                     )}
@@ -6627,7 +6627,7 @@ export function SettingsPage() {
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
                     >
-                      Get an API key &rarr;
+                      {t('dash.settings.get_api_key')} &rarr;
                     </a>
                   )}
                 </div>
@@ -6637,7 +6637,7 @@ export function SettingsPage() {
         </div>
 
         {/* 7. Advanced (collapsible) */}
-        <div style={sLabel}>Advanced</div>
+        <div style={sLabel}>{t('dash.settings.section.advanced')}</div>
         <div style={{
           background: '#181825', border: '1px solid #313244', borderRadius: 12,
           marginBottom: 16, overflow: 'hidden',
@@ -6650,8 +6650,8 @@ export function SettingsPage() {
             }}
           >
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Advanced Settings</div>
-              <div style={{ fontSize: 11, color: '#6c7086' }}>Most users don't need to change these.</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.advanced_settings')}</div>
+              <div style={{ fontSize: 11, color: '#6c7086' }}>{t('dash.settings.advanced_hint')}</div>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
               style={{ transition: 'transform 0.2s', transform: advancedOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
@@ -6664,7 +6664,7 @@ export function SettingsPage() {
               {/* Temperature */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Temperature</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.temperature')}</div>
                   <span style={{
                     background: '#313244', padding: '2px 10px', borderRadius: 6,
                     fontFamily: 'monospace', fontSize: 12, color: '#a6adc8',
@@ -6673,20 +6673,20 @@ export function SettingsPage() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 10, color: '#6c7086' }}>Precise</span>
+                  <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.settings.precise')}</span>
                   <input
                     type="range" min={0} max={2} step={0.1}
                     value={settings.temperature}
                     onChange={e => saveImmediate('temperature', parseFloat(e.target.value))}
                     style={{ flex: 1, accentColor: '#a855f7' }}
                   />
-                  <span style={{ fontSize: 10, color: '#6c7086' }}>Creative</span>
+                  <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.settings.creative')}</span>
                 </div>
               </div>
               <div style={divider} />
               {/* Max Tokens */}
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Max Response Tokens</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{t('dash.settings.max_tokens')}</div>
                 <input
                   type="number" min={256} max={65536} step={256}
                   value={settings.maxTokens}
@@ -6709,16 +6709,16 @@ export function SettingsPage() {
         {/* 8. Danger Zone */}
         {connected && (
           <>
-            <div style={sLabel}>Danger Zone</div>
+            <div style={sLabel}>{t('dash.settings.section.danger_zone')}</div>
             <div style={{
               background: '#181825', border: '1px solid rgba(248,113,113,0.30)',
               borderRadius: 12, padding: '18px 20px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f87171' }}>Disconnect Account</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f87171' }}>{t('dash.settings.disconnect_account')}</div>
                   <div style={{ fontSize: 11, color: 'rgba(248,113,113,0.7)', marginTop: 2 }}>
-                    This will sign you out and remove your account connection from this device.
+                    {t('dash.settings.disconnect_desc')}
                   </div>
                 </div>
                 <button
@@ -6734,7 +6734,7 @@ export function SettingsPage() {
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(248,113,113,0.08)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
-                  Disconnect
+                  {t('dash.settings.disconnect')}
                 </button>
               </div>
             </div>
@@ -6882,7 +6882,7 @@ export function ConnectionsPage() {
       <div style={{ ...card, textAlign: 'center', padding: '32px 20px', marginBottom: 24 }}>
         <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDD17'}</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.connections.coming_soon')}</div>
-        <div style={{ fontSize: 12, color: '#6c7086' }}>Service connections are being built and will be available in a future update.</div>
+        <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.connections.coming_soon_desc')}</div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -6893,7 +6893,7 @@ export function ConnectionsPage() {
               <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{svc.name}</div>
               <div style={{ fontSize: 11, color: '#6c7086' }}>{svc.desc}</div>
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 10px', borderRadius: 6, background: 'rgba(108,112,134,0.10)', color: '#6c7086' }}>Inactive</span>
+            <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 10px', borderRadius: 6, background: 'rgba(108,112,134,0.10)', color: '#6c7086' }}>{t('dash.connections.inactive')}</span>
           </div>
         ))}
       </div>
@@ -6993,20 +6993,28 @@ export function SupportPage() {
               background: showNewForm ? '#313244' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
               color: showNewForm ? '#6c7086' : '#fff', border: 'none',
             }}
-          >{showNewForm ? 'Cancel' : t('dash.support.new_ticket')}</button>
+          >{showNewForm ? t('dash.support.cancel') : t('dash.support.new_ticket')}</button>
         </div>
         <p style={{ ...pageSubtitle, marginBottom: 16 }}>{t('dash.support.subtitle')}</p>
 
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-          {['all', 'open', 'in_progress', 'resolved', 'closed'].map((f) => (
+          {(['all', 'open', 'in_progress', 'resolved', 'closed'] as const).map((f) => {
+            const filterLabels: Record<string, string> = {
+              all: t('dash.support.filter_all'),
+              open: t('dash.support.status.open'),
+              in_progress: t('dash.support.status.in_progress'),
+              resolved: t('dash.support.status.resolved'),
+              closed: t('dash.support.status.closed'),
+            };
+            return (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11,
               background: filter === f ? 'rgba(168,85,247,0.2)' : '#181825',
               color: filter === f ? '#e0b0ff' : '#6c7086', fontWeight: filter === f ? 600 : 400,
-              textTransform: 'capitalize',
-            }}>{f.replace('_', ' ')}</button>
-          ))}
+            }}>{filterLabels[f]}</button>
+            );
+          })}
         </div>
       </div>
 
@@ -7015,30 +7023,40 @@ export function SupportPage() {
         {!connected ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83C\uDD98'}</div>
-            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>Connect to access support</div>
-            <div style={{ fontSize: 12, color: '#6c7086' }}>Sign in with your platform key</div>
+            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>{t('dash.support.connect_to_access')}</div>
+            <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.support.sign_in_hint')}</div>
           </div>
         ) : showNewForm ? (
           /* New Ticket Form */
           <div style={card}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 12 }}>Create a Support Ticket</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 12 }}>{t('dash.support.create_ticket')}</div>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: '#6c7086', display: 'block', marginBottom: 4 }}>Category</label>
+              <label style={{ fontSize: 11, color: '#6c7086', display: 'block', marginBottom: 4 }}>{t('dash.support.category_label')}</label>
               <div style={{ display: 'flex', gap: 6 }}>
-                {['bug', 'feature', 'question', 'account', 'feedback', 'other'].map((c) => (
+                {(['bug', 'feature', 'question', 'account', 'feedback', 'other'] as const).map((c) => {
+                  const catLabels: Record<string, string> = {
+                    bug: t('dash.support.category.bug'),
+                    feature: t('dash.support.category.feature'),
+                    question: t('dash.support.category.question'),
+                    account: t('dash.support.category.account'),
+                    feedback: t('dash.support.category.feedback'),
+                    other: t('dash.support.category.other'),
+                  };
+                  return (
                   <button key={c} onClick={() => setNewCategory(c)} style={{
                     padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11,
                     background: newCategory === c ? (catColors[c]?.bg || '#313244') : '#181825',
                     color: newCategory === c ? (catColors[c]?.text || '#cdd6f4') : '#6c7086',
-                    fontWeight: newCategory === c ? 600 : 400, textTransform: 'capitalize',
-                  }}>{c}</button>
-                ))}
+                    fontWeight: newCategory === c ? 600 : 400,
+                  }}>{catLabels[c]}</button>
+                  );
+                })}
               </div>
             </div>
             <textarea
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Describe your issue or request..."
+              placeholder={t('dash.support.describe_placeholder')}
               rows={5}
               style={{
                 width: '100%', padding: '10px 14px', background: '#11111b', border: '1px solid #313244',
@@ -7050,28 +7068,28 @@ export function SupportPage() {
               padding: '10px 24px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600,
               background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', cursor: 'pointer',
               opacity: submitting || !newMessage.trim() ? 0.5 : 1,
-            }}>{submitting ? 'Submitting...' : 'Submit Ticket'}</button>
+            }}>{submitting ? t('dash.support.submitting') : t('dash.support.submit_ticket')}</button>
           </div>
         ) : selectedTicket ? (
           /* Ticket Detail */
           <div>
             <button onClick={() => setSelectedTicket(null)} style={{
               background: 'transparent', border: 'none', color: '#a855f7', fontSize: 12, cursor: 'pointer', marginBottom: 12, padding: 0,
-            }}>{'\u2190'} Back to tickets</button>
+            }}>{'\u2190'} {t('dash.support.back_to_tickets')}</button>
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, ...(statusColors[selectedTicket.status] || statusColors.open), textTransform: 'capitalize' }}>{selectedTicket.status?.replace('_', ' ')}</span>
-                <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, ...(catColors[selectedTicket.category] || catColors.other), textTransform: 'capitalize' }}>{selectedTicket.category}</span>
+                <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, ...(statusColors[selectedTicket.status] || statusColors.open) }}>{t(`dash.support.status.${selectedTicket.status}` as any) || selectedTicket.status?.replace('_', ' ')}</span>
+                <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, ...(catColors[selectedTicket.category] || catColors.other) }}>{t(`dash.support.category.${selectedTicket.category}` as any) || selectedTicket.category}</span>
                 <span style={{ fontSize: 10, color: '#45475a' }}>#{selectedTicket.id?.slice(0, 8)}</span>
               </div>
               <div style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginBottom: 16 }}>{selectedTicket.subject || selectedTicket.message?.slice(0, 80)}</div>
 
               {/* Messages */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-                {(selectedTicket.messages || [{ sender: 'You', body: selectedTicket.message, timestamp: selectedTicket.created_at }]).map((msg: any, i: number) => (
+                {(selectedTicket.messages || [{ sender: t('dash.support.you'), body: selectedTicket.message, timestamp: selectedTicket.created_at }]).map((msg: any, i: number) => (
                   <div key={i} style={{ background: '#11111b', borderRadius: 8, padding: '10px 14px', border: '1px solid #313244' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: msg.sender === 'Support' ? '#a855f7' : '#89b4fa' }}>{msg.sender || 'You'}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: msg.sender === 'Support' ? '#a855f7' : '#89b4fa' }}>{msg.sender || t('dash.support.you')}</span>
                       <span style={{ fontSize: 10, color: '#45475a' }}>{msg.timestamp ? new Date(msg.timestamp).toLocaleDateString() : ''}</span>
                     </div>
                     <div style={{ fontSize: 13, color: '#a6adc8', lineHeight: 1.6 }}>{msg.body || msg.message}</div>
@@ -7086,7 +7104,7 @@ export function SupportPage() {
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') sendReply(); }}
-                  placeholder="Type a reply..."
+                  placeholder={t('dash.support.reply_input_placeholder')}
                   style={{
                     flex: 1, padding: '8px 14px', background: '#11111b', border: '1px solid #313244',
                     borderRadius: 8, color: '#cdd6f4', fontSize: 13, outline: 'none',
@@ -7095,19 +7113,19 @@ export function SupportPage() {
                 <button onClick={sendReply} disabled={submitting || !replyText.trim()} style={{
                   padding: '8px 18px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600,
                   background: '#a855f7', color: '#fff', cursor: 'pointer', opacity: submitting ? 0.5 : 1,
-                }}>Send</button>
+                }}>{t('dash.support.send')}</button>
               </div>
             </div>
           </div>
         ) : loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>Loading tickets...</div>
+          <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>{t('dash.support.loading_tickets')}</div>
         ) : filteredTickets.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u2705'}</div>
             <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
-              {filter === 'all' ? 'No tickets yet' : `No ${filter.replace('_', ' ')} tickets`}
+              {filter === 'all' ? t('dash.support.no_tickets') : t('dash.support.no_filtered_tickets').replace('{filter}', t(`dash.support.status.${filter}` as any) || filter.replace('_', ' '))}
             </div>
-            <div style={{ fontSize: 12, color: '#6c7086' }}>Click "New Ticket" to get help</div>
+            <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.support.new_ticket_hint')}</div>
           </div>
         ) : (
           /* Ticket List */
@@ -7117,8 +7135,8 @@ export function SupportPage() {
                 ...card, padding: '14px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, ...(statusColors[ticket.status] || statusColors.open), textTransform: 'capitalize' }}>{ticket.status?.replace('_', ' ')}</span>
-                  <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, ...(catColors[ticket.category] || catColors.other), textTransform: 'capitalize' }}>{ticket.category}</span>
+                  <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, ...(statusColors[ticket.status] || statusColors.open) }}>{t(`dash.support.status.${ticket.status}` as any) || ticket.status?.replace('_', ' ')}</span>
+                  <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, ...(catColors[ticket.category] || catColors.other) }}>{t(`dash.support.category.${ticket.category}` as any) || ticket.category}</span>
                   <span style={{ fontSize: 10, color: '#45475a', marginLeft: 'auto' }}>
                     {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : ''}
                   </span>
@@ -7154,18 +7172,17 @@ export function DocumentationPage() {
 
   const docSections: DocSection[] = [
     {
-      id: 'getting-started', title: 'Getting Started',
+      id: 'getting-started', title: t('dash.docs.getting_started'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
-            Ava | Supernova IDE is a standalone desktop application with the full AI agent running locally.
-            Connect your account or add BYOK API keys to get started.
+            {t('dash.docs.getting_started_intro')}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             {[
-              { step: '1', title: 'Connect Account', desc: 'Open the Dashboard sidebar and enter your platform key (sk-ava-...) or add BYOK provider keys.' },
-              { step: '2', title: 'Choose a Mode', desc: 'Toggle Local (BYOK keys, full 54 tools on your machine) or Cloud (platform API). Switch anytime.' },
-              { step: '3', title: 'Start Building', desc: 'Open Ava Chat and start giving instructions. She reads code, makes changes, runs commands, and more.' },
+              { step: '1', title: t('dash.docs.step1_title'), desc: t('dash.docs.step1_desc') },
+              { step: '2', title: t('dash.docs.step2_title'), desc: t('dash.docs.step2_desc') },
+              { step: '3', title: t('dash.docs.step3_title'), desc: t('dash.docs.step3_desc') },
             ].map((s) => (
               <div key={s.step} style={{ ...card, padding: 16 }}>
                 <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 10 }}>{s.step}</div>
@@ -7178,30 +7195,30 @@ export function DocumentationPage() {
       ),
     },
     {
-      id: 'local-vs-cloud', title: 'Local vs Cloud Mode',
+      id: 'local-vs-cloud', title: t('dash.docs.local_vs_cloud'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ ...card, padding: 16, borderColor: 'rgba(166,227,161,0.3)' }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#a6e3a1', marginBottom: 8 }}>Local Mode</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#a6e3a1', marginBottom: 8 }}>{t('dash.docs.local_mode')}</div>
               <ul style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.8, paddingLeft: 16, margin: 0 }}>
-                <li>Full 54-tool agent runs on your machine</li>
-                <li>Requires BYOK API keys (Qwen, DeepSeek, etc.)</li>
-                <li>Tools execute locally — file edits, bash, git, screenshots</li>
-                <li>24 specialist personas with orchestration</li>
-                <li>5-layer memory system</li>
-                <li>Tool confirmation dialogs for dangerous operations</li>
+                <li>{t('dash.docs.local_mode_1')}</li>
+                <li>{t('dash.docs.local_mode_2')}</li>
+                <li>{t('dash.docs.local_mode_3')}</li>
+                <li>{t('dash.docs.local_mode_4')}</li>
+                <li>{t('dash.docs.local_mode_5')}</li>
+                <li>{t('dash.docs.local_mode_6')}</li>
               </ul>
             </div>
             <div style={{ ...card, padding: 16, borderColor: 'rgba(168,85,247,0.3)' }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#a855f7', marginBottom: 8 }}>Cloud Mode</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#a855f7', marginBottom: 8 }}>{t('dash.docs.cloud_mode')}</div>
               <ul style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.8, paddingLeft: 16, margin: 0 }}>
-                <li>Chat via platform API (ava-supernova.com)</li>
-                <li>Uses your platform account tokens</li>
-                <li>No local tool execution</li>
-                <li>Works with platform key (sk-ava-...)</li>
-                <li>Usage tracked and billed through platform</li>
-                <li>Simpler setup — just connect and chat</li>
+                <li>{t('dash.docs.cloud_mode_1')}</li>
+                <li>{t('dash.docs.cloud_mode_2')}</li>
+                <li>{t('dash.docs.cloud_mode_3')}</li>
+                <li>{t('dash.docs.cloud_mode_4')}</li>
+                <li>{t('dash.docs.cloud_mode_5')}</li>
+                <li>{t('dash.docs.cloud_mode_6')}</li>
               </ul>
             </div>
           </div>
@@ -7209,17 +7226,17 @@ export function DocumentationPage() {
       ),
     },
     {
-      id: 'modes', title: '6 Modes — States of Thought',
+      id: 'modes', title: t('dash.docs.modes'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>Modes are states of mind, not tool restrictions. Switch with the mode selector in the chat input or keyboard shortcuts.</p>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>{t('dash.docs.modes_intro')}</p>
           {[
-            { icon: '>>', name: 'Work', desc: 'Builder mindset — full 54-tool agent. Default mode.', key: 'Ctrl+Shift+1' },
-            { icon: '::', name: 'Plan', desc: 'Architect mindset — read-only analysis and strategic planning.', key: 'Ctrl+Shift+2' },
-            { icon: '..', name: 'Chat', desc: 'Friend mindset — personal conversation, memory, journal.', key: 'Ctrl+Shift+3' },
-            { icon: '??', name: 'Teach', desc: 'Tutor mindset — personalised learning with spaced repetition. Free for everyone.', key: 'Ctrl+Shift+4' },
-            { icon: '!!', name: 'Security', desc: 'Auditor mindset — dependency scanning, secret detection, code vulnerability analysis.', key: 'Ctrl+Shift+5' },
-            { icon: '**', name: 'Brainstorm', desc: 'Ideation mindset — research, generate, challenge, refine ideas.', key: 'Ctrl+Shift+6' },
+            { icon: '>>', name: t('dash.docs.mode_work'), desc: t('dash.docs.mode_work_desc'), key: 'Ctrl+Shift+1' },
+            { icon: '::', name: t('dash.docs.mode_plan'), desc: t('dash.docs.mode_plan_desc'), key: 'Ctrl+Shift+2' },
+            { icon: '..', name: t('dash.docs.mode_chat'), desc: t('dash.docs.mode_chat_desc'), key: 'Ctrl+Shift+3' },
+            { icon: '??', name: t('dash.docs.mode_teach'), desc: t('dash.docs.mode_teach_desc'), key: 'Ctrl+Shift+4' },
+            { icon: '!!', name: t('dash.docs.mode_security'), desc: t('dash.docs.mode_security_desc'), key: 'Ctrl+Shift+5' },
+            { icon: '**', name: t('dash.docs.mode_brainstorm'), desc: t('dash.docs.mode_brainstorm_desc'), key: 'Ctrl+Shift+6' },
           ].map((m) => (
             <div key={m.name} style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
               <span style={{ fontFamily: 'monospace', fontSize: 14, color: '#a855f7', fontWeight: 700, width: 28 }}>{m.icon}</span>
@@ -7234,21 +7251,21 @@ export function DocumentationPage() {
       ),
     },
     {
-      id: 'tools', title: '54 Tools',
+      id: 'tools', title: t('dash.docs.tools'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>Available in Local mode. Ava selects and chains tools automatically based on your instructions.</p>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>{t('dash.docs.tools_intro')}</p>
           {[
-            { cat: 'File Operations', tools: 'file_read, file_write, file_edit, glob, grep, list_directory, find_symbol, project_index' },
-            { cat: 'Shell & Git', tools: 'bash, git_status, git_diff, git_commit, git_create_pr, rollback' },
-            { cat: 'Web & API', tools: 'web_search, http_request, browser' },
-            { cat: 'Media', tools: 'screenshot, generate_image, remove_background' },
-            { cat: 'Memory', tools: 'memory_save, memory_recall, memory_update, memory_delete' },
-            { cat: 'Planning', tools: 'present_plan, todo_write, task_manage' },
-            { cat: 'Office Suite', tools: 'document_manage (.docx/.pdf/.csv/.md), presentation_create (.pptx), email_draft, report_generate' },
-            { cat: 'Learning', tools: 'learning_create, learning_teach, learning_progress' },
-            { cat: 'Testing & Quality', tools: 'test_run, test_generate, analyze_architecture, doc_generate, audit_dependencies, benchmark' },
-            { cat: 'Utility', tools: 'ask_user, get_datetime, detect_language, weather, news, journal_write, self_inspect, release_notes' },
+            { cat: t('dash.docs.tools_cat_file'), tools: 'file_read, file_write, file_edit, glob, grep, list_directory, find_symbol, project_index' },
+            { cat: t('dash.docs.tools_cat_shell'), tools: 'bash, git_status, git_diff, git_commit, git_create_pr, rollback' },
+            { cat: t('dash.docs.tools_cat_web'), tools: 'web_search, http_request, browser' },
+            { cat: t('dash.docs.tools_cat_media'), tools: 'screenshot, generate_image, remove_background' },
+            { cat: t('dash.docs.tools_cat_memory'), tools: 'memory_save, memory_recall, memory_update, memory_delete' },
+            { cat: t('dash.docs.tools_cat_planning'), tools: 'present_plan, todo_write, task_manage' },
+            { cat: t('dash.docs.tools_cat_office'), tools: 'document_manage (.docx/.pdf/.csv/.md), presentation_create (.pptx), email_draft, report_generate' },
+            { cat: t('dash.docs.tools_cat_learning'), tools: 'learning_create, learning_teach, learning_progress' },
+            { cat: t('dash.docs.tools_cat_testing'), tools: 'test_run, test_generate, analyze_architecture, doc_generate, audit_dependencies, benchmark' },
+            { cat: t('dash.docs.tools_cat_utility'), tools: 'ask_user, get_datetime, detect_language, weather, news, journal_write, self_inspect, release_notes' },
           ].map((g) => (
             <div key={g.cat} style={{ ...card, padding: '10px 16px' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#a855f7', marginBottom: 4 }}>{g.cat}</div>
@@ -7259,18 +7276,18 @@ export function DocumentationPage() {
       ),
     },
     {
-      id: 'library', title: 'Library',
+      id: 'library', title: t('dash.docs.library'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
-            Browse images, documents, presentations, and spreadsheets created by Ava. Access from the Dashboard sidebar.
+            {t('dash.docs.library_intro')}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
-              { title: 'Grid & List Views', desc: 'Toggle between visual grid (thumbnails) and compact list view.' },
-              { title: 'Type Filtering', desc: 'Filter by Images, Documents, Spreadsheets, or Presentations with count badges.' },
-              { title: 'File Details', desc: 'Click any file to see size, type, date, folder, and quick open/download.' },
-              { title: 'Image Preview', desc: 'Image thumbnails display inline. Documents show type icons with colour coding.' },
+              { title: t('dash.docs.library_grid'), desc: t('dash.docs.library_grid_desc') },
+              { title: t('dash.docs.library_filter'), desc: t('dash.docs.library_filter_desc') },
+              { title: t('dash.docs.library_details'), desc: t('dash.docs.library_details_desc') },
+              { title: t('dash.docs.library_preview'), desc: t('dash.docs.library_preview_desc') },
             ].map((f) => (
               <div key={f.title} style={{ ...card, padding: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{f.title}</div>
@@ -7282,16 +7299,16 @@ export function DocumentationPage() {
       ),
     },
     {
-      id: 'images-files', title: 'Images & Files in Chat',
+      id: 'images-files', title: t('dash.docs.images_files'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>Share images and files directly in the chat conversation.</p>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>{t('dash.docs.images_intro')}</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
-              { title: 'Paste Images', desc: 'Ctrl+V a screenshot or image directly into the chat input.' },
-              { title: 'Drag & Drop', desc: 'Drop images and files onto the input area to attach them.' },
-              { title: 'Attach Button', desc: 'Click the paperclip icon to browse and attach files (images, PDFs, docs, spreadsheets).' },
-              { title: 'Inline Display', desc: 'Generated images show inline in messages with download buttons. Created files appear as typed cards.' },
+              { title: t('dash.docs.images_paste'), desc: t('dash.docs.images_paste_desc') },
+              { title: t('dash.docs.images_drag'), desc: t('dash.docs.images_drag_desc') },
+              { title: t('dash.docs.images_attach'), desc: t('dash.docs.images_attach_desc') },
+              { title: t('dash.docs.images_display'), desc: t('dash.docs.images_display_desc') },
             ].map((f) => (
               <div key={f.title} style={{ ...card, padding: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{f.title}</div>
@@ -7303,37 +7320,37 @@ export function DocumentationPage() {
       ),
     },
     {
-      id: 'personas', title: 'Personas',
+      id: 'personas', title: t('dash.docs.personas'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>24 specialist personas across 5 modes, orchestrated by the Conductor.</p>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>{t('dash.docs.personas_intro')}</p>
           {[
-            { mode: 'Work', team: 'Scout, Architect, Verifier, Sequencer, Challenger, Builder' },
-            { mode: 'Plan', team: 'Researcher, Architect, Challenger' },
-            { mode: 'Teach', team: 'Curriculum Architect, Content Writer, Fact Checker, Quiz Master, Tutor' },
-            { mode: 'Security', team: 'Recon, Scanner, CVE Researcher, Verifier, Reporter' },
-            { mode: 'Brainstorm', team: 'Explorer, Researcher, Ideator, Challenger, Refiner' },
+            { mode: t('dash.docs.mode_work'), team: 'Scout, Architect, Verifier, Sequencer, Challenger, Builder' },
+            { mode: t('dash.docs.mode_plan'), team: 'Researcher, Architect, Challenger' },
+            { mode: t('dash.docs.mode_teach'), team: 'Curriculum Architect, Content Writer, Fact Checker, Quiz Master, Tutor' },
+            { mode: t('dash.docs.mode_security'), team: 'Recon, Scanner, CVE Researcher, Verifier, Reporter' },
+            { mode: t('dash.docs.mode_brainstorm'), team: 'Explorer, Researcher, Ideator, Challenger, Refiner' },
           ].map((p) => (
             <div key={p.mode} style={{ ...card, padding: '10px 16px' }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#a855f7' }}>{p.mode}:</span>
               <span style={{ fontSize: 12, color: '#6c7086', marginLeft: 8 }}>{p.team}</span>
             </div>
           ))}
-          <p style={{ fontSize: 11, color: '#45475a' }}>Chat mode has no personas — just Ava being a friend.</p>
+          <p style={{ fontSize: 11, color: '#45475a' }}>{t('dash.docs.personas_chat_note')}</p>
         </div>
       ),
     },
     {
-      id: 'memory', title: 'Memory System',
+      id: 'memory', title: t('dash.docs.memory'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>5-layer memory system that learns your coding style, decisions, and preferences across sessions.</p>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>{t('dash.docs.memory_intro')}</p>
           {[
-            { layer: 'L1 — Extract', desc: 'Regex-based extraction of facts, preferences, and patterns from conversations.' },
-            { layer: 'L2 — Reflect', desc: 'LLM reflection generates deeper insights from extracted data.' },
-            { layer: 'L3 — Accumulate', desc: 'Cross-session pattern detection — tracks recurring themes across conversations.' },
-            { layer: 'L4 — Analyse', desc: 'Cross-memory insights — connects related memories for deeper understanding.' },
-            { layer: 'L5 — Consolidate', desc: 'Merges duplicate entries, archives stale memories, maintains coherence.' },
+            { layer: t('dash.docs.memory_l1'), desc: t('dash.docs.memory_l1_desc') },
+            { layer: t('dash.docs.memory_l2'), desc: t('dash.docs.memory_l2_desc') },
+            { layer: t('dash.docs.memory_l3'), desc: t('dash.docs.memory_l3_desc') },
+            { layer: t('dash.docs.memory_l4'), desc: t('dash.docs.memory_l4_desc') },
+            { layer: t('dash.docs.memory_l5'), desc: t('dash.docs.memory_l5_desc') },
           ].map((l) => (
             <div key={l.layer} style={{ ...card, padding: '10px 16px' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#a855f7' }}>{l.layer}</div>
@@ -7344,15 +7361,15 @@ export function DocumentationPage() {
       ),
     },
     {
-      id: 'shortcuts', title: 'Keyboard Shortcuts',
+      id: 'shortcuts', title: t('dash.docs.shortcuts'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
-            { keys: 'Ctrl+Shift+1-6', action: 'Switch mode (Work, Plan, Chat, Teach, Security, Brainstorm)' },
-            { keys: 'Enter', action: 'Send message' },
-            { keys: 'Shift+Enter', action: 'New line in input' },
-            { keys: 'Ctrl+V', action: 'Paste image from clipboard' },
-            { keys: 'F12', action: 'Open DevTools' },
+            { keys: 'Ctrl+Shift+1-6', action: t('dash.docs.shortcuts_modes') },
+            { keys: 'Enter', action: t('dash.docs.shortcuts_send') },
+            { keys: 'Shift+Enter', action: t('dash.docs.shortcuts_newline') },
+            { keys: 'Ctrl+V', action: t('dash.docs.shortcuts_paste') },
+            { keys: 'F12', action: t('dash.docs.shortcuts_devtools') },
           ].map((s) => (
             <div key={s.keys} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid #313244' }}>
               <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#f5c2e7', background: '#313244', padding: '3px 10px', borderRadius: 6, flexShrink: 0 }}>{s.keys}</span>
@@ -7363,43 +7380,43 @@ export function DocumentationPage() {
       ),
     },
     {
-      id: 'tasks-panel', title: 'Tasks Panel',
+      id: 'tasks-panel', title: t('dash.docs.tasks_panel'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
-            The collapsible Tasks Panel sits alongside the chat. Click the <strong>Tasks</strong> button in the chat header to toggle it.
+            {t('dash.docs.tasks_intro')}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ ...card, padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 6 }}>Ava Tab</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 6 }}>{t('dash.docs.tasks_ava_tab')}</div>
               <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>
-                Shows session tasks from <code style={{ color: '#f5c2e7' }}>todo_write</code> tool calls. Progress bar updates live as Ava completes steps. Auto-opens when tasks are created.
+                {t('dash.docs.tasks_ava_desc')}
               </div>
             </div>
             <div style={{ ...card, padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 6 }}>My Tasks Tab</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 6 }}>{t('dash.docs.tasks_my_tab')}</div>
               <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>
-                Your personal tasks from the platform. Click a task to toggle completion. Filtered by Today or All. Requires a platform account.
+                {t('dash.docs.tasks_my_desc')}
               </div>
             </div>
           </div>
           <p style={{ color: '#6c7086', fontSize: 12 }}>
-            Drag the left edge to resize (200-500px). Press Escape to close. Width and state persist across sessions.
+            {t('dash.docs.tasks_resize')}
           </p>
         </div>
       ),
     },
     {
-      id: 'dashboard', title: 'Dashboard Pages',
+      id: 'dashboard', title: t('dash.docs.dashboard'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>16 pages organised into sections in the sidebar:</p>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>{t('dash.docs.dashboard_intro')}</p>
           {[
-            { section: 'Main', pages: 'Command Centre (landing page), Ava Chat' },
-            { section: 'Workspace', pages: 'Memory, Tasks, Journal, Learning, Library' },
-            { section: 'Personalise', pages: 'Personality, Cloud Sync' },
-            { section: 'Account', pages: 'Usage, Billing, Settings, Connections' },
-            { section: 'Help', pages: 'Support, Documentation, Release Notes' },
+            { section: t('dash.docs.dashboard_main'), pages: t('dash.docs.dashboard_main_pages') },
+            { section: t('dash.docs.dashboard_workspace'), pages: t('dash.docs.dashboard_workspace_pages') },
+            { section: t('dash.docs.dashboard_personalise'), pages: t('dash.docs.dashboard_personalise_pages') },
+            { section: t('dash.docs.dashboard_account'), pages: t('dash.docs.dashboard_account_pages') },
+            { section: t('dash.docs.dashboard_help'), pages: t('dash.docs.dashboard_help_pages') },
           ].map(s => (
             <div key={s.section} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid #313244' }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#cba6f7', minWidth: 90 }}>{s.section}</span>
@@ -7407,48 +7424,48 @@ export function DocumentationPage() {
             </div>
           ))}
           <p style={{ color: '#6c7086', fontSize: 12 }}>
-            Sections are collapsible with persistent state. A purple dot shows when the active page is inside a collapsed section.
+            {t('dash.docs.dashboard_collapse_note')}
           </p>
         </div>
       ),
     },
     {
-      id: 'session-stats', title: 'Session Stats',
+      id: 'session-stats', title: t('dash.docs.session_stats'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
-            Token usage, messages, tool calls, and per-model breakdown are tracked in real-time across the IDE.
+            {t('dash.docs.session_stats_intro')}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            {['Chat header shows token count', 'Usage page — Session tab with live data', 'Command Centre stats update instantly'].map(item => (
+            {[t('dash.docs.session_stats_1'), t('dash.docs.session_stats_2'), t('dash.docs.session_stats_3')].map(item => (
               <div key={item} style={{ ...card, padding: 12, fontSize: 12, color: '#6c7086', lineHeight: 1.5 }}>{item}</div>
             ))}
           </div>
           <p style={{ color: '#6c7086', fontSize: 12 }}>
-            Stats reset on New Chat. All-Time tab reads from the platform API for connected users.
+            {t('dash.docs.session_stats_note')}
           </p>
         </div>
       ),
     },
     {
-      id: 'release-notes', title: 'Release Notes',
+      id: 'release-notes', title: t('dash.docs.release_notes'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
-            Release notes are tagged by platform and displayed across the entire ecosystem.
+            {t('dash.docs.release_notes_intro')}
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {[
-              { label: 'Core', color: '#89b4fa' },
-              { label: 'Extension', color: '#a855f7' },
-              { label: 'IDE', color: '#a6e3a1' },
-              { label: 'Companion', color: '#fab387' },
+              { label: t('dash.releases.core'), color: '#89b4fa' },
+              { label: t('dash.releases.extension'), color: '#a855f7' },
+              { label: t('dash.releases.ide'), color: '#a6e3a1' },
+              { label: t('dash.releases.companion'), color: '#fab387' },
             ].map(p => (
               <span key={p.label} style={{ fontSize: 11, fontWeight: 600, color: p.color, background: `${p.color}18`, padding: '4px 12px', borderRadius: 6 }}>{p.label}</span>
             ))}
           </div>
           <p style={{ color: '#6c7086', fontSize: 12 }}>
-            Filter by platform using the tabs. Each release card shows its platform badge. Month filter also available.
+            {t('dash.docs.release_notes_note')}
           </p>
         </div>
       ),
@@ -7471,7 +7488,7 @@ export function DocumentationPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search docs..."
+            placeholder={t('dash.docs.search_placeholder')}
             style={{
               width: '100%', padding: '6px 10px', background: '#11111b', border: '1px solid #313244',
               borderRadius: 6, color: '#cdd6f4', fontSize: 12, outline: 'none',
@@ -7616,8 +7633,8 @@ export function ReleaseNotesPage() {
             value={selectedMonth}
             onChange={setSelectedMonth}
             width={180}
-            placeholder="All months"
-            options={[{ value: '', label: 'All months' }, ...months.map(([key, label]) => ({ value: key, label }))]}
+            placeholder={t('dash.releases.all_months')}
+            options={[{ value: '', label: t('dash.releases.all_months') }, ...months.map(([key, label]) => ({ value: key, label }))]}
           />
         </div>
 
@@ -7650,7 +7667,7 @@ export function ReleaseNotesPage() {
                 background: '#181825', border: '1px dashed #313244', borderRadius: 12,
                 padding: '40px 20px', textAlign: 'center',
               }}>
-                <div style={{ fontSize: 13, color: '#6c7086' }}>No releases for this month.</div>
+                <div style={{ fontSize: 13, color: '#6c7086' }}>{t('dash.releases.no_releases')}</div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -7703,7 +7720,7 @@ export function ReleaseNotesPage() {
                               background: 'rgba(168,85,247,0.10)', padding: '2px 8px',
                               borderRadius: 4, letterSpacing: 0.8, textTransform: 'uppercase' as const,
                             }}>
-                              LATEST
+                              {t('dash.releases.latest')}
                             </span>
                           )}
                           {title && <span style={{ fontSize: 13, color: '#a6adc8' }}>{title}</span>}
@@ -7714,7 +7731,7 @@ export function ReleaseNotesPage() {
                               fontSize: 10, color: '#6c7086', background: '#313244',
                               padding: '2px 8px', borderRadius: 4,
                             }}>
-                              {toolCount} tools
+                              {t('dash.releases.tools_count').replace('{count}', String(toolCount))}
                             </span>
                           )}
                           <span style={{ fontSize: 10, color: '#6c7086' }}>
@@ -7736,7 +7753,7 @@ export function ReleaseNotesPage() {
                               background: '#313244', borderRadius: 8, padding: '12px 14px',
                               marginTop: 12, marginBottom: 14,
                             }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Highlights</div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{t('dash.releases.highlights')}</div>
                               <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                                 {highlights.map((h: string, i: number) => (
                                   <li key={i} style={{
