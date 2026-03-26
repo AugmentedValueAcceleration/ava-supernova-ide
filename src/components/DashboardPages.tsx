@@ -868,7 +868,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
     <WidgetCard
       title={t('dash.cc.todays_tasks')}
       icon={'\u2705'}
-      action={tasks.length > 0 ? { label: t('dash.cc.view_all'), onClick: () => {} } : undefined}
+      action={tasks.length > 0 ? { label: t('dash.cc.view_all'), onClick: () => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'tasks' })) } : undefined}
       onRefresh={onRefresh}
     >
       {loading ? (
@@ -937,7 +937,7 @@ function CCJournalWidget({ journalDay, loading }: { journalDay: JournalDay | nul
     <WidgetCard
       title={t('dash.cc.todays_journal')}
       icon={'\uD83D\uDCD3'}
-      action={{ label: hasContent ? t('dash.cc.open_journal') : t('dash.cc.write_entry'), onClick: () => {} }}
+      action={{ label: hasContent ? t('dash.cc.open_journal') : t('dash.cc.write_entry'), onClick: () => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'journal' })) }}
     >
       {loading ? (
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_journal')}</div>
@@ -988,7 +988,7 @@ function CCLearningWidget({ curriculums, loading }: { curriculums: LearningCurri
     <WidgetCard
       title={t('dash.cc.learning')}
       icon={'\uD83C\uDF93'}
-      action={curriculums.length > 0 ? { label: t('dash.cc.continue_learning'), onClick: () => {} } : undefined}
+      action={curriculums.length > 0 ? { label: t('dash.cc.continue_learning'), onClick: () => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' })) } : undefined}
     >
       {loading ? (
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_learning')}</div>
@@ -1039,7 +1039,7 @@ function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loadin
     <WidgetCard
       title={t('dash.cc.memory')}
       icon={'\uD83E\uDDE0'}
-      action={{ label: t('dash.cc.view_all'), onClick: () => {} }}
+      action={{ label: t('dash.cc.view_all'), onClick: () => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'memory' })) }}
     >
       {loading ? (
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_memories')}</div>
@@ -1304,6 +1304,17 @@ export function AvaChatPage() {
     updatedAt: number;
     model: string;
   }
+
+  // ── Sidecar model mapping (single source of truth) ─────────────────────────
+  const SIDECAR_MODEL_MAP: Record<string, string> = {
+    'qwen-flash': 'platform:qwen-flash',
+    'qwen3.5-plus': 'platform:qwen3.5-plus',
+    'deepseek-chat': 'deepseek:deepseek-chat',
+    'deepseek-reasoner': 'deepseek:deepseek-reasoner',
+    'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
+    'glm-4-plus': 'zhipu:glm-4-plus',
+    'mistral-large': 'mistral:mistral-large-latest',
+  };
 
   // ── Mode definitions ───────────────────────────────────────────────────────
   const MODES: { id: AvaMode; label: string; icon: string; prefix: string; placeholder: string }[] = [
@@ -1734,9 +1745,9 @@ export function AvaChatPage() {
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
         const idx = parseInt(e.key) - 1;
-        if (idx >= 0 && idx < MODES.length) {
+        if (idx < MODES.length) {
           e.preventDefault();
           setMode(MODES[idx].id);
           setModeMenuOpen(false);
@@ -1783,17 +1794,7 @@ export function AvaChatPage() {
           }
         } catch { /* */ }
 
-        // Map model ID to qualified provider:model format for core
-        // Platform models use platform: prefix, BYOK use provider-specific prefix
-        const modelMap: Record<string, string> = {
-          'qwen-flash': 'platform:qwen-flash',
-          'qwen3.5-plus': 'platform:qwen3.5-plus',
-          'deepseek-chat': 'deepseek:deepseek-chat',
-          'deepseek-reasoner': 'deepseek:deepseek-reasoner',
-          'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
-          'glm-4-plus': 'zhipu:glm-4-plus',
-          'mistral-large': 'mistral:mistral-large-latest',
-        };
+        const modelMap = SIDECAR_MODEL_MAP;
 
         // Read working hours from localStorage
         const workStart = Number(localStorage.getItem('ava-ide-work-start')) || 9;
@@ -1823,7 +1824,6 @@ export function AvaChatPage() {
       } catch (err: any) {
         if (!cancelled) {
           setSidecarStatus('error');
-          console.error('[sidecar start]', err);
         }
       }
     };
@@ -1853,18 +1853,9 @@ export function AvaChatPage() {
   useEffect(() => {
     if (!sidecarReady) return;
     const sidecar = getSidecar();
-    const modelMap: Record<string, string> = {
-      'qwen-flash': 'platform:qwen-flash',
-      'qwen3.5-plus': 'platform:qwen3.5-plus',
-      'deepseek-chat': 'deepseek:deepseek-chat',
-      'deepseek-reasoner': 'deepseek:deepseek-reasoner',
-      'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
-      'glm-4-plus': 'zhipu:glm-4-plus',
-      'mistral-large': 'mistral:mistral-large-latest',
-    };
     if (model !== prevModelRef.current) {
       prevModelRef.current = model;
-      sidecar.setModel(modelMap[model] || `platform:${model}`).catch(() => {});
+      sidecar.setModel(SIDECAR_MODEL_MAP[model] || `platform:${model}`).catch(() => {});
     }
     if (mode !== prevModeRef.current) {
       prevModeRef.current = mode;

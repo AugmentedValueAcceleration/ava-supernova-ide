@@ -55,6 +55,16 @@ export default function App() {
     save('dashPage', page);
   }, []);
 
+  // Listen for navigation events from dashboard widgets
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const page = (e as CustomEvent).detail;
+      if (page) handleDashboardSelect(page);
+    };
+    window.addEventListener('ava-navigate-dashboard', handler);
+    return () => window.removeEventListener('ava-navigate-dashboard', handler);
+  }, [handleDashboardSelect]);
+
   const toggleSidebarPosition = useCallback(() => {
     setSidebarPosition(p => {
       const next = p === 'left' ? 'right' : 'left';
