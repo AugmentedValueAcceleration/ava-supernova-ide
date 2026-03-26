@@ -3719,6 +3719,8 @@ export function ChatHistoryPage() {
 }
 
 /* ===== 3. Memory ===== */
+const MEMORY_PAGE_SIZE = 100;
+
 export function MemoryPage() {
   useLocale();
   const connected = checkConnected();
@@ -3728,6 +3730,7 @@ export function MemoryPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [displayLimit, setDisplayLimit] = useState(MEMORY_PAGE_SIZE);
 
   useEffect(() => {
     const list = Array.isArray(rawMemories) ? rawMemories : (rawMemories as any)?.entries || (rawMemories as any)?.memories || [];
@@ -3771,6 +3774,12 @@ export function MemoryPage() {
     }
     return result;
   }, [memories, categoryFilter, search]);
+
+  // Reset display limit when filters change
+  useEffect(() => { setDisplayLimit(MEMORY_PAGE_SIZE); }, [categoryFilter, search]);
+
+  const displayed = filtered.slice(0, displayLimit);
+  const hasMore = displayLimit < filtered.length;
 
   const formatDate = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -3890,7 +3899,11 @@ export function MemoryPage() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {filtered.map(m => {
+                {/* Showing count */}
+                <div style={{ fontSize: 11, color: '#6c7086', textAlign: 'center', marginBottom: 4 }}>
+                  Showing {Math.min(displayLimit, filtered.length)} of {filtered.length} memories
+                </div>
+                {displayed.map(m => {
                   const id = m.id || m._id;
                   const cat = m.category || 'general';
                   const cs = getCatStyle(cat);
@@ -3997,9 +4010,22 @@ export function MemoryPage() {
               </div>
             )}
 
-            <div style={{ fontSize: 12, color: '#6c7086', marginTop: 16, textAlign: 'center' }}>
-              {(filtered.length === 1 ? t('dash.memory.count_one') : t('dash.memory.count_other')).replace('{n}', String(filtered.length))}{search ? ` ${t('dash.memory.matching').replace('{query}', search)}` : ''}{categoryFilter ? ` ${t('dash.memory.in_category').replace('{category}', categoryFilter)}` : ''}
-            </div>
+            {/* Load more */}
+            {hasMore && (
+              <button
+                onClick={() => setDisplayLimit(prev => prev + MEMORY_PAGE_SIZE)}
+                style={{
+                  background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)',
+                  borderRadius: 10, padding: '12px 20px', fontSize: 12, fontWeight: 500,
+                  color: '#a855f7', cursor: 'pointer', transition: 'border-color 0.15s',
+                  textAlign: 'center', marginTop: 4, width: '100%',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,0.4)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+              >
+                Load more ({filtered.length - displayLimit} remaining)
+              </button>
+            )}
           </>
         )}
       </div>
