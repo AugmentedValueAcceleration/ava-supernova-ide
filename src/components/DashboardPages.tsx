@@ -1407,6 +1407,20 @@ export function AvaChatPage() {
   const [confirmInput, setConfirmInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<{ name: string; dataUri: string; mimeType: string }[]>([]);
 
+  // ── Usage warning state ──────────────────────────────────────────────
+  const [usageWarning, setUsageWarning] = useState<{ level: string; message: string }>({ level: 'none', message: '' });
+  const fetchUsageWarning = useCallback(async () => {
+    if (!checkConnected()) return;
+    try {
+      const res = await apiFetch('/account-info');
+      if (res?.warning && res.warning !== 'none') {
+        setUsageWarning({ level: res.warning, message: res.warning_message || '' });
+      } else {
+        setUsageWarning({ level: 'none', message: '' });
+      }
+    } catch { /* silent */ }
+  }, []);
+
   // ── Secret Vault state ────────────────────────────────────────────────
   const [secrets, setSecrets] = useState<{ id: string; label: string; value: string }[]>([]);
   const [showVault, setShowVault] = useState(false);
@@ -1623,6 +1637,11 @@ export function AvaChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // ── Usage warning check (on mount + after messages change while not streaming) ──
+  useEffect(() => {
+    if (!streaming) fetchUsageWarning();
+  }, [messages.length, streaming, fetchUsageWarning]);
 
   // ── Close dropdowns on outside click ──────────────────────────────────────
   useEffect(() => {
@@ -3423,6 +3442,18 @@ export function AvaChatPage() {
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
             >
+              {/* Usage warning banner */}
+              {usageWarning.level !== 'none' && usageWarning.message && (
+                <div style={{
+                  marginBottom: 6, padding: '6px 10px', borderRadius: 8, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6,
+                  background: usageWarning.level === 'exhausted' ? 'rgba(239,68,68,0.12)' : usageWarning.level === 'critical' ? 'rgba(249,115,22,0.12)' : 'rgba(234,179,8,0.08)',
+                  color: usageWarning.level === 'exhausted' ? '#f38ba8' : usageWarning.level === 'critical' ? '#fab387' : '#f9e2af',
+                  border: `1px solid ${usageWarning.level === 'exhausted' ? 'rgba(239,68,68,0.2)' : usageWarning.level === 'critical' ? 'rgba(249,115,22,0.2)' : 'rgba(234,179,8,0.15)'}`,
+                }}>
+                  <span>{usageWarning.level === 'exhausted' ? '\u26D4' : usageWarning.level === 'critical' ? '\u26A0' : '\u25CB'}</span>
+                  <span style={{ flex: 1 }}>{usageWarning.message}</span>
+                </div>
+              )}
               {/* Pending attachments preview */}
               {pendingAttachments.length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
