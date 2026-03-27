@@ -85,6 +85,16 @@ export default function App() {
     save('panelTab', tab);
   }, []);
 
+  // Project folder state — persisted
+  const [projectFolder, setProjectFolder] = useState<string | null>(() => load('projectFolder', null));
+  const handleOpenFolder = useCallback((path: string) => {
+    setProjectFolder(path);
+    save('projectFolder', path);
+    // Notify sidecar and other components
+    localStorage.setItem('ava-ide-project-folder', path);
+    window.dispatchEvent(new CustomEvent('ava-folder-changed', { detail: path }));
+  }, []);
+
   // Mode state — synced with chat via localStorage + events
   const MODES = ['work', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
   const MODE_LABELS: Record<string, string> = { work: 'Work', plan: 'Plan', chat: 'Chat', teach: 'Teach', security: 'Security', brainstorm: 'Brainstorm' };
@@ -124,7 +134,7 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      <TitleBar />
+      <TitleBar onOpenFolder={handleOpenFolder} currentFolder={projectFolder} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {sidebarPosition === 'left' && activityBar}
         {sidebarPosition === 'left' && sidebar}

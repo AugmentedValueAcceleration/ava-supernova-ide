@@ -1804,7 +1804,7 @@ export function AvaChatPage() {
           providers,
           platformKey: getPlatformKey() || undefined,
           activeModel: modelMap[model] || `qwen:${model}`,
-          cwd: '.', // TODO: use project folder from Explorer
+          cwd: localStorage.getItem('ava-ide-project-folder') || '.',
           mode,
           permissionMode: 'balanced',
           autoMemory: true,
@@ -2144,7 +2144,7 @@ export function AvaChatPage() {
           providers: {},
           platformKey: getPlatformKey() || undefined,
           activeModel: `platform:${model}`,
-          cwd: '.',
+          cwd: localStorage.getItem('ava-ide-project-folder') || '.',
           mode,
           permissionMode: 'balanced',
           autoMemory: true,
