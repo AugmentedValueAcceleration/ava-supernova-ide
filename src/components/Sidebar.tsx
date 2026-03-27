@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import type { ActivityItem, SidebarPosition } from '../App';
-import { validateKey, getStoredEmail, getStoredTier, isConnected } from '../lib/api';
+import { validateKey, getStoredEmail, getStoredTier, isConnected, apiFetch } from '../lib/api';
 import { t, useLocale } from '../lib/i18n';
 
 interface Props {
@@ -864,6 +864,108 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <Panel />
+      </div>
+
+      {/* Mini Calendar — always visible */}
+      <SidebarCalendar onDashboardSelect={onDashboardSelect} />
+    </div>
+  );
+}
+
+/* ── Sidebar Calendar ──────────────────────────────────────────────────── */
+
+function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: string) => void }) {
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [taskDates, setTaskDates] = useState<Set<string>>(new Set());
+
+  // Fetch task dates
+  useEffect(() => {
+    if (!isConnected()) {
+      try {
+        const raw = localStorage.getItem('ava-ide-tasks');
+        if (raw) {
+          const tasks = JSON.parse(raw);
+          const dates = new Set<string>();
+          for (const t of (Array.isArray(tasks) ? tasks : tasks?.tasks || [])) {
+            if (t.due_date && t.status !== 'done' && !t.done) dates.add(t.due_date.slice(0, 10));
+          }
+          setTaskDates(dates);
+        }
+      } catch { /* */ }
+      return;
+    }
+    apiFetch('/tasks?status=todo,in-progress').then((data: any) => {
+      const list = Array.isArray(data) ? data : data?.tasks || data?.data || [];
+      const dates = new Set<string>();
+      for (const t of list) {
+        if (t.due_date) dates.add(t.due_date.slice(0, 10));
+      }
+      setTaskDates(dates);
+    }).catch(() => {});
+  }, [monthOffset]);
+
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const year = target.getFullYear();
+  const month = target.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const label = target.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const todayStr = now.toISOString().slice(0, 10);
+
+  function handleDayClick(day: number) {
+    const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'tasks' }));
+    window.dispatchEvent(new CustomEvent('ava-task-date-selected', { detail: iso }));
+    onDashboardSelect?.('tasks');
+  }
+
+  return (
+    <div style={{
+      borderTop: '1px solid rgba(168, 85, 247, 0.12)',
+      padding: '10px 14px',
+      flexShrink: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <button onClick={() => setMonthOffset(o => o - 1)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 10, padding: 2 }}>{'\u25C0'}</button>
+        <span style={{ fontSize: 10, fontWeight: 600, color: '#a6adc8' }}>{label}</span>
+        <button onClick={() => setMonthOffset(o => o + 1)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 10, padding: 2 }}>{'\u25B6'}</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, textAlign: 'center', marginBottom: 2 }}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <span key={i} style={{ fontSize: 8, color: '#45475a', fontWeight: 600 }}>{d}</span>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+        {days.map(day => {
+          const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const isToday = iso === todayStr;
+          const hasTask = taskDates.has(iso);
+          return (
+            <button
+              key={day}
+              onClick={() => handleDayClick(day)}
+              style={{
+                width: 24, height: 24, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                background: isToday ? 'rgba(168,85,247,0.25)' : 'transparent',
+                color: isToday ? '#a855f7' : '#a6adc8',
+                fontSize: 9, fontWeight: isToday ? 600 : 400,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                position: 'relative',
+              }}
+            >
+              {day}
+              {hasTask && (
+                <span style={{
+                  position: 'absolute', bottom: 1, width: 4, height: 4, borderRadius: '50%',
+                  background: isToday ? '#a855f7' : '#f59e0b',
+                }} />
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

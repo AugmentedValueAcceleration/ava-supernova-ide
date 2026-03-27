@@ -4113,6 +4113,21 @@ export function TasksPage() {
   const [formDueDate, setFormDueDate] = useState('');
   const [formCategory, setFormCategory] = useState('work');
 
+  // Calendar date filter (set by sidebar calendar click)
+  const [selectedCalDate, setSelectedCalDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const date = (e as CustomEvent).detail;
+      if (date) {
+        setSelectedCalDate(date);
+        setFilter('all');
+      }
+    };
+    window.addEventListener('ava-task-date-selected', handler);
+    return () => window.removeEventListener('ava-task-date-selected', handler);
+  }, []);
+
   useEffect(() => {
     const list = Array.isArray(rawTasks) ? rawTasks : rawTasks?.tasks || [];
     if (list.length > 0 || !loading) setTasks(list);
@@ -4128,13 +4143,17 @@ export function TasksPage() {
   }, [tasks]);
 
   const filtered = useMemo(() => {
+    // If a calendar date is selected, show all tasks for that day
+    if (selectedCalDate) {
+      return tasks.filter((t: any) => t.due_date && t.due_date.slice(0, 10) === selectedCalDate);
+    }
     switch (filter) {
       case 'today': return tasks.filter((t: any) => isTaskDueToday(t) && !t.done && t.status !== 'done');
       case 'overdue': return tasks.filter((t: any) => isTaskOverdue(t));
       case 'completed': return tasks.filter((t: any) => t.done || t.status === 'done');
       default: return tasks.filter((t: any) => !t.done && t.status !== 'done');
     }
-  }, [tasks, filter]);
+  }, [tasks, filter, selectedCalDate]);
 
   const resetForm = () => {
     setFormTitle('');
@@ -4367,12 +4386,12 @@ export function TasksPage() {
           {filterTabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setFilter(tab.key)}
+              onClick={() => { setFilter(tab.key); setSelectedCalDate(null); }}
               style={{
                 padding: '10px 16px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
                 background: 'transparent', border: 'none',
-                borderBottom: filter === tab.key ? '2px solid #a855f7' : '2px solid transparent',
-                color: filter === tab.key ? '#cdd6f4' : '#6c7086',
+                borderBottom: filter === tab.key && !selectedCalDate ? '2px solid #a855f7' : '2px solid transparent',
+                color: filter === tab.key && !selectedCalDate ? '#cdd6f4' : '#6c7086',
                 display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
@@ -4392,6 +4411,25 @@ export function TasksPage() {
             </button>
           ))}
         </div>
+
+        {/* Calendar date filter indicator */}
+        {selectedCalDate && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 14px', marginBottom: 12, borderRadius: 8,
+            background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)',
+          }}>
+            <span style={{ fontSize: 12, color: '#a855f7' }}>
+              Showing tasks for {new Date(selectedCalDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+            <button
+              onClick={() => setSelectedCalDate(null)}
+              style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 11 }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
 
         {/* Task list */}
         {loading ? <LoadingSpinner /> : error ? <ErrorBanner message={error} /> : (
