@@ -30,6 +30,15 @@
     "core:window:allow-start-dragging",
     "core:window:allow-set-focus",
     "updater:default",
-    "dialog:default"
+    "dialog:default",
+    "fs:default",
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [{ "path": "**" }]
+    }
   ]
 }

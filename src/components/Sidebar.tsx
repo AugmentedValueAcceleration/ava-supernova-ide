@@ -1,4 +1,5 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { readDir } from '@tauri-apps/plugin-fs';
 import type { ActivityItem, SidebarPosition } from '../App';
 import { validateKey, getStoredEmail, getStoredTier, isConnected, apiFetch } from '../lib/api';
 import { t, useLocale } from '../lib/i18n';
@@ -21,23 +22,17 @@ const panelTitles: Record<ActivityItem, string> = {
   dashboard: 'DASHBOARD',
 };
 
-/* ---------- File tree placeholder ---------- */
-const fileTree = [
-  { name: 'src', type: 'folder' as const, depth: 0, open: true },
-  { name: 'components', type: 'folder' as const, depth: 1, open: true },
-  { name: 'TitleBar.tsx', type: 'file' as const, depth: 2 },
-  { name: 'ActivityBar.tsx', type: 'file' as const, depth: 2 },
-  { name: 'Sidebar.tsx', type: 'file' as const, depth: 2 },
-  { name: 'EditorArea.tsx', type: 'file' as const, depth: 2 },
-  { name: 'BottomPanel.tsx', type: 'file' as const, depth: 2 },
-  { name: 'StatusBar.tsx', type: 'file' as const, depth: 2 },
-  { name: 'App.tsx', type: 'file' as const, depth: 1 },
-  { name: 'main.tsx', type: 'file' as const, depth: 1 },
-  { name: 'index.css', type: 'file' as const, depth: 1 },
-  { name: 'package.json', type: 'file' as const, depth: 0 },
-  { name: 'tsconfig.json', type: 'file' as const, depth: 0 },
-  { name: 'vite.config.ts', type: 'file' as const, depth: 0 },
-];
+/* ---------- Hidden folders/files to skip ---------- */
+const HIDDEN = new Set(['.git', 'node_modules', '.next', '__pycache__', '.venv', 'dist', '.DS_Store', 'Thumbs.db', '.idea', '.vs']);
+
+/** Recursively update children for a directory in the tree */
+function updateChildren(tree: FsEntry[], dirPath: string, children: FsEntry[]): FsEntry[] {
+  return tree.map(e => {
+    if (e.path === dirPath) return { ...e, children };
+    if (e.children) return { ...e, children: updateChildren(e.children, dirPath, children) };
+    return e;
+  });
+}
 
 function FolderIcon() {
   return (
@@ -61,43 +56,151 @@ function FileIcon({ name }: { name: string }) {
   );
 }
 
+interface FsEntry {
+  name: string;
+  isDir: boolean;
+  path: string;
+  children?: FsEntry[];
+}
+
+function FileTreeNode({ entry, depth, expandedDirs, onToggle }: { entry: FsEntry; depth: number; expandedDirs: Set<string>; onToggle: (path: string) => void }) {
+  const isOpen = expandedDirs.has(entry.path);
+
+  return (
+    <>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '3px 8px',
+          paddingLeft: 8 + depth * 16,
+          fontSize: 13,
+          color: '#cdd6f4',
+          cursor: 'pointer',
+        }}
+        onClick={() => { if (entry.isDir) onToggle(entry.path); }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+      >
+        {entry.isDir ? (
+          <>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d={isOpen ? 'M2 4l4 4 4-4' : 'M4 2l4 4-4 4'} stroke="#a6adc8" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <FolderIcon />
+          </>
+        ) : (
+          <>
+            <span style={{ width: 12 }} />
+            <FileIcon name={entry.name} />
+          </>
+        )}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</span>
+      </div>
+      {entry.isDir && isOpen && entry.children?.map((child) => (
+        <FileTreeNode key={child.path} entry={child} depth={depth + 1} expandedDirs={expandedDirs} onToggle={onToggle} />
+      ))}
+    </>
+  );
+}
+
 function ExplorerPanel() {
+  const [entries, setEntries] = useState<FsEntry[]>([]);
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [projectFolder, setProjectFolder] = useState<string | null>(localStorage.getItem('ava-ide-project-folder'));
+
+  const loadDir = useCallback(async (dirPath: string): Promise<FsEntry[]> => {
+    try {
+      const items = await readDir(dirPath);
+      const result: FsEntry[] = [];
+      for (const item of items) {
+        if (HIDDEN.has(item.name)) continue;
+        const fullPath = dirPath.replace(/\\/g, '/') + '/' + item.name;
+        result.push({
+          name: item.name,
+          isDir: item.isDirectory,
+          path: fullPath,
+          children: item.isDirectory ? [] : undefined,
+        });
+      }
+      // Sort: folders first, then alphabetical
+      result.sort((a, b) => {
+        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      return result;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Load root when folder changes
+  useEffect(() => {
+    if (!projectFolder) { setEntries([]); return; }
+    loadDir(projectFolder).then(setEntries);
+  }, [projectFolder, loadDir]);
+
+  // Listen for folder changes
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const folder = (e as CustomEvent).detail;
+      setProjectFolder(folder);
+      setExpandedDirs(new Set());
+    };
+    window.addEventListener('ava-folder-changed', handler);
+    return () => window.removeEventListener('ava-folder-changed', handler);
+  }, []);
+
+  const handleToggle = useCallback(async (dirPath: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dirPath)) {
+        next.delete(dirPath);
+      } else {
+        next.add(dirPath);
+      }
+      return next;
+    });
+    // Lazy load children if not loaded yet
+    setEntries(prev => {
+      const loadChildren = async () => {
+        const children = await loadDir(dirPath);
+        setEntries(current => updateChildren(current, dirPath, children));
+      };
+      // Check if this dir's children are empty (not yet loaded)
+      const findEntry = (list: FsEntry[]): FsEntry | null => {
+        for (const e of list) {
+          if (e.path === dirPath) return e;
+          if (e.children) {
+            const found = findEntry(e.children);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      const entry = findEntry(prev);
+      if (entry && entry.children && entry.children.length === 0) {
+        loadChildren();
+      }
+      return prev;
+    });
+  }, [loadDir]);
+
+  const folderName = projectFolder ? projectFolder.split(/[/\\]/).pop() : null;
+
   return (
     <div style={{ padding: '4px 0' }}>
       <div style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, color: '#cdd6f4', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-        Ava-Supernova-IDE
+        {folderName || 'No folder open'}
       </div>
-      {fileTree.map((item, i) => (
-        <div
-          key={i}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '3px 8px',
-            paddingLeft: 8 + item.depth * 16,
-            fontSize: 13,
-            color: '#cdd6f4',
-            cursor: 'pointer',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-        >
-          {item.type === 'folder' ? (
-            <>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d={item.open ? 'M2 4l4 4 4-4' : 'M4 2l4 4-4 4'} stroke="#a6adc8" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <FolderIcon />
-            </>
-          ) : (
-            <>
-              <span style={{ width: 12 }} />
-              <FileIcon name={item.name} />
-            </>
-          )}
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+      {!projectFolder && (
+        <div style={{ padding: '12px 16px', fontSize: 12, color: '#6c7086' }}>
+          Use File &gt; Open Folder to get started.
         </div>
+      )}
+      {entries.map((entry) => (
+        <FileTreeNode key={entry.path} entry={entry} depth={0} expandedDirs={expandedDirs} onToggle={handleToggle} />
       ))}
     </div>
   );
