@@ -94,7 +94,9 @@ process.on('unhandledRejection', (err) => {
 async function handleInit(data) {
   try {
     const config = data.config || {};
-    const cwd = config.cwd || process.cwd();
+    const cwd = (config.cwd && config.cwd !== '.') ? config.cwd : (process.env.HOME || process.env.USERPROFILE || process.cwd());
+    // Change Node.js working directory so relative paths resolve correctly
+    try { process.chdir(cwd); } catch { /* non-fatal */ }
     const projectRoot = detectProjectRoot(cwd) ?? undefined;
     currentMode = config.mode || 'work';
 
