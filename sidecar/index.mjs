@@ -305,7 +305,12 @@ async function handleMessage(data) {
     return;
   }
   if (isRunning) {
-    emitError('Already processing a message. Cancel first or wait.');
+    // Inject as mid-run interjection instead of rejecting
+    if (agent) {
+      agent.inject(data.content);
+      conversation?.addUserMessage(data.content);
+      emit({ event: 'injected' });
+    }
     return;
   }
 
@@ -509,6 +514,12 @@ function handleCancel() {
   if (currentAbort) {
     currentAbort.abort();
   }
+  // Safety: ensure isRunning clears even if finally block hasn't fired yet
+  setTimeout(() => {
+    if (isRunning && !currentAbort) {
+      isRunning = false;
+    }
+  }, 500);
 }
 
 async function handleInterrupt() {
