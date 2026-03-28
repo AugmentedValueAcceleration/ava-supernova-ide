@@ -1417,6 +1417,7 @@ export function AvaChatPage() {
     } catch { return new Set<string>(); }
   });
   const [tokenCount, setTokenCount] = useState(0);
+  const [platformBalance, setPlatformBalance] = useState<{ used: number; limit: number } | null>(null);
   const [conversationTitle, setConversationTitle] = useState(t('dash.chat.new_chat'));
   const [contextPercent, setContextPercent] = useState(0);
 
@@ -1437,6 +1438,22 @@ export function AvaChatPage() {
     window.addEventListener('ava-load-conversation', handler);
     return () => window.removeEventListener('ava-load-conversation', handler);
   }, []);
+
+  // ── Platform balance fetch ──────────────────────────────────────────────
+  const fetchBalance = useCallback(async () => {
+    const key = getPlatformKey();
+    if (!key) return;
+    try {
+      const res = await apiFetch('/api/usage', { method: 'GET', headers: { Authorization: `Bearer ${key}` } });
+      if (res && res.free_tokens_used !== undefined) {
+        setPlatformBalance({ used: res.free_tokens_used, limit: res.free_tokens_limit || 3000000 });
+      }
+    } catch { /* non-fatal */ }
+  }, []);
+
+  useEffect(() => { fetchBalance(); }, [fetchBalance]);
+  // Refresh balance when streaming ends
+  useEffect(() => { if (!streaming) fetchBalance(); }, [streaming, fetchBalance]);
 
   // ── Local sidecar state ─────────────────────────────────────────────────
   const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() => {
@@ -2828,10 +2845,23 @@ export function AvaChatPage() {
             </button>
           </div>
 
-          {/* Token counter */}
-          <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={t('dash.chat.tokens_used').replace('{n}', tokenCount.toLocaleString())}>
-            {tokenCount > 0 ? fmtTokens(tokenCount) + ' ' + t('dash.chat.tokens') : '0 ' + t('dash.chat.tokens')}
-          </span>
+          {/* Token display — platform balance or session count */}
+          {platformBalance && connected ? (() => {
+            const isAdmin = platformBalance.limit >= 999_999_999;
+            if (isAdmin) return <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', opacity: 0.5 }} title="Unlimited tokens">∞ tokens</span>;
+            const remaining = Math.max(0, platformBalance.limit - platformBalance.used);
+            const pct = platformBalance.limit > 0 ? (platformBalance.used / platformBalance.limit) * 100 : 0;
+            const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
+            return (
+              <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color }} title={`${remaining.toLocaleString()} of ${platformBalance.limit.toLocaleString()} tokens remaining (${Math.round(pct)}% used)`}>
+                {fmtTokens(remaining)} left
+              </span>
+            );
+          })() : (
+            <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used this session`}>
+              {tokenCount > 0 ? fmtTokens(tokenCount) + ' tokens' : '0 tokens'}
+            </span>
+          )}
 
           {/* Context usage ring */}
           {contextPercent > 0 && (() => {
