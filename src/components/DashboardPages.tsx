@@ -3822,7 +3822,7 @@ export function ChatHistoryPage() {
                     // Store the conversation to load, navigate to chat
                     localStorage.setItem('ava-ide-load-conversation', JSON.stringify(conv));
                     window.dispatchEvent(new CustomEvent('ava-load-conversation'));
-                    window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'chat' }));
+                    window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'ava-chat' }));
                   }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)')}
