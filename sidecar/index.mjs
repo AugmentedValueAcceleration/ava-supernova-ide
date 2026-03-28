@@ -199,6 +199,27 @@ async function handleInit(data) {
     await setLocale(language);
     emit({ event: 'info', message: 'Locale set' });
 
+    // Auto-detect knowledge packs from project type
+    let knowledgeContext;
+    try {
+      const { readdirSync } = await import('node:fs');
+      const files = readdirSync(cwd).map(f => f.toLowerCase());
+      const isGameProject = files.some(f =>
+        f.endsWith('.uproject') || f === 'project.godot' ||
+        (files.includes('content') && files.includes('source'))
+      );
+      if (isGameProject) {
+        const gamePack = core.BUILTIN_PACKS?.find(p => p.id === 'game-development');
+        if (gamePack) {
+          const engine = files.some(f => f.endsWith('.uproject')) ? 'Unreal Engine (C++)'
+            : files.includes('project.godot') ? 'Godot (GDScript)'
+            : files.some(f => f.endsWith('.csproj')) ? 'Unity (C#)'
+            : 'game engine';
+          knowledgeContext = `## Active Knowledge Pack: Game Development\nDetected: ${engine}\n\n${gamePack.context}`;
+        }
+      }
+    } catch { /* non-fatal */ }
+
     // Conversation + system prompt
     conversation = new Conversation();
     conversation.setSystemPrompt(
@@ -212,6 +233,7 @@ async function handleInit(data) {
         autoMemory: config.autoMemory ?? true,
         personality: personalityPrefix || undefined,
         language,
+        knowledgeContext,
       })
     );
 
