@@ -7852,6 +7852,84 @@ export function DocumentationPage() {
       ),
     },
     {
+      id: 'unified-panel', title: 'Unified Panel',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            Chat and Dashboard are merged into one unified app inside a single editor panel. No more switching between separate views.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ ...card, padding: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Sidebar Controls</div>
+              <ul style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.8, paddingLeft: 16, margin: 0 }}>
+                <li>Collapse/expand toggle</li>
+                <li>Flip between left and right</li>
+                <li>Task calendar always visible</li>
+                <li>Persisted across sessions</li>
+              </ul>
+            </div>
+            <div style={{ ...card, padding: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Chat Header</div>
+              <ul style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.8, paddingLeft: 16, margin: 0 }}>
+                <li>Model selector</li>
+                <li>Local/Cloud &amp; Provider toggles</li>
+                <li>Session token counter</li>
+                <li>Context usage ring (80%/90% warnings)</li>
+              </ul>
+            </div>
+          </div>
+          <p style={{ color: '#6c7086', fontSize: 12 }}>
+            All thinking, tool calls, and text appear in one cohesive bubble per response. Identical layout across VS Code extension and IDE.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'local-cloud-sync', title: 'Local/Cloud Data Sync',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            Your data, your choice. Ava is local-first by default — nothing leaves your machine unless you choose it.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ ...card, padding: 16, borderColor: 'rgba(166,227,161,0.3)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#a6e3a1', marginBottom: 8 }}>Local (Default)</div>
+              <p style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.6 }}>Data stays on your machine. Nothing syncs. Full privacy.</p>
+            </div>
+            <div style={{ ...card, padding: 16, borderColor: 'rgba(137,180,250,0.3)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#89b4fa', marginBottom: 8 }}>Cloud</div>
+              <p style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.6 }}>Auto-syncs every 15 minutes. Memory, tasks, journal, learning, history, settings, personality.</p>
+            </div>
+          </div>
+          <p style={{ color: '#6c7086', fontSize: 12 }}>
+            Toggle in the chat header. Only visible when connected to a platform account. BYOK users without an account never see it.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'interjection', title: 'Mid-Task Interjection',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            Get Ava{"'"}s attention while she{"'"}s working without losing progress.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            {[
+              { title: 'Pause', desc: 'Tap the pause button. Ava stops, acknowledges, and asks what you need. She remembers what she was doing.' },
+              { title: 'Type While Running', desc: 'Your message is injected as an interjection. Ava sees it mid-run and adjusts her work.' },
+              { title: 'Hard Stop', desc: 'Hold the stop button 800ms. Kills the current run completely. Use when something went wrong.' },
+            ].map(s => (
+              <div key={s.title} style={{ ...card, padding: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{s.title}</div>
+                <p style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+    },
+    {
       id: 'release-notes', title: t('dash.docs.release_notes'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
