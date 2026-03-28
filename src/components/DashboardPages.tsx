@@ -3723,6 +3723,20 @@ export function AvaChatPage() {
               )}
             </button>
 
+            {/* Token balance in input bar */}
+            {connected && platformBalance && (() => {
+              const isAdmin = platformBalance.limit >= 999_999_999;
+              if (isAdmin) return <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#6c7086', opacity: 0.5, flexShrink: 0 }} title="Unlimited tokens">∞</span>;
+              const remaining = Math.max(0, platformBalance.limit - platformBalance.used);
+              const pct = platformBalance.limit > 0 ? (platformBalance.used / platformBalance.limit) * 100 : 0;
+              const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
+              return (
+                <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color, flexShrink: 0 }} title={`${remaining.toLocaleString()} tokens remaining`}>
+                  {fmtTokens(remaining)}
+                </span>
+              );
+            })()}
+
             {/* Send / Interrupt button */}
             {streaming ? (
               <button
