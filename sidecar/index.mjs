@@ -376,20 +376,23 @@ async function handleMessage(data) {
     }
     let messages = conversation.getMessages();
 
-    // Proactive memory recall on first user message — Ava should know who you are
-    if (memoryManager && messages.filter(m => m.role === 'user').length <= 1) {
+    // Per-turn memory recall — inject relevant memories for every message
+    if (memoryManager && data.content && data.content.length > 5) {
       try {
-        const memories = await memoryManager.recall({ query: data.content || 'user context', limit: 10 });
+        const memories = await memoryManager.recall({ query: data.content, limit: 5, scope: 'all' });
         if (memories && memories.length > 0) {
-          const memoryContext = memories.map(m => `[${m.category || m.scope || 'memory'}] (relevance: ${Math.round((m.relevance || 0) * 100)}%) ${m.content}`).join('\n\n');
-          // Inject memories into system prompt (Conversation has no addSystemMessage)
+          const memoryContext = memories
+            .map(m => `[${m.scope || 'global'}/${m.entry?.category || m.category || 'general'}] ${(m.entry?.content || m.content || '').slice(0, 300)}`)
+            .join('\n');
+          // Inject as a system message (not into the system prompt — keeps it per-turn)
           const currentMsgs = conversation.getMessages();
-          const currentSys = currentMsgs[0]?.role === 'system' ? currentMsgs[0].content : '';
-          conversation.setSystemPrompt(currentSys + `\n\n[Auto-recalled memories — Ava knows this about the user and project]\n\n${memoryContext}`);
+          currentMsgs.push({
+            role: 'system',
+            content: `[Relevant memories for this message]\n${memoryContext}\n\nUse these if relevant. Don't mention them unless asked about memory.`,
+          });
+          conversation.setMessages(currentMsgs);
           messages = conversation.getMessages();
-          emit({ event: 'info', message: `Proactively recalled ${memories.length} memories` });
-        } else {
-          emit({ event: 'info', message: 'No memories found for proactive recall' });
+          emit({ event: 'info', message: `Recalled ${memories.length} relevant memories` });
         }
       } catch (err) {
         emit({ event: 'info', message: `Memory recall failed: ${err.message}` });
