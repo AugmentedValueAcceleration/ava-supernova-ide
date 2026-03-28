@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { readDir } from '@tauri-apps/plugin-fs';
 import type { ActivityItem, SidebarPosition } from '../App';
 import { validateKey, getStoredEmail, getStoredTier, isConnected, apiFetch } from '../lib/api';
@@ -894,10 +894,49 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
 
   const Panel = panels[activePanel];
 
+  // Resizable sidebar width — persisted
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('ava-ide-sidebar-width');
+    return saved ? Math.max(180, Math.min(450, Number(saved))) : 260;
+  });
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(260);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = sidebarWidth;
+
+    const isRight = position === 'right';
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = ev.clientX - dragStartX.current;
+      const newWidth = Math.max(180, Math.min(450, dragStartWidth.current + (isRight ? -delta : delta)));
+      setSidebarWidth(newWidth);
+    };
+
+    const onUp = () => {
+      isDragging.current = false;
+      localStorage.setItem('ava-ide-sidebar-width', String(sidebarWidth));
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [sidebarWidth, position]);
+
+  useEffect(() => {
+    localStorage.setItem('ava-ide-sidebar-width', String(sidebarWidth));
+  }, [sidebarWidth]);
+
   return (
     <div
       style={{
-        width: 260,
+        width: sidebarWidth,
         background: 'rgba(15, 10, 26, 0.95)',
         borderRight: position === 'left' ? '1px solid rgba(168, 85, 247, 0.12)' : 'none',
         borderLeft: position === 'right' ? '1px solid rgba(168, 85, 247, 0.12)' : 'none',
@@ -905,8 +944,20 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
         flexDirection: 'column',
         flexShrink: 0,
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
+      {/* Drag handle */}
+      <div
+        onMouseDown={handleDragStart}
+        style={{
+          position: 'absolute', top: 0, bottom: 0, width: 4, zIndex: 10,
+          cursor: 'col-resize',
+          [position === 'left' ? 'right' : 'left']: 0,
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(168,85,247,0.3)')}
+        onMouseLeave={e => { if (!isDragging.current) e.currentTarget.style.background = 'transparent'; }}
+      />
       {/* Header */}
       <div
         style={{
