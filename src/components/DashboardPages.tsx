@@ -1420,6 +1420,24 @@ export function AvaChatPage() {
   const [conversationTitle, setConversationTitle] = useState(t('dash.chat.new_chat'));
   const [contextPercent, setContextPercent] = useState(0);
 
+  // ── Load conversation from history ──────────────────────────────────────
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const raw = localStorage.getItem('ava-ide-load-conversation');
+        if (!raw) return;
+        localStorage.removeItem('ava-ide-load-conversation');
+        const conv = JSON.parse(raw);
+        if (conv.messages && Array.isArray(conv.messages)) {
+          setMessages(conv.messages);
+          setConversationTitle(conv.title || t('dash.chat.new_chat'));
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('ava-load-conversation', handler);
+    return () => window.removeEventListener('ava-load-conversation', handler);
+  }, []);
+
   // ── Local sidecar state ─────────────────────────────────────────────────
   const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() => {
     const saved = localStorage.getItem('ava-ide-chat-backend') as 'local' | 'cloud' | null;
@@ -3800,6 +3818,12 @@ export function ChatHistoryPage() {
                   background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
                   padding: '14px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
                 }}
+                  onClick={() => {
+                    // Store the conversation to load, navigate to chat
+                    localStorage.setItem('ava-ide-load-conversation', JSON.stringify(conv));
+                    window.dispatchEvent(new CustomEvent('ava-load-conversation'));
+                    window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'chat' }));
+                  }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)')}
                 >
