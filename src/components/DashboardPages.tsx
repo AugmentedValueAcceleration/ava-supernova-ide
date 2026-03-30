@@ -1317,8 +1317,8 @@ export function AvaChatPage() {
   ];
 
   const SIDECAR_MODEL_MAP: Record<string, string> = {
-    'qwen-flash': 'platform:qwen-flash',
-    'qwen3.5-plus': 'platform:qwen3.5-plus',
+    'qwen3-omni-flash': 'platform:qwen3-omni-flash',
+    'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
     'deepseek-chat': 'deepseek:deepseek-chat',
     'deepseek-reasoner': 'deepseek:deepseek-reasoner',
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
@@ -6390,8 +6390,8 @@ export function UsagePage() {
 
   // Cost estimate
   const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-    'qwen-turbo-latest': { input: 0.05, output: 0.40 },
-    'qwen-plus-latest': { input: 0.20, output: 1.20 },
+    'qwen3-omni-flash': { input: 0.065, output: 0.26 },
+    'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
     'deepseek-chat': { input: 0.14, output: 0.28 },
   };
   const DEFAULT_PRICING = { input: 0.20, output: 1.20 };

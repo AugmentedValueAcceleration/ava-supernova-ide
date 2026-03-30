@@ -167,7 +167,7 @@ function AvaCliPanel() {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'qwen-flash',
+            model: 'qwen3-omni-flash',
             messages: [{ role: 'user', content: trimmed }],
           }),
         });

@@ -135,13 +135,13 @@ async function handleInit(data) {
     }
 
     // Resolve model — try BYOK first, then fall back to platform
-    let activeModel = config.activeModel || 'platform:qwen-flash';
+    let activeModel = config.activeModel || 'platform:qwen3-omni-flash';
     emit({ event: 'info', message: `Resolving model: ${activeModel}` });
     let resolved = providerRegistry.resolveModel(activeModel);
 
     // If BYOK model not found, try platform models
     if (!resolved && config.platformKey) {
-      const platformFallbacks = ['platform:qwen-flash', 'platform:qwen3.5-plus'];
+      const platformFallbacks = ['platform:qwen3-omni-flash', 'platform:qwen3.5-omni-plus'];
       for (const fb of platformFallbacks) {
         resolved = providerRegistry.resolveModel(fb);
         if (resolved) { activeModel = fb; break; }
