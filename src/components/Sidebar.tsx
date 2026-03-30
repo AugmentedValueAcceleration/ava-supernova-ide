@@ -786,6 +786,7 @@ const sections = [
       { id: 'support', icon: '\uD83C\uDD98', labelKey: 'dash.nav.support', descKey: 'dash.nav.support_desc' },
       { id: 'documentation', icon: '\uD83D\uDCD6', labelKey: 'dash.nav.documentation', descKey: 'dash.nav.documentation_desc' },
       { id: 'release-notes', icon: '\uD83D\uDCCB', labelKey: 'dash.nav.release_notes', descKey: 'dash.nav.release_notes_desc' },
+      { id: 'roadmap', icon: '\uD83D\uDDFA\uFE0F', labelKey: 'dash.nav.roadmap', descKey: 'dash.nav.roadmap_desc', fallbackLabel: 'Roadmap', fallbackDesc: 'Where Ava is heading' },
     ],
   },
 ];

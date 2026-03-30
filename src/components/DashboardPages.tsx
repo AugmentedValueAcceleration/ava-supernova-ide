@@ -8437,3 +8437,91 @@ export function ReleaseNotesPage() {
     </div>
   );
 }
+
+/* ===== Roadmap ===== */
+
+const ROADMAP_THEMES = [
+  { title: 'Intelligence', icon: '\uD83E\uDDE0', color: '#a855f7', colorBg: 'rgba(168,85,247,0.08)', items: [
+    { label: 'Core agent loop with 54 tools', shipped: true }, { label: '6 thinking modes', shipped: true },
+    { label: '24 specialist personas with conductor', shipped: true }, { label: '5-layer memory with TF-IDF recall', shipped: true },
+    { label: 'Per-turn memory injection', shipped: true }, { label: 'Knowledge packs (7 built-in)', shipped: true },
+    { label: 'Self-improvement vault', shipped: true }, { label: 'Work mode persona activation', shipped: true },
+    { label: 'Multi-agent collaboration', shipped: false }, { label: 'Voice system (Kokoro TTS)', shipped: false },
+    { label: 'Computer use (browser + desktop)', shipped: false },
+  ]},
+  { title: 'Surfaces', icon: '\uD83D\uDCBB', color: '#f97316', colorBg: 'rgba(249,115,22,0.08)', items: [
+    { label: 'VS Code extension (unified panel)', shipped: true }, { label: 'Ava IDE (Tauri desktop)', shipped: true },
+    { label: 'Companion web/mobile app', shipped: true }, { label: 'CLI agent', shipped: true },
+    { label: 'Resizable sidebar with flip', shipped: true }, { label: 'Single-bubble responses', shipped: true },
+    { label: 'Data portability (export/import)', shipped: true }, { label: 'Game engine integrations', shipped: false },
+    { label: 'Plugin marketplace', shipped: false }, { label: 'Code signing', shipped: false },
+  ]},
+  { title: 'Education', icon: '\uD83C\uDF93', color: '#3b82f6', colorBg: 'rgba(59,130,246,0.08)', items: [
+    { label: 'Teach mode with curriculums', shipped: true }, { label: 'Spaced repetition', shipped: true },
+    { label: 'Fact-checked content', shipped: true }, { label: '20 language support', shipped: true },
+    { label: 'Game dev knowledge pack', shipped: true }, { label: 'AI-era learning paths', shipped: false },
+    { label: 'Community knowledge packs', shipped: false },
+  ]},
+  { title: 'Privacy & Security', icon: '\uD83D\uDD12', color: '#10b981', colorBg: 'rgba(16,185,129,0.08)', items: [
+    { label: 'Local-first architecture', shipped: true }, { label: 'Cloud sync opt-in', shipped: true },
+    { label: 'BYOK fully private', shipped: true }, { label: 'Secret vault', shipped: true },
+    { label: 'Security audit mode (OWASP)', shipped: true }, { label: 'Atomic token enforcement', shipped: true },
+    { label: '3-layer hub auth', shipped: true }, { label: 'Independent security audit', shipped: false },
+    { label: 'E2E encryption for cloud sync', shipped: false },
+  ]},
+  { title: 'Platform & Business', icon: '\uD83D\uDE80', color: '#ec4899', colorBg: 'rgba(236,72,153,0.08)', items: [
+    { label: 'Web platform with auth', shipped: true }, { label: 'Company hub (Tauri admin)', shipped: true },
+    { label: 'Qwen partnership (50% pricing)', shipped: true }, { label: '7 providers, 12 models', shipped: true },
+    { label: '3M free tokens for all', shipped: true }, { label: 'Creative studio', shipped: true },
+    { label: 'Paid plans (Pro, Ultra, Enterprise)', shipped: false }, { label: 'Token top-ups', shipped: false },
+    { label: 'OAuth connections', shipped: false }, { label: 'Ava Foundation (40% of earnings)', shipped: false },
+  ]},
+];
+
+export function RoadmapPage() {
+  useLocale();
+  const totalShipped = ROADMAP_THEMES.reduce((s, t) => s + t.items.filter(i => i.shipped).length, 0);
+  const totalAll = ROADMAP_THEMES.reduce((s, t) => s + t.items.length, 0);
+  const pctAll = Math.round((totalShipped / totalAll) * 100);
+  return (
+    <div style={pageWrapper}>
+      <div style={{ width: '100%', maxWidth: 700 }}>
+        <div style={pageTitle}>Roadmap</div>
+        <div style={{ ...pageSubtitle, marginBottom: 24 }}>Where Ava has been and where she is heading.</div>
+        <div style={{ display: 'flex', gap: 32, marginBottom: 32 }}>
+          <div><div style={{ fontSize: 28, fontWeight: 300, color: '#a855f7' }}>{pctAll}%</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Complete</div></div>
+          <div><div style={{ fontSize: 28, fontWeight: 300, color: '#a6e3a1' }}>{totalShipped}</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Shipped</div></div>
+          <div><div style={{ fontSize: 28, fontWeight: 300, color: '#89b4fa' }}>{totalAll - totalShipped}</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Coming</div></div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {ROADMAP_THEMES.map(theme => {
+            const shipped = theme.items.filter(i => i.shipped).length;
+            const total = theme.items.length;
+            const themePct = Math.round((shipped / total) * 100);
+            return (
+              <div key={theme.title} style={{ ...card, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px' }}>
+                  <span style={{ fontSize: 20 }}>{theme.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 14, fontWeight: 400, color: '#cdd6f4' }}>{theme.title}</span><span style={{ fontSize: 10, color: '#6c7086' }}>{shipped}/{total}</span></div>
+                    <div style={{ marginTop: 6, height: 4, width: '100%', borderRadius: 2, background: theme.colorBg }}><div style={{ height: '100%', borderRadius: 2, background: theme.color, width: themePct + '%' }} /></div>
+                  </div>
+                </div>
+                <div style={{ padding: '0 20px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                  {theme.items.map(item => (
+                    <div key={item.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 8px', borderRadius: 6, background: item.shipped ? 'transparent' : theme.colorBg }}>
+                      {item.shipped
+                        ? <svg width="12" height="12" viewBox="0 0 16 16" style={{ marginTop: 2, flexShrink: 0, color: theme.color }}><path fill="currentColor" d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+                        : <span style={{ marginTop: 2, width: 12, height: 12, borderRadius: '50%', border: '1.5px solid ' + theme.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ width: 4, height: 4, borderRadius: '50%', background: theme.color, opacity: 0.5 }} /></span>}
+                      <span style={{ fontSize: 11, fontWeight: 300, lineHeight: 1.4, color: item.shipped ? '#6c7086' : '#cdd6f4' }}>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

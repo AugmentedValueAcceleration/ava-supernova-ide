@@ -16,6 +16,7 @@ import {
   SupportPage,
   DocumentationPage,
   ReleaseNotesPage,
+  RoadmapPage,
 } from './DashboardPages';
 import { t, useLocale } from '../lib/i18n';
 
@@ -36,7 +37,8 @@ export type DashboardPageId =
   | 'connections'
   | 'support'
   | 'documentation'
-  | 'release-notes';
+  | 'release-notes'
+  | 'roadmap';
 
 interface Props {
   dashboardPage?: DashboardPageId | null;
@@ -60,6 +62,7 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'support': '\uD83C\uDD98',
   'documentation': '\uD83D\uDCD6',
   'release-notes': '\uD83D\uDCCB',
+  'roadmap': '\uD83D\uDDFA\uFE0F',
 };
 
 // Map stable IDs to i18n keys for tab labels
@@ -81,6 +84,7 @@ const dashboardLabelKeys: Record<DashboardPageId, string> = {
   'support': 'dash.nav.support',
   'documentation': 'dash.nav.documentation',
   'release-notes': 'dash.nav.release_notes',
+  'roadmap': 'dash.nav.roadmap',
 };
 
 const dashboardComponents: Record<DashboardPageId, React.FC> = {
@@ -101,6 +105,7 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'support': SupportPage,
   'documentation': DocumentationPage,
   'release-notes': ReleaseNotesPage,
+  'roadmap': RoadmapPage,
 };
 
 export default function EditorArea({ dashboardPage }: Props) {
