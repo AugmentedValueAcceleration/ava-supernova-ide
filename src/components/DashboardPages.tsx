@@ -1339,7 +1339,7 @@ export function AvaChatPage() {
   // ── BYOK model map — fetched from platform, fallback to hardcoded ──────────
   const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
-    Qwen: [{ id: 'qwen-plus', name: 'Qwen Plus' }, { id: 'qwen-max', name: 'Qwen Max' }],
+    Qwen: [{ id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash' }],
     Moonshot: [{ id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
     Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'codestral-latest', name: 'Codestral' }],
@@ -1402,7 +1402,7 @@ export function AvaChatPage() {
     ];
   });
   const [input, setInput] = useState('');
-  const [model, setModel] = useState<string>(() => localStorage.getItem('ava-ide-chat-model') || 'qwen-flash');
+  const [model, setModel] = useState<string>(() => localStorage.getItem('ava-ide-chat-model') || 'qwen3-omni-flash');
   const [mode, setMode] = useState<AvaMode>(() => (localStorage.getItem('ava-ide-chat-mode') as AvaMode) || 'work');
   const [streaming, setStreaming] = useState(false);
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
@@ -2622,6 +2622,8 @@ export function AvaChatPage() {
   // ── Active mode info ──────────────────────────────────────────────────────
   const currentMode = MODES.find((m) => m.id === mode) || MODES[0];
   const activeModelName = useMemo(() => {
+    if (model === 'qwen3-omni-flash') return 'Qwen Omni Flash';
+    if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
     if (model === 'qwen-flash') return 'Qwen Flash';
     if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
     const byok = byokModels.find((m) => m.id === model);
@@ -2680,8 +2682,8 @@ export function AvaChatPage() {
                   {t('dash.chat.platform')}
                 </div>
                 {[
-                  { id: 'qwen-flash', name: 'Qwen Flash', tag: '' },
-                  { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: '' },
+                  { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash', tag: '' },
+                  { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus', tag: '' },
                 ].map((m) => (
                   <button
                     key={m.id}
@@ -6741,7 +6743,7 @@ export function SettingsPage() {
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V3 and R1 \u2014 best price/performance' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.cn', description: 'Kimi K2.5 \u2014 best multi-step tool calling' },
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://open.bigmodel.cn', description: 'GLM-5, GLM-4.7 \u2014 best tool-call reliability' },
-    { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.5 Plus and Qwen Turbo' },
+    { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.5 Omni Plus and Omni Flash — multimodal' },
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Codestral, Devstral 2' },
   ];
 
@@ -8446,6 +8448,7 @@ const ROADMAP_THEMES = [
     { label: '24 specialist personas with conductor', shipped: true }, { label: '5-layer memory with TF-IDF recall', shipped: true },
     { label: 'Per-turn memory injection', shipped: true }, { label: 'Knowledge packs (7 built-in)', shipped: true },
     { label: 'Self-improvement vault', shipped: true }, { label: 'Work mode persona activation', shipped: true },
+    { label: 'Qwen Omni models (multimodal, vision, audio)', shipped: true }, { label: 'Intent detection (thinking out loud vs instruction)', shipped: true },
     { label: 'Multi-agent collaboration', shipped: false }, { label: 'Voice system (Kokoro TTS)', shipped: false },
     { label: 'Computer use (browser + desktop)', shipped: false },
   ]},
@@ -8471,7 +8474,8 @@ const ROADMAP_THEMES = [
   ]},
   { title: 'Platform & Business', icon: '\uD83D\uDE80', color: '#ec4899', colorBg: 'rgba(236,72,153,0.08)', items: [
     { label: 'Web platform with auth', shipped: true }, { label: 'Company hub (Tauri admin)', shipped: true },
-    { label: 'Qwen partnership (50% pricing)', shipped: true }, { label: '7 providers, 12 models', shipped: true },
+    { label: 'Qwen partnership (50% pricing)', shipped: true }, { label: '7 providers, 14 models', shipped: true },
+    { label: 'Qwen 3.5 Omni Plus + Omni Flash (default)', shipped: true },
     { label: '3M free tokens for all', shipped: true }, { label: 'Creative studio', shipped: true },
     { label: 'Paid plans (Pro, Ultra, Enterprise)', shipped: false }, { label: 'Token top-ups', shipped: false },
     { label: 'OAuth connections', shipped: false }, { label: 'Ava Foundation (40% of earnings)', shipped: false },
