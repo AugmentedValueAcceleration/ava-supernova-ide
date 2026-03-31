@@ -2121,8 +2121,12 @@ export function AvaChatPage() {
     if (!canChat) return;
     const sidecar = getSidecar();
     sidecar.onAny(handleSidecarEvent);
+    // Listen for memory clear events from MemoryPage
+    const onClearMemory = () => { sidecar.clearMemory().catch(() => {}); };
+    window.addEventListener('ava-clear-memory', onClearMemory);
     return () => {
       sidecar.offAny(handleSidecarEvent);
+      window.removeEventListener('ava-clear-memory', onClearMemory);
     };
   }, [canChat, handleSidecarEvent]);
 
@@ -3997,13 +4001,18 @@ export function MemoryPage() {
 
     // Step 1: Delete all platform memories (loop until done)
     try {
-      for (let i = 0; i < 100; i++) {
-        const res = await fetch(apiStreamUrl('/memories'), {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${getPlatformKey()}`, 'Content-Type': 'application/json', 'X-Ava-Platform': 'ide', 'X-Ava-Device': localStorage.getItem('ava-ide-device-id') || '' },
-        });
-        const data = await res.json().catch(() => ({}));
-        if (data?.remaining === 0 || data?.deleted === 0) break;
+      const key = getPlatformKey();
+      if (key) {
+        const API = 'https://ava-supernova.com/api';
+        const deviceId = localStorage.getItem('ava-ide-device-id') || '';
+        for (let i = 0; i < 100; i++) {
+          const res = await fetch(`${API}/memories`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Ava-Platform': 'ide', 'X-Ava-Device': deviceId },
+          });
+          const data = await res.json().catch(() => ({}));
+          if (data?.remaining === 0 || data?.deleted === 0) break;
+        }
       }
     } catch { /* best-effort */ }
 
@@ -4014,10 +4023,10 @@ export function MemoryPage() {
       await writeTextFile('.ava/memory.json', emptyStore, { baseDir: BaseDirectory.Home }).catch(() => {});
     } catch { /* not in Tauri or fs plugin not available */ }
 
-    // Step 3: Reset sidecar memory manager
+    // Step 3: Reset sidecar memory manager via global event
     try {
-      sidecar.clearMemory().catch(() => {});
-    } catch { /* sidecar may not be running */ }
+      window.dispatchEvent(new CustomEvent('ava-clear-memory'));
+    } catch { /* best-effort */ }
 
     setMemories([]);
     setDeletingAll(false);
