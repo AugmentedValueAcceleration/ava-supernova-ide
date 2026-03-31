@@ -3923,6 +3923,8 @@ export function MemoryPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(MEMORY_PAGE_SIZE);
 
   useEffect(() => {
@@ -3989,16 +3991,71 @@ export function MemoryPage() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    setDeletingAll(true);
+    setConfirmDeleteAll(false);
+    try {
+      await apiFetch('/memories', { method: 'DELETE' });
+      setMemories([]);
+    } catch (err: any) {
+      alert(`Failed to delete all: ${err.message}`);
+    }
+    setDeletingAll(false);
+  };
+
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
   const getCatStyle = (cat: string) => CATEGORY_COLORS[cat] || CATEGORY_COLORS.general;
 
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
         {/* Header */}
-        <div style={{ marginBottom: 8 }}>
-          <div style={pageTitle}>{t('dash.memory.title')}</div>
-          <div style={pageSubtitle}>{t('dash.memory.subtitle')}</div>
+        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={pageTitle}>{t('dash.memory.title')}</div>
+            <div style={pageSubtitle}>{t('dash.memory.subtitle')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleRefresh} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.2)', background: 'transparent', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
+              Refresh
+            </button>
+            {memories.length > 0 && !deletingAll && (
+              <button onClick={() => setConfirmDeleteAll(true)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: 12, cursor: 'pointer' }}>
+                Delete All
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Delete All Confirmation */}
+        {confirmDeleteAll && (
+          <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)' }}>
+            <p style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>Are you sure you want to delete all memories?</p>
+            <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>This is permanent and cannot be undone. ALL memories will be deleted.</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleDeleteAll} style={{ padding: '6px 14px', borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 12, border: 'none', cursor: 'pointer' }}>
+                Yes, delete all permanently
+              </button>
+              <button onClick={() => setConfirmDeleteAll(false)} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.2)', background: 'transparent', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Deleting progress */}
+        {deletingAll && (
+          <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.1)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
+            <div>
+              <p style={{ fontSize: 13, color: '#f59e0b' }}>Deleting all memories... This may take a moment.</p>
+              <p style={{ fontSize: 11, color: 'rgba(245,158,11,0.6)', marginTop: 2 }}>Please stay on this page — leaving will interrupt the deletion.</p>
+            </div>
+          </div>
+        )}
 
         {!connected && <NotConnectedBanner />}
 
