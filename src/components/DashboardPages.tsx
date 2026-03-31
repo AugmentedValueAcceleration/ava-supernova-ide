@@ -3994,12 +3994,22 @@ export function MemoryPage() {
   const handleDeleteAll = async () => {
     setDeletingAll(true);
     setConfirmDeleteAll(false);
+
+    // Clear local memory files
+    try {
+      const { writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+      const emptyStore = JSON.stringify({ version: 2, lastModified: new Date().toISOString(), entries: [] });
+      await writeTextFile('.ava/memory.json', emptyStore, { baseDir: BaseDirectory.Home }).catch(() => {});
+    } catch { /* not in Tauri or fs plugin not available */ }
+
+    // Clear platform memories
     try {
       await apiFetch('/memories', { method: 'DELETE' });
-      setMemories([]);
     } catch (err: any) {
-      alert(`Failed to delete all: ${err.message}`);
+      alert(`Failed to delete platform memories: ${err.message}`);
     }
+
+    setMemories([]);
     setDeletingAll(false);
   };
 
