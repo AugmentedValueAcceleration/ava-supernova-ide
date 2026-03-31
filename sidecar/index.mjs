@@ -141,7 +141,7 @@ async function handleInit(data) {
 
     // If BYOK model not found, try platform models
     if (!resolved && config.platformKey) {
-      const platformFallbacks = ['platform:qwen3-omni-flash', 'platform:qwen3.5-omni-plus'];
+      const platformFallbacks = ['platform:qwen3-omni-flash', 'platform:qwen3.5-omni-plus', 'platform:qwen3.5-plus', 'platform:qwen-flash'];
       for (const fb of platformFallbacks) {
         resolved = providerRegistry.resolveModel(fb);
         if (resolved) { activeModel = fb; break; }

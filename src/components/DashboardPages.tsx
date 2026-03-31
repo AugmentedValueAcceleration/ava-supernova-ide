@@ -1319,6 +1319,8 @@ export function AvaChatPage() {
   const SIDECAR_MODEL_MAP: Record<string, string> = {
     'qwen3-omni-flash': 'platform:qwen3-omni-flash',
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
+    'qwen3.5-plus': 'platform:qwen3.5-plus',
+    'qwen-flash': 'platform:qwen-flash',
     'deepseek-chat': 'deepseek:deepseek-chat',
     'deepseek-reasoner': 'deepseek:deepseek-reasoner',
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
@@ -1339,7 +1341,7 @@ export function AvaChatPage() {
   // ── BYOK model map — fetched from platform, fallback to hardcoded ──────────
   const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
-    Qwen: [{ id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash' }],
+    Qwen: [{ id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash' }, { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus' }, { id: 'qwen-flash', name: 'Qwen Flash' }],
     Moonshot: [{ id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
     Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'codestral-latest', name: 'Codestral' }],
@@ -2684,6 +2686,8 @@ export function AvaChatPage() {
                 {[
                   { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash', tag: '' },
                   { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus', tag: '' },
+                  { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: '' },
+                  { id: 'qwen-flash', name: 'Qwen Flash', tag: '' },
                 ].map((m) => (
                   <button
                     key={m.id}
@@ -6392,6 +6396,8 @@ export function UsagePage() {
   const MODEL_PRICING: Record<string, { input: number; output: number }> = {
     'qwen3-omni-flash': { input: 0.065, output: 0.26 },
     'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
+    'qwen3.5-plus': { input: 0.20, output: 1.20 },
+    'qwen-flash': { input: 0.05, output: 0.40 },
     'deepseek-chat': { input: 0.14, output: 0.28 },
   };
   const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
