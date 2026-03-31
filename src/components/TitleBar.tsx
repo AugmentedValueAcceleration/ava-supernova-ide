@@ -10,7 +10,8 @@ interface TitleBarProps {
 
 export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps) {
   useLocale();
-  const win = getCurrentWindow();
+  let win: ReturnType<typeof getCurrentWindow> | null = null;
+  try { win = getCurrentWindow(); } catch { /* not in Tauri */ }
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -28,7 +29,8 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
 
   const handleOpenFolder = async () => {
     setMenuOpen(false);
-    const selected = await open({ directory: true, multiple: false, title: 'Open Folder' });
+    let selected;
+    try { selected = await open({ directory: true, multiple: false, title: 'Open Folder' }); } catch { return; }
     if (selected && typeof selected === 'string') {
       onOpenFolder?.(selected);
     }
@@ -150,7 +152,7 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
       {/* @ts-expect-error Tauri window no-drag region CSS property */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 0, WebkitAppRegion: 'no-drag' }}>
         <button
-          onClick={() => win.minimize()}
+          onClick={() => win?.minimize()}
           style={{ width: 46, height: 32, background: 'transparent', border: 'none', color: '#a6adc8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -158,7 +160,7 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
           <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor" /></svg>
         </button>
         <button
-          onClick={() => win.toggleMaximize()}
+          onClick={() => win?.toggleMaximize()}
           style={{ width: 46, height: 32, background: 'transparent', border: 'none', color: '#a6adc8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -166,7 +168,7 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" strokeWidth="1" /></svg>
         </button>
         <button
-          onClick={() => win.close()}
+          onClick={() => win?.close()}
           style={{ width: 46, height: 32, background: 'transparent', border: 'none', color: '#a6adc8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = '#e81123'; e.currentTarget.style.color = '#ffffff'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#a6adc8'; }}
