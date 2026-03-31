@@ -760,6 +760,17 @@ rl.on('line', async (line) => {
     case 'set_model':
       handleSetModel(data).catch((err) => emitError(err.message));
       break;
+    case 'clear_memory':
+      if (memoryManager) {
+        try {
+          await memoryManager.clearEverything();
+          memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot: cwd });
+          emit({ event: 'info', message: 'Memory cleared and manager reset' });
+        } catch (err) {
+          emitError(`Failed to clear memory: ${err.message}`);
+        }
+      }
+      break;
     case 'set_working_hours':
       if (conversation && data.start != null && data.end != null) {
         const fmt = (h) => `${String(h).padStart(2, '0')}:00`;

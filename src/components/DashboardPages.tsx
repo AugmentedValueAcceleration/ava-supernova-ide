@@ -3995,19 +3995,29 @@ export function MemoryPage() {
     setDeletingAll(true);
     setConfirmDeleteAll(false);
 
-    // Clear local memory files
+    // Step 1: Delete all platform memories (loop until done)
+    try {
+      for (let i = 0; i < 100; i++) {
+        const res = await fetch(apiStreamUrl('/memories'), {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${getPlatformKey()}`, 'Content-Type': 'application/json', 'X-Ava-Platform': 'ide', 'X-Ava-Device': localStorage.getItem('ava-ide-device-id') || '' },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data?.remaining === 0 || data?.deleted === 0) break;
+      }
+    } catch { /* best-effort */ }
+
+    // Step 2: Clear local memory files
     try {
       const { writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
       const emptyStore = JSON.stringify({ version: 2, lastModified: new Date().toISOString(), entries: [] });
       await writeTextFile('.ava/memory.json', emptyStore, { baseDir: BaseDirectory.Home }).catch(() => {});
     } catch { /* not in Tauri or fs plugin not available */ }
 
-    // Clear platform memories
+    // Step 3: Reset sidecar memory manager
     try {
-      await apiFetch('/memories', { method: 'DELETE' });
-    } catch (err: any) {
-      alert(`Failed to delete platform memories: ${err.message}`);
-    }
+      sidecar.clearMemory().catch(() => {});
+    } catch { /* sidecar may not be running */ }
 
     setMemories([]);
     setDeletingAll(false);

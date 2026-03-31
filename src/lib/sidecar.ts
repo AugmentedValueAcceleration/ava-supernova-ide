@@ -253,6 +253,13 @@ export class SidecarManager {
   }
 
   /**
+   * Clear all memory in the sidecar and reset the memory manager.
+   */
+  async clearMemory(): Promise<void> {
+    await this.send({ cmd: 'clear_memory' });
+  }
+
+  /**
    * Stop the sidecar process.
    */
   async stop(): Promise<void> {
