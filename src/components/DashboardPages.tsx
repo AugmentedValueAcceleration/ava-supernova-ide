@@ -1525,7 +1525,7 @@ export function AvaChatPage() {
     const label = vaultNewLabel.trim();
     const value = vaultNewValue.trim();
     if (!label || !value) return;
-    setSecrets(prev => [...prev, { id: `secret-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, label, value }]);
+    setSecrets(prev => [...prev, { id: `secret-${crypto.randomUUID()}`, label, value }]);
     setVaultNewLabel('');
     setVaultNewValue('');
   }, [vaultNewLabel, vaultNewValue]);

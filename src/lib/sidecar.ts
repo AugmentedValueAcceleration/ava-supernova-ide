@@ -141,10 +141,11 @@ export class SidecarManager {
       }
     });
 
-    // Listen for stderr (errors, warnings)
+    // Listen for stderr (errors, warnings) — redact potential secrets
     command.stderr.on('data', (line: string) => {
-      console.warn('[sidecar stderr]', line);
-      this.emitEvent('stderr', { event: 'stderr', message: line });
+      const redacted = line.replace(/sk-[a-zA-Z0-9_-]{10,}/g, 'sk-***').replace(/Bearer [^\s]+/g, 'Bearer ***');
+      console.warn('[sidecar stderr]', redacted);
+      this.emitEvent('stderr', { event: 'stderr', message: redacted });
     });
 
     // Listen for process close

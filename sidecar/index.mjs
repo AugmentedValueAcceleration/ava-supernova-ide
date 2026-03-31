@@ -94,7 +94,11 @@ process.on('unhandledRejection', (err) => {
 async function handleInit(data) {
   try {
     const config = data.config || {};
-    const cwd = (config.cwd && config.cwd !== '.') ? config.cwd : (process.env.HOME || process.env.USERPROFILE || process.cwd());
+    let cwd = (config.cwd && config.cwd !== '.') ? config.cwd : (process.env.HOME || process.env.USERPROFILE || process.cwd());
+    // Validate path — resolve to absolute, reject path traversal
+    const path = await import('path');
+    cwd = path.default.resolve(cwd);
+    if (cwd.includes('..')) { cwd = process.env.HOME || process.env.USERPROFILE || process.cwd(); }
     // Change Node.js working directory so relative paths resolve correctly
     try { process.chdir(cwd); } catch { /* non-fatal */ }
     const projectRoot = detectProjectRoot(cwd) ?? undefined;
@@ -160,7 +164,7 @@ async function handleInit(data) {
 
     // Confirmation handler — pauses and waits for IDE response
     toolRegistry.setConfirmationHandler(async (toolName, args) => {
-      const id = Math.random().toString(36).slice(2, 10);
+      const id = crypto.randomUUID().slice(0, 8);
       emit({ event: 'confirm_required', id, toolName, args });
       return new Promise((resolve) => {
         pendingConfirmations.set(id, { resolve });
