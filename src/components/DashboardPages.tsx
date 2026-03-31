@@ -2373,7 +2373,7 @@ export function AvaChatPage() {
       const key = getPlatformKey();
       const response = await fetch(apiStreamUrl('/chat'), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Ava-Platform': 'ide', 'X-Ava-Device': localStorage.getItem('ava-ide-device-id') || '' },
         body: JSON.stringify({ model, messages: apiMessages }),
         signal: controller.signal,
       });

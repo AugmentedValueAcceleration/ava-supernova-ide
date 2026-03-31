@@ -17,12 +17,27 @@ export function isConnected(): boolean {
   return !!key && key.startsWith('sk-ava-');
 }
 
+function getDeviceId(): string {
+  let id = localStorage.getItem('ava-ide-device-id');
+  if (!id) {
+    id = crypto.randomUUID().slice(0, 16);
+    localStorage.setItem('ava-ide-device-id', id);
+  }
+  return id;
+}
+
 export async function apiFetch(path: string, options?: RequestInit) {
   const key = getPlatformKey();
   if (!key) throw new Error('Not connected');
   const res = await fetch(`${PLATFORM_URL}${path}`, {
     ...options,
-    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', ...options?.headers },
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'X-Ava-Platform': 'ide',
+      'X-Ava-Device': getDeviceId(),
+      ...options?.headers,
+    },
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   return res.json();
