@@ -1066,7 +1066,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const label = target.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const label = target.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
   const todayStr = now.toISOString().slice(0, 10);
 
   function handleDayClick(day: number) {

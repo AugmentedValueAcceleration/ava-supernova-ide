@@ -341,7 +341,7 @@ function formatRelativeDate(dateStr: string): string {
   if (diffDays === 0) return t('dash.cc.today');
   if (diffDays === 1) return t('dash.cc.yesterday');
   if (diffDays < 7) return t('dash.cc.days_ago', { n: diffDays });
-  return d.toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 function truncate(str: string, len: number): string {
@@ -363,7 +363,7 @@ function getDayName(dateStr: string): string {
   tomorrow.setDate(tomorrow.getDate() + 1);
   if (d.toDateString() === today.toDateString()) return t('dash.cc.today');
   if (d.toDateString() === tomorrow.toDateString()) return t('dash.cc.tomorrow');
-  return d.toLocaleDateString(getLocale(), { weekday: 'short' });
+  return d.toLocaleDateString('en-GB', { weekday: 'short' });
 }
 
 // ── Weather fetching (direct HTTP, no platform) ────────────────────────────
@@ -1133,7 +1133,7 @@ export function CommandCentrePage() {
 
   const connected = checkConnected();
   const email = getStoredEmail();
-  const dateStr = new Date().toLocaleDateString(getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateStr = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   // ── Weather state (direct fetch, cached) ──────────────────────────────
   const [weather, setWeather] = useState<WeatherData | null>(getCachedWeather());
@@ -3864,7 +3864,7 @@ export function ChatHistoryPage() {
             {filtered.map((conv: any) => {
               const msgCount = conv.messages?.length || 0;
               const date = conv.updatedAt ? new Date(conv.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-              const time = conv.updatedAt ? new Date(conv.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+              const time = conv.updatedAt ? new Date(conv.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
               const preview = conv.messages?.find((m: any) => m.role === 'ava')?.text?.slice(0, 120) || '';
 
               return (
@@ -4886,7 +4886,7 @@ export function JournalPage() {
   const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
   const dd = String(targetDate.getDate()).padStart(2, '0');
   const isoDate = `${yyyy}-${mm}-${dd}`;
-  const dateStr = targetDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const dateStr = targetDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const isToday = dateOffset === 0;
 
   const { data: journalData, loading } = useApiData<any>(`/journal?date=${isoDate}`, null);
@@ -4941,7 +4941,7 @@ export function JournalPage() {
   const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
   const firstDayOfWeek = new Date(calendarYear, calendarMonth, 1).getDay();
   const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const monthLabel = new Date(calendarYear, calendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthLabel = new Date(calendarYear, calendarMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
   return (
     <div style={{ ...pageWrapper, display: 'flex', gap: 24 }}>
@@ -5738,7 +5738,7 @@ export function LibraryPage() {
                     }}>{file.name}</div>
                     <div style={{ fontSize: 10, color: '#6c7086', display: 'flex', justifyContent: 'space-between' }}>
                       <span>{formatFileSize(file.size)}</span>
-                      {file.modified && <span>{new Date(file.modified).toLocaleDateString()}</span>}
+                      {file.modified && <span>{new Date(file.modified).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
                     </div>
                   </div>
                 </div>
@@ -5792,7 +5792,7 @@ export function LibraryPage() {
                   </span>
                   {/* Date */}
                   <span style={{ fontSize: 11, color: '#6c7086', flexShrink: 0, width: 80, textAlign: 'right' }}>
-                    {file.modified ? new Date(file.modified).toLocaleDateString() : ''}
+                    {file.modified ? new Date(file.modified).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
                   </span>
                 </div>
               );
@@ -5819,7 +5819,7 @@ export function LibraryPage() {
               <span>{selectedFile.type}</span>
               <span>{formatFileSize(selectedFile.size)}</span>
               {selectedFile.folder && <span>{selectedFile.folder}</span>}
-              {selectedFile.modified && <span>{new Date(selectedFile.modified).toLocaleDateString()}</span>}
+              {selectedFile.modified && <span>{new Date(selectedFile.modified).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
             </div>
           </div>
           {selectedFile.url && (
@@ -6325,7 +6325,7 @@ export function CloudSyncPage() {
                       {description}
                       {lastSynced && (
                         <span style={{ opacity: 0.6, marginLeft: 4 }}>
-                          &middot; Last synced {new Date(lastSynced).toLocaleDateString()}
+                          &middot; Last synced {new Date(lastSynced).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                         </span>
                       )}
                     </div>
@@ -6682,7 +6682,7 @@ export function UsagePage() {
                         const tokens = d.tokens || d.total_tokens || 0;
                         const heightPct = maxDaily > 0 ? (tokens / maxDaily) * 100 : 0;
                         const isToday = (d.date || '') === today;
-                        const dayLabel = d.date ? new Date(d.date + 'T00:00:00').toLocaleDateString('en', { day: 'numeric' }) : (d.day || '');
+                        const dayLabel = d.date ? new Date(d.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric' }) : (d.day || '');
                         return (
                           <div key={d.date || d.day || i} style={{
                             flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
@@ -7753,7 +7753,7 @@ export function SupportPage() {
                   <div key={i} style={{ background: 'rgba(10, 6, 18, 0.8)', borderRadius: 8, padding: '10px 14px', border: '1px solid rgba(168, 85, 247, 0.12)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: msg.sender === 'Support' ? '#a855f7' : '#89b4fa' }}>{msg.sender || t('dash.support.you')}</span>
-                      <span style={{ fontSize: 10, color: '#45475a' }}>{msg.timestamp ? new Date(msg.timestamp).toLocaleDateString() : ''}</span>
+                      <span style={{ fontSize: 10, color: '#45475a' }}>{msg.timestamp ? new Date(msg.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}</span>
                     </div>
                     <div style={{ fontSize: 13, color: '#a6adc8', lineHeight: 1.6 }}>{msg.body || msg.message}</div>
                   </div>
@@ -7801,7 +7801,7 @@ export function SupportPage() {
                   <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, ...(statusColors[ticket.status] || statusColors.open) }}>{t(`dash.support.status.${ticket.status}` as any) || ticket.status?.replace('_', ' ')}</span>
                   <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, ...(catColors[ticket.category] || catColors.other) }}>{t(`dash.support.category.${ticket.category}` as any) || ticket.category}</span>
                   <span style={{ fontSize: 10, color: '#45475a', marginLeft: 'auto' }}>
-                    {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : ''}
+                    {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
                   </span>
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>
@@ -8338,7 +8338,7 @@ export function ReleaseNotesPage() {
   };
 
   const formatMonth = (date: Date) => {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   };
 
   const months = useMemo(() => {
@@ -8476,7 +8476,7 @@ export function ReleaseNotesPage() {
                             </span>
                           )}
                           <span style={{ fontSize: 10, color: '#6c7086' }}>
-                            {dateStr ? new Date(dateStr).toLocaleDateString() : ''}
+                            {dateStr ? new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
                           </span>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                             style={{ transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
