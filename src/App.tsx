@@ -42,8 +42,6 @@ export default function App() {
       return [...prev, { path, name }];
     });
     setActiveFilePath(path);
-    setDashboardPage(null);
-    save('dashPage', null);
   }, []);
 
   const handleFileClose = useCallback((path: string) => {
@@ -172,7 +170,7 @@ export default function App() {
             dashboardPage={dashboardPage}
             openFiles={openFiles}
             activeFilePath={activeFilePath}
-            onFileSelect={setActiveFilePath}
+            onFileSelect={(path) => setActiveFilePath(path || null)}
             onFileClose={handleFileClose}
             onDashboardSelect={(page) => { setActiveFilePath(null); handleDashboardSelect(page); }}
           />

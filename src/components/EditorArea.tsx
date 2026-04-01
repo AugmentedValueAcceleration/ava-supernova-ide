@@ -163,9 +163,9 @@ function FileViewer({ path }: { path: string }) {
   );
 }
 
-export default function EditorArea({ dashboardPage, openFiles = [], activeFilePath, onFileSelect, onFileClose, onDashboardSelect }: Props) {
+export default function EditorArea({ dashboardPage, openFiles = [], activeFilePath, onFileSelect, onFileClose }: Props) {
   useLocale();
-  const showingFile = activeFilePath && !dashboardPage;
+  const showingFile = !!activeFilePath;
   const activePage = dashboardPage || 'command-centre';
   const DashboardComponent = dashboardComponents[activePage] || CommandCentrePage;
 
@@ -191,11 +191,11 @@ export default function EditorArea({ dashboardPage, openFiles = [], activeFilePa
         display: 'flex', alignItems: 'stretch', flexShrink: 0, overflowX: 'auto',
         borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
       }}>
-        {/* Dashboard tab */}
+        {/* Dashboard tab — click to switch back from file view */}
         {dashboardPage && (
           <div
             style={tabStyle(!showingFile)}
-            onClick={() => onDashboardSelect?.(activePage)}
+            onClick={() => { onFileSelect?.(''); }}
           >
             <span style={{ fontSize: 14 }}>{dashboardIcons[activePage]}</span>
             <span style={{ fontSize: 13, color: '#cdd6f4', whiteSpace: 'nowrap' }}>
@@ -233,6 +233,7 @@ export default function EditorArea({ dashboardPage, openFiles = [], activeFilePa
       ) : (
         <DashboardComponent />
       )}
+
     </div>
   );
 }
