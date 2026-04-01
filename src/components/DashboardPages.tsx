@@ -8580,18 +8580,23 @@ export function ReleaseNotesPage() {
 
 const ROADMAP_THEMES = [
   { title: 'Intelligence', icon: '\uD83E\uDDE0', color: '#a855f7', colorBg: 'rgba(168,85,247,0.08)', items: [
-    { label: 'Core agent loop with 54 tools', shipped: true }, { label: '6 thinking modes', shipped: true },
+    { label: 'Core agent loop with 56 tools', shipped: true }, { label: '6 thinking modes', shipped: true },
     { label: '24 specialist personas with conductor', shipped: true }, { label: '5-layer memory with TF-IDF recall', shipped: true },
-    { label: 'Per-turn memory injection', shipped: true }, { label: '10 knowledge packs (game dev, web, mobile, API, DevOps, systems, data science)', shipped: true },
+    { label: 'Memory Agent — curated briefs, not raw dumps', shipped: true },
+    { label: 'Auto Mode — Kimi K2.5 conductor, best model per task', shipped: true },
+    { label: 'Self-inspect — Ava reads her own code from Supabase', shipped: true },
+    { label: '10 knowledge packs (game dev, web, mobile, API, DevOps, systems, data science)', shipped: true },
     { label: 'Self-improvement vault', shipped: true }, { label: 'Flat system prompt (80% token reduction)', shipped: true },
     { label: 'Direct mode — no auto-orchestration', shipped: true }, { label: 'Qwen Omni + Kimi K2.5 multimodal', shipped: true },
     { label: 'Intent detection (thinking out loud vs instruction)', shipped: true },
-    { label: 'Multi-agent collaboration', shipped: false }, { label: 'Voice system (Kokoro TTS)', shipped: false },
+    { label: 'Voice system (Kokoro TTS)', shipped: false },
     { label: 'Computer use (browser + desktop)', shipped: false },
   ]},
   { title: 'Surfaces', icon: '\uD83D\uDCBB', color: '#f97316', colorBg: 'rgba(249,115,22,0.08)', items: [
     { label: 'VS Code extension (unified panel)', shipped: true }, { label: 'Ava IDE (Tauri desktop)', shipped: true },
     { label: 'Companion web/mobile app', shipped: true }, { label: 'CLI agent', shipped: true },
+    { label: 'Consolidated sidebar — 7 items, identical across extension + IDE', shipped: true },
+    { label: 'IDE file explorer with syntax highlighting', shipped: true },
     { label: 'Resizable sidebar with flip', shipped: true }, { label: 'Single-bubble responses', shipped: true },
     { label: 'Data portability (export/import)', shipped: true }, { label: 'Game engine integrations', shipped: false },
     { label: 'Plugin marketplace', shipped: false }, { label: 'Code signing', shipped: false },
@@ -8612,7 +8617,7 @@ const ROADMAP_THEMES = [
   { title: 'Platform & Business', icon: '\uD83D\uDE80', color: '#ec4899', colorBg: 'rgba(236,72,153,0.08)', items: [
     { label: 'Web platform with auth', shipped: true }, { label: 'Company hub (Tauri admin)', shipped: true },
     { label: 'Qwen partnership (50% pricing)', shipped: true }, { label: 'Kimi K2.5 — paid plans default', shipped: true },
-    { label: '7 providers, 15+ models', shipped: true },
+    { label: '10 providers, 15+ models', shipped: true },
     { label: '3M free Qwen tokens for all', shipped: true }, { label: 'Device sessions (1 key, 3 platforms)', shipped: true },
     { label: 'Creative studio', shipped: true }, { label: 'Delete all memories (local + platform)', shipped: true },
     { label: 'Paid plans (Pro, Ultra, Enterprise)', shipped: false }, { label: 'Token top-ups', shipped: false },
