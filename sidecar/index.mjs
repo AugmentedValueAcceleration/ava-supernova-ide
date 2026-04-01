@@ -279,6 +279,9 @@ async function handleInit(data) {
       memoryManager,
       journalManager,
       platformKey: config.platformKey,
+      qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
+      minimaxApiKey: config.providers?.minimax?.apiKey || process.env.MINIMAX_API_KEY,
+      activeModelId: resolved.model.id,
     };
 
     // Build resilient provider with fallback
@@ -681,6 +684,7 @@ async function handleSetModel(data) {
 
     const cwd = globalThis._cwd || process.cwd();
     const sharedState = globalThis._sharedState || {};
+    sharedState.activeModelId = finalResolved.model.id;
 
     agent = new Agent({
       provider: finalResolved.provider,
