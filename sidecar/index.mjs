@@ -207,17 +207,12 @@ async function handleInit(data) {
     await setLocale(language);
     emit({ event: 'info', message: 'Locale set' });
 
-    // Load knowledge packs — internal (always active) + auto-detected
+    // Load knowledge packs — auto-detected project context only
+    // Self-knowledge is NOT injected into context (147KB = ~37K tokens).
+    // Ava accesses her own code via the self_inspect tool instead.
     let knowledgeContext;
     try {
       const packSections = [];
-
-      // Always load internal packs (self-knowledge, etc.)
-      for (const pack of (core.BUILTIN_PACKS || [])) {
-        if (pack.domain === 'internal') {
-          packSections.push(`## ${pack.name}\n\n${pack.context}`);
-        }
-      }
 
       // Auto-detect game projects
       const { readdirSync } = await import('node:fs');
