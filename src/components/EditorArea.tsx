@@ -131,6 +131,89 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'help': HelpPage,
 };
 
+// Basic syntax token colours by extension
+const KEYWORD_COLORS: Record<string, { keywords: RegExp; strings: RegExp; comments: RegExp; types?: RegExp }> = {
+  cpp: {
+    keywords: /\b(if|else|for|while|return|class|struct|public|private|protected|virtual|override|const|static|void|int|float|double|bool|char|auto|nullptr|new|delete|this|true|false|include|define|pragma)\b/g,
+    strings: /(["'])(?:(?=(\\?))\2.)*?\1/g,
+    comments: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+    types: /\b(FString|FVector|FRotator|AActor|UObject|UPROPERTY|UFUNCTION|UCLASS|USTRUCT|UENUM|TArray|TMap|TSubclassOf|int32|uint8|FName|FText|EInputActionValueType)\b/g,
+  },
+  ts: {
+    keywords: /\b(import|export|from|const|let|var|function|return|if|else|for|while|class|interface|type|extends|implements|new|this|async|await|try|catch|throw|typeof|instanceof|default|switch|case|break|continue|true|false|null|undefined|void)\b/g,
+    strings: /(["'`])(?:(?=(\\?))\2.)*?\1/g,
+    comments: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+    types: /\b(string|number|boolean|any|never|unknown|Record|Array|Promise|Partial|Omit|Pick)\b/g,
+  },
+  py: {
+    keywords: /\b(def|class|import|from|return|if|elif|else|for|while|try|except|finally|with|as|in|not|and|or|is|True|False|None|self|lambda|yield|raise|pass|break|continue)\b/g,
+    strings: /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,
+    comments: /(#.*$)/gm,
+  },
+};
+
+// Map file extensions to syntax rules
+function getSyntax(path: string) {
+  const ext = path.split('.').pop()?.toLowerCase() || '';
+  if (['cpp', 'cc', 'cxx', 'c', 'h', 'hpp'].includes(ext)) return KEYWORD_COLORS.cpp;
+  if (['ts', 'tsx', 'js', 'jsx', 'mjs'].includes(ext)) return KEYWORD_COLORS.ts;
+  if (['py', 'pyw'].includes(ext)) return KEYWORD_COLORS.py;
+  return null;
+}
+
+function highlightLine(line: string, syntax: typeof KEYWORD_COLORS['cpp'] | null): React.ReactNode {
+  if (!syntax) return line;
+
+  // Comments take priority
+  const commentMatch = line.match(/^(\s*)(\/\/.*|#.*)$/);
+  if (commentMatch) {
+    return <>{commentMatch[1]}<span style={{ color: '#6c7086', fontStyle: 'italic' }}>{commentMatch[2]}</span></>;
+  }
+
+  // Simple token-based highlighting (not perfect, but good enough)
+  const parts: React.ReactNode[] = [];
+  let remaining = line;
+  let key = 0;
+
+  while (remaining.length > 0) {
+    let earliest = { idx: remaining.length, len: 0, color: '', match: '' };
+
+    // Check strings
+    const strMatch = remaining.match(syntax.strings);
+    if (strMatch) {
+      const idx = remaining.indexOf(strMatch[0]);
+      if (idx < earliest.idx) earliest = { idx, len: strMatch[0].length, color: '#a6e3a1', match: strMatch[0] };
+    }
+
+    // Check keywords
+    const kwMatch = remaining.match(syntax.keywords);
+    if (kwMatch) {
+      const idx = remaining.indexOf(kwMatch[0]);
+      if (idx < earliest.idx) earliest = { idx, len: kwMatch[0].length, color: '#cba6f7', match: kwMatch[0] };
+    }
+
+    // Check types
+    if (syntax.types) {
+      const tyMatch = remaining.match(syntax.types);
+      if (tyMatch) {
+        const idx = remaining.indexOf(tyMatch[0]);
+        if (idx < earliest.idx) earliest = { idx, len: tyMatch[0].length, color: '#89b4fa', match: tyMatch[0] };
+      }
+    }
+
+    if (earliest.idx === remaining.length) {
+      parts.push(remaining);
+      break;
+    }
+
+    if (earliest.idx > 0) parts.push(remaining.slice(0, earliest.idx));
+    parts.push(<span key={key++} style={{ color: earliest.color }}>{earliest.match}</span>);
+    remaining = remaining.slice(earliest.idx + earliest.len);
+  }
+
+  return <>{parts}</>;
+}
+
 function FileViewer({ path }: { path: string }) {
   const [content, setContent] = useState<string>('Loading...');
   const [error, setError] = useState(false);
@@ -151,15 +234,34 @@ function FileViewer({ path }: { path: string }) {
     );
   }
 
+  const lines = content.split('\n');
+  const gutterWidth = String(lines.length).length * 9 + 20;
+  const syntax = getSyntax(path);
+
   return (
-    <pre style={{
-      flex: 1, margin: 0, padding: '16px 20px', overflowY: 'auto',
+    <div style={{
+      flex: 1, overflow: 'auto',
       background: 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)',
-      color: '#cdd6f4', fontSize: 13, lineHeight: 1.6, fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
-      whiteSpace: 'pre', tabSize: 4,
+      fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
+      fontSize: 13, lineHeight: '20px', tabSize: 4,
     }}>
-      {content}
-    </pre>
+      {lines.map((line, i) => (
+        <div key={i} style={{ display: 'flex', minHeight: 20 }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168, 85, 247, 0.04)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <span style={{
+            width: gutterWidth, minWidth: gutterWidth, textAlign: 'right', paddingRight: 16,
+            color: '#45475a', userSelect: 'none', flexShrink: 0,
+          }}>
+            {i + 1}
+          </span>
+          <span style={{ color: '#cdd6f4', whiteSpace: 'pre', flex: 1 }}>
+            {highlightLine(line, syntax)}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 

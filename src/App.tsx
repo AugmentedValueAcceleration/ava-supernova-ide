@@ -59,11 +59,7 @@ export default function App() {
   }, [activeFilePath]);
 
   const toggleActivity = useCallback((item: ActivityItem) => {
-    // When clicking a non-dashboard activity item, clear the dashboard page
-    if (item !== 'dashboard') {
-      setDashboardPage(null);
-      save('dashPage', null);
-    }
+    // Keep dashboard page visible — activity bar only controls the sidebar panel
 
     if (activeActivity === item && sidebarOpen) {
       setSidebarOpen(false);
