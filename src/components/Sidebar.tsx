@@ -10,6 +10,7 @@ interface Props {
   onTogglePosition?: () => void;
   onDashboardSelect?: (page: string) => void;
   activeDashboardPage?: string | null;
+  onFileOpen?: (path: string) => void;
 }
 
 const panelTitles: Record<ActivityItem, string> = {
@@ -63,7 +64,7 @@ interface FsEntry {
   children?: FsEntry[];
 }
 
-function FileTreeNode({ entry, depth, expandedDirs, onToggle }: { entry: FsEntry; depth: number; expandedDirs: Set<string>; onToggle: (path: string) => void }) {
+function FileTreeNode({ entry, depth, expandedDirs, onToggle, onFileOpen }: { entry: FsEntry; depth: number; expandedDirs: Set<string>; onToggle: (path: string) => void; onFileOpen?: (path: string) => void }) {
   const isOpen = expandedDirs.has(entry.path);
 
   return (
@@ -79,7 +80,7 @@ function FileTreeNode({ entry, depth, expandedDirs, onToggle }: { entry: FsEntry
           color: '#cdd6f4',
           cursor: 'pointer',
         }}
-        onClick={() => { if (entry.isDir) onToggle(entry.path); }}
+        onClick={() => { if (entry.isDir) onToggle(entry.path); else onFileOpen?.(entry.path); }}
         onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
       >
@@ -99,13 +100,13 @@ function FileTreeNode({ entry, depth, expandedDirs, onToggle }: { entry: FsEntry
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</span>
       </div>
       {entry.isDir && isOpen && entry.children?.map((child) => (
-        <FileTreeNode key={child.path} entry={child} depth={depth + 1} expandedDirs={expandedDirs} onToggle={onToggle} />
+        <FileTreeNode key={child.path} entry={child} depth={depth + 1} expandedDirs={expandedDirs} onToggle={onToggle} onFileOpen={onFileOpen} />
       ))}
     </>
   );
 }
 
-function ExplorerPanel() {
+function ExplorerPanel({ onFileOpen }: { onFileOpen?: (path: string) => void }) {
   const [entries, setEntries] = useState<FsEntry[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [projectFolder, setProjectFolder] = useState<string | null>(localStorage.getItem('ava-ide-project-folder'));
@@ -200,7 +201,7 @@ function ExplorerPanel() {
         </div>
       )}
       {entries.map((entry) => (
-        <FileTreeNode key={entry.path} entry={entry} depth={0} expandedDirs={expandedDirs} onToggle={handleToggle} />
+        <FileTreeNode key={entry.path} entry={entry} depth={0} expandedDirs={expandedDirs} onToggle={handleToggle} onFileOpen={onFileOpen} />
       ))}
     </div>
   );
@@ -797,9 +798,9 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
   );
 }
 
-export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onDashboardSelect, activeDashboardPage }: Props) {
+export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onDashboardSelect, activeDashboardPage, onFileOpen }: Props) {
   const panels: Record<ActivityItem, (props?: { onDashboardSelect?: (page: string) => void }) => ReactNode> = {
-    explorer: ExplorerPanel,
+    explorer: () => <ExplorerPanel onFileOpen={onFileOpen} />,
     search: SearchPanel,
     git: GitPanel,
     ava: AvaPanel,

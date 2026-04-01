@@ -13,6 +13,7 @@ import UpdateChecker from './components/UpdateChecker';
 export type ActivityItem = 'explorer' | 'search' | 'git' | 'ava' | 'extensions' | 'debug' | 'dashboard';
 export type BottomTab = 'terminal' | 'problems' | 'output' | 'debug-console' | 'ava';
 export type SidebarPosition = 'left' | 'right';
+export interface OpenFile { path: string; name: string; }
 
 // Persist layout to localStorage
 function load<T>(key: string, fallback: T): T {
@@ -31,6 +32,33 @@ export default function App() {
   const [bottomPanelOpen, setBottomPanelOpen] = useState(() => load('panelOpen', false));
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>(() => load('panelTab', 'terminal'));
   const [dashboardPage, setDashboardPage] = useState<DashboardPageId | null>(() => load('dashPage', 'command-centre'));
+  const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+
+  const handleFileOpen = useCallback((path: string) => {
+    const name = path.split('/').pop() || path.split('\\').pop() || path;
+    setOpenFiles(prev => {
+      if (prev.some(f => f.path === path)) return prev;
+      return [...prev, { path, name }];
+    });
+    setActiveFilePath(path);
+    setDashboardPage(null);
+    save('dashPage', null);
+  }, []);
+
+  const handleFileClose = useCallback((path: string) => {
+    setOpenFiles(prev => {
+      const next = prev.filter(f => f.path !== path);
+      if (activeFilePath === path) {
+        setActiveFilePath(next.length > 0 ? next[next.length - 1].path : null);
+        if (next.length === 0) {
+          setDashboardPage('command-centre');
+          save('dashPage', 'command-centre');
+        }
+      }
+      return next;
+    });
+  }, [activeFilePath]);
 
   const toggleActivity = useCallback((item: ActivityItem) => {
     // When clicking a non-dashboard activity item, clear the dashboard page
@@ -129,6 +157,7 @@ export default function App() {
       onTogglePosition={toggleSidebarPosition}
       onDashboardSelect={handleDashboardSelect}
       activeDashboardPage={dashboardPage}
+      onFileOpen={handleFileOpen}
     />
   ) : null;
 
@@ -139,7 +168,14 @@ export default function App() {
         {sidebarPosition === 'left' && activityBar}
         {sidebarPosition === 'left' && sidebar}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-          <EditorArea dashboardPage={dashboardPage} />
+          <EditorArea
+            dashboardPage={dashboardPage}
+            openFiles={openFiles}
+            activeFilePath={activeFilePath}
+            onFileSelect={setActiveFilePath}
+            onFileClose={handleFileClose}
+            onDashboardSelect={(page) => { setActiveFilePath(null); handleDashboardSelect(page); }}
+          />
           {bottomPanelOpen && (
             <BottomPanel activeTab={activeBottomTab} onTabChange={changeBottomTab} onClose={toggleBottomPanel} />
           )}
