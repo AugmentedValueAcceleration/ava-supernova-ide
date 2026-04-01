@@ -48,6 +48,7 @@ const {
   ProviderHealthTracker,
   ResilientProvider,
   Conductor,
+  AutoCoordinator,
   BriefingEngine,
   detectProjectRoot,
   loadProjectInstructions,
@@ -59,6 +60,7 @@ const {
 
 let agent = null;
 let conductor = null;
+let autoCoordinator = null;
 let conversation = null;
 let toolRegistry = null;
 let memoryManager = null;
@@ -203,9 +205,19 @@ async function handleInit(data) {
     await setLocale(language);
     emit({ event: 'info', message: 'Locale set' });
 
-    // Auto-detect knowledge packs from project type
+    // Load knowledge packs — internal (always active) + auto-detected
     let knowledgeContext;
     try {
+      const packSections = [];
+
+      // Always load internal packs (self-knowledge, etc.)
+      for (const pack of (core.BUILTIN_PACKS || [])) {
+        if (pack.domain === 'internal') {
+          packSections.push(`## ${pack.name}\n\n${pack.context}`);
+        }
+      }
+
+      // Auto-detect game projects
       const { readdirSync } = await import('node:fs');
       const files = readdirSync(cwd).map(f => f.toLowerCase());
       const isGameProject = files.some(f =>
@@ -219,8 +231,12 @@ async function handleInit(data) {
             : files.includes('project.godot') ? 'Godot (GDScript)'
             : files.some(f => f.endsWith('.csproj')) ? 'Unity (C#)'
             : 'game engine';
-          knowledgeContext = `## Active Knowledge Pack: Game Development\nDetected: ${engine}\n\n${gamePack.context}`;
+          packSections.push(`## Active Knowledge Pack: Game Development\nDetected: ${engine}\n\n${gamePack.context}`);
         }
+      }
+
+      if (packSections.length > 0) {
+        knowledgeContext = packSections.join('\n\n');
       }
     } catch { /* non-fatal */ }
 
@@ -318,6 +334,27 @@ async function handleInit(data) {
       cwd,
       sharedState,
     });
+
+    // Auto Mode — detect available providers
+    const availableProviders = new Set();
+    if (config.platformKey) availableProviders.add('platform');
+    if (sharedState.qwenApiKey) availableProviders.add('qwen');
+    if (sharedState.minimaxApiKey) availableProviders.add('minimax');
+    if (config.providers?.kimi?.apiKey || process.env.KIMI_API_KEY) availableProviders.add('kimi');
+    if (config.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY) availableProviders.add('deepseek');
+
+    if (availableProviders.size > 1 || availableProviders.has('platform')) {
+      autoCoordinator = new AutoCoordinator({
+        coordinatorProvider: provider,
+        coordinatorModel: resolved.model,
+        providerRegistry,
+        toolRegistry,
+        cwd,
+        sharedState,
+        availableProviders,
+        platformKey: config.platformKey,
+      });
+    }
 
     // Store for hot-swap model changes
     globalThis._providerRegistry = providerRegistry;
@@ -436,8 +473,9 @@ async function handleMessage(data) {
       ];
     }
 
-    // Run main agent loop
-    const updated = await agent.run(
+    // Run main agent loop (Auto Mode if available, otherwise direct agent)
+    const runner = autoCoordinator || agent;
+    const updated = await runner.run(
       messages,
       (agentEvent) => {
         // Forward all agent events to the IDE
@@ -503,6 +541,15 @@ async function handleMessage(data) {
             break;
           case 'error':
             emit({ event: 'agent_error', message: agentEvent.error.message });
+            break;
+          case 'auto_routing':
+            emit({ event: 'auto_routing', category: agentEvent.category, model: agentEvent.model, reason: agentEvent.reason });
+            break;
+          case 'auto_agent_start':
+            emit({ event: 'auto_agent_start', model: agentEvent.model });
+            break;
+          case 'auto_agent_end':
+            emit({ event: 'auto_agent_end', model: agentEvent.model, summary: agentEvent.summary });
             break;
           case 'done':
             // Final message content
@@ -701,6 +748,26 @@ async function handleSetModel(data) {
       cwd,
       sharedState,
     });
+
+    // Recreate AutoCoordinator if available
+    const availableProviders = new Set();
+    if (sharedState.platformKey) availableProviders.add('platform');
+    if (sharedState.qwenApiKey) availableProviders.add('qwen');
+    if (sharedState.minimaxApiKey) availableProviders.add('minimax');
+    if (availableProviders.size > 1 || availableProviders.has('platform')) {
+      autoCoordinator = new AutoCoordinator({
+        coordinatorProvider: finalResolved.provider,
+        coordinatorModel: finalResolved.model,
+        providerRegistry,
+        toolRegistry,
+        cwd,
+        sharedState,
+        availableProviders,
+        platformKey: sharedState.platformKey,
+      });
+    } else {
+      autoCoordinator = null;
+    }
 
     emit({ event: 'model_changed', model: finalResolved.model.id, provider: finalResolved.provider.name });
   } catch (err) {
