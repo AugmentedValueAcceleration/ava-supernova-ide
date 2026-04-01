@@ -1317,6 +1317,8 @@ export function AvaChatPage() {
   ];
 
   const SIDECAR_MODEL_MAP: Record<string, string> = {
+    'auto': 'auto',
+    'kimi-k2.5': 'platform:kimi-k2.5',
     'qwen3-omni-flash': 'platform:qwen3-omni-flash',
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
     'qwen3.5-plus': 'platform:qwen3.5-plus',
@@ -1408,7 +1410,7 @@ export function AvaChatPage() {
     ];
   });
   const [input, setInput] = useState('');
-  const [model, setModel] = useState<string>(() => localStorage.getItem('ava-ide-chat-model') || 'qwen3-omni-flash');
+  const [model, setModel] = useState<string>(() => localStorage.getItem('ava-ide-chat-model') || 'auto');
   const [mode, setMode] = useState<AvaMode>(() => (localStorage.getItem('ava-ide-chat-mode') as AvaMode) || 'work');
   const [streaming, setStreaming] = useState(false);
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
@@ -2632,6 +2634,8 @@ export function AvaChatPage() {
   // ── Active mode info ──────────────────────────────────────────────────────
   const currentMode = MODES.find((m) => m.id === mode) || MODES[0];
   const activeModelName = useMemo(() => {
+    if (model === 'auto') return '✦ Auto';
+    if (model === 'kimi-k2.5') return 'Kimi K2.5';
     if (model === 'qwen3-omni-flash') return 'Qwen Omni Flash';
     if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
     if (model === 'qwen-flash') return 'Qwen Flash';
@@ -2692,7 +2696,28 @@ export function AvaChatPage() {
               }}>
                 {/* Platform models header */}
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                  {t('dash.chat.platform')}
+                  Auto
+                </div>
+                <button
+                  onClick={() => { setModel('auto'); setModelMenuOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                    padding: '8px 10px', background: model === 'auto' ? 'rgba(168,85,247,0.15)' : 'transparent',
+                    border: 'none', borderRadius: 6, color: model === 'auto' ? '#e0b0ff' : '#cdd6f4',
+                    fontSize: 12, cursor: 'pointer', textAlign: 'left',
+                  }}
+                  onMouseEnter={(e) => { if (model !== 'auto') e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
+                  onMouseLeave={(e) => { if (model !== 'auto') e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {model === 'auto' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }} />}
+                    ✦ Auto
+                  </span>
+                  <span style={{ fontSize: 10, color: '#a855f7' }}>Best model per task</span>
+                </button>
+                <div style={{ height: 1, background: 'rgba(49, 34, 68, 0.5)', margin: '6px 0' }} />
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                {t('dash.chat.platform')}
                 </div>
                 {[
                   { id: 'kimi-k2.5', name: 'Kimi K2.5', tag: '' },

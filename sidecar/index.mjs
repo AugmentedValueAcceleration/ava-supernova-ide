@@ -746,53 +746,24 @@ function handleSetMode(data) {
 
 async function handleSetModel(data) {
   // Hot-swap the model without restarting the sidecar
-  // Re-resolve the model and recreate the agent
   if (!data.model) { emitError('No model specified'); return; }
 
   try {
     const providerRegistry = globalThis._providerRegistry;
     if (!providerRegistry) { emitError('Not initialized'); return; }
-
-    const resolved = providerRegistry.resolveModel(data.model);
-    if (!resolved) {
-      // Try platform fallback
-      const fb = providerRegistry.resolveModel(`platform:${data.model.split(':').pop()}`);
-      if (!fb) { emitError(`Model not found: ${data.model}`); return; }
-      Object.assign(resolved || {}, fb);
-    }
-
-    const finalResolved = resolved || providerRegistry.resolveModel(`platform:${data.model.split(':').pop()}`);
-    if (!finalResolved) { emitError(`Model not found: ${data.model}`); return; }
-
     const cwd = globalThis._cwd || process.cwd();
     const sharedState = globalThis._sharedState || {};
-    sharedState.activeModelId = finalResolved.model.id;
 
-    agent = new Agent({
-      provider: finalResolved.provider,
-      model: finalResolved.model,
-      toolRegistry,
-      cwd,
-      sharedState,
-    });
+    // Auto mode — use AutoCoordinator with correct coordinator model
+    if (data.model === 'auto') {
+      const availableProviders = new Set();
+      if (sharedState.platformKey) availableProviders.add('platform');
+      if (sharedState.qwenApiKey) availableProviders.add('qwen');
+      if (sharedState.minimaxApiKey) availableProviders.add('minimax');
+      if (sharedState.kimiApiKey) availableProviders.add('kimi');
+      if (sharedState.deepseekApiKey) availableProviders.add('deepseek');
 
-    conductor = new Conductor({
-      provider: finalResolved.provider,
-      model: finalResolved.model,
-      toolRegistry,
-      cwd,
-      sharedState,
-    });
-
-    // Recreate AutoCoordinator if available
-    const availableProviders = new Set();
-    if (sharedState.platformKey) availableProviders.add('platform');
-    if (sharedState.qwenApiKey) availableProviders.add('qwen');
-    if (sharedState.minimaxApiKey) availableProviders.add('minimax');
-    if (availableProviders.size > 1 || availableProviders.has('platform')) {
-      autoCoordinator = new AutoCoordinator({
-        coordinatorProvider: finalResolved.provider,
-        coordinatorModel: finalResolved.model,
+      autoCoordinator = AutoCoordinator.create({
         providerRegistry,
         toolRegistry,
         cwd,
@@ -800,11 +771,45 @@ async function handleSetModel(data) {
         availableProviders,
         platformKey: sharedState.platformKey,
       });
-    } else {
-      autoCoordinator = null;
+
+      if (autoCoordinator) {
+        emit({ event: 'model_changed', model: 'auto', provider: 'auto' });
+      } else {
+        emitError('Auto mode unavailable — no providers found');
+      }
+      return;
     }
 
-    emit({ event: 'model_changed', model: finalResolved.model.id, provider: finalResolved.provider.name });
+    // Specific model — resolve and switch
+    let resolved = providerRegistry.resolveModel(data.model);
+    if (!resolved) {
+      // Try platform fallback
+      resolved = providerRegistry.resolveModel(`platform:${data.model.split(':').pop()}`);
+    }
+    if (!resolved) { emitError(`Model not found: ${data.model}`); return; }
+
+    sharedState.activeModelId = resolved.model.id;
+
+    agent = new Agent({
+      provider: resolved.provider,
+      model: resolved.model,
+      toolRegistry,
+      cwd,
+      sharedState,
+    });
+
+    conductor = new Conductor({
+      provider: resolved.provider,
+      model: resolved.model,
+      toolRegistry,
+      cwd,
+      sharedState,
+    });
+
+    // Disable auto coordinator when specific model selected
+    autoCoordinator = null;
+
+    emit({ event: 'model_changed', model: resolved.model.id, provider: resolved.provider.name });
   } catch (err) {
     emitError(`Model switch failed: ${err.message}`);
   }
