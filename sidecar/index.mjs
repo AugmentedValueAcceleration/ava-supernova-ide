@@ -124,22 +124,15 @@ async function handleInit(data) {
       }
     }
 
-    // DEV ONLY — Platform fallback for testing sidecar without BYOK keys.
-    // TODO: Remove before 1.0.0. Production local mode = BYOK keys only.
-    if (config.platformKey && config._devPlatformFallback) {
+    // Register platform provider when user has a platform key
+    if (config.platformKey) {
       try {
-        if (!PlatformProvider) {
-          emit({ event: 'info', message: 'PlatformProvider not available in core build' });
-        } else {
-          const platformProvider = new PlatformProvider({ apiKey: config.platformKey });
-          providerRegistry.registerCustom('platform', platformProvider);
-          emit({ event: 'info', message: `Platform provider registered, models: ${platformProvider.listModels().map(m => m.id).join(', ')}` });
-        }
+        const platformProvider = new PlatformProvider({ apiKey: config.platformKey });
+        providerRegistry.registerCustom('platform', platformProvider);
+        emit({ event: 'info', message: `Platform provider registered, models: ${platformProvider.listModels().map(m => m.id).join(', ')}` });
       } catch (err) {
         emit({ event: 'info', message: `Platform provider error: ${err.message}` });
       }
-    } else {
-      emit({ event: 'info', message: `Platform fallback skipped: key=${!!config.platformKey} flag=${!!config._devPlatformFallback}` });
     }
 
     // Resolve model — try BYOK first, then fall back to platform
