@@ -1321,6 +1321,9 @@ export function AvaChatPage() {
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
     'qwen3.5-plus': 'platform:qwen3.5-plus',
     'qwen-flash': 'platform:qwen-flash',
+    'MiniMax-M2.7': 'platform:MiniMax-M2.7',
+    'MiniMax-M2.5': 'platform:MiniMax-M2.5',
+    'MiniMax-M2': 'platform:MiniMax-M2',
     'deepseek-chat': 'deepseek:deepseek-chat',
     'deepseek-reasoner': 'deepseek:deepseek-reasoner',
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
@@ -1342,6 +1345,7 @@ export function AvaChatPage() {
   const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
     Qwen: [{ id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash' }, { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus' }, { id: 'qwen-flash', name: 'Qwen Flash' }],
+    MiniMax: [{ id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' }],
     Moonshot: [{ id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
     Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'codestral-latest', name: 'Codestral' }],
@@ -2632,6 +2636,9 @@ export function AvaChatPage() {
     if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
     if (model === 'qwen-flash') return 'Qwen Flash';
     if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
+    if (model === 'MiniMax-M2.7') return 'MiniMax M2.7';
+    if (model === 'MiniMax-M2.5') return 'MiniMax M2.5';
+    if (model === 'MiniMax-M2') return 'MiniMax M2';
     const byok = byokModels.find((m) => m.id === model);
     return byok ? byok.name : model;
   }, [model, byokModels]);
@@ -2688,6 +2695,9 @@ export function AvaChatPage() {
                   {t('dash.chat.platform')}
                 </div>
                 {[
+                  { id: 'kimi-k2.5', name: 'Kimi K2.5', tag: '' },
+                  { id: 'MiniMax-M2.7', name: 'MiniMax M2.7', tag: '' },
+                  { id: 'MiniMax-M2.5', name: 'MiniMax M2.5', tag: '' },
                   { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash', tag: '' },
                   { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus', tag: '' },
                   { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: '' },
@@ -6484,6 +6494,8 @@ export function UsagePage() {
     'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
     'qwen3.5-plus': { input: 0.20, output: 1.20 },
     'qwen-flash': { input: 0.05, output: 0.40 },
+    'MiniMax-M2.7': { input: 0.30, output: 1.20 },
+    'MiniMax-M2.5': { input: 0.15, output: 1.20 },
     'deepseek-chat': { input: 0.14, output: 0.28 },
   };
   const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
@@ -6834,6 +6846,7 @@ export function SettingsPage() {
     { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.6, Sonnet 4.6, Haiku 4.5' },
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V3 and R1 \u2014 best price/performance' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.cn', description: 'Kimi K2.5 \u2014 best multi-step tool calling' },
+    { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M2.7 self-evolving, M2.5 best tool calling' },
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://open.bigmodel.cn', description: 'GLM-5, GLM-4.7 \u2014 best tool-call reliability' },
     { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.5 Omni Plus and Omni Flash — multimodal' },
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Codestral, Devstral 2' },
