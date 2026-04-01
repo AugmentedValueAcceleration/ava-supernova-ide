@@ -2509,7 +2509,13 @@ export function AvaChatPage() {
                   trackTokenUsage(json.usage, model);
                   if (json.usage.prompt_tokens && json.usage.completion_tokens) {
                     const total = json.usage.prompt_tokens + json.usage.completion_tokens;
-                    const ctxWindow = 131072;
+                    // Use model's actual context window for percentage
+                    const MODEL_CTX: Record<string, number> = {
+                      'kimi-k2.5': 262144, 'MiniMax-M2.7': 204800, 'MiniMax-M2.5': 1048576,
+                      'qwen3-omni-flash': 131072, 'qwen3.5-omni-plus': 131072, 'qwen3.5-plus': 131072,
+                      'qwen-flash': 131072, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
+                    };
+                    const ctxWindow = MODEL_CTX[model] || 131072;
                     setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
                   }
                 }
