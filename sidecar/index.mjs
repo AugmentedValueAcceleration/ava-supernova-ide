@@ -49,6 +49,7 @@ const {
   ResilientProvider,
   Conductor,
   AutoCoordinator,
+  MemoryAgent,
   BriefingEngine,
   detectProjectRoot,
   loadProjectInstructions,
@@ -65,6 +66,7 @@ let conversation = null;
 let toolRegistry = null;
 let memoryManager = null;
 let journalManager = null;
+let memoryAgentInstance = null;
 let currentAbort = null;
 let currentMode = 'work';
 let isRunning = false;
@@ -300,6 +302,20 @@ async function handleInit(data) {
       activeModelId: resolved.model.id,
     };
 
+    // Memory Agent — curates briefs instead of raw memory dumps
+    const qwenFlash = providerRegistry.resolveModel('platform:qwen3-omni-flash')
+      || providerRegistry.resolveModel('platform:qwen-flash')
+      || providerRegistry.resolveModel('qwen:qwen3-omni-flash');
+    if (qwenFlash && memoryManager) {
+      memoryAgentInstance = new MemoryAgent({
+        memoryManager,
+        provider: qwenFlash.provider,
+        model: qwenFlash.model,
+      });
+      sharedState.memoryAgent = memoryAgentInstance;
+      emit({ event: 'info', message: 'Memory Agent initialized on ' + qwenFlash.model.id });
+    }
+
     // Build resilient provider with fallback
     const healthTracker = new ProviderHealthTracker();
     const fallbackChain = providerRegistry.buildFallbackChain(activeModel);
@@ -343,10 +359,9 @@ async function handleInit(data) {
     if (config.providers?.kimi?.apiKey || process.env.KIMI_API_KEY) availableProviders.add('kimi');
     if (config.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY) availableProviders.add('deepseek');
 
+    // Use static create() — picks Kimi K2.5 for platform, best available for BYOK
     if (availableProviders.size > 1 || availableProviders.has('platform')) {
-      autoCoordinator = new AutoCoordinator({
-        coordinatorProvider: provider,
-        coordinatorModel: resolved.model,
+      autoCoordinator = AutoCoordinator.create({
         providerRegistry,
         toolRegistry,
         cwd,
@@ -420,15 +435,35 @@ async function handleMessage(data) {
     }
     let messages = conversation.getMessages();
 
-    // Per-turn memory recall — inject relevant memories for every message
-    if (memoryManager && data.content && data.content.length > 5) {
+    // Per-turn memory brief (curated by Memory Agent) or raw recall fallback
+    if (memoryAgentInstance && data.content && data.content.length > 5) {
+      try {
+        const brief = await memoryAgentInstance.generateBrief(data.content);
+        if (brief.summary) {
+          const topicList = brief.availableTopics.length > 0
+            ? '\n\nAvailable memory topics (use memory_recall for detail): ' +
+              brief.availableTopics.map(t => t.topic).join(', ')
+            : '';
+          const currentMsgs = conversation.getMessages();
+          currentMsgs.push({
+            role: 'system',
+            content: `[Memory Brief]\n${brief.summary}${topicList}`,
+          });
+          conversation.setMessages(currentMsgs);
+          messages = conversation.getMessages();
+          emit({ event: 'info', message: `Memory brief generated (${brief.consideredEntryCount} memories considered)` });
+        }
+      } catch (err) {
+        emit({ event: 'info', message: `Memory brief failed: ${err.message}` });
+      }
+    } else if (memoryManager && data.content && data.content.length > 5) {
+      // Fallback: raw recall (no Memory Agent available)
       try {
         const memories = await memoryManager.recall({ query: data.content, limit: 5, scope: 'all' });
         if (memories && memories.length > 0) {
           const memoryContext = memories
             .map(m => `[${m.scope || 'global'}/${m.entry?.category || m.category || 'general'}] ${(m.entry?.content || m.content || '').slice(0, 300)}`)
             .join('\n');
-          // Inject as a system message (not into the system prompt — keeps it per-turn)
           const currentMsgs = conversation.getMessages();
           currentMsgs.push({
             role: 'system',

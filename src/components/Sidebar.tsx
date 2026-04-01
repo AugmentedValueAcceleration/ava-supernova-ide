@@ -741,137 +741,51 @@ function AuthSection() {
 
 /* ---------- Dashboard Panel ---------- */
 
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8,
-  color: '#585b70', padding: '10px 10px 4px', userSelect: 'none',
-};
-
-const sections = [
-  {
-    items: [
-      { id: 'command-centre', icon: '\u26A1', labelKey: 'dash.nav.command_centre', descKey: 'dash.nav.command_centre_desc' },
-      { id: 'ava-chat', icon: '\uD83D\uDCAC', labelKey: 'dash.nav.ava_chat', descKey: 'dash.nav.ava_chat_desc' },
-    ],
-  },
-  {
-    titleKey: 'dash.section.workspace',
-    items: [
-      { id: 'chat-history', icon: '\uD83D\uDCDC', labelKey: 'dash.nav.chat_history', descKey: 'dash.nav.chat_history_desc' },
-      { id: 'memory', icon: '\uD83E\uDDE0', labelKey: 'dash.nav.memory', descKey: 'dash.nav.memory_desc' },
-      { id: 'tasks', icon: '\u2705', labelKey: 'dash.nav.tasks', descKey: 'dash.nav.tasks_desc' },
-      { id: 'journal', icon: '\uD83D\uDCD3', labelKey: 'dash.nav.journal', descKey: 'dash.nav.journal_desc' },
-      { id: 'learning', icon: '\uD83C\uDF93', labelKey: 'dash.nav.learning', descKey: 'dash.nav.learning_desc' },
-      { id: 'library', icon: '\uD83D\uDDBC\uFE0F', labelKey: 'dash.nav.library', descKey: 'dash.nav.library_desc' },
-    ],
-  },
-  {
-    titleKey: 'dash.section.personalise',
-    items: [
-      { id: 'personality', icon: '\uD83C\uDFA8', labelKey: 'dash.nav.personality', descKey: 'dash.nav.personality_desc' },
-      { id: 'cloud-sync', icon: '\u2601\uFE0F', labelKey: 'dash.nav.cloud_sync', descKey: 'dash.nav.cloud_sync_desc' },
-    ],
-  },
-  {
-    titleKey: 'dash.section.account',
-    items: [
-      { id: 'usage', icon: '\uD83D\uDCCA', labelKey: 'dash.nav.usage', descKey: 'dash.nav.usage_desc' },
-      { id: 'billing', icon: '\uD83D\uDCB3', labelKey: 'dash.nav.billing', descKey: 'dash.nav.billing_desc' },
-      { id: 'settings', icon: '\u2699\uFE0F', labelKey: 'dash.nav.settings', descKey: 'dash.nav.settings_desc' },
-      { id: 'connections', icon: '\uD83D\uDD17', labelKey: 'dash.nav.connections', descKey: 'dash.nav.connections_desc' },
-    ],
-  },
-  {
-    titleKey: 'dash.section.help',
-    items: [
-      { id: 'support', icon: '\uD83C\uDD98', labelKey: 'dash.nav.support', descKey: 'dash.nav.support_desc' },
-      { id: 'documentation', icon: '\uD83D\uDCD6', labelKey: 'dash.nav.documentation', descKey: 'dash.nav.documentation_desc' },
-      { id: 'release-notes', icon: '\uD83D\uDCCB', labelKey: 'dash.nav.release_notes', descKey: 'dash.nav.release_notes_desc' },
-      { id: 'roadmap', icon: '\uD83D\uDDFA\uFE0F', labelKey: 'dash.nav.roadmap', descKey: 'dash.nav.roadmap_desc', fallbackLabel: 'Roadmap', fallbackDesc: 'Where Ava is heading' },
-    ],
-  },
+// Flat nav — matches extension sidebar exactly
+const NAV_ITEMS = [
+  { id: 'ava-chat',    icon: '\uD83D\uDCAC', label: 'Chat',    desc: 'Talk, build, create' },
+  { id: 'planner',     icon: '\uD83D\uDCCB', label: 'Planner', desc: 'Tasks, journal, learning' },
+  { id: 'memory',      icon: '\uD83E\uDDE0', label: 'Memory',  desc: 'Patterns, preferences, decisions' },
+  { id: 'chat-history', icon: '\uD83D\uDCCA', label: 'History', desc: 'Tokens, sessions, models' },
+  { id: 'account',     icon: '\u2699\uFE0F', label: 'Account', desc: 'Settings, billing, personalisation' },
+  { id: 'help',        icon: '\u2753',        label: 'Help',    desc: 'Support, releases, roadmap' },
 ];
 
-// Pages hidden when user is not connected (BYOK mode)
-const CONNECTED_ONLY_PAGES = ['billing', 'cloud-sync'];
-
 function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?: (page: string) => void; activePage?: string | null }) {
-  useLocale(); // re-render on language change
+  useLocale();
   const [, setAuthVersion] = useState(0);
   useEffect(() => {
     const handler = () => setAuthVersion(v => v + 1);
     window.addEventListener('ava-auth-changed', handler);
     return () => window.removeEventListener('ava-auth-changed', handler);
   }, []);
-  const connected = isConnected();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
-    try { const s = localStorage.getItem('ava-ide-sidebar-collapsed'); return s ? JSON.parse(s) : {}; } catch { return {}; }
-  });
-
-  const toggleSection = (title: string) => {
-    setCollapsed(prev => {
-      const next = { ...prev, [title]: !prev[title] };
-      try { localStorage.setItem('ava-ide-sidebar-collapsed', JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-        {sections.map((section, si) => {
-          const sectionTitle = section.titleKey ? t(section.titleKey) : undefined;
-          const isCollapsed = sectionTitle ? !!collapsed[sectionTitle] : false;
-          const visibleItems = section.items.filter(item => connected || !CONNECTED_ONLY_PAGES.includes(item.id));
-          const hasActive = visibleItems.some(item => activePage === item.id);
+        {NAV_ITEMS.map((item) => {
+          const isActive = activePage === item.id;
           return (
-            <div key={si}>
-              {sectionTitle && (
-                <button
-                  onClick={() => toggleSection(sectionTitle)}
-                  style={{
-                    ...sectionLabelStyle,
-                    display: 'flex', alignItems: 'center', gap: 4, width: '100%',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: hasActive && isCollapsed ? '#a855f7' : '#585b70',
-                  }}
-                >
-                  <span style={{
-                    fontSize: 7, transition: 'transform 0.15s',
-                    transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
-                  }}>▶</span>
-                  {sectionTitle}
-                  {hasActive && isCollapsed && <span style={{ fontSize: 7, color: '#a855f7' }}>●</span>}
-                </button>
-              )}
-              {!isCollapsed && section.items
-                .filter(item => connected || !CONNECTED_ONLY_PAGES.includes(item.id))
-                .map((item) => {
-                const label = t(item.labelKey);
-                const isActive = activePage === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => onDashboardSelect?.(item.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                      padding: '7px 10px', borderRadius: 6, border: 'none',
-                      background: isActive ? 'rgba(49, 34, 68, 0.5)' : 'transparent',
-                      color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
-                      fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
-                      borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
-                    }}
-                    onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
-                    onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 500, fontSize: 12 }}>{label}</div>
-                      <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(item.descKey)}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            <button
+              key={item.id}
+              onClick={() => onDashboardSelect?.(item.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                padding: '7px 10px', borderRadius: 6, border: 'none',
+                background: isActive ? 'rgba(49, 34, 68, 0.5)' : 'transparent',
+                color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
+                fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
+                borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
+              }}
+              onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
+              onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</div>
+                <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>
+              </div>
+            </button>
           );
         })}
       </div>

@@ -8589,6 +8589,112 @@ const ROADMAP_THEMES = [
   ]},
 ];
 
+/* ═══════════════════════════════════════════════════════════════════
+ * CONSOLIDATED PAGES — match extension sidebar layout
+ * ═══════════════════════════════════════════════════════════════════ */
+
+export function PlannerPage() {
+  const [tab, setTab] = useState<'tasks' | 'journal' | 'learning'>('tasks');
+  const tabs = [
+    { key: 'tasks' as const, icon: '\u2713', label: 'Tasks' },
+    { key: 'journal' as const, icon: '\u270E', label: 'Journal' },
+    { key: 'learning' as const, icon: '\u2605', label: 'Learning' },
+  ];
+  return (
+    <div style={pageWrapper}>
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={pageTitle}>Planner</h2>
+        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Tasks, reflections, and learning paths</p>
+      </div>
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            padding: '6px 12px', fontSize: 12, fontWeight: 500, border: 'none', cursor: 'pointer',
+            background: 'transparent', color: tab === t.key ? '#cdd6f4' : '#585b70',
+            borderBottom: tab === t.key ? '2px solid #a855f7' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}>{t.icon} {t.label}</button>
+        ))}
+      </div>
+      {tab === 'tasks' && <TasksPageInner />}
+      {tab === 'journal' && <JournalPageInner />}
+      {tab === 'learning' && <LearningPageInner />}
+    </div>
+  );
+}
+
+// Inner components — reuse existing page content without the outer wrapper
+function TasksPageInner() { return <TasksPage />; }
+function JournalPageInner() { return <JournalPage />; }
+function LearningPageInner() { return <LearningPage />; }
+
+export function AccountPage() {
+  const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality' | 'sync'>('settings');
+  const connected = typeof window !== 'undefined' && !!localStorage.getItem('ava-platform-key');
+  const tabs = [
+    { key: 'settings' as const, label: 'Settings' },
+    ...(connected ? [{ key: 'billing' as const, label: 'Billing' }] : []),
+    { key: 'connections' as const, label: 'Connections' },
+    { key: 'personality' as const, label: 'Personality' },
+    ...(connected ? [{ key: 'sync' as const, label: 'Sync' }] : []),
+  ];
+  return (
+    <div style={pageWrapper}>
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={pageTitle}>Account</h2>
+        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Settings, billing, connections, and personalisation</p>
+      </div>
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            padding: '6px 12px', fontSize: 12, fontWeight: 500, border: 'none', cursor: 'pointer',
+            background: 'transparent', color: tab === t.key ? '#cdd6f4' : '#585b70',
+            borderBottom: tab === t.key ? '2px solid #a855f7' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}>{t.label}</button>
+        ))}
+      </div>
+      {tab === 'settings' && <SettingsPage />}
+      {tab === 'billing' && <BillingPage />}
+      {tab === 'connections' && <ConnectionsPage />}
+      {tab === 'personality' && <PersonalityPage />}
+      {tab === 'sync' && <CloudSyncPage />}
+    </div>
+  );
+}
+
+export function HelpPage() {
+  const [tab, setTab] = useState<'support' | 'releases' | 'roadmap'>('support');
+  const tabs = [
+    { key: 'support' as const, label: 'Support' },
+    { key: 'releases' as const, label: 'Releases' },
+    { key: 'roadmap' as const, label: 'Roadmap' },
+  ];
+  return (
+    <div style={pageWrapper}>
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={pageTitle}>Help</h2>
+        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Support, release notes, and product roadmap</p>
+      </div>
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            padding: '6px 12px', fontSize: 12, fontWeight: 500, border: 'none', cursor: 'pointer',
+            background: 'transparent', color: tab === t.key ? '#cdd6f4' : '#585b70',
+            borderBottom: tab === t.key ? '2px solid #a855f7' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}>{t.label}</button>
+        ))}
+      </div>
+      {tab === 'support' && <SupportPage />}
+      {tab === 'releases' && <ReleaseNotesPage />}
+      {tab === 'roadmap' && <RoadmapInner />}
+    </div>
+  );
+}
+
+function RoadmapInner() { return <RoadmapPage />; }
+
 export function RoadmapPage() {
   useLocale();
   const totalShipped = ROADMAP_THEMES.reduce((s, t) => s + t.items.filter(i => i.shipped).length, 0);
