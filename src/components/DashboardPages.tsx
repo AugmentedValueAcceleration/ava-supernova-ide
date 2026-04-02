@@ -1318,6 +1318,7 @@ export function AvaChatPage() {
 
   const SIDECAR_MODEL_MAP: Record<string, string> = {
     'auto': 'auto',
+    'qwen3.6-plus': 'platform:qwen3.6-plus',
     'kimi-k2.5': 'platform:kimi-k2.5',
     'qwen3-omni-flash': 'platform:qwen3-omni-flash',
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
@@ -1872,7 +1873,7 @@ export function AvaChatPage() {
           activeModel: modelMap[model] || `qwen:${model}`,
           cwd: localStorage.getItem('ava-ide-project-folder') || '.',
           mode,
-          permissionMode: 'balanced',
+          permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
           autoMemory: true,
           workingHours: { start: workStart, end: workEnd },
           userName: localStorage.getItem('ava-ide-user-name') || localStorage.getItem('ava-ide-email')?.split('@')[0] || undefined,
@@ -1950,9 +1951,18 @@ export function AvaChatPage() {
           setMessages((prev) => {
             const copy = [...prev];
             const last = copy[copy.length - 1];
+            // If last message is an ava message with tool calls but no text after them,
+            // create a new ava message for the continuation text (timeline flow)
+            if (last?.role === 'ava' && last.toolCalls && last.toolCalls.length > 0 && !last.text.endsWith(event.content || '')) {
+              const hasTextAfterTools = last.text.length > 0;
+              if (hasTextAfterTools) {
+                // Start a new ava message for text after tool calls
+                copy.push({ id: mkId(), role: 'ava', text: redactSecrets(event.content || ''), timestamp: Date.now(), toolCalls: [] });
+                return copy;
+              }
+            }
             if (last?.role === 'ava') {
               const newText = redactSecrets(last.text + event.content);
-              // Track if redaction happened — mark previous user msg
               if (newText !== last.text + event.content) {
                 const prevUser = copy.filter(m => m.role === 'user').pop();
                 if (prevUser) secretMsgIds.current.add(prevUser.id);
@@ -2227,7 +2237,7 @@ export function AvaChatPage() {
           activeModel: `platform:${model}`,
           cwd: localStorage.getItem('ava-ide-project-folder') || '.',
           mode,
-          permissionMode: 'balanced',
+          permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
           autoMemory: true,
           _devPlatformFallback: true,
         } as SidecarConfig).catch(() => {});
@@ -2262,9 +2272,10 @@ export function AvaChatPage() {
     let partKey = 0;
 
     while ((match = codeBlockRegex.exec(text)) !== null) {
-      // Text before code block
+      // Text before code block (may contain tables)
       if (match.index > lastIndex) {
-        parts.push(<span key={partKey++}>{renderInlineMarkdown(text.slice(lastIndex, match.index))}</span>);
+        parts.push(...renderTextWithTables(text.slice(lastIndex, match.index), partKey));
+        partKey += 10; // leave room for table keys
       }
       // Code block
       const lang = match[1] || '';
@@ -2289,17 +2300,70 @@ export function AvaChatPage() {
       );
       lastIndex = match.index + match[0].length;
     }
-    // Remaining text
+    // Remaining text (may contain tables)
     if (lastIndex < text.length) {
-      parts.push(<span key={partKey++}>{renderInlineMarkdown(text.slice(lastIndex))}</span>);
+      parts.push(...renderTextWithTables(text.slice(lastIndex), partKey));
     }
     return <>{parts}</>;
   }, []);
 
-  const renderInlineMarkdown = (text: string): React.ReactNode[] => {
+  // Parse markdown tables into styled HTML tables
+  const renderTable = (tableText: string, key: number): React.ReactNode => {
+    const lines = tableText.trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) return null;
+
+    const parseRow = (line: string) => line.split('|').map(c => c.trim()).filter(c => c !== '');
+    const headers = parseRow(lines[0]);
+    // Skip separator line (line[1] with dashes)
+    const rows = lines.slice(2).map(parseRow);
+
+    return (
+      <table key={`tbl-${key}`} style={{ width: '100%', borderCollapse: 'collapse', margin: '8px 0', fontSize: 13 }}>
+        <thead>
+          <tr>
+            {headers.map((h, i) => (
+              <th key={i} style={{ textAlign: 'left', padding: '6px 12px', borderBottom: '1px solid rgba(168,85,247,0.2)', color: '#a855f7', fontWeight: 500, fontSize: 12 }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci} style={{ padding: '5px 12px', borderBottom: '1px solid rgba(168,85,247,0.06)', color: '#cdd6f4', fontSize: 12, fontWeight: 300 }}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
+  // Check if text contains a markdown table and split around it
+  const renderTextWithTables = (text: string, baseKey: number): React.ReactNode[] => {
+    const tableRegex = /(\|[^\n]+\|\n\|[-| :]+\|\n(?:\|[^\n]+\|\n?)+)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let match;
+    let key = baseKey;
+
+    while ((match = tableRegex.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        parts.push(<span key={key++}>{renderInlineMarkdown(text.slice(lastIdx, match.index))}</span>);
+      }
+      parts.push(renderTable(match[1], key++));
+      lastIdx = match.index + match[0].length;
+    }
+    if (lastIdx < text.length) {
+      parts.push(<span key={key++}>{renderInlineMarkdown(text.slice(lastIdx))}</span>);
+    }
+    return parts;
+  };
+
+  // Inline formatting: bold, italic, inline code
+  const renderInlineFormatting = (text: string): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
-    // Process inline code and bold
-    const inlineRegex = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+    const inlineRegex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
     let lastIdx = 0;
     let m;
     let key = 0;
@@ -2307,18 +2371,99 @@ export function AvaChatPage() {
       if (m.index > lastIdx) nodes.push(text.slice(lastIdx, m.index));
       const matched = m[0];
       if (matched.startsWith('`') && matched.endsWith('`')) {
-        nodes.push(
-          <code key={`ic-${key++}`} style={{
-            background: 'rgba(49, 34, 68, 0.5)', padding: '1px 6px', borderRadius: 4,
-            fontSize: '0.9em', fontFamily: "'JetBrains Mono', monospace", color: '#f5c2e7',
-          }}>{matched.slice(1, -1)}</code>
-        );
+        nodes.push(<code key={`ic-${key++}`} style={{ background: 'rgba(49, 34, 68, 0.5)', padding: '1px 6px', borderRadius: 4, fontSize: '0.9em', fontFamily: "'JetBrains Mono', monospace", color: '#f5c2e7' }}>{matched.slice(1, -1)}</code>);
       } else if (matched.startsWith('**') && matched.endsWith('**')) {
         nodes.push(<strong key={`b-${key++}`} style={{ color: '#cdd6f4', fontWeight: 600 }}>{matched.slice(2, -2)}</strong>);
+      } else if (matched.startsWith('*') && matched.endsWith('*')) {
+        nodes.push(<em key={`i-${key++}`} style={{ color: '#cdd6f4' }}>{matched.slice(1, -1)}</em>);
       }
       lastIdx = m.index + matched.length;
     }
     if (lastIdx < text.length) nodes.push(text.slice(lastIdx));
+    return nodes;
+  };
+
+  // Block-level markdown: headings, lists, hr, paragraphs
+  const renderInlineMarkdown = (text: string): React.ReactNode[] => {
+    const lines = text.split('\n');
+    const nodes: React.ReactNode[] = [];
+    let key = 0;
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // Horizontal rule
+      if (/^---+$/.test(line.trim())) {
+        nodes.push(<hr key={`hr-${key++}`} style={{ border: 'none', borderTop: '1px solid rgba(168,85,247,0.15)', margin: '12px 0' }} />);
+        i++;
+        continue;
+      }
+
+      // Headings
+      if (line.startsWith('#### ')) {
+        nodes.push(<div key={`h4-${key++}`} style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', margin: '10px 0 4px' }}>{renderInlineFormatting(line.slice(5))}</div>);
+        i++; continue;
+      }
+      if (line.startsWith('### ')) {
+        nodes.push(<div key={`h3-${key++}`} style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', margin: '14px 0 6px' }}>{renderInlineFormatting(line.slice(4))}</div>);
+        i++; continue;
+      }
+      if (line.startsWith('## ')) {
+        nodes.push(<div key={`h2-${key++}`} style={{ fontSize: 16, fontWeight: 600, color: '#e0b0ff', margin: '16px 0 8px' }}>{renderInlineFormatting(line.slice(3))}</div>);
+        i++; continue;
+      }
+      if (line.startsWith('# ')) {
+        nodes.push(<div key={`h1-${key++}`} style={{ fontSize: 18, fontWeight: 700, color: '#e0b0ff', margin: '18px 0 8px' }}>{renderInlineFormatting(line.slice(2))}</div>);
+        i++; continue;
+      }
+
+      // Bullet list (- or * prefix)
+      if (/^\s*[-*]\s/.test(line)) {
+        const items: React.ReactNode[] = [];
+        while (i < lines.length && /^\s*[-*]\s/.test(lines[i])) {
+          const indent = lines[i].match(/^(\s*)/)?.[1].length || 0;
+          const content = lines[i].replace(/^\s*[-*]\s+/, '');
+          items.push(
+            <div key={`li-${key++}`} style={{ display: 'flex', gap: 6, paddingLeft: indent > 1 ? 16 : 0, margin: '2px 0' }}>
+              <span style={{ color: '#a855f7', flexShrink: 0 }}>{'\u2022'}</span>
+              <span>{renderInlineFormatting(content)}</span>
+            </div>
+          );
+          i++;
+        }
+        nodes.push(<div key={`ul-${key++}`} style={{ margin: '4px 0' }}>{items}</div>);
+        continue;
+      }
+
+      // Numbered list
+      if (/^\s*\d+\.\s/.test(line)) {
+        const items: React.ReactNode[] = [];
+        while (i < lines.length && /^\s*\d+\.\s/.test(lines[i])) {
+          const num = lines[i].match(/^\s*(\d+)\./)?.[1] || '1';
+          const content = lines[i].replace(/^\s*\d+\.\s+/, '');
+          items.push(
+            <div key={`oli-${key++}`} style={{ display: 'flex', gap: 6, margin: '2px 0' }}>
+              <span style={{ color: '#a855f7', flexShrink: 0, fontWeight: 500, minWidth: 16 }}>{num}.</span>
+              <span>{renderInlineFormatting(content)}</span>
+            </div>
+          );
+          i++;
+        }
+        nodes.push(<div key={`ol-${key++}`} style={{ margin: '4px 0' }}>{items}</div>);
+        continue;
+      }
+
+      // Empty line = paragraph break
+      if (line.trim() === '') {
+        nodes.push(<div key={`br-${key++}`} style={{ height: 6 }} />);
+        i++; continue;
+      }
+
+      // Regular text
+      nodes.push(<div key={`p-${key++}`} style={{ margin: '2px 0' }}>{renderInlineFormatting(line)}</div>);
+      i++;
+    }
     return nodes;
   };
 
@@ -2516,9 +2661,9 @@ export function AvaChatPage() {
                     const total = json.usage.prompt_tokens + json.usage.completion_tokens;
                     // Use model's actual context window for percentage
                     const MODEL_CTX: Record<string, number> = {
-                      'kimi-k2.5': 262144, 'MiniMax-M2.7': 204800, 'MiniMax-M2.5': 1048576,
-                      'qwen3-omni-flash': 131072, 'qwen3.5-omni-plus': 131072, 'qwen3.5-plus': 131072,
-                      'qwen-flash': 131072, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
+                      'qwen3.6-plus': 1048576, 'kimi-k2.5': 262144, 'MiniMax-M2.7': 204800, 'MiniMax-M2.5': 1048576,
+                      'qwen3-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
+                      'qwen-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
                     setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
@@ -2642,10 +2787,28 @@ export function AvaChatPage() {
     setConfirmInput('');
   }, [pendingConfirm]);
 
+  // Always Allow — approve this, update settings to Autonomous permanently
+  const approveAll = useCallback(async () => {
+    if (!pendingConfirm) return;
+    const sidecar = getSidecar();
+    await sidecar.confirm(pendingConfirm.id, true);
+    sidecar.setPermission('autonomous').catch(() => {});
+    // Persist to settings so it stays Autonomous across sessions
+    try {
+      const raw = localStorage.getItem('ava-ide-settings');
+      const s = raw ? JSON.parse(raw) : {};
+      s.permissionMode = 'autonomous';
+      localStorage.setItem('ava-ide-settings', JSON.stringify(s));
+    } catch { /* */ }
+    setPendingConfirm(null);
+    setConfirmInput('');
+  }, [pendingConfirm]);
+
   // ── Active mode info ──────────────────────────────────────────────────────
   const currentMode = MODES.find((m) => m.id === mode) || MODES[0];
   const activeModelName = useMemo(() => {
     if (model === 'auto') return '✦ Auto';
+    if (model === 'qwen3.6-plus') return 'Qwen 3.6 Plus';
     if (model === 'qwen3-omni-flash') return 'Qwen Omni Flash';
     if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
     if (model === 'qwen-flash') return 'Qwen Flash';
@@ -2726,16 +2889,39 @@ export function AvaChatPage() {
                   <span style={{ fontSize: 10, color: '#a855f7' }}>Best model per task</span>
                 </button>
                 <div style={{ height: 1, background: 'rgba(49, 34, 68, 0.5)', margin: '6px 0' }} />
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                {t('dash.chat.platform')}
-                </div>
+                {/* Qwen family */}
+                <div style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>Qwen</div>
+                {[
+                  { id: 'qwen3.6-plus', name: 'Qwen 3.6 Plus', tag: 'New' },
+                  { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Plus', tag: '' },
+                  { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash', tag: '' },
+                  { id: 'qwen-flash', name: 'Qwen Flash', tag: '' },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => { setModel(m.id); setModelMenuOpen(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                      padding: '8px 10px', background: model === m.id ? 'rgba(168,85,247,0.15)' : 'transparent',
+                      border: 'none', borderRadius: 6, color: model === m.id ? '#e0b0ff' : '#cdd6f4',
+                      fontSize: 12, cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => { if (model !== m.id) e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
+                    onMouseLeave={(e) => { if (model !== m.id) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {model === m.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a6e3a1' }} />}
+                      {m.name}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#a6e3a1', fontWeight: 500 }}>{m.tag}</span>
+                  </button>
+                ))}
+
+                {/* MiniMax family */}
+                <div style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>MiniMax</div>
                 {[
                   { id: 'MiniMax-M2.7', name: 'MiniMax M2.7', tag: '' },
                   { id: 'MiniMax-M2.5', name: 'MiniMax M2.5', tag: '' },
-                  { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash', tag: '' },
-                  { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus', tag: '' },
-                  { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: '' },
-                  { id: 'qwen-flash', name: 'Qwen Flash', tag: '' },
                 ].map((m) => (
                   <button
                     key={m.id}
@@ -3366,6 +3552,16 @@ export function AvaChatPage() {
                 }}
               >
                 {t('plan.approve')}
+              </button>
+              <button
+                onClick={approveAll}
+                style={{
+                  padding: '4px 12px', background: 'transparent', border: '1px solid #a855f7',
+                  borderRadius: 6, color: '#a855f7', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                }}
+                title="Approve and switch to Autonomous mode — updates your settings"
+              >
+                Always Allow
               </button>
             </div>
           </div>
