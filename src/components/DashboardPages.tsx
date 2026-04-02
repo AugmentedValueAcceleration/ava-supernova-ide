@@ -1825,6 +1825,9 @@ export function AvaChatPage() {
     try { localStorage.setItem('ava-ide-chat-backend', chatBackend); } catch { /* */ }
   }, [chatBackend]);
 
+  // Ref to hold the latest event handler — avoids ordering issues with useCallback
+  const sidecarEventRef = useRef<((event: SidecarEvent) => void) | null>(null);
+
   // ── Sidecar lifecycle — always runs (both Local and Cloud need tools) ──
   useEffect(() => {
     // Sidecar runs in both modes — Cloud uses platform key, Local uses BYOK
@@ -1880,6 +1883,10 @@ export function AvaChatPage() {
         await sidecar.start(config);
 
         if (!cancelled) {
+          // Attach event listener IMMEDIATELY after start — before setting ready
+          // This prevents the race condition where messages are sent before listeners exist
+          const handler = (event: SidecarEvent) => { sidecarEventRef.current?.(event); };
+          sidecar.onAny(handler);
           setSidecarReady(true);
           setSidecarStatus('ready');
         }
@@ -1901,13 +1908,18 @@ export function AvaChatPage() {
     };
     sidecar.on('close', onClose);
 
+    // Memory clear events
+    const onClearMemory = () => { sidecar.clearMemory().catch(() => {}); };
+    window.addEventListener('ava-clear-memory', onClearMemory);
+
     return () => {
       cancelled = true;
       sidecar.off('close', onClose);
       sidecar.removeAllListeners();
+      window.removeEventListener('ava-clear-memory', onClearMemory);
       sidecar.stop().catch(() => {});
     };
-  }, [canChat]); // Restart sidecar when chat ability changes (key added/removed, connect/disconnect)
+  }, [canChat]); // Restart sidecar when chat ability changes
 
   // ── Send model/mode changes to running sidecar (no restart) ────────────
   const prevModelRef = useRef(model);
@@ -2122,19 +2134,11 @@ export function AvaChatPage() {
     }
   }, [redactSecrets]);
 
-  // ── Attach sidecar event listener (both Local and Cloud use sidecar) ──
-  useEffect(() => {
-    if (!canChat) return;
-    const sidecar = getSidecar();
-    sidecar.onAny(handleSidecarEvent);
-    // Listen for memory clear events from MemoryPage
-    const onClearMemory = () => { sidecar.clearMemory().catch(() => {}); };
-    window.addEventListener('ava-clear-memory', onClearMemory);
-    return () => {
-      sidecar.offAny(handleSidecarEvent);
-      window.removeEventListener('ava-clear-memory', onClearMemory);
-    };
-  }, [canChat, handleSidecarEvent]);
+  // Keep the ref in sync with the latest callback
+  useEffect(() => { sidecarEventRef.current = handleSidecarEvent; }, [handleSidecarEvent]);
+
+  // Event listener is now attached in the sidecar lifecycle effect above
+  // to prevent race condition where messages are sent before listeners exist
 
   // ── New Chat ──────────────────────────────────────────────────────────────
   const newChat = useCallback(() => {
