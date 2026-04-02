@@ -1886,7 +1886,8 @@ export function AvaChatPage() {
         if (!cancelled) {
           // Attach event listener IMMEDIATELY after start — before setting ready
           // This prevents the race condition where messages are sent before listeners exist
-          const handler = (event: SidecarEvent) => { sidecarEventRef.current?.(event); };
+          const handler = (event: SidecarEvent) => { sidecarEventRef.current(event); };
+          (sidecar as any).__avaHandler = handler;
           sidecar.onAny(handler);
           setSidecarReady(true);
           setSidecarStatus('ready');
@@ -1916,7 +1917,7 @@ export function AvaChatPage() {
     return () => {
       cancelled = true;
       sidecar.off('close', onClose);
-      sidecar.removeAllListeners();
+      if ((sidecar as any).__avaHandler) sidecar.offAny((sidecar as any).__avaHandler);
       window.removeEventListener('ava-clear-memory', onClearMemory);
       sidecar.stop().catch(() => {});
     };
@@ -2181,7 +2182,6 @@ export function AvaChatPage() {
     if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
     const sidecar = getSidecar();
     sidecar.clear().catch(() => {});
-    sidecar.removeAllListeners();
     setStreaming(false);
     textareaRef.current?.focus();
   }, [messages, model]);
