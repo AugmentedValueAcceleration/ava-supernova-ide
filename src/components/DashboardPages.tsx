@@ -1452,7 +1452,7 @@ export function AvaChatPage() {
     const key = getPlatformKey();
     if (!key) return;
     try {
-      const res = await apiFetch('/api/usage', { method: 'GET', headers: { Authorization: `Bearer ${key}` } });
+      const res = await apiFetch('/usage', { method: 'GET', headers: { Authorization: `Bearer ${key}` } });
       if (res && res.free_tokens_used !== undefined) {
         setPlatformBalance({ used: res.free_tokens_used, limit: res.free_tokens_limit || 3000000 });
       }

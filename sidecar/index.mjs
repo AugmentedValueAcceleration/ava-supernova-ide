@@ -50,6 +50,7 @@ const {
   Conductor,
   AutoCoordinator,
   MemoryAgent,
+  ProjectIndexer,
   BriefingEngine,
   detectProjectRoot,
   loadProjectInstructions,
@@ -280,10 +281,19 @@ async function handleInit(data) {
     // Journal manager (local-first, stored in ~/.ava/journal/)
     journalManager = new JournalManager({ globalDir: AVA_HOME, projectRoot: cwd });
 
+    // Project indexer
+    let projectIndexer = null;
+    try {
+      projectIndexer = new ProjectIndexer(cwd);
+      await projectIndexer.scan();
+      emit({ event: 'info', message: `Project indexed: ${projectIndexer.getIndex()?.framework?.name || 'unknown'} project` });
+    } catch { /* non-fatal */ }
+
     // Shared state
     const sharedState = {
       memoryManager,
       journalManager,
+      projectIndexer,
       platformKey: config.platformKey,
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
       minimaxApiKey: config.providers?.minimax?.apiKey || process.env.MINIMAX_API_KEY,
