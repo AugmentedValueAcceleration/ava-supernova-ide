@@ -2646,7 +2646,6 @@ export function AvaChatPage() {
   const currentMode = MODES.find((m) => m.id === mode) || MODES[0];
   const activeModelName = useMemo(() => {
     if (model === 'auto') return '✦ Auto';
-    if (model === 'kimi-k2.5') return 'Kimi K2.5';
     if (model === 'qwen3-omni-flash') return 'Qwen Omni Flash';
     if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
     if (model === 'qwen-flash') return 'Qwen Flash';
@@ -2731,7 +2730,6 @@ export function AvaChatPage() {
                 {t('dash.chat.platform')}
                 </div>
                 {[
-                  { id: 'kimi-k2.5', name: 'Kimi K2.5', tag: '' },
                   { id: 'MiniMax-M2.7', name: 'MiniMax M2.7', tag: '' },
                   { id: 'MiniMax-M2.5', name: 'MiniMax M2.5', tag: '' },
                   { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash', tag: '' },

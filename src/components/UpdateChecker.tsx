@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { check } from '@tauri-apps/plugin-updater';
 
-export const APP_VERSION = '0.4.2';
+export const APP_VERSION = '0.4.3';
 
 interface UpdateInfo {
   version: string;
