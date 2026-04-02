@@ -1503,6 +1503,7 @@ export function AvaChatPage() {
   // Track inline reveal toggles per message: msgId -> set of character offsets
   const [inlineReveals, setInlineReveals] = useState<Record<string, Set<number>>>({});
   const vaultPanelRef = useRef<HTMLDivElement>(null);
+  const vaultBtnRef = useRef<HTMLButtonElement>(null);
 
   // Load secrets from localStorage on mount
   useEffect(() => {
@@ -1521,7 +1522,7 @@ export function AvaChatPage() {
   useEffect(() => {
     if (!showVault) return;
     const handler = (e: MouseEvent) => {
-      if (vaultPanelRef.current && !vaultPanelRef.current.contains(e.target as Node)) setShowVault(false);
+      if (vaultPanelRef.current && !vaultPanelRef.current.contains(e.target as Node) && vaultBtnRef.current && !vaultBtnRef.current.contains(e.target as Node)) setShowVault(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -1825,8 +1826,8 @@ export function AvaChatPage() {
     try { localStorage.setItem('ava-ide-chat-backend', chatBackend); } catch { /* */ }
   }, [chatBackend]);
 
-  // Ref to hold the latest event handler — avoids ordering issues with useCallback
-  const sidecarEventRef = useRef<((event: SidecarEvent) => void) | null>(null);
+  // Ref to hold the latest event handler — set synchronously, never null after mount
+  const sidecarEventRef = useRef<(event: SidecarEvent) => void>(() => {});
 
   // ── Sidecar lifecycle — always runs (both Local and Cloud need tools) ──
   useEffect(() => {
@@ -2134,8 +2135,8 @@ export function AvaChatPage() {
     }
   }, [redactSecrets]);
 
-  // Keep the ref in sync with the latest callback
-  useEffect(() => { sidecarEventRef.current = handleSidecarEvent; }, [handleSidecarEvent]);
+  // Keep the ref in sync — synchronous assignment, not in useEffect
+  sidecarEventRef.current = handleSidecarEvent;
 
   // Event listener is now attached in the sidecar lifecycle effect above
   // to prevent race condition where messages are sent before listeners exist
@@ -3751,6 +3752,7 @@ export function AvaChatPage() {
 
             {/* Secret Vault button */}
             <button
+              ref={vaultBtnRef}
               onClick={() => setShowVault(!showVault)}
               style={{
                 width: 36, height: 36, borderRadius: 8,
