@@ -353,6 +353,18 @@ export class SidecarManager {
         case 'get_dpi_scale':
           result = await invoke('get_dpi_scale');
           break;
+        case 'list_ui_elements':
+          result = await invoke('list_ui_elements');
+          break;
+        case 'find_ui_element':
+          result = await invoke('find_ui_element', { name: event.text });
+          break;
+        case 'click_element':
+          result = await invoke('click_element', { name: event.text });
+          break;
+        case 'focus_window':
+          result = await invoke('focus_window', { name: event.text });
+          break;
         default:
           throw new Error(`Unknown computer use action: ${action}`);
       }

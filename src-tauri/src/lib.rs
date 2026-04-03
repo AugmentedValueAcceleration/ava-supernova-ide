@@ -278,6 +278,194 @@ unsafe fn get_process_name(pid: u32) -> Option<String> {
     path.rsplit('\\').next().map(|s| s.to_string())
 }
 
+// ─── UI Automation: Structured element detection ─────────────────────────────
+
+/// UI element info returned to the frontend/sidecar
+#[derive(Serialize, Clone)]
+struct UIElementInfo {
+    name: String,
+    control_type: String,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    /// Centre point for clicking
+    cx: i32,
+    cy: i32,
+}
+
+/// List all clickable UI elements in the foreground window.
+/// Returns structured data: name, type, bounding box, centre coordinates.
+#[tauri::command]
+fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use uiautomation::UIAutomation;
+
+        let automation = UIAutomation::new().map_err(|e| format!("UIA init failed: {e}"))?;
+        let root = automation.get_root_element().map_err(|e| format!("Root failed: {e}"))?;
+
+        // Get the foreground window
+        let _focused = automation.get_focused_element().map_err(|e| format!("Focus failed: {e}"))?;
+        let walker = automation.get_control_view_walker().map_err(|e| format!("Walker failed: {e}"))?;
+
+        // Walk the focused window's children (max 50 elements to avoid overwhelming)
+        let mut elements = Vec::new();
+        collect_elements(&walker, &root, &mut elements, 0, 3); // depth 3
+
+        Ok(elements)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("UI Automation not available on this platform".into())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn collect_elements(
+    walker: &uiautomation::UITreeWalker,
+    parent: &uiautomation::UIElement,
+    elements: &mut Vec<UIElementInfo>,
+    depth: u32,
+    max_depth: u32,
+) {
+    if depth > max_depth || elements.len() >= 100 {
+        return;
+    }
+
+    if let Ok(child) = walker.get_first_child(parent) {
+        collect_element_recursive(walker, &child, elements, depth, max_depth);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn collect_element_recursive(
+    walker: &uiautomation::UITreeWalker,
+    element: &uiautomation::UIElement,
+    elements: &mut Vec<UIElementInfo>,
+    depth: u32,
+    max_depth: u32,
+) {
+    if elements.len() >= 100 {
+        return;
+    }
+
+    // Get element info
+    let name = element.get_name().unwrap_or_default();
+    let control_type = element.get_localized_control_type().unwrap_or_default();
+    let rect = element.get_bounding_rectangle().unwrap_or_default();
+
+    // Only include elements that have a name and a visible bounding box
+    let w = rect.get_width() as i32;
+    let h = rect.get_height() as i32;
+    let x = rect.get_left() as i32;
+    let y = rect.get_top() as i32;
+    if !name.is_empty() && w > 0 && h > 0 {
+        elements.push(UIElementInfo {
+            name: name.clone(),
+            control_type,
+            x,
+            y,
+            width: w,
+            height: h,
+            cx: x + w / 2,
+            cy: y + h / 2,
+        });
+    }
+
+    // Recurse into children
+    if depth < max_depth {
+        collect_elements(walker, element, elements, depth + 1, max_depth);
+    }
+
+    // Move to next sibling
+    if let Ok(next) = walker.get_next_sibling(element) {
+        collect_element_recursive(walker, &next, elements, depth, max_depth);
+    }
+}
+
+/// Find a specific UI element by name (partial match) and return its centre coordinates.
+#[tauri::command]
+fn find_ui_element(name: String) -> Result<UIElementInfo, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let elements = list_ui_elements()?;
+        let name_lower = name.to_lowercase();
+
+        // Exact match first, then partial
+        if let Some(el) = elements.iter().find(|e| e.name.to_lowercase() == name_lower) {
+            return Ok(el.clone());
+        }
+        if let Some(el) = elements.iter().find(|e| e.name.to_lowercase().contains(&name_lower)) {
+            return Ok(el.clone());
+        }
+
+        Err(format!("Element '{}' not found. Available: {}", name,
+            elements.iter().take(10).map(|e| format!("{}({})", e.name, e.control_type)).collect::<Vec<_>>().join(", ")))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("UI Automation not available on this platform".into())
+    }
+}
+
+/// Focus a window by name — brings it to the foreground.
+#[tauri::command]
+fn focus_window(name: String) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use uiautomation::UIAutomation;
+
+        let automation = UIAutomation::new().map_err(|e| format!("UIA init failed: {e}"))?;
+        let root = automation.get_root_element().map_err(|e| format!("Root failed: {e}"))?;
+        let walker = automation.get_control_view_walker().map_err(|e| format!("Walker failed: {e}"))?;
+
+        let name_lower = name.to_lowercase();
+
+        // Walk top-level windows to find the target
+        if let Ok(child) = walker.get_first_child(&root) {
+            let mut current = child;
+            loop {
+                let win_name = current.get_name().unwrap_or_default();
+                if win_name.to_lowercase().contains(&name_lower) {
+                    // Found it — try to set focus
+                    current.set_focus().map_err(|e| format!("Focus failed: {e}"))?;
+                    return Ok(win_name);
+                }
+                match walker.get_next_sibling(&current) {
+                    Ok(next) => current = next,
+                    Err(_) => break,
+                }
+            }
+        }
+
+        Err(format!("Window '{}' not found", name))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Not available on this platform".into())
+    }
+}
+
+/// Click a UI element by name — finds it via UIA and clicks its centre.
+#[tauri::command]
+fn click_element(name: String) -> Result<UIElementInfo, String> {
+    let element = find_ui_element(name)?;
+
+    // Click the centre of the element
+    use enigo::{Enigo, Mouse, Settings, Coordinate};
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
+    enigo.move_mouse(element.cx, element.cy, Coordinate::Abs)
+        .map_err(|e| format!("Move failed: {e}"))?;
+    enigo.button(enigo::Button::Left, enigo::Direction::Click)
+        .map_err(|e| format!("Click failed: {e}"))?;
+
+    Ok(element)
+}
+
 /// Get the primary monitor's DPI scale factor (e.g., 1.25 for 125% scaling).
 #[tauri::command]
 fn get_dpi_scale() -> Result<f64, String> {
@@ -323,6 +511,10 @@ pub fn run() {
             drag,
             get_active_window,
             get_dpi_scale,
+            list_ui_elements,
+            find_ui_element,
+            click_element,
+            focus_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -189,6 +189,26 @@ const windowBridge = {
   },
 };
 
+/** UI Automation bridge — structured element detection */
+const uiaBridge = {
+  async listElements() {
+    const result = await computerUseRequest('list_ui_elements');
+    return result.data;
+  },
+  async findElement(name) {
+    const result = await computerUseRequest('find_ui_element', { name });
+    return result.data;
+  },
+  async clickElement(name) {
+    const result = await computerUseRequest('click_element', { name });
+    return result.data;
+  },
+  async focusWindow(name) {
+    const result = await computerUseRequest('focus_window', { name });
+    return result.data;
+  },
+};
+
 // ─── NDJSON I/O ─────────────────────────────────────────────────────────────
 
 function emit(event) {
@@ -419,6 +439,7 @@ async function handleInit(data) {
       inputProvider: inputBridge,
       windowProvider: windowBridge,
       holoApiKey: process.env.HAI_API_KEY || config.holoApiKey,
+      uiaProvider: uiaBridge,
       _debug_holo: !!(config.holoApiKey || process.env.HAI_API_KEY) ? 'BYOK' : (config.platformKey ? 'platform' : 'none'),
       computerUseSettings: config.computerUseSettings || undefined,
     };
@@ -658,6 +679,14 @@ async function handleMessage(data) {
             });
             break;
           case 'tool_call_partial':
+            // Check for Holo3 usage data embedded in tool output
+            if (typeof agentEvent.data === 'string' && agentEvent.data.startsWith('__usage__:')) {
+              try {
+                const usageData = JSON.parse(agentEvent.data.slice(10));
+                emit({ event: 'usage', usage: usageData, cost: 0 });
+              } catch { /* ignore parse errors */ }
+              break; // Don't forward the raw __usage__ line to the UI
+            }
             emit({
               event: 'tool_call_partial',
               toolCallId: agentEvent.toolCallId,

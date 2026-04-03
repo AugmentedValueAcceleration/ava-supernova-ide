@@ -7782,7 +7782,7 @@ export function SettingsPage() {
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Vision Model</div>
                 <select
-                  value={settings.computerUseModel || 'holo3-35b-a3b'}
+                  value={settings.computerUseModel || 'holo3-122b-a10b'}
                   onChange={e => saveImmediate('computerUseModel', e.target.value)}
                   style={{ ...inputStyle, width: 200, height: 34, borderRadius: 8, fontSize: 12, cursor: 'pointer' }}
                 >
