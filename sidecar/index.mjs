@@ -124,9 +124,15 @@ const screenshotBridge = {
     const data = result.data;
     // New format returns { image, width, height }
     if (data && typeof data === 'object' && data.image) {
-      if (!screenshotDims) {
-        screenshotDims = { width: data.width, height: data.height };
+      // Always update dimensions (monitors can change)
+      const prevDims = screenshotDims;
+      screenshotDims = { width: data.width, height: data.height };
+      // Expose dimensions so computer-use tool can pass to Holo3
+      screenshotBridge._lastDims = screenshotDims;
+      if (!prevDims) {
         emit({ event: 'info', message: `Screenshot: ${data.width}x${data.height} pixels` });
+      } else if (prevDims.width !== data.width || prevDims.height !== data.height) {
+        emit({ event: 'info', message: `Screenshot resolution changed: ${data.width}x${data.height}` });
       }
       return data.image;
     }
@@ -140,20 +146,37 @@ const screenshotBridge = {
   },
 };
 
-/** DPI scale factor — screenshot pixels / logical screen pixels */
-let dpiScale = null;
+/** DPI scale factor — screenshot pixels / logical screen pixels.
+ *  Fetched fresh each action to handle monitor changes / docking. */
+let dpiScaleCache = null;
+let dpiScaleAge = 0;
+const DPI_CACHE_TTL = 10_000; // Re-detect every 10 seconds
 async function getDpiScale() {
-  if (dpiScale !== null) return dpiScale;
+  const now = Date.now();
+  if (dpiScaleCache !== null && (now - dpiScaleAge) < DPI_CACHE_TTL) return dpiScaleCache;
   try {
     const result = await computerUseRequest('get_dpi_scale');
-    dpiScale = (typeof result.data === 'number' && result.data > 0) ? result.data : 1.5;
-    emit({ event: 'info', message: `DPI scale: ${dpiScale}` });
+    const scale = (typeof result.data === 'number' && result.data > 0) ? result.data : null;
+    if (scale) {
+      if (dpiScaleCache !== null && dpiScaleCache !== scale) {
+        emit({ event: 'info', message: `DPI scale changed: ${dpiScaleCache} → ${scale}` });
+      }
+      dpiScaleCache = scale;
+      dpiScaleAge = now;
+    } else if (dpiScaleCache === null) {
+      // First call failed — detect from screenshot vs screen resolution
+      dpiScaleCache = 1.0; // Safe default: assume 100% until proven otherwise
+      dpiScaleAge = now;
+      emit({ event: 'info', message: `DPI scale: 1.0 (detection failed, using safe default)` });
+    }
   } catch {
-    // Fallback: assume 150% scaling (most common high-DPI on Windows laptops)
-    dpiScale = 1.5;
-    emit({ event: 'info', message: `DPI scale: ${dpiScale} (fallback)` });
+    if (dpiScaleCache === null) {
+      dpiScaleCache = 1.0;
+      dpiScaleAge = now;
+      emit({ event: 'info', message: `DPI scale: 1.0 (fallback)` });
+    }
   }
-  return dpiScale;
+  return dpiScaleCache;
 }
 
 /** Scale Holo3 coordinates (physical pixels) to logical coordinates for enigo */
@@ -165,21 +188,38 @@ async function scaleCoord(x, y) {
 /** First screenshot logs dimensions for coordinate calibration */
 let screenshotDims = null;
 
+/** Scale and clamp coordinates to screen bounds */
+async function scaleAndClamp(x, y) {
+  const scale = await getDpiScale();
+  let sx = Math.round(x / scale);
+  let sy = Math.round(y / scale);
+  // Clamp to screen bounds if we know them
+  if (screenshotDims) {
+    const maxX = Math.round(screenshotDims.width / scale);
+    const maxY = Math.round(screenshotDims.height / scale);
+    sx = Math.max(0, Math.min(sx, maxX - 1));
+    sy = Math.max(0, Math.min(sy, maxY - 1));
+  }
+  return { sx, sy, scale };
+}
+
 const inputBridge = {
   async click(x, y) {
-    const scale = await getDpiScale();
-    const sx = Math.round(x / scale);
-    const sy = Math.round(y / scale);
+    const { sx, sy, scale } = await scaleAndClamp(x, y);
     emit({ event: 'info', message: `Click: Holo3=(${x},${y}) → Screen=(${sx},${sy}) [DPI ${scale}]` });
     await computerUseRequest('click', { x: sx, y: sy });
   },
-  async doubleClick(x, y) { const s = await getDpiScale(); await computerUseRequest('double_click', { x: Math.round(x/s), y: Math.round(y/s) }); },
-  async rightClick(x, y) { const s = await getDpiScale(); await computerUseRequest('right_click', { x: Math.round(x/s), y: Math.round(y/s) }); },
+  async doubleClick(x, y) { const { sx, sy } = await scaleAndClamp(x, y); await computerUseRequest('double_click', { x: sx, y: sy }); },
+  async rightClick(x, y) { const { sx, sy } = await scaleAndClamp(x, y); await computerUseRequest('right_click', { x: sx, y: sy }); },
   async typeText(text) { await computerUseRequest('type_text', { text }); },
   async keyPress(key) { await computerUseRequest('key_press', { key }); },
   async scroll(direction, amount) { await computerUseRequest('scroll', { direction, amount }); },
-  async moveMouse(x, y) { const s = await getDpiScale(); await computerUseRequest('move_mouse', { x: Math.round(x/s), y: Math.round(y/s) }); },
-  async drag(x, y, endX, endY) { const s = await getDpiScale(); await computerUseRequest('drag', { x: Math.round(x/s), y: Math.round(y/s), end_x: Math.round(endX/s), end_y: Math.round(endY/s) }); },
+  async moveMouse(x, y) { const { sx, sy } = await scaleAndClamp(x, y); await computerUseRequest('move_mouse', { x: sx, y: sy }); },
+  async drag(x, y, endX, endY) {
+    const start = await scaleAndClamp(x, y);
+    const end = await scaleAndClamp(endX, endY);
+    await computerUseRequest('drag', { x: start.sx, y: start.sy, end_x: end.sx, end_y: end.sy });
+  },
 };
 
 const windowBridge = {
