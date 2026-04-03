@@ -6,6 +6,7 @@ import {
   TasksPage,
   JournalPage,
   LearningPage,
+  LearningLibraryPage,
   LibraryPage,
   PersonalityPage,
   CloudSyncPage,
@@ -34,6 +35,7 @@ export type DashboardPageId =
   | 'tasks'
   | 'journal'
   | 'learning'
+  | 'learning-library'
   | 'library'
   | 'personality'
   | 'cloud-sync'
@@ -66,6 +68,7 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'tasks': '\u2705',
   'journal': '\uD83D\uDCD3',
   'learning': '\uD83C\uDF93',
+  'learning-library': '\uD83D\uDCDA',
   'library': '\uD83D\uDDBC\uFE0F',
   'personality': '\uD83C\uDFA8',
   'cloud-sync': '\u2601\uFE0F',
@@ -91,6 +94,7 @@ const dashboardLabelKeys: Record<DashboardPageId, string> = {
   'tasks': 'dash.nav.tasks',
   'journal': 'dash.nav.journal',
   'learning': 'dash.nav.learning',
+  'learning-library': 'dash.nav.learning_library',
   'library': 'dash.nav.library',
   'personality': 'dash.nav.personality',
   'cloud-sync': 'dash.nav.cloud_sync',
@@ -115,6 +119,7 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'tasks': TasksPage,
   'journal': JournalPage,
   'learning': LearningPage,
+  'learning-library': LearningLibraryPage,
   'library': LibraryPage,
   'personality': PersonalityPage,
   'cloud-sync': CloudSyncPage,

@@ -5910,6 +5910,186 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/* ===== 6b. Learning Library ===== */
+export function LearningLibraryPage() {
+  useLocale();
+  const { data, loading } = useApiData<{ paths: any[]; total: number }>('/learning/library?limit=30', { paths: [], total: 0 });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<any>(null);
+  const [search, setSearch] = useState('');
+  const [levelFilter, setLevelFilter] = useState('all');
+  const [sort, setSort] = useState('popular');
+  const [forking, setForking] = useState(false);
+
+  const paths: any[] = data?.paths || [];
+  const filtered = paths.filter(p => {
+    if (levelFilter !== 'all' && p.level !== levelFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return p.title.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q) || p.subject?.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const handleSelect = async (id: string) => {
+    setSelectedId(id);
+    try {
+      const res = await fetch(`https://ava-supernova.com/api/learning/library/${id}`);
+      const d = await res.json();
+      if (d?.id) setDetail(d);
+    } catch { /* */ }
+  };
+
+  const handleFork = async (id: string) => {
+    setForking(true);
+    try {
+      const key = getPlatformKey();
+      if (!key) return;
+      await apiFetch(`/learning/library/${id}/fork`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } });
+    } catch { /* */ }
+    setForking(false);
+  };
+
+  const levelColors: Record<string, { color: string; bg: string }> = {
+    beginner: { color: '#34d399', bg: 'rgba(52,211,153,0.10)' },
+    intermediate: { color: '#60a5fa', bg: 'rgba(96,165,250,0.10)' },
+    advanced: { color: '#fbbf24', bg: 'rgba(251,191,36,0.10)' },
+    mixed: { color: '#a78bfa', bg: 'rgba(167,139,250,0.10)' },
+  };
+
+  // Detail view
+  if (selectedId && detail && detail.id === selectedId) {
+    const lc = levelColors[detail.level] || levelColors.beginner;
+    const modules = detail.content?.modules || [];
+    return (
+      <div style={pageWrapper}>
+        <button onClick={() => { setSelectedId(null); setDetail(null); }} style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>
+          &larr; Back to Library
+        </button>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, color: detail.source === 'curated' ? '#a855f7' : '#60a5fa', background: detail.source === 'curated' ? 'rgba(168,85,247,0.1)' : 'rgba(96,165,250,0.1)' }}>
+            {detail.source === 'curated' ? 'Curated by Ava' : 'Community'}
+          </span>
+          <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, color: lc.color, background: lc.bg }}>{detail.level}</span>
+          {detail.estimated_hours && <span style={{ fontSize: 11, color: '#6c7086' }}>{detail.estimated_hours}h</span>}
+        </div>
+        <div style={{ ...pageTitle, marginBottom: 4 }}>{detail.title}</div>
+        {detail.author_name && <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>by {detail.author_name}</div>}
+        <div style={{ fontSize: 13, color: '#a6adc8', lineHeight: 1.6, marginBottom: 16 }}>{detail.description}</div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 20, fontSize: 12, color: '#6c7086' }}>
+          <span>{detail.fork_count} learner{detail.fork_count !== 1 ? 's' : ''}</span>
+          {detail.rating_count > 0 && <span>{(detail.rating_sum / detail.rating_count).toFixed(1)}/5 rating</span>}
+          <span>{modules.length} modules</span>
+          <span>{modules.reduce((s: number, m: any) => s + (m.lessons?.length || 0), 0)} lessons</span>
+        </div>
+        {detail.learning_objectives?.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={sectionTitle}>What you will learn</div>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#a6adc8', lineHeight: 1.8 }}>
+              {detail.learning_objectives.map((obj: string, i: number) => <li key={i}>{obj}</li>)}
+            </ul>
+          </div>
+        )}
+        <div style={{ marginBottom: 20 }}>
+          <div style={sectionTitle}>Curriculum</div>
+          {modules.map((mod: any, mi: number) => (
+            <div key={mi} style={{ ...card, marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Module {mi + 1}: {mod.title}</div>
+              {mod.description && <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 6 }}>{mod.description}</div>}
+              {(mod.lessons || []).map((l: any, li: number) => (
+                <div key={li} style={{ fontSize: 12, color: '#a6adc8', padding: '2px 0', display: 'flex', gap: 6 }}>
+                  <span>{l.type === 'concept' ? '\uD83D\uDCD6' : l.type === 'exercise' ? '\uD83D\uDCBB' : l.type === 'project' ? '\uD83D\uDEE0' : l.type === 'quiz' ? '\u2753' : '\uD83D\uDD04'}</span>
+                  <span>{l.title}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <button onClick={() => handleFork(detail.id)} disabled={forking} style={{ padding: '10px 24px', borderRadius: 8, border: 'none', cursor: forking ? 'wait' : 'pointer', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', fontSize: 14, fontWeight: 500 }}>
+          {forking ? 'Starting...' : 'Start Learning'}
+        </button>
+      </div>
+    );
+  }
+
+  // List view
+  return (
+    <div style={pageWrapper}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <div style={pageTitle}>Learning Library</div>
+        <button onClick={() => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }))} style={{ background: 'none', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 6, padding: '4px 12px', color: '#a6adc8', cursor: 'pointer', fontSize: 11 }}>
+          My Learning
+        </button>
+      </div>
+      <div style={pageSubtitle}>Curated and community learning paths. Free for everyone.</div>
+
+      <input
+        type="text"
+        placeholder="Search paths..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        style={{ ...inputStyle, marginBottom: 12 }}
+      />
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <select value={levelFilter} onChange={e => setLevelFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', height: 30, fontSize: 11 }}>
+          <option value="all">All levels</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+          <option value="mixed">Mixed</option>
+        </select>
+        <select value={sort} onChange={e => setSort(e.target.value)} style={{ ...inputStyle, width: 'auto', height: 30, fontSize: 11 }}>
+          <option value="popular">Most Popular</option>
+          <option value="newest">Newest</option>
+          <option value="rating">Highest Rated</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: '#6c7086' }}>Loading...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 40, color: '#6c7086' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCDA'}</div>
+          <div style={{ fontSize: 13 }}>No paths found.</div>
+          <div style={{ fontSize: 11, marginTop: 4 }}>Try a different search or ask Ava to create a custom path.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filtered.map((p: any) => {
+            const lc = levelColors[p.level] || levelColors.beginner;
+            const avgRating = p.rating_count > 0 ? (p.rating_sum / p.rating_count).toFixed(1) : null;
+            return (
+              <button
+                key={p.id}
+                onClick={() => handleSelect(p.id)}
+                style={{ ...card, textAlign: 'left' as const, cursor: 'pointer', border: '1px solid rgba(168,85,247,0.12)', transition: 'border-color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.12)')}
+              >
+                <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' as const }}>
+                  <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 600, textTransform: 'uppercase' as const, color: p.source === 'curated' ? '#a855f7' : '#60a5fa', background: p.source === 'curated' ? 'rgba(168,85,247,0.1)' : 'rgba(96,165,250,0.1)' }}>
+                    {p.source === 'curated' ? 'Curated' : 'Community'}
+                  </span>
+                  <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 600, textTransform: 'uppercase' as const, color: lc.color, background: lc.bg }}>{p.level}</span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{p.title}</div>
+                <div style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.5, marginBottom: 8 }}>{p.description?.slice(0, 120)}{(p.description?.length || 0) > 120 ? '...' : ''}</div>
+                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#6c7086' }}>
+                  {p.estimated_hours && <span>{p.estimated_hours}h</span>}
+                  <span>{p.fork_count} learner{p.fork_count !== 1 ? 's' : ''}</span>
+                  {avgRating && <span>{'\u2605'} {avgRating}/5</span>}
+                  {p.author_name && <span>by {p.author_name}</span>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function LibraryPage() {
   useLocale();
   const connected = checkConnected();
