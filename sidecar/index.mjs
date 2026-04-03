@@ -660,9 +660,31 @@ async function handleMessage(data) {
     let messages = conversation.getMessages();
 
     // Per-turn memory brief (curated by Memory Agent) or raw recall fallback
+    // Enhanced: detects ambiguous references and topic shifts for proactive recall
     if (memoryAgentInstance && data.content && data.content.length > 5) {
       try {
-        const brief = await memoryAgentInstance.generateBrief(data.content);
+        // Detect ambiguous references — "that thing", "the issue", "what we discussed"
+        // If found, enrich the query with recent conversation context for better recall
+        const ambiguousPatterns = /\b(?:that (?:thing|issue|bug|problem|feature|idea)|what we (?:discussed|talked about|mentioned|decided)|remember (?:when|that|the)|as (?:we|I) (?:said|mentioned|discussed)|the (?:previous|earlier|last) (?:issue|conversation|discussion))\b/i;
+        const hasAmbiguousRef = ambiguousPatterns.test(data.content);
+
+        let briefQuery = data.content;
+        if (hasAmbiguousRef) {
+          // Enrich query with recent conversation context for disambiguation
+          const recentMsgs = conversation.getMessages()
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .slice(-4)
+            .map(m => typeof m.content === 'string' ? m.content.slice(0, 150) : '')
+            .filter(Boolean)
+            .join(' ');
+          briefQuery = `${data.content} [Context: ${recentMsgs.slice(0, 400)}]`;
+          emit({ event: 'info', message: 'Detected ambiguous reference — enriching memory recall with conversation context' });
+        }
+
+        // Detect topic shift — compare current message to last brief's topic
+        // If the topic shifted significantly, force a fresh recall
+        const conversationContext = hasAmbiguousRef ? briefQuery : undefined;
+        const brief = await memoryAgentInstance.generateBrief(briefQuery, conversationContext);
         if (brief.summary) {
           const topicList = brief.availableTopics.length > 0
             ? '\n\nAvailable memory topics (use memory_recall for detail): ' +
@@ -675,7 +697,7 @@ async function handleMessage(data) {
           });
           conversation.setMessages(currentMsgs);
           messages = conversation.getMessages();
-          emit({ event: 'info', message: `Memory brief generated (${brief.consideredEntryCount} memories considered)` });
+          emit({ event: 'info', message: `Memory brief generated (${brief.consideredEntryCount} memories considered${hasAmbiguousRef ? ', disambiguation enriched' : ''})` });
         }
       } catch (err) {
         emit({ event: 'info', message: `Memory brief failed: ${err.message}` });
