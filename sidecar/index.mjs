@@ -565,11 +565,32 @@ async function handleMessage(data) {
 
     // Build multimodal content if attachments are present (images, files)
     if (data.attachments && Array.isArray(data.attachments) && data.attachments.length > 0) {
+      emit({ event: 'info', message: `Attachments received: ${data.attachments.length}` });
       const parts = [];
       if (data.content) parts.push({ type: 'text', text: data.content });
       for (const att of data.attachments) {
-        if (att.mimeType?.startsWith('image/') && att.dataUri) {
-          parts.push({ type: 'image_url', image_url: { url: att.dataUri } });
+        if (att.mimeType?.startsWith('image/')) {
+          let imageUrl = att.dataUri;
+          // Handle file:// temp attachments — read back to data URI
+          if (imageUrl?.startsWith('file://')) {
+            try {
+              const filePath = imageUrl.replace('file://', '');
+              const { readFile } = await import('node:fs/promises');
+              const bytes = await readFile(filePath);
+              imageUrl = `data:${att.mimeType};base64,${bytes.toString('base64')}`;
+              // Clean up temp file
+              const { unlink } = await import('node:fs/promises');
+              unlink(filePath).catch(() => {});
+              emit({ event: 'info', message: `Image loaded from temp: ${att.name} (${Math.round(bytes.length / 1024)}KB)` });
+            } catch (err) {
+              emit({ event: 'info', message: `Failed to read temp image: ${err.message}` });
+              continue;
+            }
+          }
+          if (imageUrl) {
+            parts.push({ type: 'image_url', image_url: { url: imageUrl } });
+            emit({ event: 'info', message: `Image attached: ${att.name} (${att.mimeType})` });
+          }
         }
       }
       conversation.addUserMessage(parts.length > 0 ? parts : data.content);

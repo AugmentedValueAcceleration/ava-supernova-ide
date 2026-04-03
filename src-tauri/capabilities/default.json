@@ -43,6 +43,10 @@
     {
       "identifier": "fs:allow-stat",
       "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "$TEMP/**" }]
     }
   ]
 }

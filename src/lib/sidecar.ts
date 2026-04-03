@@ -230,7 +230,29 @@ export class SidecarManager {
    * Send a chat message to the agent.
    */
   async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[]): Promise<void> {
-    await this.send({ cmd: 'message', content, attachments: attachments?.length ? attachments : undefined, history: history?.length ? history : undefined });
+    // For large attachments (images), write to temp files to avoid stdin buffer limits
+    let processedAttachments = attachments;
+    if (attachments?.length) {
+      processedAttachments = [];
+      for (const att of attachments) {
+        if (att.dataUri && att.dataUri.length > 100_000) {
+          // Large attachment — write to temp file, pass path
+          try {
+            const tempPath = `${await import('@tauri-apps/api/path').then(p => p.tempDir())}ava-attach-${Date.now()}-${att.name}`;
+            const base64Data = att.dataUri.replace(/^data:[^;]+;base64,/, '');
+            const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+            await import('@tauri-apps/plugin-fs').then(fs => fs.writeFile(tempPath, bytes));
+            processedAttachments.push({ ...att, dataUri: `file://${tempPath}`, _tempFile: true } as any);
+          } catch {
+            // Fallback: send inline (may fail for very large images)
+            processedAttachments.push(att);
+          }
+        } else {
+          processedAttachments.push(att);
+        }
+      }
+    }
+    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined });
   }
 
   async setWorkingHours(start: number, end: number): Promise<void> {
