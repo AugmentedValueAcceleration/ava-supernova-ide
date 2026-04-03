@@ -517,6 +517,7 @@ async function handleInit(data) {
     globalThis._providerRegistry = providerRegistry;
     globalThis._cwd = cwd;
     globalThis._sharedState = sharedState;
+    globalThis._currentModel = resolved.model;
 
     emit({ event: 'info', message: `Holo3: ${sharedState._debug_holo}, key prefix: ${(sharedState.holoApiKey || '').slice(0, 6) || 'none'}` });
     emit({ event: 'ready', model: resolved.model.id, provider: resolved.provider.name });
@@ -566,6 +567,12 @@ async function handleMessage(data) {
     // Build multimodal content if attachments are present (images, files)
     if (data.attachments && Array.isArray(data.attachments) && data.attachments.length > 0) {
       emit({ event: 'info', message: `Attachments received: ${data.attachments.length}` });
+      // Warn user immediately if current model can't process images
+      const hasImages = data.attachments.some(a => a.mimeType?.startsWith('image/'));
+      const currentModel = globalThis._currentModel;
+      if (hasImages && currentModel && !currentModel.supportsVision) {
+        emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.5 Plus or Qwen Omni Flash to analyse images.` });
+      }
       const parts = [];
       if (data.content) parts.push({ type: 'text', text: data.content });
       for (const att of data.attachments) {
@@ -961,6 +968,7 @@ async function handleSetModel(data) {
     if (!resolved) { emitError(`Model not found: ${data.model}`); return; }
 
     sharedState.activeModelId = resolved.model.id;
+    globalThis._currentModel = resolved.model;
 
     agent = new Agent({
       provider: resolved.provider,
@@ -1081,6 +1089,43 @@ rl.on('line', async (line) => {
       if (agent?.sharedState) {
         agent.sharedState.computerUseSettings = data.settings;
         emit({ event: 'info', message: 'Computer use settings updated' });
+      }
+      break;
+    }
+    case 'set_cwd': {
+      // Dynamic working directory update — called when user opens a new folder
+      if (!data.cwd) { emitError('No cwd specified'); break; }
+      try {
+        const path = await import('path');
+        let newCwd = path.default.resolve(data.cwd);
+        if (newCwd.includes('..')) { emitError('Invalid cwd path'); break; }
+        process.chdir(newCwd);
+        globalThis._cwd = newCwd;
+
+        // Update agent and conductor with new cwd
+        if (agent) agent.setCwd(newCwd);
+        if (conductor) conductor.setCwd(newCwd);
+
+        // Re-detect project root for memory scoping
+        const projectRoot = detectProjectRoot(newCwd) ?? undefined;
+        if (memoryManager) {
+          try {
+            memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot });
+            if (globalThis._sharedState) globalThis._sharedState.memoryManager = memoryManager;
+          } catch { /* non-fatal */ }
+        }
+
+        // Re-index the new project
+        try {
+          const projectIndexer = new ProjectIndexer(newCwd);
+          await projectIndexer.scan();
+          if (globalThis._sharedState) globalThis._sharedState.projectIndexer = projectIndexer;
+          emit({ event: 'info', message: `Re-indexed: ${projectIndexer.getIndex()?.framework?.name || 'unknown'} project in ${newCwd}` });
+        } catch { /* non-fatal */ }
+
+        emit({ event: 'cwd_changed', message: newCwd });
+      } catch (err) {
+        emitError(`Failed to change cwd: ${err.message}`);
       }
       break;
     }

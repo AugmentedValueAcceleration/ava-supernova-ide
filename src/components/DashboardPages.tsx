@@ -1453,9 +1453,9 @@ export function AvaChatPage() {
     const key = getPlatformKey();
     if (!key) return;
     try {
-      const res = await apiFetch('/usage', { method: 'GET', headers: { Authorization: `Bearer ${key}` } });
-      if (res && res.free_tokens_used !== undefined) {
-        setPlatformBalance({ used: res.free_tokens_used, limit: res.free_tokens_limit || 3000000 });
+      const res = await apiFetch('/account-info');
+      if (res?.usage && res.usage.free_tokens_used !== undefined) {
+        setPlatformBalance({ used: res.usage.free_tokens_used, limit: res.usage.free_tokens_limit || 3000000 });
       }
     } catch { /* non-fatal */ }
   }, []);
@@ -1917,11 +1917,21 @@ export function AvaChatPage() {
     const onClearMemory = () => { sidecar.clearMemory().catch(() => {}); };
     window.addEventListener('ava-clear-memory', onClearMemory);
 
+    // Folder change — update sidecar working directory when user opens a new project
+    const onFolderChanged = (e: Event) => {
+      const path = (e as CustomEvent).detail;
+      if (path && sidecar.isReady) {
+        sidecar.setWorkingDirectory(path).catch(() => {});
+      }
+    };
+    window.addEventListener('ava-folder-changed', onFolderChanged);
+
     return () => {
       cancelled = true;
       sidecar.off('close', onClose);
       if ((sidecar as any).__avaHandler) sidecar.offAny((sidecar as any).__avaHandler);
       window.removeEventListener('ava-clear-memory', onClearMemory);
+      window.removeEventListener('ava-folder-changed', onFolderChanged);
       sidecar.stop().catch(() => {});
     };
   }, [canChat]); // Restart sidecar when chat ability changes
@@ -2144,6 +2154,22 @@ export function AvaChatPage() {
           timestamp: Date.now(),
         }]);
         setStreaming(false);
+        break;
+
+      case 'warning':
+        setMessages((prev) => [...prev, {
+          id: mkId(), role: 'error' as const,
+          text: event.message || 'Warning',
+          timestamp: Date.now(),
+        }]);
+        break;
+
+      case 'cwd_changed':
+        setMessages((prev) => [...prev, {
+          id: mkId(), role: 'system' as const,
+          text: `Project folder changed: ${event.message}`,
+          timestamp: Date.now(),
+        }]);
         break;
     }
   }, [redactSecrets]);

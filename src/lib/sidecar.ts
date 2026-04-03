@@ -315,6 +315,13 @@ export class SidecarManager {
     await this.send({ cmd: 'clear_memory' });
   }
 
+  /**
+   * Update the sidecar's working directory when user opens a new project folder.
+   */
+  async setWorkingDirectory(cwd: string): Promise<void> {
+    await this.send({ cmd: 'set_cwd', cwd });
+  }
+
   async setPermission(mode: 'strict' | 'balanced' | 'autonomous'): Promise<void> {
     await this.send({ cmd: 'set_permission', mode });
   }
