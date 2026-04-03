@@ -5917,12 +5917,18 @@ export function LearningLibraryPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [search, setSearch] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('all');
   const [levelFilter, setLevelFilter] = useState('all');
   const [sort, setSort] = useState('popular');
   const [forking, setForking] = useState(false);
 
   const paths: any[] = data?.paths || [];
+  const subjects = useMemo(() => {
+    const set = new Set(paths.map((p: any) => p.subject).filter(Boolean));
+    return ['all', ...Array.from(set).sort()];
+  }, [paths]);
   const filtered = paths.filter(p => {
+    if (subjectFilter !== 'all' && p.subject !== subjectFilter) return false;
     if (levelFilter !== 'all' && p.level !== levelFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -6031,19 +6037,49 @@ export function LearningLibraryPage() {
         style={{ ...inputStyle, marginBottom: 12 }}
       />
 
+      {/* Subject filter tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' as const }}>
+        {subjects.map(sub => (
+          <button
+            key={sub}
+            onClick={() => setSubjectFilter(sub)}
+            style={{
+              padding: '4px 12px', borderRadius: 12, border: '1px solid rgba(168,85,247,0.12)', cursor: 'pointer',
+              background: subjectFilter === sub ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'transparent',
+              color: subjectFilter === sub ? '#fff' : '#a6adc8',
+              fontSize: 11, fontWeight: 500, transition: 'all 0.15s',
+            }}
+          >
+            {sub === 'all' ? 'All' : sub}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <select value={levelFilter} onChange={e => setLevelFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', height: 30, fontSize: 11 }}>
-          <option value="all">All levels</option>
-          <option value="beginner">Beginner</option>
-          <option value="intermediate">Intermediate</option>
-          <option value="advanced">Advanced</option>
-          <option value="mixed">Mixed</option>
-        </select>
-        <select value={sort} onChange={e => setSort(e.target.value)} style={{ ...inputStyle, width: 'auto', height: 30, fontSize: 11 }}>
-          <option value="popular">Most Popular</option>
-          <option value="newest">Newest</option>
-          <option value="rating">Highest Rated</option>
-        </select>
+        <CustomSelect
+          value={levelFilter}
+          onChange={setLevelFilter}
+          options={[
+            { value: 'all', label: 'All levels' },
+            { value: 'beginner', label: 'Beginner' },
+            { value: 'intermediate', label: 'Intermediate' },
+            { value: 'advanced', label: 'Advanced' },
+            { value: 'mixed', label: 'Mixed' },
+          ]}
+          width={140}
+          height={30}
+        />
+        <CustomSelect
+          value={sort}
+          onChange={setSort}
+          options={[
+            { value: 'popular', label: 'Most Popular' },
+            { value: 'newest', label: 'Newest' },
+            { value: 'rating', label: 'Highest Rated' },
+          ]}
+          width={140}
+          height={30}
+        />
       </div>
 
       {loading ? (
@@ -6072,6 +6108,9 @@ export function LearningLibraryPage() {
                     {p.source === 'curated' ? 'Curated' : 'Community'}
                   </span>
                   <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 600, textTransform: 'uppercase' as const, color: lc.color, background: lc.bg }}>{p.level}</span>
+                  {p.subject && (
+                    <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 500, color: '#cdd6f4', background: 'rgba(205,214,244,0.08)', border: '1px solid rgba(205,214,244,0.1)' }}>{p.subject}</span>
+                  )}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{p.title}</div>
                 <div style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.5, marginBottom: 8 }}>{p.description?.slice(0, 120)}{(p.description?.length || 0) > 120 ? '...' : ''}</div>
@@ -7973,16 +8012,18 @@ export function SettingsPage() {
             {/* Confirmation Mode */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Confirmation</div>
-              <select
+              <CustomSelect
                 value={settings.computerUseConfirm || 'first_per_app'}
-                onChange={e => saveImmediate('computerUseConfirm', e.target.value)}
-                style={{ ...inputStyle, maxWidth: 300, height: 38, borderRadius: 8, cursor: 'pointer' }}
-              >
-                <option value="every_action">Every Action</option>
-                <option value="first_per_app">First Per App</option>
-                <option value="session">Once Per Session</option>
-                <option value="never">Never (autonomous)</option>
-              </select>
+                onChange={v => saveImmediate('computerUseConfirm', v)}
+                options={[
+                  { value: 'every_action', label: 'Every Action' },
+                  { value: 'first_per_app', label: 'First Per App' },
+                  { value: 'session', label: 'Once Per Session' },
+                  { value: 'never', label: 'Never (autonomous)' },
+                ]}
+                width={300}
+                height={38}
+              />
             </div>
 
             <div style={divider} />
@@ -8065,14 +8106,16 @@ export function SettingsPage() {
             <div style={{ display: 'flex', gap: 24 }}>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Vision Model</div>
-                <select
+                <CustomSelect
                   value={settings.computerUseModel || 'holo3-122b-a10b'}
-                  onChange={e => saveImmediate('computerUseModel', e.target.value)}
-                  style={{ ...inputStyle, width: 200, height: 34, borderRadius: 8, fontSize: 12, cursor: 'pointer' }}
-                >
-                  <option value="holo3-35b-a3b">Holo3-35B (fast)</option>
-                  <option value="holo3-122b-a10b">Holo3-122B (precise)</option>
-                </select>
+                  onChange={v => saveImmediate('computerUseModel', v)}
+                  options={[
+                    { value: 'holo3-35b-a3b', label: 'Holo3-35B (fast)' },
+                    { value: 'holo3-122b-a10b', label: 'Holo3-122B (precise)' },
+                  ]}
+                  width={200}
+                  height={34}
+                />
               </div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Max Steps</div>
