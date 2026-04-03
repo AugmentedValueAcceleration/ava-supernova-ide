@@ -15,25 +15,44 @@ struct ActiveWindowInfo {
 }
 
 /// Capture the primary screen as a JSON with base64 PNG + dimensions.
+/// Resizes to max 1280px width for efficient Holo3 inference while preserving
+/// the original dimensions for coordinate mapping.
 #[tauri::command]
 fn capture_screen() -> Result<serde_json::Value, String> {
+    use screenshots::image::imageops::FilterType;
+
     let screens = screenshots::Screen::all().map_err(|e| format!("Failed to list screens: {e}"))?;
     let screen = screens.into_iter().next().ok_or("No screens found")?;
     let capture = screen.capture().map_err(|e| format!("Failed to capture screen: {e}"))?;
 
-    let width = capture.width();
-    let height = capture.height();
+    let orig_width = capture.width();
+    let orig_height = capture.height();
+
+    // Resize for Holo3 — max 1280px wide, maintain aspect ratio
+    let max_width: u32 = 1280;
+    let (out_width, out_height) = if orig_width > max_width {
+        let scale = max_width as f64 / orig_width as f64;
+        (max_width, (orig_height as f64 * scale).round() as u32)
+    } else {
+        (orig_width, orig_height)
+    };
+
+    let resized = if out_width != orig_width {
+        screenshots::image::imageops::resize(&capture, out_width, out_height, FilterType::Triangle)
+    } else {
+        capture.clone()
+    };
 
     let mut buf = Cursor::new(Vec::new());
-    capture.write_to(&mut buf, screenshots::image::ImageFormat::Png)
+    resized.write_to(&mut buf, screenshots::image::ImageFormat::Png)
         .map_err(|e| format!("PNG encode failed: {e}"))?;
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(buf.into_inner());
 
     Ok(serde_json::json!({
         "image": b64,
-        "width": width,
-        "height": height,
+        "width": orig_width,
+        "height": orig_height,
     }))
 }
 

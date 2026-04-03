@@ -188,19 +188,32 @@ async function scaleCoord(x, y) {
 /** First screenshot logs dimensions for coordinate calibration */
 let screenshotDims = null;
 
-/** Scale and clamp coordinates to screen bounds */
+/** Screenshot resize ratio — Holo3 sees 1280px wide, coordinates need scaling back.
+ *  Rust returns original dimensions; the image is resized server-side. */
+const HOLO_MAX_WIDTH = 1280;
+function getResizeScale() {
+  if (!screenshotDims || screenshotDims.width <= HOLO_MAX_WIDTH) return 1.0;
+  return screenshotDims.width / HOLO_MAX_WIDTH;
+}
+
+/** Scale Holo3 coordinates → original screen → logical (DPI-adjusted) coordinates */
 async function scaleAndClamp(x, y) {
-  const scale = await getDpiScale();
-  let sx = Math.round(x / scale);
-  let sy = Math.round(y / scale);
-  // Clamp to screen bounds if we know them
+  const dpi = await getDpiScale();
+  const resize = getResizeScale();
+  // Step 1: Holo3 coords (resized image space) → original screen pixels
+  const origX = Math.round(x * resize);
+  const origY = Math.round(y * resize);
+  // Step 2: original screen pixels → logical coordinates (for enigo)
+  let sx = Math.round(origX / dpi);
+  let sy = Math.round(origY / dpi);
+  // Clamp to screen bounds
   if (screenshotDims) {
-    const maxX = Math.round(screenshotDims.width / scale);
-    const maxY = Math.round(screenshotDims.height / scale);
+    const maxX = Math.round(screenshotDims.width / dpi);
+    const maxY = Math.round(screenshotDims.height / dpi);
     sx = Math.max(0, Math.min(sx, maxX - 1));
     sy = Math.max(0, Math.min(sy, maxY - 1));
   }
-  return { sx, sy, scale };
+  return { sx, sy, scale: dpi };
 }
 
 const inputBridge = {
