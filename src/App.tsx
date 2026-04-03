@@ -108,11 +108,17 @@ export default function App() {
   }, []);
 
   // Project folder state — persisted
-  const [projectFolder, setProjectFolder] = useState<string | null>(() => load('projectFolder', null));
+  // Sync both localStorage keys on init to prevent mismatch
+  const [projectFolder, setProjectFolder] = useState<string | null>(() => {
+    const saved = load('projectFolder', null) as string | null;
+    // Ensure the sidecar key always matches the app key
+    if (saved) localStorage.setItem('ava-ide-project-folder', saved);
+    return saved;
+  });
   const handleOpenFolder = useCallback((path: string) => {
     setProjectFolder(path);
     save('projectFolder', path);
-    // Notify sidecar and other components
+    // Notify sidecar and other components — both keys must stay in sync
     localStorage.setItem('ava-ide-project-folder', path);
     window.dispatchEvent(new CustomEvent('ava-folder-changed', { detail: path }));
   }, []);
