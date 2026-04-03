@@ -1414,6 +1414,7 @@ export function AvaChatPage() {
   const [model, setModel] = useState<string>(() => localStorage.getItem('ava-ide-chat-model') || 'auto');
   const [mode, setMode] = useState<AvaMode>(() => (localStorage.getItem('ava-ide-chat-mode') as AvaMode) || 'work');
   const [streaming, setStreaming] = useState(false);
+  const [statusText, setStatusText] = useState('');
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
   const [copiedMsg, setCopiedMsg] = useState<string | null>(null);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
@@ -1956,10 +1957,68 @@ export function AvaChatPage() {
   const handleSidecarEvent = useCallback((event: SidecarEvent) => {
     switch (event.event) {
       case 'stream_start':
+        setStatusText('');
+        break;
+
+      // ── Status feedback — show users what Ava is doing ──────────────
+      case 'info':
+        if (event.message) {
+          // Map sidecar info messages to user-friendly status text
+          const msg = event.message;
+          if (msg.includes('Memory manager')) setStatusText('Loading memory...');
+          else if (msg.includes('Personality')) setStatusText('Loading personality...');
+          else if (msg.includes('Locale')) setStatusText('Setting up language...');
+          else if (msg.includes('Project indexed')) setStatusText(msg.replace('Project indexed:', 'Scanned project:').trim());
+          else if (msg.includes('Resolving model')) setStatusText('Connecting to model...');
+          else if (msg.includes('Memory Agent')) setStatusText('Memory agent ready');
+          else if (msg.includes('Memory brief')) setStatusText('Recalling relevant context...');
+          else if (msg.includes('Recalled')) setStatusText(msg);
+          else if (msg.includes('Re-indexed')) setStatusText('Re-scanning project...');
+          else if (msg.includes('Image attached')) setStatusText(msg);
+          else if (msg.includes('Image loaded')) setStatusText('Processing image...');
+          else if (msg.includes('Provider failover')) setStatusText('Switching provider...');
+        }
+        break;
+
+      case 'orchestration_start':
+        setStatusText('Planning approach...');
+        break;
+
+      case 'conductor_event':
+        if (event.message) setStatusText(event.message);
+        break;
+
+      case 'orchestration_end':
+        setStatusText('Executing plan...');
+        break;
+
+      case 'auto_routing':
+        setStatusText('Selecting best model for task...');
+        break;
+
+      case 'auto_agent_start':
+        setStatusText('Spinning up specialist agent...');
+        break;
+
+      case 'auto_agent_end':
+        setStatusText('');
+        break;
+
+      case 'context_compression_start':
+        setStatusText('Compressing context...');
+        break;
+
+      case 'context_compression_end':
+        setStatusText('');
+        break;
+
+      case 'thinking_delta':
+        setStatusText('Thinking...');
         break;
 
       case 'stream_delta':
         if (event.content) {
+          setStatusText('');
           setMessages((prev) => {
             const copy = [...prev];
             const last = copy[copy.length - 1];
@@ -1987,7 +2046,22 @@ export function AvaChatPage() {
         }
         break;
 
-      case 'tool_call_start':
+      case 'tool_call_start': {
+        // Show tool name as status
+        const toolLabel = event.toolName === 'bash' ? 'Running command...'
+          : event.toolName === 'glob' || event.toolName === 'list_directory' ? 'Scanning files...'
+          : event.toolName === 'grep' || event.toolName === 'find_symbol' ? 'Searching code...'
+          : event.toolName === 'file_read' ? 'Reading file...'
+          : event.toolName === 'file_write' || event.toolName === 'file_edit' ? 'Writing code...'
+          : event.toolName === 'git_status' || event.toolName === 'git_diff' ? 'Checking git...'
+          : event.toolName === 'web_search' ? 'Searching the web...'
+          : event.toolName === 'memory_recall' ? 'Recalling memories...'
+          : event.toolName === 'memory_save' ? 'Saving to memory...'
+          : event.toolName === 'test_run' ? 'Running tests...'
+          : event.toolName === 'analyze_architecture' ? 'Analysing architecture...'
+          : event.toolName === 'project_index' ? 'Indexing project...'
+          : event.toolName ? `Using ${event.toolName}...` : '';
+        if (toolLabel) setStatusText(toolLabel);
         setMessages((prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
@@ -2011,6 +2085,7 @@ export function AvaChatPage() {
           if (!tasksPanelOpen) setTasksPanelOpen(true);
         }
         break;
+      }
 
       case 'tool_call_end':
         trackToolCall();
@@ -2131,6 +2206,7 @@ export function AvaChatPage() {
           });
         }
         setStreaming(false);
+        setStatusText('');
         textareaRef.current?.focus();
         break;
 
@@ -2144,6 +2220,7 @@ export function AvaChatPage() {
           return copy;
         });
         setStreaming(false);
+        setStatusText('');
         break;
 
       case 'error':
@@ -2154,6 +2231,7 @@ export function AvaChatPage() {
           timestamp: Date.now(),
         }]);
         setStreaming(false);
+        setStatusText('');
         break;
 
       case 'warning':
@@ -3541,7 +3619,7 @@ export function AvaChatPage() {
                 }} />
               ))}
             </div>
-            <span style={{ fontSize: 11, color: '#6c7086' }}>{t('thinking.0')}</span>
+            <span style={{ fontSize: 11, color: '#a6adc8', transition: 'opacity 0.3s' }}>{statusText || t('thinking.0')}</span>
           </div>
         )}
 
