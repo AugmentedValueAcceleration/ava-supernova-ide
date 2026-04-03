@@ -14,3 +14,4 @@ src-tauri/resources/sidecar-bundle.mjs
 
 # Updater signing key (NEVER commit the private key)
 src-tauri/.tauri-updater-key
+sidecar/.env

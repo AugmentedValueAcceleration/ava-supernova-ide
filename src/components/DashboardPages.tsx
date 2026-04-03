@@ -1880,6 +1880,8 @@ export function AvaChatPage() {
           userEmail: localStorage.getItem('ava-ide-email') || undefined,
           userTier: localStorage.getItem('ava-ide-tier') || undefined,
           _devPlatformFallback: !!getPlatformKey(),
+          // Computer Use — pass HAI key if configured
+          holoApiKey: localStorage.getItem('ava-ide-holo-key') || undefined,
         } as SidecarConfig;
 
         await sidecar.start(config);
@@ -2240,6 +2242,7 @@ export function AvaChatPage() {
           permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
           autoMemory: true,
           _devPlatformFallback: true,
+          holoApiKey: localStorage.getItem('ava-ide-holo-key') || undefined,
         } as SidecarConfig).catch(() => {});
       }).catch(() => {});
     });
@@ -7112,9 +7115,13 @@ export function SettingsPage() {
   const saveImmediate = (key: string, value: any) => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
+    // Persist specific keys to localStorage for sidecar access
     if (key === 'language') {
       localStorage.setItem('ava-ide-language', value);
       import('../lib/i18n').then(({ initLocale }) => initLocale(value)).catch(() => {});
+    }
+    if (key === 'holoApiKey') {
+      localStorage.setItem('ava-ide-holo-key', value || '');
     }
     if (connected) {
       apiFetch('/settings', {
@@ -7613,7 +7620,192 @@ export function SettingsPage() {
           )}
         </div>
 
-        {/* 8. Danger Zone */}
+        {/* 8. Computer Use (Holo3) */}
+        <div style={sLabel}>COMPUTER USE</div>
+        <div style={{
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
+          padding: '18px 20px', marginBottom: 16,
+        }}>
+          {/* Enable toggle */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Enable Computer Use</div>
+              <div style={{ fontSize: 11, color: '#6c7086' }}>Let Ava see your screen and interact with desktop apps</div>
+            </div>
+            <ToggleSwitch value={settings.computerUseEnabled ?? false} onChange={v => saveImmediate('computerUseEnabled', v)} />
+          </div>
+
+          {settings.computerUseEnabled && (<>
+            <div style={divider} />
+
+            {/* Holo3 API Key */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Holo3 API Key</div>
+              <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 8 }}>
+                Get your key from <span style={{ color: '#a855f7' }}>api.hcompany.ai</span> — powers Ava's vision
+              </div>
+              <input
+                type="password"
+                placeholder="hai_..."
+                value={settings.holoApiKey || ''}
+                onChange={e => saveImmediate('holoApiKey', e.target.value)}
+                style={{ ...inputStyle, maxWidth: 400, height: 38, borderRadius: 8 }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+              />
+            </div>
+
+            <div style={divider} />
+
+            {/* Permission Level */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Permission Level</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { id: 'view_only', label: 'View Only', desc: 'See screen, no interaction' },
+                  { id: 'navigate', label: 'Navigate', desc: 'Click, scroll — no typing' },
+                  { id: 'full', label: 'Full', desc: 'Click, type, drag — everything' },
+                  { id: 'restricted', label: 'Restricted', desc: 'Full minus dangerous buttons' },
+                ].map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => saveImmediate('computerUsePermission', p.id)}
+                    style={{
+                      padding: '8px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                      background: (settings.computerUsePermission || 'full') === p.id ? 'rgba(168,85,247,0.15)' : 'rgba(49,34,68,0.3)',
+                      border: `1px solid ${(settings.computerUsePermission || 'full') === p.id ? 'rgba(168,85,247,0.4)' : 'rgba(168,85,247,0.08)'}`,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 600, color: (settings.computerUsePermission || 'full') === p.id ? '#a855f7' : '#cdd6f4' }}>{p.label}</div>
+                    <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{p.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={divider} />
+
+            {/* Confirmation Mode */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Confirmation</div>
+              <select
+                value={settings.computerUseConfirm || 'first_per_app'}
+                onChange={e => saveImmediate('computerUseConfirm', e.target.value)}
+                style={{ ...inputStyle, maxWidth: 300, height: 38, borderRadius: 8, cursor: 'pointer' }}
+              >
+                <option value="every_action">Every Action</option>
+                <option value="first_per_app">First Per App</option>
+                <option value="session">Once Per Session</option>
+                <option value="never">Never (autonomous)</option>
+              </select>
+            </div>
+
+            <div style={divider} />
+
+            {/* Allowed Apps */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Allowed Apps</div>
+              <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 8 }}>
+                Ava can only interact with these apps. Leave empty to allow all.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {(settings.computerUseApps || []).map((app: string, i: number) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'rgba(168,85,247,0.12)', padding: '4px 10px', borderRadius: 6,
+                  }}>
+                    <span style={{ fontSize: 12, color: '#cdd6f4' }}>{app}</span>
+                    <button
+                      onClick={() => {
+                        const apps = [...(settings.computerUseApps || [])];
+                        apps.splice(i, 1);
+                        saveImmediate('computerUseApps', apps);
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 12, padding: 0 }}
+                    >x</button>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={e => {
+                e.preventDefault();
+                const input = (e.target as HTMLFormElement).elements.namedItem('newApp') as HTMLInputElement;
+                const val = input.value.trim();
+                if (val && !(settings.computerUseApps || []).includes(val)) {
+                  saveImmediate('computerUseApps', [...(settings.computerUseApps || []), val]);
+                  input.value = '';
+                }
+              }} style={{ display: 'flex', gap: 8 }}>
+                <input name="newApp" placeholder="e.g. Blender, Notepad, Chrome..." style={{ ...inputStyle, maxWidth: 250, height: 34, borderRadius: 8, fontSize: 12 }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+                />
+                <button type="submit" style={{
+                  padding: '6px 14px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)',
+                  borderRadius: 8, color: '#a855f7', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>Add</button>
+              </form>
+            </div>
+
+            <div style={divider} />
+
+            {/* Safety */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Safety</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, color: '#cdd6f4' }}>Log all actions</div>
+                  <div style={{ fontSize: 10, color: '#6c7086' }}>Record screenshots before/after each action</div>
+                </div>
+                <ToggleSwitch value={settings.computerUseLog ?? true} onChange={v => saveImmediate('computerUseLog', v)} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, color: '#cdd6f4' }}>Block dangerous buttons</div>
+                  <div style={{ fontSize: 10, color: '#6c7086' }}>Prevent clicks on delete, send, pay, format</div>
+                </div>
+                <ToggleSwitch value={settings.computerUseBlockDangerous ?? true} onChange={v => saveImmediate('computerUseBlockDangerous', v)} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, color: '#cdd6f4' }}>Inactivity pause</div>
+                  <div style={{ fontSize: 10, color: '#6c7086' }}>Pause if no user interaction for 60 seconds</div>
+                </div>
+                <ToggleSwitch value={settings.computerUsePauseInactive ?? true} onChange={v => saveImmediate('computerUsePauseInactive', v)} />
+              </div>
+            </div>
+
+            <div style={divider} />
+
+            {/* Model + Max Steps */}
+            <div style={{ display: 'flex', gap: 24 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Vision Model</div>
+                <select
+                  value={settings.computerUseModel || 'holo3-35b-a3b'}
+                  onChange={e => saveImmediate('computerUseModel', e.target.value)}
+                  style={{ ...inputStyle, width: 200, height: 34, borderRadius: 8, fontSize: 12, cursor: 'pointer' }}
+                >
+                  <option value="holo3-35b-a3b">Holo3-35B (fast)</option>
+                  <option value="holo3-122b-a10b">Holo3-122B (precise)</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Max Steps</div>
+                <input
+                  type="number" min={5} max={100} step={5}
+                  value={settings.computerUseMaxSteps || 50}
+                  onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 5 && v <= 100) saveImmediate('computerUseMaxSteps', v); }}
+                  style={{ ...inputStyle, width: 100, height: 34, borderRadius: 8, fontSize: 12, fontFamily: 'monospace' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+                />
+              </div>
+            </div>
+          </>)}
+        </div>
+
+        {/* 9. Danger Zone */}
         {connected && (
           <>
             <div style={sLabel}>{t('dash.settings.section.danger_zone')}</div>

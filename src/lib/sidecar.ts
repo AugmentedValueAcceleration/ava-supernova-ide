@@ -8,12 +8,28 @@
 
 import { Command, type Child } from '@tauri-apps/plugin-shell';
 import { resolveResource } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
+
+export interface ComputerUseSettings {
+  enabled: boolean;
+  allowedApps: string[];
+  permission: 'view_only' | 'navigate' | 'full' | 'restricted';
+  confirmMode: 'every_action' | 'first_per_app' | 'session' | 'never';
+  maxSteps: number;
+  actionDelay: number;
+  logActions: boolean;
+  inactivityTimeout: number;
+  blockDangerous: boolean;
+  holoModel: 'Holo3-35B-A3B' | 'Holo3-122B-A10B';
+}
 
 export interface SidecarConfig {
   providers: Record<string, { apiKey: string; baseUrl?: string }>;
   platformKey?: string;
+  holoApiKey?: string;
+  computerUseSettings?: ComputerUseSettings;
   activeModel: string;
   cwd: string;
   mode?: string;
@@ -66,6 +82,19 @@ export interface SidecarEvent {
   originalTokens?: number;
   compressedTokens?: number;
   droppedCount?: number;
+  // computer use
+  requestId?: string;
+  action?: string;
+  x?: number;
+  y?: number;
+  end_x?: number;
+  end_y?: number;
+  text?: string;
+  key?: string;
+  direction?: string;
+  amount?: number;
+  window?: string;
+  settings?: ComputerUseSettings;
 }
 
 type EventListener = (event: SidecarEvent) => void;
@@ -134,6 +163,10 @@ export class SidecarManager {
         const event: SidecarEvent = JSON.parse(line);
         if (event.event === 'ready') {
           this.ready = true;
+        }
+        // Handle computer use requests from sidecar — invoke Tauri commands
+        if (event.event === 'computer_use_request' && event.requestId && event.action) {
+          this.handleComputerUseRequest(event);
         }
         this.emitEvent(event.event, event);
       } catch {
@@ -258,6 +291,79 @@ export class SidecarManager {
    */
   async clearMemory(): Promise<void> {
     await this.send({ cmd: 'clear_memory' });
+  }
+
+  async setPermission(mode: 'strict' | 'balanced' | 'autonomous'): Promise<void> {
+    await this.send({ cmd: 'set_permission', mode });
+  }
+
+  /**
+   * Update computer use settings on the live sidecar.
+   */
+  async updateComputerUseSettings(settings: ComputerUseSettings): Promise<void> {
+    await this.send({ cmd: 'update_computer_use_settings', settings });
+  }
+
+  /**
+   * Handle computer_use_request from sidecar — invoke Tauri Rust commands.
+   */
+  private async handleComputerUseRequest(event: SidecarEvent): Promise<void> {
+    const { requestId, action } = event;
+    try {
+      let result: unknown;
+      switch (action) {
+        case 'capture_screen':
+          result = await invoke('capture_screen');
+          break;
+        case 'click':
+          await invoke('click', { x: event.x, y: event.y });
+          result = 'ok';
+          break;
+        case 'double_click':
+          await invoke('double_click', { x: event.x, y: event.y });
+          result = 'ok';
+          break;
+        case 'right_click':
+          await invoke('right_click', { x: event.x, y: event.y });
+          result = 'ok';
+          break;
+        case 'type_text':
+          await invoke('type_text', { text: event.text });
+          result = 'ok';
+          break;
+        case 'key_press':
+          await invoke('key_press', { key: event.key });
+          result = 'ok';
+          break;
+        case 'scroll':
+          await invoke('scroll', { direction: event.direction, amount: event.amount });
+          result = 'ok';
+          break;
+        case 'move_mouse':
+          await invoke('move_mouse', { x: event.x, y: event.y });
+          result = 'ok';
+          break;
+        case 'drag':
+          await invoke('drag', { x: event.x, y: event.y, endX: event.end_x, endY: event.end_y });
+          result = 'ok';
+          break;
+        case 'get_active_window':
+          result = await invoke('get_active_window');
+          break;
+        case 'get_dpi_scale':
+          result = await invoke('get_dpi_scale');
+          break;
+        default:
+          throw new Error(`Unknown computer use action: ${action}`);
+      }
+      await this.send({ cmd: 'computer_use_response', requestId, result });
+    } catch (err) {
+      await this.send({
+        cmd: 'computer_use_response',
+        requestId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   /**

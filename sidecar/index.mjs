@@ -16,10 +16,27 @@ import { platform } from 'node:os';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 // ─── Resolve @ava/core ──────────────────────────────────────────────────────
 // In monorepo: workspace link. Standalone: relative path fallback.
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Load .env from sidecar directory (dev) or next to the bundle (prod)
+try {
+  const envPath = join(__dirname, '.env');
+  const envContent = readFileSync(envPath, 'utf-8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.replace(/\r/g, '').trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq > 0) {
+      const key = trimmed.slice(0, eq).trim();
+      const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+} catch { /* no .env file — that's fine */ }
 
 let core;
 try {
@@ -74,6 +91,103 @@ let isRunning = false;
 
 /** Map<confirmId, { resolve: Function }> */
 const pendingConfirmations = new Map();
+
+/** Map<requestId, { resolve: Function, reject: Function }> for computer use requests */
+const pendingComputerUse = new Map();
+let computerUseRequestId = 0;
+
+/**
+ * Send a computer use command to Tauri frontend and wait for the response.
+ * The frontend calls the Tauri Rust command and sends back the result.
+ */
+function computerUseRequest(action, args = {}) {
+  return new Promise((resolve, reject) => {
+    const requestId = `cu_${++computerUseRequestId}`;
+    const timeout = setTimeout(() => {
+      pendingComputerUse.delete(requestId);
+      reject(new Error(`Computer use request timed out: ${action}`));
+    }, 15000); // 15s timeout for any single action
+
+    pendingComputerUse.set(requestId, {
+      resolve: (result) => { clearTimeout(timeout); resolve(result); },
+      reject: (err) => { clearTimeout(timeout); reject(err); },
+    });
+
+    emit({ event: 'computer_use_request', requestId, action, ...args });
+  });
+}
+
+/** Bridge providers for ComputerUseTool — delegates to Tauri via NDJSON */
+const screenshotBridge = {
+  async capture() {
+    const result = await computerUseRequest('capture_screen');
+    const data = result.data;
+    // New format returns { image, width, height }
+    if (data && typeof data === 'object' && data.image) {
+      if (!screenshotDims) {
+        screenshotDims = { width: data.width, height: data.height };
+        emit({ event: 'info', message: `Screenshot: ${data.width}x${data.height} pixels` });
+      }
+      return data.image;
+    }
+    return data; // fallback: raw base64 string
+  },
+  async captureWindow(windowTitle) {
+    const result = await computerUseRequest('capture_screen', { window: windowTitle });
+    const data = result.data;
+    if (data && typeof data === 'object' && data.image) return data.image;
+    return data;
+  },
+};
+
+/** DPI scale factor — screenshot pixels / logical screen pixels */
+let dpiScale = null;
+async function getDpiScale() {
+  if (dpiScale !== null) return dpiScale;
+  try {
+    const result = await computerUseRequest('get_dpi_scale');
+    dpiScale = (typeof result.data === 'number' && result.data > 0) ? result.data : 1.5;
+    emit({ event: 'info', message: `DPI scale: ${dpiScale}` });
+  } catch {
+    // Fallback: assume 150% scaling (most common high-DPI on Windows laptops)
+    dpiScale = 1.5;
+    emit({ event: 'info', message: `DPI scale: ${dpiScale} (fallback)` });
+  }
+  return dpiScale;
+}
+
+/** Scale Holo3 coordinates (physical pixels) to logical coordinates for enigo */
+async function scaleCoord(x, y) {
+  const scale = await getDpiScale();
+  return { x: Math.round(x / scale), y: Math.round(y / scale) };
+}
+
+/** First screenshot logs dimensions for coordinate calibration */
+let screenshotDims = null;
+
+const inputBridge = {
+  async click(x, y) {
+    const scale = await getDpiScale();
+    const sx = Math.round(x / scale);
+    const sy = Math.round(y / scale);
+    emit({ event: 'info', message: `Click: Holo3=(${x},${y}) → Screen=(${sx},${sy}) [DPI ${scale}]` });
+    await computerUseRequest('click', { x: sx, y: sy });
+  },
+  async doubleClick(x, y) { const s = await getDpiScale(); await computerUseRequest('double_click', { x: Math.round(x/s), y: Math.round(y/s) }); },
+  async rightClick(x, y) { const s = await getDpiScale(); await computerUseRequest('right_click', { x: Math.round(x/s), y: Math.round(y/s) }); },
+  async typeText(text) { await computerUseRequest('type_text', { text }); },
+  async keyPress(key) { await computerUseRequest('key_press', { key }); },
+  async scroll(direction, amount) { await computerUseRequest('scroll', { direction, amount }); },
+  async moveMouse(x, y) { const s = await getDpiScale(); await computerUseRequest('move_mouse', { x: Math.round(x/s), y: Math.round(y/s) }); },
+  async drag(x, y, endX, endY) { const s = await getDpiScale(); await computerUseRequest('drag', { x: Math.round(x/s), y: Math.round(y/s), end_x: Math.round(endX/s), end_y: Math.round(endY/s) }); },
+};
+
+const windowBridge = {
+  async getActiveWindow() {
+    const result = await computerUseRequest('get_active_window');
+    return result.data;
+  },
+};
 
 // ─── NDJSON I/O ─────────────────────────────────────────────────────────────
 
@@ -157,7 +271,9 @@ async function handleInit(data) {
 
     // Tools
     toolRegistry = new ToolRegistry();
-    toolRegistry.registerBuiltins();
+    toolRegistry.registerBuiltins({
+      exclude: ['screenshot'], // IDE uses Tauri capture_screen via computer_use tool instead
+    });
     toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
 
     // Confirmation handler — pauses and waits for IDE response
@@ -298,6 +414,13 @@ async function handleInit(data) {
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
       minimaxApiKey: config.providers?.minimax?.apiKey || process.env.MINIMAX_API_KEY,
       activeModelId: resolved.model.id,
+      // Computer Use — bridges to Tauri desktop commands
+      screenshotProvider: screenshotBridge,
+      inputProvider: inputBridge,
+      windowProvider: windowBridge,
+      holoApiKey: process.env.HAI_API_KEY || config.holoApiKey,
+      _debug_holo: !!(config.holoApiKey || process.env.HAI_API_KEY) ? 'BYOK' : (config.platformKey ? 'platform' : 'none'),
+      computerUseSettings: config.computerUseSettings || undefined,
     };
 
     // Memory Agent — curates briefs instead of raw memory dumps
@@ -374,6 +497,7 @@ async function handleInit(data) {
     globalThis._cwd = cwd;
     globalThis._sharedState = sharedState;
 
+    emit({ event: 'info', message: `Holo3: ${sharedState._debug_holo}, key prefix: ${(sharedState.holoApiKey || '').slice(0, 6) || 'none'}` });
     emit({ event: 'ready', model: resolved.model.id, provider: resolved.provider.name });
   } catch (err) {
     emitError(`Init failed: ${err.message}`);
@@ -864,6 +988,12 @@ rl.on('line', async (line) => {
     case 'clear':
       handleClear();
       break;
+    case 'set_permission':
+      if (toolRegistry && data.mode) {
+        toolRegistry.setPermissionMode(data.mode);
+        emit({ event: 'info', message: `Permission mode: ${data.mode}` });
+      }
+      break;
     case 'inject':
       handleInject(data);
       break;
@@ -884,6 +1014,26 @@ rl.on('line', async (line) => {
         }
       }
       break;
+    case 'computer_use_response': {
+      const pending = pendingComputerUse.get(data.requestId);
+      if (pending) {
+        pendingComputerUse.delete(data.requestId);
+        if (data.error) {
+          pending.reject(new Error(data.error));
+        } else {
+          pending.resolve({ data: data.result });
+        }
+      }
+      break;
+    }
+    case 'update_computer_use_settings': {
+      // Live update computer use settings from the UI
+      if (agent?.sharedState) {
+        agent.sharedState.computerUseSettings = data.settings;
+        emit({ event: 'info', message: 'Computer use settings updated' });
+      }
+      break;
+    }
     case 'set_working_hours':
       if (conversation && data.start != null && data.end != null) {
         const fmt = (h) => `${String(h).padStart(2, '0')}:00`;
