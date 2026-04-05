@@ -13,15 +13,18 @@ interface Props {
   onFileOpen?: (path: string) => void;
 }
 
-const panelTitles: Record<ActivityItem, string> = {
-  explorer: 'EXPLORER',
-  search: 'SEARCH',
-  git: 'SOURCE CONTROL',
-  ava: 'AVA',
-  extensions: 'EXTENSIONS',
-  debug: 'RUN AND DEBUG',
-  dashboard: 'DASHBOARD',
-};
+function getPanelTitle(item: ActivityItem): string {
+  const titles: Record<ActivityItem, string> = {
+    explorer: t('dash.sidebar.explorer'),
+    search: t('dash.sidebar.search'),
+    git: t('dash.sidebar.git'),
+    ava: t('dash.sidebar.ava'),
+    extensions: t('dash.sidebar.extensions'),
+    debug: t('dash.sidebar.debug'),
+    dashboard: t('dash.sidebar.dashboard'),
+  };
+  return titles[item] || item.toUpperCase();
+}
 
 /* ---------- Hidden folders/files to skip ---------- */
 const HIDDEN = new Set(['.git', 'node_modules', '.next', '__pycache__', '.venv', 'dist', '.DS_Store', 'Thumbs.db', '.idea', '.vs']);
@@ -888,7 +891,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
         }}
       >
         <span style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-          {panelTitles[activePanel]}
+          {getPanelTitle(activePanel)}
         </span>
         <div style={{ display: 'flex', gap: 2 }}>
           {onTogglePosition && (

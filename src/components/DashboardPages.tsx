@@ -1965,23 +1965,23 @@ export function AvaChatPage() {
         if (event.message) {
           // Map sidecar info messages to user-friendly status text
           const msg = event.message;
-          if (msg.includes('Memory manager')) setStatusText('Loading memory...');
-          else if (msg.includes('Personality')) setStatusText('Loading personality...');
-          else if (msg.includes('Locale')) setStatusText('Setting up language...');
+          if (msg.includes('Memory manager')) setStatusText(t('dash.chat.status.loading_memory'));
+          else if (msg.includes('Personality')) setStatusText(t('dash.chat.status.loading_personality'));
+          else if (msg.includes('Locale')) setStatusText(t('dash.chat.status.setting_language'));
           else if (msg.includes('Project indexed')) setStatusText(msg.replace('Project indexed:', 'Scanned project:').trim());
-          else if (msg.includes('Resolving model')) setStatusText('Connecting to model...');
-          else if (msg.includes('Memory Agent')) setStatusText('Memory agent ready');
-          else if (msg.includes('Memory brief')) setStatusText('Recalling relevant context...');
+          else if (msg.includes('Resolving model')) setStatusText(t('dash.chat.status.connecting_model'));
+          else if (msg.includes('Memory Agent')) setStatusText(t('dash.chat.status.memory_agent_ready'));
+          else if (msg.includes('Memory brief')) setStatusText(t('dash.chat.status.recalling_context'));
           else if (msg.includes('Recalled')) setStatusText(msg);
-          else if (msg.includes('Re-indexed')) setStatusText('Re-scanning project...');
+          else if (msg.includes('Re-indexed')) setStatusText(t('dash.chat.status.rescanning_project'));
           else if (msg.includes('Image attached')) setStatusText(msg);
-          else if (msg.includes('Image loaded')) setStatusText('Processing image...');
-          else if (msg.includes('Provider failover')) setStatusText('Switching provider...');
+          else if (msg.includes('Image loaded')) setStatusText(t('dash.chat.status.processing_image'));
+          else if (msg.includes('Provider failover')) setStatusText(t('dash.chat.status.switching_provider'));
         }
         break;
 
       case 'orchestration_start':
-        setStatusText('Planning approach...');
+        setStatusText(t('dash.chat.status.planning'));
         break;
 
       case 'conductor_event':
@@ -1989,15 +1989,15 @@ export function AvaChatPage() {
         break;
 
       case 'orchestration_end':
-        setStatusText('Executing plan...');
+        setStatusText(t('dash.chat.status.executing'));
         break;
 
       case 'auto_routing':
-        setStatusText('Selecting best model for task...');
+        setStatusText(t('dash.chat.status.selecting_model'));
         break;
 
       case 'auto_agent_start':
-        setStatusText('Spinning up specialist agent...');
+        setStatusText(t('dash.chat.status.spinning_agent'));
         break;
 
       case 'auto_agent_end':
@@ -2005,7 +2005,7 @@ export function AvaChatPage() {
         break;
 
       case 'context_compression_start':
-        setStatusText('Compressing context...');
+        setStatusText(t('dash.chat.status.compressing'));
         break;
 
       case 'context_compression_end':
@@ -2013,7 +2013,7 @@ export function AvaChatPage() {
         break;
 
       case 'thinking_delta':
-        setStatusText('Thinking...');
+        setStatusText(t('dash.chat.status.thinking'));
         break;
 
       case 'stream_delta':
@@ -2048,18 +2048,18 @@ export function AvaChatPage() {
 
       case 'tool_call_start': {
         // Show tool name as status
-        const toolLabel = event.toolName === 'bash' ? 'Running command...'
-          : event.toolName === 'glob' || event.toolName === 'list_directory' ? 'Scanning files...'
-          : event.toolName === 'grep' || event.toolName === 'find_symbol' ? 'Searching code...'
-          : event.toolName === 'file_read' ? 'Reading file...'
-          : event.toolName === 'file_write' || event.toolName === 'file_edit' ? 'Writing code...'
-          : event.toolName === 'git_status' || event.toolName === 'git_diff' ? 'Checking git...'
-          : event.toolName === 'web_search' ? 'Searching the web...'
-          : event.toolName === 'memory_recall' ? 'Recalling memories...'
-          : event.toolName === 'memory_save' ? 'Saving to memory...'
-          : event.toolName === 'test_run' ? 'Running tests...'
-          : event.toolName === 'analyze_architecture' ? 'Analysing architecture...'
-          : event.toolName === 'project_index' ? 'Indexing project...'
+        const toolLabel = event.toolName === 'bash' ? t('dash.chat.status.tool.bash')
+          : event.toolName === 'glob' || event.toolName === 'list_directory' ? t('dash.chat.status.tool.glob')
+          : event.toolName === 'grep' || event.toolName === 'find_symbol' ? t('dash.chat.status.tool.grep')
+          : event.toolName === 'file_read' ? t('dash.chat.status.tool.file_read')
+          : event.toolName === 'file_write' || event.toolName === 'file_edit' ? t('dash.chat.status.tool.file_write')
+          : event.toolName === 'git_status' || event.toolName === 'git_diff' ? t('dash.chat.status.tool.git')
+          : event.toolName === 'web_search' ? t('dash.chat.status.tool.web_search')
+          : event.toolName === 'memory_recall' ? t('dash.chat.status.tool.memory_recall')
+          : event.toolName === 'memory_save' ? t('dash.chat.status.tool.memory_save')
+          : event.toolName === 'test_run' ? t('dash.chat.status.tool.test_run')
+          : event.toolName === 'analyze_architecture' ? t('dash.chat.status.tool.architecture')
+          : event.toolName === 'project_index' ? t('dash.chat.status.tool.project_index')
           : event.toolName ? `Using ${event.toolName}...` : '';
         if (toolLabel) setStatusText(toolLabel);
         setMessages((prev) => {

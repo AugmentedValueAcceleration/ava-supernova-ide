@@ -15,8 +15,9 @@ const PROVIDERS = [
 
 export default function WelcomeOverlay({ onComplete }: Props) {
   const [step, setStep] = useState(0);
+  const [consentChecked, setConsentChecked] = useState(false);
 
-  // Step 2 state
+  // Step 2 state (was step 1 before consent gate)
   const [platformKey, setPlatformKey] = useState('');
   const [platformStatus, setPlatformStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [platformEmail, setPlatformEmail] = useState('');
@@ -27,11 +28,11 @@ export default function WelcomeOverlay({ onComplete }: Props) {
   // Name state (shown after platform connect)
   const [userName, setUserName] = useState('');
 
-  // Step 3 state
+  // Step 4 state (was step 3)
   const [workStart, setWorkStart] = useState(9);
   const [workEnd, setWorkEnd] = useState(17);
 
-  const totalSteps = 4;
+  const totalSteps = 5;
 
   const handleValidatePlatform = useCallback(async () => {
     if (!platformKey.startsWith('sk-ava-')) return;
@@ -72,6 +73,20 @@ export default function WelcomeOverlay({ onComplete }: Props) {
     onComplete(navigateTo);
   }, [onComplete]);
 
+  const recordConsent = useCallback(() => {
+    const timestamp = new Date().toISOString();
+    localStorage.setItem('ava-ide-consent-accepted', timestamp);
+    // Record consent server-side if connected
+    const key = localStorage.getItem('ava-ide-platform-key');
+    if (key) {
+      fetch('https://ava-supernova.com/api/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'X-Ava-Platform': 'ide' },
+        body: JSON.stringify({ platform: 'ide', appVersion: '1.0.0', acceptedAt: timestamp, termsVersion: '1.0', privacyVersion: '1.0' }),
+      }).catch(() => { /* non-critical */ });
+    }
+  }, []);
+
   const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
   const inputStyle: React.CSSProperties = {
@@ -101,8 +116,57 @@ export default function WelcomeOverlay({ onComplete }: Props) {
           ))}
         </div>
 
-        {/* Step 1: Welcome */}
+        {/* Step 0: Consent Gate (GDPR) */}
         {step === 0 && (
+          <div>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Before You Begin</h2>
+              <p style={{ fontSize: 12, color: '#6c7086' }}>Please review our terms and privacy policy</p>
+            </div>
+
+            <div style={{
+              background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)',
+              borderRadius: 12, padding: 20, marginBottom: 16,
+            }}>
+              <div style={{ fontSize: 11, color: '#a6adc8', lineHeight: 1.8 }}>
+                <p style={{ marginBottom: 8 }}>
+                  Ava is built by <span style={{ color: '#cdd6f4', fontWeight: 500 }}>Augmented Value Acceleration Ltd</span>, registered in England and Wales.
+                </p>
+                <ul style={{ paddingLeft: 16, margin: 0 }}>
+                  <li style={{ marginBottom: 4 }}>All data is <span style={{ color: '#a6e3a1' }}>stored locally</span> on your machine by default</li>
+                  <li style={{ marginBottom: 4 }}>Cloud sync is <span style={{ color: '#a6e3a1' }}>opt-in only</span></li>
+                  <li style={{ marginBottom: 4 }}>Your code is <span style={{ color: '#a6e3a1' }}>never used to train AI models</span></li>
+                  <li style={{ marginBottom: 4 }}>API keys are stored securely, <span style={{ color: '#a6e3a1' }}>never transmitted</span> to our servers</li>
+                  <li>No third-party analytics or tracking</li>
+                </ul>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
+              <a href="https://ava-supernova.com/terms" target="_blank" rel="noopener"
+                 style={{ fontSize: 11, color: '#a855f7', textDecoration: 'none' }}>Terms of Service</a>
+              <span style={{ color: '#585b70' }}>|</span>
+              <a href="https://ava-supernova.com/privacy" target="_blank" rel="noopener"
+                 style={{ fontSize: 11, color: '#a855f7', textDecoration: 'none' }}>Privacy Policy</a>
+            </div>
+
+            <label style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer',
+              background: consentChecked ? 'rgba(168, 85, 247, 0.08)' : 'rgba(26, 16, 40, 0.4)',
+              border: consentChecked ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid rgba(168, 85, 247, 0.08)',
+              borderRadius: 10, padding: '12px 14px', transition: 'all 0.15s',
+            }}>
+              <input type="checkbox" checked={consentChecked} onChange={e => setConsentChecked(e.target.checked)}
+                     style={{ marginTop: 2, accentColor: '#a855f7' }} />
+              <span style={{ fontSize: 11, color: '#a6adc8', lineHeight: 1.5 }}>
+                I have read and agree to the <span style={{ color: '#cdd6f4', fontWeight: 500 }}>Terms of Service</span> and <span style={{ color: '#cdd6f4', fontWeight: 500 }}>Privacy Policy</span>
+              </span>
+            </label>
+          </div>
+        )}
+
+        {/* Step 1: Welcome */}
+        {step === 1 && (
           <div style={{ textAlign: 'center' }}>
             <img src="/icon.png" width={72} height={72} style={{
               borderRadius: 16, margin: '0 auto 24px', display: 'block',
@@ -121,7 +185,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
         )}
 
         {/* Step 2: Get Connected */}
-        {step === 1 && (
+        {step === 2 && (
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 6, textAlign: 'center' }}>Get Connected</h2>
             <p style={{ fontSize: 12, color: '#6c7086', textAlign: 'center', marginBottom: 20 }}>Choose how you want to use Ava</p>
@@ -209,7 +273,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
         )}
 
         {/* Step 3: Working Hours */}
-        {step === 2 && (
+        {step === 3 && (
           <div style={{ textAlign: 'center' }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Set Your Hours</h2>
             <p style={{ fontSize: 12, color: '#6c7086', marginBottom: 24 }}>
@@ -250,7 +314,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
         )}
 
         {/* Step 4: Ready */}
-        {step === 3 && (
+        {step === 4 && (
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>🚀</div>
             <h2 style={{ fontSize: 20, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>You're Ready</h2>
@@ -282,7 +346,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
 
         {/* Navigation */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 28 }}>
-          {step > 0 ? (
+          {step > 1 ? (
             <button
               onClick={() => setStep(s => s - 1)}
               style={{ background: 'none', border: 'none', color: '#6c7086', fontSize: 12, cursor: 'pointer' }}
@@ -290,19 +354,27 @@ export default function WelcomeOverlay({ onComplete }: Props) {
           ) : <div />}
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <button
-              onClick={() => finish()}
-              style={{ background: 'none', border: 'none', color: '#585b70', fontSize: 11, cursor: 'pointer' }}
-            >Skip</button>
+            {/* Skip not available on consent step */}
+            {step > 0 && (
+              <button
+                onClick={() => finish()}
+                style={{ background: 'none', border: 'none', color: '#585b70', fontSize: 11, cursor: 'pointer' }}
+              >Skip</button>
+            )}
 
             {step < totalSteps - 1 && (
               <button
-                onClick={() => setStep(s => s + 1)}
+                onClick={() => {
+                  if (step === 0) recordConsent();
+                  setStep(s => s + 1);
+                }}
+                disabled={step === 0 && !consentChecked}
                 style={{
                   padding: '8px 24px', background: '#a855f7', border: 'none',
                   borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  opacity: (step === 0 && !consentChecked) ? 0.3 : 1,
                 }}
-              >Next</button>
+              >{step === 0 ? 'I Agree' : 'Next'}</button>
             )}
           </div>
         </div>
