@@ -6421,8 +6421,6 @@ export function LibraryPage() {
 export function PersonalityPage() {
   useLocale();
   const connected = checkConnected();
-  const [name, setName] = useState('Ava');
-  const [pronouns, setPronouns] = useState('she/her');
   const [tone, setTone] = useState('warm');
   const [energy, setEnergy] = useState('enthusiastic');
   const [style, setStyle] = useState('conversational');
@@ -6430,12 +6428,6 @@ export function PersonalityPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-
-  const PRONOUNS = [
-    { value: 'she/her', label: t('dash.personality.pronouns.she') },
-    { value: 'he/him', label: t('dash.personality.pronouns.he') },
-    { value: 'they/them', label: t('dash.personality.pronouns.they') },
-  ];
 
   const TONES = [
     { value: 'warm', label: t('dash.personality.tone.warm'), desc: t('dash.personality.tone.warm_desc') },
@@ -6464,8 +6456,6 @@ export function PersonalityPage() {
     apiFetch('/settings')
       .then((data: any) => {
         const p = data.personality || data;
-        if (p.personality_name || p.name) setName(p.personality_name || p.name);
-        if (p.pronouns) setPronouns(p.pronouns);
         if (p.tone) setTone(p.tone);
         if (p.energy) setEnergy(p.energy);
         if (p.style || p.communication_style) setStyle(p.style || p.communication_style);
@@ -6482,9 +6472,9 @@ export function PersonalityPage() {
       await apiFetch('/settings', {
         method: 'POST',
         body: JSON.stringify({
-          personality: { name, pronouns, tone, energy, style, description },
-          personality_name: name,
-          pronouns, tone, energy,
+          personality: { name: 'Ava', pronouns: 'she/her', tone, energy, style, description },
+          personality_name: 'Ava',
+          pronouns: 'she/her', tone, energy,
           communication_style: style,
           description,
         }),
@@ -6496,8 +6486,6 @@ export function PersonalityPage() {
   };
 
   const handleReset = async () => {
-    setName('Ava');
-    setPronouns('she/her');
     setTone('warm');
     setEnergy('enthusiastic');
     setStyle('conversational');
@@ -6546,48 +6534,6 @@ export function PersonalityPage() {
         </div>
 
         {!connected && <NotConnectedBanner />}
-
-        {/* Name */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={sectionLabelStyle}>{t('dash.personality.name')}</div>
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Ava"
-            style={{
-              ...inputStyle, maxWidth: 280, height: 40, borderRadius: 10,
-              border: '1px solid rgba(168, 85, 247, 0.12)',
-            }}
-            onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
-          />
-        </div>
-
-        {/* Pronouns */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={sectionLabelStyle}>{t('dash.personality.pronouns')}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {PRONOUNS.map(p => (
-              <button
-                key={p.value}
-                onClick={() => setPronouns(p.value)}
-                style={{
-                  padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                  border: pronouns === p.value ? '1px solid #a855f7' : '1px solid rgba(168, 85, 247, 0.12)',
-                  background: pronouns === p.value ? 'rgba(168,85,247,0.15)' : 'rgba(49, 34, 68, 0.5)',
-                  color: pronouns === p.value ? '#fff' : '#a6adc8',
-                  boxShadow: pronouns === p.value ? '0 0 12px rgba(168,85,247,0.25)' : 'none',
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => { if (pronouns !== p.value) (e.currentTarget as HTMLElement).style.borderColor = '#6c7086'; }}
-                onMouseLeave={e => { if (pronouns !== p.value) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Tone */}
         <div style={{ marginBottom: 24 }}>
@@ -7536,7 +7482,7 @@ export function SettingsPage() {
                 {(personality?.name || 'A')[0].toUpperCase()}
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{personality?.name || 'Ava'}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Ava</div>
                 <div style={{ fontSize: 11, color: '#6c7086' }}>
                   {personality ? `${personality.tone} / ${personality.energy} / ${personality.style}` : t('dash.settings.default_personality')}
                 </div>
@@ -7594,7 +7540,7 @@ export function SettingsPage() {
 
             {/* AI Avatar */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>{personality?.name || 'Ava'}</div>
+              <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>Ava</div>
               <div
                 onClick={() => {
                   const input = document.createElement('input');
@@ -9390,7 +9336,7 @@ export function AccountPage() {
     { key: 'settings' as const, label: 'Settings' },
     ...(connected ? [{ key: 'billing' as const, label: 'Billing' }] : []),
     { key: 'connections' as const, label: 'Connections' },
-    { key: 'personality' as const, label: 'Personality' },
+    { key: 'personality' as const, label: "Ava's Style" },
     ...(connected ? [{ key: 'sync' as const, label: 'Sync' }] : []),
   ];
   return (
