@@ -3274,6 +3274,25 @@ export function AvaChatPage() {
         </div>
       </div>
 
+      {/* ── Token usage bar ────────────────────────────────────────────── */}
+      {platformBalance && connected && platformBalance.limit > 0 && platformBalance.limit < 999_999_999 && (() => {
+        const remaining = Math.max(0, platformBalance.limit - platformBalance.used);
+        const pct = Math.max(0, Math.min(100, (remaining / platformBalance.limit) * 100));
+        const color = pct <= 5 ? '#ef4444' : pct <= 20 ? '#eab308' : '#a855f7';
+        return (
+          <div style={{ padding: '0 16px 6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, height: 4, borderRadius: 4, overflow: 'hidden', background: 'rgba(168,85,247,0.08)' }}>
+                <div style={{ width: `${pct}%`, height: '100%', borderRadius: 4, background: color, transition: 'width 0.5s' }} />
+              </div>
+              <span style={{ fontSize: 9, fontFamily: 'monospace', color, opacity: pct <= 20 ? 0.9 : 0.4, flexShrink: 0 }}>
+                {remaining >= 1_000_000 ? `${(remaining / 1_000_000).toFixed(2)}M` : remaining >= 1000 ? `${(remaining / 1000).toFixed(1)}K` : remaining} left
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Messages Area (flex-1, scrollable) ──────────────────────────── */}
       <div style={{
         flex: 1, overflowY: 'auto', padding: '20px 24px',
@@ -6985,10 +7004,11 @@ export function UsagePage() {
   const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || 0)) : 1;
   const today = new Date().toISOString().slice(0, 10);
 
-  // Balance
+  // Balance — free tier shows free pool only, paid tiers show subscription pool
   const isUnlimited = usage?.isUnlimited || false;
-  const balanceUsed = freeUsed + subUsed;
-  const balanceLimit = freeLimit + subLimit;
+  const hasSub = subLimit > 0 && (usage?.tier || 'free') !== 'free';
+  const balanceUsed = hasSub ? subUsed : freeUsed;
+  const balanceLimit = hasSub ? subLimit : freeLimit;
   const balancePct = isUnlimited ? 0 : (balanceLimit > 0 ? Math.min((balanceUsed / balanceLimit) * 100, 100) : 0);
 
   // Cost estimate
