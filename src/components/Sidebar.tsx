@@ -786,7 +786,18 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
               onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
               onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
             >
-              <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+              <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0, position: 'relative' }}>
+                {item.icon}
+                {item.id === 'help' && (() => {
+                  try {
+                    const count = Number(localStorage.getItem('ava-support-unread') || 0);
+                    if (count > 0) return (
+                      <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 14, height: 14, borderRadius: '50%', background: '#a855f7', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
+                    );
+                  } catch { /* */ }
+                  return null;
+                })()}
+              </span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</div>
                 <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>

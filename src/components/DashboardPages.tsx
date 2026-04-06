@@ -8464,7 +8464,13 @@ export function SupportPage() {
   useEffect(() => {
     if (!connected) { setLoading(false); return; }
     apiFetch('/support/conversations')
-      .then((data: any) => setConversations(data?.conversations || []))
+      .then((data: any) => {
+        const convs = data?.conversations || [];
+        setConversations(convs);
+        // Update unread badge in sidebar
+        const unread = convs.reduce((sum: number, c: any) => sum + (c.unread_user || 0), 0);
+        try { localStorage.setItem('ava-support-unread', String(unread)); } catch { /* */ }
+      })
       .catch(() => setConversations([]))
       .finally(() => setLoading(false));
   }, [connected]);
