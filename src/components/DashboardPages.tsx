@@ -6809,7 +6809,7 @@ export function PersonalityPage() {
             Preview
           </div>
           <div style={{ fontSize: 13, color: '#cdd6f4' }}>
-            <span style={{ fontWeight: 600, color: '#a855f7' }}>{name || 'Ava'}</span>{' '}
+            <span style={{ fontWeight: 600, color: '#a855f7' }}>Ava</span>{' '}
             will be {toneLabel}, {energyLabel}, and {styleLabel}.
           </div>
           {description && (
@@ -8456,7 +8456,7 @@ export function SupportPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
