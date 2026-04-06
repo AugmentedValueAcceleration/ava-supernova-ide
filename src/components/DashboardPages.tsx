@@ -459,6 +459,13 @@ async function fetchNewsDirect(category?: string): Promise<NewsArticle[]> {
   } catch { return []; }
 }
 
+async function fetchArticleDirect(slug: string): Promise<{ post: any; related: any[] } | null> {
+  try {
+    const data = await apiFetch(`/news/${encodeURIComponent(slug)}`);
+    return { post: data.post || null, related: data.related || [] };
+  } catch { return null; }
+}
+
 // ── Reusable WidgetCard ─────────────────────────────────────────────────────
 
 const widgetCardStyle: React.CSSProperties = {
@@ -749,14 +756,271 @@ function WorkingHoursClock() {
   );
 }
 
+// ── Article Reader ──────────────────────────────────────────────────────────
+
+const ARTICLE_GRADIENTS = [
+  'radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.2), transparent 60%), linear-gradient(135deg, #1a1a2e, #16213e)',
+  'radial-gradient(ellipse at 80% 20%, rgba(167,139,250,0.2), transparent 60%), linear-gradient(135deg, #0f172a, #1e1b4b)',
+  'radial-gradient(ellipse at 50% 80%, rgba(192,132,252,0.2), transparent 60%), linear-gradient(135deg, #1a1a2e, #312e81)',
+  'radial-gradient(ellipse at 30% 30%, rgba(129,140,248,0.2), transparent 60%), linear-gradient(135deg, #0c0a1d, #1e293b)',
+  'radial-gradient(ellipse at 70% 60%, rgba(99,102,241,0.2), transparent 60%), linear-gradient(135deg, #111827, #1e1b4b)',
+];
+
+const ARTICLE_CATEGORIES: Record<string, { label: string; icon: string }> = {
+  'ai-agents':    { label: 'AI Agents',          icon: '🤖' },
+  'models':       { label: 'Models & Benchmarks', icon: '🧠' },
+  'dev-tools':    { label: 'Developer Tools',     icon: '🛠️' },
+  'open-source':  { label: 'Open Source',          icon: '📦' },
+  'education':    { label: 'AI Education',         icon: '🎓' },
+  'productivity': { label: 'Productivity & AI',    icon: '⚡' },
+  'companions':   { label: 'AI Companions',        icon: '💬' },
+  'health':       { label: 'Health & Wellness',    icon: '🏥' },
+  'enterprise':   { label: 'Enterprise AI',        icon: '🏢' },
+  'industry':     { label: 'Industry & Policy',    icon: '📰' },
+};
+
+function renderMarkdown(md: string): string {
+  let html = md
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="art-code"><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code class="art-inline">$1</code>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/^---$/gm, '<hr />')
+    .replace(/^[*-] (.+)$/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>');
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  html = `<p>${html}</p>`;
+  html = html.replace(/<p>\s*<\/p>/g, '');
+  html = html.replace(/<p>(<h[1-3]>)/g, '$1');
+  html = html.replace(/(<\/h[1-3]>)<\/p>/g, '$1');
+  html = html.replace(/<p>(<pre)/g, '$1');
+  html = html.replace(/(<\/pre>)<\/p>/g, '$1');
+  html = html.replace(/<p>(<ul>)/g, '$1');
+  html = html.replace(/(<\/ul>)<\/p>/g, '$1');
+  html = html.replace(/<p>(<hr \/>)/g, '$1');
+  html = html.replace(/(<hr \/>)<\/p>/g, '$1');
+  return html;
+}
+
+function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
+  article: any;
+  related: any[];
+  onBack: () => void;
+  onNavigateToArticle: (slug: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const cat = article.category ? ARTICLE_CATEGORIES[article.category] : null;
+  const sources: any[] = article.sources || [];
+  const tags: string[] = article.tags || [];
+  const articleHtml = renderMarkdown(article.content || '');
+  const gradientIndex = (article.slug || '').split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0) % ARTICLE_GRADIENTS.length;
+  const articleUrl = `https://ava-supernova.com/news/${article.slug}`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(articleUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* */ }
+  };
+
+  return (
+    <div style={{ maxWidth: 720, margin: '0 auto', paddingBottom: 48 }}>
+      {/* Back button */}
+      <button
+        onClick={onBack}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6c7086', background: 'none', border: 'none', cursor: 'pointer', marginBottom: 24, padding: 0 }}
+      >
+        <svg style={{ width: 14, height: 14 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+        </svg>
+        Back to News
+      </button>
+
+      {/* Hero image */}
+      <div style={{ position: 'relative', marginBottom: 24, height: 144, overflow: 'hidden', borderRadius: 12 }}>
+        {article.image_url ? (
+          <img src={article.image_url} alt={article.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, background: ARTICLE_GRADIENTS[gradientIndex] }} />
+        )}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 40%, #0f0a1a)' }} />
+        <div style={{ position: 'absolute', right: 12, top: 12, display: 'flex', gap: 6 }}>
+          {cat && (
+            <span style={{ borderRadius: 9999, background: 'rgba(255,255,255,0.1)', padding: '3px 10px', fontSize: 9, fontWeight: 700, color: '#fff', backdropFilter: 'blur(4px)' }}>
+              {cat.icon} {cat.label}
+            </span>
+          )}
+          {article.priority === 'breaking' && (
+            <span style={{ borderRadius: 9999, background: '#ef4444', padding: '3px 10px', fontSize: 9, fontWeight: 700, color: '#fff' }}>BREAKING</span>
+          )}
+          {article.ai_generated && (
+            <span style={{ borderRadius: 9999, background: 'rgba(255,255,255,0.1)', padding: '3px 10px', fontSize: 9, fontWeight: 700, color: '#a855f7', backdropFilter: 'blur(4px)' }}>AI-Curated</span>
+          )}
+        </div>
+      </div>
+
+      {/* Meta */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 10, color: '#6c7086', marginBottom: 12 }}>
+        <span>{new Date(article.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        {article.reading_time && <><span>&middot;</span><span>{article.reading_time} min read</span></>}
+        {article.source_publication && <><span>&middot;</span><span>{article.source_publication}</span></>}
+      </div>
+
+      {/* Title */}
+      <h1 style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.3, color: '#cdd6f4', margin: '0 0 8px 0' }}>{article.title}</h1>
+      {article.excerpt && <p style={{ fontSize: 13, color: '#a6adc8', margin: '0 0 16px 0' }}>{article.excerpt}</p>}
+
+      {/* Tags */}
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+          {tags.map((tag: string) => (
+            <span key={tag} style={{ borderRadius: 9999, border: '1px solid rgba(168,85,247,0.12)', padding: '2px 8px', fontSize: 9, color: '#a6adc8' }}>#{tag}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+        <button onClick={handleCopy} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.3)', padding: '6px 12px', fontSize: 10, color: '#a6adc8', cursor: 'pointer' }}>
+          {copied ? '✓ Copied!' : '🔗 Copy Link'}
+        </button>
+        <button onClick={() => window.open(articleUrl, '_blank')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.3)', padding: '6px 12px', fontSize: 10, color: '#a6adc8', cursor: 'pointer' }}>
+          🔗 Open in Browser
+        </button>
+      </div>
+
+      {/* Source attribution */}
+      {(article.source_url || article.source_author || article.source_publication) && (
+        <div style={{ marginBottom: 24, borderRadius: 12, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)', padding: 12 }}>
+          <p style={{ fontSize: 12, color: '#a6adc8', margin: 0 }}>
+            Originally reported
+            {article.source_author && <> by <span style={{ fontWeight: 500, color: '#cdd6f4' }}>{article.source_author}</span></>}
+            {article.source_publication && <> at <span style={{ fontWeight: 500, color: '#cdd6f4' }}>{article.source_publication}</span></>}
+          </p>
+          {article.source_url && (
+            <a href={article.source_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 12, color: '#a855f7', textDecoration: 'none' }}>
+              Read the original article ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Article content */}
+      <style>{`
+        .ide-article h1 { font-size: 18px; font-weight: 700; color: #cdd6f4; margin: 24px 0 8px; }
+        .ide-article h2 { font-size: 16px; font-weight: 600; color: #cdd6f4; margin: 20px 0 6px; }
+        .ide-article h3 { font-size: 14px; font-weight: 600; color: #cdd6f4; margin: 16px 0 4px; }
+        .ide-article p { margin: 0 0 12px; }
+        .ide-article a { color: #a855f7; text-decoration: none; }
+        .ide-article a:hover { text-decoration: underline; }
+        .ide-article strong { color: #cdd6f4; font-weight: 600; }
+        .ide-article ul { list-style-type: disc; padding-left: 20px; margin: 0 0 12px; }
+        .ide-article li { margin-bottom: 4px; }
+        .ide-article hr { border: none; border-top: 1px solid rgba(168,85,247,0.12); margin: 20px 0; }
+        .ide-article pre.art-code { background: rgba(49,34,68,0.3); border: 1px solid rgba(168,85,247,0.12); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 12px; margin: 0 0 12px; }
+        .ide-article code.art-inline { background: rgba(49,34,68,0.3); border-radius: 4px; padding: 1px 4px; font-size: 0.85em; }
+      `}</style>
+      <div className="ide-article" style={{ fontSize: 13, lineHeight: 1.7, color: '#a6adc8' }} dangerouslySetInnerHTML={{ __html: articleHtml }} />
+
+      {/* Ava's commentary */}
+      {article.ava_commentary && (
+        <div style={{ marginTop: 32, borderRadius: 12, border: '1px solid rgba(168,85,247,0.3)', background: 'linear-gradient(135deg, rgba(168,85,247,0.05), rgba(168,85,247,0.1))', padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(to right, #a855f7, #c084fc)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>A</span>
+            </div>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#cdd6f4', margin: 0 }}>Ava's Take</p>
+              <p style={{ fontSize: 9, color: '#6c7086', margin: 0 }}>Ava | Supernova Commentary</p>
+            </div>
+          </div>
+          <p style={{ fontSize: 12, lineHeight: 1.6, color: '#a6adc8', margin: 0 }}>{article.ava_commentary}</p>
+        </div>
+      )}
+
+      {/* Sources */}
+      {sources.length > 0 && (
+        <div style={{ marginTop: 32, borderTop: '1px solid rgba(168,85,247,0.12)', paddingTop: 24 }}>
+          <h2 style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 12 }}>Sources</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {sources.map((source: any, i: number) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)', padding: 10 }}>
+                <span style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(49,34,68,0.5)', fontSize: 9, fontWeight: 700, color: '#6c7086', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                <div>
+                  <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 500, color: '#a855f7', textDecoration: 'none' }}>{source.title}</a>
+                  <p style={{ marginTop: 2, fontSize: 10, color: '#6c7086', margin: '2px 0 0' }}>
+                    {source.author && <>{source.author} — </>}{source.publication}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Related articles */}
+      {related.length > 0 && (
+        <div style={{ marginTop: 32, borderTop: '1px solid rgba(168,85,247,0.12)', paddingTop: 24 }}>
+          <h2 style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 12 }}>Related Articles</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            {related.map((rel: any, i: number) => {
+              const relCat = rel.category ? ARTICLE_CATEGORIES[rel.category] : null;
+              return (
+                <button key={rel.id} onClick={() => onNavigateToArticle(rel.slug)} style={{ display: 'block', overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+                  <div style={{ position: 'relative', height: 80, overflow: 'hidden' }}>
+                    {rel.image_url ? (
+                      <img src={rel.image_url} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ position: 'absolute', inset: 0, background: ARTICLE_GRADIENTS[(i + gradientIndex) % ARTICLE_GRADIENTS.length] }} />
+                    )}
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)' }} />
+                    {relCat && (
+                      <span style={{ position: 'absolute', left: 8, top: 8, borderRadius: 4, background: 'rgba(0,0,0,0.4)', padding: '2px 6px', fontSize: 8, fontWeight: 700, color: '#fff', backdropFilter: 'blur(4px)' }}>
+                        {relCat.icon} {relCat.label}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ padding: 10 }}>
+                    <h3 style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, color: '#cdd6f4', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{rel.title}</h3>
+                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, color: '#6c7086' }}>
+                      {rel.reading_time && <span>{rel.reading_time}m read</span>}
+                      {rel.reading_time && <span>&middot;</span>}
+                      <span>{new Date(rel.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Transparency notice */}
+      <div style={{ marginTop: 32, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.2)', padding: '8px 12px', textAlign: 'center', fontSize: 10, color: '#6c7086' }}>
+        {article.ai_generated
+          ? 'This article was AI-curated by Ava | Supernova. All credit belongs to the original authors and publications listed above.'
+          : 'All credit belongs to the original authors and publications where applicable.'
+        }
+      </div>
+    </div>
+  );
+}
+
 // ── News Widget ─────────────────────────────────────────────────────────────
 
-function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, onRefresh }: {
+function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, onRefresh, onOpenArticle }: {
   articles: NewsArticle[];
   loading: boolean;
   onCategoryChange: (cat: string | null) => void;
   selectedCategory: string | null;
   onRefresh: () => void;
+  onOpenArticle?: (slug: string) => void;
 }) {
   const catBtnBase: React.CSSProperties = {
     flexShrink: 0, borderRadius: 9999, padding: '4px 10px', fontSize: 10, fontWeight: 500,
@@ -804,7 +1068,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
           {articles.map((article, idx) => (
             <button
               key={article.slug || idx}
-              onClick={() => window.open(`https://ava-supernova.com/news/${article.slug}`, '_blank')}
+              onClick={() => onOpenArticle ? onOpenArticle(article.slug) : window.open(`https://ava-supernova.com/news/${article.slug}`, '_blank')}
               style={{
                 display: 'block', width: '100%', textAlign: 'left', padding: 12,
                 background: 'rgba(49,50,68,0.3)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8, cursor: 'pointer',
@@ -1171,6 +1435,22 @@ export function CommandCentrePage() {
     loadNews(cat);
   };
 
+  // ── Article reader state ─────────────────────────────────────────────
+  const [activeArticle, setActiveArticle] = useState<any>(null);
+  const [activeArticleRelated, setActiveArticleRelated] = useState<any[]>([]);
+  const [articleLoading, setArticleLoading] = useState(false);
+
+  const openArticle = useCallback((slug: string) => {
+    setArticleLoading(true);
+    fetchArticleDirect(slug).then(result => {
+      if (result?.post) {
+        setActiveArticle(result.post);
+        setActiveArticleRelated(result.related);
+      }
+      setArticleLoading(false);
+    });
+  }, []);
+
   // ── Platform API data (tasks, journal, learning, memory, release) ──
   const { data: rawTasks2, loading: tasksLoading, refetch: refetchTasks } = useApiData<any>('/tasks', null);
   const tasks: TaskEntry[] = Array.isArray(rawTasks2) ? rawTasks2 : (rawTasks2?.tasks ?? rawTasks2?.data ?? []);
@@ -1186,6 +1466,24 @@ export function CommandCentrePage() {
     if (Array.isArray(releaseData)) return releaseData[0] ?? null;
     return releaseData;
   }, [releaseData]);
+
+  // Show article reader when an article is active
+  if (activeArticle) {
+    return (
+      <div style={pageWrapper}>
+        <IdeArticleReader
+          article={activeArticle}
+          related={activeArticleRelated}
+          onBack={() => { setActiveArticle(null); setActiveArticleRelated([]); }}
+          onNavigateToArticle={(slug) => {
+            setActiveArticle(null);
+            setArticleLoading(true);
+            openArticle(slug);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div style={pageWrapper}>
@@ -1237,6 +1535,7 @@ export function CommandCentrePage() {
             onCategoryChange={handleNewsCategory}
             selectedCategory={newsCategory}
             onRefresh={() => loadNews(newsCategory)}
+            onOpenArticle={openArticle}
           />
           {connected ? (
             <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
