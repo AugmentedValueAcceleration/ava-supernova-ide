@@ -4179,8 +4179,11 @@ export function AvaChatPage() {
 /* ===== 2b. Chat History ===== */
 export function ChatHistoryPage() {
   useLocale();
+  const connected = checkConnected();
   const [conversations, setConversations] = useState<any[]>([]);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'usage'>('conversations');
+  const { data: usage } = useApiData<any>('/usage/summary', null);
 
   useEffect(() => {
     try {
@@ -4199,11 +4202,159 @@ export function ChatHistoryPage() {
     try { localStorage.setItem('ava-ide-chat-history', JSON.stringify(updated)); } catch {}
   };
 
+  // Usage analytics
+  const period = usage?.period || {};
+  const totals = usage?.totals || {};
+  const freeUsed = period.free_tokens_used || 0;
+  const freeLimit = period.free_tokens_limit || 3000000;
+  const subUsed = period.tokens_used || 0;
+  const subLimit = period.tokens_limit || 0;
+  const isUnlimited = usage?.isUnlimited || false;
+  const hasSub = subLimit > 0 && (usage?.tier || 'free') !== 'free';
+  const balanceUsed = hasSub ? subUsed : freeUsed;
+  const balanceLimit = hasSub ? subLimit : freeLimit;
+  const balancePct = isUnlimited ? 0 : (balanceLimit > 0 ? Math.min((balanceUsed / balanceLimit) * 100, 100) : 0);
+  const daily: any[] = usage?.daily || [];
+  const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || 0)) : 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const models: any[] = usage?.models || [];
+  const maxModelTokens = models.length > 0 ? Math.max(...models.map((m: any) => m.total_tokens || 0)) : 1;
+
+  const tabStyle = (active: boolean) => ({
+    padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600 as const, cursor: 'pointer' as const,
+    border: 'none', transition: 'all 0.15s',
+    background: active ? '#a855f7' : 'transparent',
+    color: active ? '#fff' : '#6c7086',
+  });
+
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
-        <div style={pageTitle}>{t('dash.nav.chat_history')}</div>
-        <div style={{ ...pageSubtitle, marginBottom: 16 }}>{t('dash.nav.chat_history_desc')}</div>
+        <div style={pageTitle}>History</div>
+        <div style={{ ...pageSubtitle, marginBottom: 16 }}>Tokens, sessions, models</div>
+
+        {/* ── Tabs ───────────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: 'rgba(26, 16, 40, 0.6)', borderRadius: 10, padding: 4, width: 'fit-content' }}>
+          <button style={tabStyle(activeTab === 'conversations')} onClick={() => setActiveTab('conversations')}>Conversations</button>
+          <button style={tabStyle(activeTab === 'usage')} onClick={() => setActiveTab('usage')}>Usage</button>
+        </div>
+
+        {/* ── Usage Tab ──────────────────────────────────────────────── */}
+        {activeTab === 'usage' && (
+          <>
+            {/* Token Balance */}
+            {connected && usage && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Token Balance</div>
+                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px' }}>
+                  {isUnlimited ? (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
+                        <span style={{ color: '#a6adc8' }}>Admin</span>
+                        <span style={{ color: '#a855f7', fontWeight: 600 }}>Unlimited</span>
+                      </div>
+                      <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
+                        <div style={{ width: '100%', height: '100%', borderRadius: 6, background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
+                        <span style={{ color: '#a6adc8' }}>{formatTokens(balanceUsed)} / {formatTokens(balanceLimit)} used</span>
+                        <span style={{ color: '#6c7086' }}>{balancePct.toFixed(0)}%</span>
+                      </div>
+                      <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
+                        <div style={{
+                          width: `${balancePct}%`, height: '100%', borderRadius: 6,
+                          background: balancePct > 90 ? '#f87171' : balancePct > 70 ? '#f59e0b' : 'linear-gradient(90deg, #a855f7, #6366f1)',
+                          transition: 'width 0.5s',
+                        }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Overview Stats */}
+            {connected && usage && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Overview</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                  {[
+                    { label: 'This Month', value: formatTokens(totals.tokens || 0) },
+                    { label: 'Requests', value: String(totals.requests || 0) },
+                    { label: 'Active Days', value: String(totals.active_days || 0) },
+                    { label: 'Avg / Request', value: formatTokens(totals.requests > 0 ? Math.round((totals.tokens || 0) / totals.requests) : 0) },
+                  ].map(s => (
+                    <div key={s.label} style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10, padding: '14px 16px' }}>
+                      <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{s.label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#cdd6f4' }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Daily Usage Chart */}
+            {connected && daily.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Daily Usage (Last 14 Days)</div>
+                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80 }}>
+                    {daily.map((d: any) => {
+                      const h = maxDaily > 0 ? Math.max(2, (d.tokens / maxDaily) * 80) : 2;
+                      const isToday = d.date === today;
+                      return (
+                        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} title={`${d.date}: ${formatTokens(d.tokens)}`}>
+                          <div style={{
+                            width: '100%', height: h, borderRadius: 3,
+                            background: isToday ? '#a855f7' : 'rgba(168, 85, 247, 0.3)',
+                          }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                    <span style={{ fontSize: 9, color: '#585b70' }}>{daily[0]?.date?.slice(5)}</span>
+                    <span style={{ fontSize: 9, color: '#585b70' }}>{daily[daily.length - 1]?.date?.slice(5)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Most Used Models */}
+            {connected && models.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Most Used Models</div>
+                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {models.slice(0, 5).map((m: any) => (
+                    <div key={m.model}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                        <span style={{ color: '#cdd6f4', fontWeight: 500 }}>{m.model}</span>
+                        <span style={{ color: '#6c7086' }}>{formatTokens(m.total_tokens)} ({m.request_count} req)</span>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
+                        <div style={{ width: `${(m.total_tokens / maxModelTokens) * 100}%`, height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!connected && (
+              <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '48px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 13, color: '#6c7086' }}>Connect your account to see usage analytics.</div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Conversations Tab ──────────────────────────────────────── */}
+        {activeTab === 'conversations' && (
+          <>
+
 
         {/* Search */}
         <div style={{ marginBottom: 20 }}>
@@ -4276,6 +4427,8 @@ export function ChatHistoryPage() {
               );
             })}
           </div>
+        )}
+          </>
         )}
       </div>
     </div>
