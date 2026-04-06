@@ -8,7 +8,8 @@ The standalone AI-native development environment. Built with Tauri v2, React 19,
 - **Local mode** — Node.js sidecar runs @ava/core with all 54 tools, 6 modes, 24 personas, 5-layer memory
 - **Cloud mode** — Platform API with managed tokens, usage tracking, billing
 - **Toggle freely** — switch between Local and Cloud from the chat header
-- **Model picker** — Qwen Flash, Qwen 3.5 Plus, DeepSeek, Kimi, Zhipu, Mistral + BYOK
+- **Model picker** — Qwen 3.6 Plus, MiniMax M2.7, DeepSeek, Kimi, Zhipu, Mistral + BYOK
+- **Auto Mode** — routes every task to the best model automatically
 - **Mode selector** — Work (>>), Plan (::), Chat (..), Teach (??), Security (!!), Brainstorm (**)
 
 ### Collapsible Tasks Panel
@@ -31,6 +32,15 @@ Weather, statistics, latest news (10 categories), today's tasks, journal preview
 
 ### Platform-Tagged Release Notes
 Colour-coded tabs — Core (blue), Extension (purple), IDE (green), Companion (orange). Shows ecosystem velocity at a glance.
+
+### Token Usage Bar
+Visual token balance below the chat header — depletes in real-time as tokens are used. Colour-coded thresholds (purple → yellow → red).
+
+### Live Chat Support
+Chat-based support with Ava first-line triage. Conversation list, message history, 10-second polling. No tickets, no forms — just ask.
+
+### Tick Engine
+Background awareness every 2 minutes — checks token balance, support messages, and surfaces findings only when they matter.
 
 ### Session Stats
 Live token usage, messages, tool calls, and model breakdown — synced across Usage, Command Centre, and chat header in real-time.
