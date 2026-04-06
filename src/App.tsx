@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { initLocale, useLocale } from './lib/i18n';
+import { TickEngine } from './lib/tick-engine';
 import TitleBar from './components/TitleBar';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
@@ -160,6 +161,32 @@ export default function App() {
       onFileOpen={handleFileOpen}
     />
   ) : null;
+
+  // ── Tick Engine — background awareness ──────────────────────────────
+  const tickRef = useRef<TickEngine | null>(null);
+  useEffect(() => {
+    if (!tickRef.current) tickRef.current = new TickEngine();
+    const interval = setInterval(async () => {
+      if (!tickRef.current) return;
+      const result = await tickRef.current.tick({
+        getTokenBalance: () => {
+          try {
+            const bal = localStorage.getItem('ava-platform-balance');
+            if (bal) { const p = JSON.parse(bal); return { used: p.used, limit: p.limit }; }
+          } catch { /* */ }
+          return null;
+        },
+        getSupportUnread: () => {
+          try { return Number(localStorage.getItem('ava-support-unread') || 0); } catch { return 0; }
+        },
+      });
+      for (const event of result.events) {
+        // Dispatch as custom event for toast/notification display
+        window.dispatchEvent(new CustomEvent('ava-tick-event', { detail: event }));
+      }
+    }, 120_000); // Every 2 minutes
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
