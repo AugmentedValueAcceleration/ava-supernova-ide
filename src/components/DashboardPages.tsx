@@ -8484,6 +8484,17 @@ export function SupportPage() {
     } catch { setMessages([]); }
   }, []);
 
+  // Poll for new messages every 10 seconds
+  useEffect(() => {
+    if (!activeConvId) return;
+    const interval = setInterval(() => {
+      apiFetch(`/support/conversations/${activeConvId}/messages`)
+        .then((data: any) => { if (data?.messages) setMessages(data.messages); })
+        .catch(() => {});
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [activeConvId]);
+
   const handleSend = useCallback(async () => {
     if (!input.trim() || sending) return;
     const text = input.trim();
