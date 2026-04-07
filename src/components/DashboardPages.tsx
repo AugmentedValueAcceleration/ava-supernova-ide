@@ -3193,19 +3193,11 @@ export function AvaChatPage() {
     setConfirmInput('');
   }, [pendingConfirm]);
 
-  // Always Allow — approve this, update settings to Autonomous permanently
-  const approveAll = useCallback(async () => {
+  // Always Allow — approve this category for the session (no longer switches to autonomous permanently)
+  const approveAlwaysCategory = useCallback(async () => {
     if (!pendingConfirm) return;
     const sidecar = getSidecar();
-    await sidecar.confirm(pendingConfirm.id, true);
-    sidecar.setPermission('autonomous').catch(() => {});
-    // Persist to settings so it stays Autonomous across sessions
-    try {
-      const raw = localStorage.getItem('ava-ide-settings');
-      const s = raw ? JSON.parse(raw) : {};
-      s.permissionMode = 'autonomous';
-      localStorage.setItem('ava-ide-settings', JSON.stringify(s));
-    } catch { /* */ }
+    await sidecar.confirm(pendingConfirm.id, true, undefined, true);
     setPendingConfirm(null);
     setConfirmInput('');
   }, [pendingConfirm]);
@@ -3979,12 +3971,12 @@ export function AvaChatPage() {
                 {t('plan.approve')}
               </button>
               <button
-                onClick={approveAll}
+                onClick={approveAlwaysCategory}
                 style={{
                   padding: '4px 12px', background: 'transparent', border: '1px solid #a855f7',
                   borderRadius: 6, color: '#a855f7', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                 }}
-                title="Approve and switch to Autonomous mode — updates your settings"
+                title="Auto-approve this tool category for the rest of the session"
               >
                 Always Allow
               </button>
@@ -8142,6 +8134,65 @@ export function SettingsPage() {
               );
             })}
           </div>
+
+          {/* Custom mode indicator */}
+          {settings.permissionMode === 'custom' && (
+            <div style={{ marginBottom: 12, borderRadius: 8, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.05)', padding: '8px 12px', fontSize: 11, color: '#c4b5fd' }}>
+              Custom — you've adjusted individual categories. Select a preset above to reset.
+            </div>
+          )}
+
+          {/* Category-level permissions */}
+          <details style={{ marginBottom: 16 }}>
+            <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#a6adc8', userSelect: 'none' }}>
+              Customise by Category
+            </summary>
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {([
+                { id: 'file_ops', icon: '📁', label: 'File Operations', desc: 'read, write, edit, glob, grep' },
+                { id: 'shell', icon: '💻', label: 'Shell', desc: 'bash, test_run, test_generate' },
+                { id: 'git', icon: '🔀', label: 'Git', desc: 'status, diff, commit, PR, rollback' },
+                { id: 'web', icon: '🌐', label: 'Web', desc: 'search, http_request, browser' },
+                { id: 'media', icon: '🎨', label: 'Media', desc: 'screenshot, generate_image' },
+                { id: 'database', icon: '🗄️', label: 'Database', desc: 'database_query' },
+                { id: 'system', icon: '🖥️', label: 'System', desc: 'computer_use' },
+                { id: 'documents', icon: '📄', label: 'Documents', desc: 'docs, presentations, reports' },
+                { id: 'memory', icon: '🧠', label: 'Memory', desc: 'save, recall, update, delete' },
+                { id: 'learning', icon: '🎓', label: 'Learning', desc: 'create, teach, progress' },
+              ] as const).map(cat => {
+                const currentPerm = (settings as any).categoryPermissions?.[cat.id] || 'auto';
+                return (
+                  <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.3)', padding: '8px 12px' }}>
+                    <span style={{ fontSize: 14 }}>{cat.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: '#a6adc8' }}>{cat.label}</div>
+                      <div style={{ fontSize: 9, color: '#6c7086', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat.desc}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 2, borderRadius: 6, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)', padding: 2 }}>
+                      {(['auto', 'first_time', 'always_ask'] as const).map(perm => (
+                        <button
+                          key={perm}
+                          onClick={() => {
+                            const updated = { ...(settings as any).categoryPermissions, [cat.id]: perm };
+                            saveImmediate('categoryPermissions' as any, updated);
+                            getSidecar().setCategoryPermission(cat.id, perm).catch(() => {});
+                          }}
+                          style={{
+                            padding: '2px 8px', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 9, fontWeight: 500,
+                            background: currentPerm === perm ? '#a855f7' : 'transparent',
+                            color: currentPerm === perm ? '#fff' : '#6c7086',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {perm === 'auto' ? 'Auto' : perm === 'first_time' ? 'First Time' : 'Always Ask'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </details>
 
           <div style={divider} />
 

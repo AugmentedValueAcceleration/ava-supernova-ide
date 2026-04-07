@@ -352,11 +352,21 @@ async function handleInit(data) {
     // Confirmation handler — pauses and waits for IDE response
     toolRegistry.setConfirmationHandler(async (toolName, args) => {
       const id = crypto.randomUUID().slice(0, 8);
-      emit({ event: 'confirm_required', id, toolName, args });
+      const toolCategory = toolRegistry.getCategoryForTool(toolName);
+      emit({ event: 'confirm_required', id, toolName, toolCategory, args });
       return new Promise((resolve) => {
-        pendingConfirmations.set(id, { resolve });
+        pendingConfirmations.set(id, { resolve, toolName });
       });
     });
+
+    // Audit callback — log all tool executions
+    const auditLog = [];
+    toolRegistry.setAuditCallback((entry) => {
+      auditLog.push(entry);
+      if (auditLog.length > 500) auditLog.shift();
+    });
+    // Expose audit log for IDE retrieval
+    globalThis.__avaAuditLog = auditLog;
 
     // Memory
     let sync;
@@ -959,6 +969,13 @@ function handleConfirm(data) {
   }
   pendingConfirmations.delete(data.id);
 
+  // "Always Allow" — approve this category for the session
+  if (data.approved && data.alwaysAllowCategory && toolRegistry && pending.toolName) {
+    const category = toolRegistry.getCategoryForTool(pending.toolName);
+    toolRegistry.approveCategory(category);
+    toolRegistry.setCategoryPermission(category, 'auto');
+  }
+
   if (data.response && typeof data.response === 'string') {
     // Free-text response (e.g., ask_user, present_plan approval)
     pending.resolve(data.response);
@@ -1126,6 +1143,20 @@ rl.on('line', async (line) => {
         toolRegistry.setPermissionMode(data.mode);
         emit({ event: 'info', message: `Permission mode: ${data.mode}` });
       }
+      break;
+    case 'set_category_permission':
+      if (toolRegistry && data.category && data.permission) {
+        toolRegistry.setCategoryPermission(data.category, data.permission);
+        emit({ event: 'info', message: `Category ${data.category}: ${data.permission}` });
+      }
+      break;
+    case 'get_category_permissions':
+      if (toolRegistry) {
+        emit({ event: 'category_permissions', permissions: toolRegistry.getCategoryPermissions(), mode: toolRegistry.getPermissionMode() });
+      }
+      break;
+    case 'get_audit_log':
+      emit({ event: 'audit_log', entries: globalThis.__avaAuditLog || [] });
       break;
     case 'inject':
       handleInject(data);

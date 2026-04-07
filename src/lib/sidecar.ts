@@ -276,8 +276,8 @@ export class SidecarManager {
   /**
    * Respond to a tool confirmation request.
    */
-  async confirm(id: string, approved: boolean, response?: string): Promise<void> {
-    await this.send({ cmd: 'confirm', id, approved, response });
+  async confirm(id: string, approved: boolean, response?: string, alwaysAllowCategory?: boolean): Promise<void> {
+    await this.send({ cmd: 'confirm', id, approved, response, alwaysAllowCategory });
   }
 
   /**
@@ -322,8 +322,20 @@ export class SidecarManager {
     await this.send({ cmd: 'set_cwd', cwd });
   }
 
-  async setPermission(mode: 'strict' | 'balanced' | 'autonomous'): Promise<void> {
+  async setPermission(mode: 'strict' | 'balanced' | 'autonomous' | 'custom'): Promise<void> {
     await this.send({ cmd: 'set_permission', mode });
+  }
+
+  async setCategoryPermission(category: string, permission: string): Promise<void> {
+    await this.send({ cmd: 'set_category_permission', category, permission });
+  }
+
+  async getAuditLog(): Promise<void> {
+    await this.send({ cmd: 'get_audit_log' });
+  }
+
+  async getCategoryPermissions(): Promise<void> {
+    await this.send({ cmd: 'get_category_permissions' });
   }
 
   /**
