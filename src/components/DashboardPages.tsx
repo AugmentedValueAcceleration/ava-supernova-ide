@@ -2548,6 +2548,12 @@ export function AvaChatPage() {
           timestamp: Date.now(),
         }]);
         break;
+
+      case 'audit_log':
+      case 'audit_entry':
+        // Forward audit events to window so UsagePage can pick them up
+        window.dispatchEvent(new CustomEvent('ava-audit-event', { detail: event }));
+        break;
     }
   }, [redactSecrets]);
 
@@ -7407,8 +7413,27 @@ export function CloudSyncPage() {
 export function UsagePage() {
   useLocale();
   const connected = checkConnected();
-  const [activeTab, setActiveTab] = useState<'session' | 'alltime'>('session');
+  const [activeTab, setActiveTab] = useState<'session' | 'alltime' | 'audit'>('session');
   const { data: usage, loading, error } = useApiData<any>('/usage/summary', null);
+
+  // Audit log state
+  const [auditEntries, setAuditEntries] = useState<any[]>([]);
+  const [auditExpanded, setAuditExpanded] = useState<number | null>(null);
+
+  // Listen for audit events forwarded from sidecar event handler
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.event === 'audit_log' && Array.isArray(detail.entries)) {
+        setAuditEntries(detail.entries);
+      }
+      if (detail?.event === 'audit_entry' && detail.entry) {
+        setAuditEntries(prev => [...prev, detail.entry].slice(-500));
+      }
+    };
+    window.addEventListener('ava-audit-event', handler);
+    return () => window.removeEventListener('ava-audit-event', handler);
+  }, []);
 
   // Live session stats from shared store
   const [session, setSession] = useState<SessionStats>(getSessionStats);
@@ -7502,10 +7527,15 @@ export function UsagePage() {
         <div style={{
           display: 'inline-flex', gap: 2, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 10, padding: 3, marginBottom: 24,
         }}>
-          {(['session', 'alltime'] as const).map(tab => (
+          {(['session', 'alltime', 'audit'] as const).map(tab => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => {
+                setActiveTab(tab);
+                if (tab === 'audit') {
+                  try { getSidecar().getAuditLog(); } catch { /* */ }
+                }
+              }}
               style={{
                 padding: '7px 18px', borderRadius: 8, fontSize: 12, fontWeight: 500,
                 border: 'none', cursor: 'pointer',
@@ -7514,7 +7544,7 @@ export function UsagePage() {
                 transition: 'all 0.15s',
               }}
             >
-              {tab === 'session' ? t('dash.usage.session') : t('dash.usage.all_time')}
+              {tab === 'session' ? t('dash.usage.session') : tab === 'alltime' ? t('dash.usage.all_time') : 'Audit'}
             </button>
           ))}
         </div>
@@ -7598,6 +7628,77 @@ export function UsagePage() {
                     padding: '32px 20px', textAlign: 'center',
                   }}>
                     <div style={{ fontSize: 13, color: '#6c7086' }}>No usage this session yet. Start chatting with Ava!</div>
+                  </div>
+                )}
+              </>
+            ) : activeTab === 'audit' ? (
+              <>
+                {/* Audit Trail */}
+                {auditEntries.length === 0 ? (
+                  <div style={{
+                    background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12,
+                    padding: '32px 20px', textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>📋</div>
+                    <div style={{ fontSize: 13, color: '#6c7086' }}>No tool calls recorded this session.</div>
+                  </div>
+                ) : (
+                  <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+                    {/* Header row */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '60px 1fr 80px 60px 90px 60px',
+                      gap: 8, padding: '8px 12px',
+                      borderBottom: '1px solid rgba(168,85,247,0.12)',
+                      fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' as const, color: '#6c7086',
+                    }}>
+                      <span>Time</span><span>Tool</span><span>Category</span><span>Risk</span><span>Approval</span><span>Status</span>
+                    </div>
+                    {/* Entries — newest first */}
+                    {[...auditEntries].reverse().map((entry: any, i: number) => {
+                      const time = new Date(entry.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                      const isExp = auditExpanded === i;
+                      const approvalColors: Record<string, string> = { 'auto': '#34d399', 'first-time': '#60a5fa', 'user-approved': '#fbbf24', 'denied': '#f87171' };
+                      const statusColors: Record<string, string> = { 'success': '#34d399', 'failed': '#f87171', 'denied': '#f87171' };
+                      const riskColors: Record<string, string> = { 'safe': '#34d399', 'write': '#fbbf24', 'dangerous': '#f87171' };
+                      const catLabels: Record<string, string> = { file_ops: 'File Ops', shell: 'Shell', git: 'Git', web: 'Web', media: 'Media', database: 'Database', system: 'System', documents: 'Docs', memory: 'Memory', learning: 'Learning' };
+                      return (
+                        <div key={i}>
+                          <button
+                            onClick={() => setAuditExpanded(isExp ? null : i)}
+                            style={{
+                              display: 'grid', gridTemplateColumns: '60px 1fr 80px 60px 90px 60px',
+                              gap: 8, width: '100%', padding: '8px 12px', textAlign: 'left',
+                              fontSize: 11, border: 'none', background: 'transparent', cursor: 'pointer',
+                            }}
+                          >
+                            <span style={{ color: '#6c7086', fontFamily: 'monospace' }}>{time}</span>
+                            <span style={{ color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.toolName}</span>
+                            <span style={{ color: '#a6adc8' }}>{catLabels[entry.category] || entry.category}</span>
+                            <span style={{ color: riskColors[entry.riskLevel] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.riskLevel}</span>
+                            <span style={{ color: approvalColors[entry.approvalMethod] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.approvalMethod}</span>
+                            <span style={{ color: statusColors[entry.status] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.status}</span>
+                          </button>
+                          {isExp && (
+                            <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <div style={{ background: 'rgba(49,34,68,0.3)', borderRadius: 8, padding: 10 }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: '#6c7086', marginBottom: 4 }}>Arguments</div>
+                                <pre style={{ fontSize: 10, color: '#a6adc8', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 160, overflowY: 'auto', margin: 0 }}>
+                                  {entry.fullArgs ? JSON.stringify(entry.fullArgs, null, 2) : entry.argsSummary}
+                                </pre>
+                              </div>
+                              {entry.result && (
+                                <div style={{ background: 'rgba(49,34,68,0.3)', borderRadius: 8, padding: 10 }}>
+                                  <div style={{ fontSize: 9, fontWeight: 700, color: '#6c7086', marginBottom: 4 }}>Result</div>
+                                  <pre style={{ fontSize: 10, color: '#a6adc8', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 160, overflowY: 'auto', margin: 0 }}>
+                                    {entry.result}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </>
