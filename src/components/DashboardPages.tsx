@@ -10008,3 +10008,447 @@ export function RoadmapPage() {
     </div>
   );
 }
+
+/* ===== Creative Studio ===== */
+
+const csCard: React.CSSProperties = {
+  background: 'rgba(26, 16, 40, 0.6)',
+  border: '1px solid rgba(168, 85, 247, 0.12)',
+  borderRadius: 12,
+  padding: 16,
+};
+
+const csInput: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 12px',
+  borderRadius: 8,
+  border: '1px solid rgba(168,85,247,0.12)',
+  background: 'rgba(49,34,68,0.5)',
+  color: '#cdd6f4',
+  fontSize: 13,
+  fontWeight: 300,
+  outline: 'none',
+  resize: 'vertical' as const,
+  fontFamily: 'inherit',
+  boxSizing: 'border-box' as const,
+};
+
+const csLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  letterSpacing: 1.5,
+  textTransform: 'uppercase' as const,
+  color: '#6c7086',
+  margin: '0 0 8px 0',
+};
+
+const csPrimaryBtn: React.CSSProperties = {
+  width: '100%',
+  padding: '12px 16px',
+  borderRadius: 10,
+  border: 'none',
+  background: '#a855f7',
+  color: '#fff',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'opacity 0.15s',
+};
+
+const csPrimaryBtnDisabled: React.CSSProperties = {
+  ...csPrimaryBtn,
+  opacity: 0.5,
+  cursor: 'not-allowed',
+};
+
+const PLATFORM_API = 'https://ava-supernova.com/api';
+
+export function CreativeStudioPage() {
+  useLocale();
+
+  const [tab, setTab] = useState<'images' | 'audio' | 'video'>('images');
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Images state
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [imageSize, setImageSize] = useState<'1:1' | '3:4' | '4:3'>('1:1');
+  const [lastImage, setLastImage] = useState<string | null>(null);
+
+  // Audio state
+  const [musicPrompt, setMusicPrompt] = useState('');
+  const [musicLyrics, setMusicLyrics] = useState('');
+  const [lastAudio, setLastAudio] = useState<string | null>(null);
+
+  // Video state
+  const [videoPrompt, setVideoPrompt] = useState('');
+  const [videoDuration, setVideoDuration] = useState<6 | 10>(6);
+  const [lastVideo, setLastVideo] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clear error when switching tabs
+  useEffect(() => { setError(null); }, [tab]);
+
+  // Elapsed timer for video generation
+  useEffect(() => {
+    if (generating && tab === 'video') {
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed(p => p + 1), 1000);
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      setElapsed(0);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [generating, tab]);
+
+  function authHeaders(): Record<string, string> {
+    const key = getPlatformKey();
+    return {
+      'Content-Type': 'application/json',
+      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+    };
+  }
+
+  /* ---------- Image generation ---------- */
+  const handleGenerateImage = async () => {
+    if (!imagePrompt.trim() || generating) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const sizeMap: Record<string, string> = { '1:1': '1280*1280', '3:4': '768*1280', '4:3': '1280*768' };
+      const res = await fetch(`${PLATFORM_API}/generate-image`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ prompt: imagePrompt.trim(), size: sizeMap[imageSize], model: 'minimax' }),
+      });
+      if (!res.ok) throw new Error(`Image generation failed (${res.status})`);
+      const data = await res.json();
+      if (data.url) setLastImage(data.url);
+      else throw new Error(data.error || 'No image URL returned');
+    } catch (e: any) {
+      setError(e.message || 'Image generation failed');
+    }
+    setGenerating(false);
+  };
+
+  /* ---------- Music generation ---------- */
+  const handleGenerateMusic = async () => {
+    if (!musicPrompt.trim() || generating) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch(`${PLATFORM_API}/generate-music`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ prompt: musicPrompt.trim(), lyrics: musicLyrics.trim() || undefined }),
+      });
+      if (!res.ok) throw new Error(`Music generation failed (${res.status})`);
+      const data = await res.json();
+      if (data.url) setLastAudio(data.url);
+      else throw new Error(data.error || 'No audio URL returned');
+    } catch (e: any) {
+      setError(e.message || 'Music generation failed');
+    }
+    setGenerating(false);
+  };
+
+  /* ---------- Video generation ---------- */
+  const handleGenerateVideo = async () => {
+    if (!videoPrompt.trim() || generating) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch(`${PLATFORM_API}/generate-video`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ prompt: videoPrompt.trim(), duration: videoDuration }),
+      });
+      if (!res.ok) throw new Error(`Video generation failed (${res.status})`);
+      const data = await res.json();
+      if (data.url) setLastVideo(data.url);
+      else throw new Error(data.error || 'No video URL returned');
+    } catch (e: any) {
+      setError(e.message || 'Video generation failed');
+    }
+    setGenerating(false);
+  };
+
+  /* ---------- Shared UI helpers ---------- */
+  const sizeBtn = (value: string, active: boolean): React.CSSProperties => ({
+    flex: 1,
+    padding: '7px 0',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    border: 'none',
+    cursor: 'pointer',
+    background: active ? '#a855f7' : 'rgba(49,34,68,0.5)',
+    color: active ? '#fff' : '#6c7086',
+    transition: 'all 0.15s',
+  });
+
+  const tabBtn = (value: string, active: boolean): React.CSSProperties => ({
+    padding: '7px 18px',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    border: 'none',
+    cursor: 'pointer',
+    background: active ? '#a855f7' : 'transparent',
+    color: active ? '#fff' : '#6c7086',
+    transition: 'all 0.15s',
+  });
+
+  const errorBox = error ? (
+    <div style={{
+      padding: '10px 12px', borderRadius: 8,
+      background: 'rgba(243,139,168,0.08)', border: '1px solid rgba(243,139,168,0.2)',
+      fontSize: 12, color: '#f38ba8', lineHeight: 1.5,
+    }}>
+      {error}
+    </div>
+  ) : null;
+
+  /* ---------- Images tab ---------- */
+  const renderImagesGenerate = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={csCard}>
+        <div style={csLabel}>Prompt</div>
+        <textarea
+          value={imagePrompt}
+          onChange={e => setImagePrompt(e.target.value)}
+          placeholder="Describe the image you want to create..."
+          rows={5}
+          style={{ ...csInput, height: 120, resize: 'vertical' as const }}
+        />
+      </div>
+      <div style={csCard}>
+        <div style={csLabel}>Size</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['1:1', '3:4', '4:3'] as const).map(s => (
+            <button key={s} onClick={() => setImageSize(s)} style={sizeBtn(s, imageSize === s)}>
+              {s === '1:1' ? 'Square 1:1' : s === '3:4' ? 'Portrait 3:4' : 'Landscape 4:3'}
+            </button>
+          ))}
+        </div>
+      </div>
+      {errorBox}
+      <button
+        onClick={handleGenerateImage}
+        disabled={!imagePrompt.trim() || generating}
+        style={!imagePrompt.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}
+      >
+        {generating ? 'Generating...' : 'Generate Image'}
+      </button>
+    </div>
+  );
+
+  const renderImagesResults = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {lastImage ? (
+        <div style={csCard}>
+          <img
+            src={lastImage}
+            alt="Generated image"
+            style={{ width: '100%', borderRadius: 10, display: 'block' }}
+          />
+          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated image</div>
+          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{imagePrompt}</div>
+          <a
+            href={lastImage}
+            download
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-block', marginTop: 10, padding: '6px 14px',
+              borderRadius: 6, fontSize: 11, fontWeight: 500,
+              background: 'rgba(49,34,68,0.5)', color: '#cdd6f4',
+              textDecoration: 'none', border: '1px solid rgba(168,85,247,0.12)',
+            }}
+          >
+            Download
+          </a>
+        </div>
+      ) : (
+        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
+          Generated images will appear here
+        </div>
+      )}
+    </div>
+  );
+
+  /* ---------- Audio tab ---------- */
+  const renderAudioGenerate = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={csCard}>
+        <div style={csLabel}>Prompt</div>
+        <textarea
+          value={musicPrompt}
+          onChange={e => setMusicPrompt(e.target.value)}
+          placeholder="Describe the music — genre, mood, instruments..."
+          rows={4}
+          style={{ ...csInput, height: 100, resize: 'vertical' as const }}
+        />
+      </div>
+      <div style={csCard}>
+        <div style={csLabel}>Lyrics (optional)</div>
+        <textarea
+          value={musicLyrics}
+          onChange={e => setMusicLyrics(e.target.value)}
+          placeholder="Add lyrics for a vocal track (optional)"
+          rows={4}
+          style={{ ...csInput, height: 100, resize: 'vertical' as const }}
+        />
+      </div>
+      {errorBox}
+      <button
+        onClick={handleGenerateMusic}
+        disabled={!musicPrompt.trim() || generating}
+        style={!musicPrompt.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}
+      >
+        {generating ? 'Generating...' : 'Generate Music'}
+      </button>
+    </div>
+  );
+
+  const renderAudioResults = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {lastAudio ? (
+        <div style={csCard}>
+          <audio controls src={lastAudio} style={{ width: '100%' }} />
+          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated audio</div>
+          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{musicPrompt}</div>
+          <a
+            href={lastAudio}
+            download
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-block', marginTop: 10, padding: '6px 14px',
+              borderRadius: 6, fontSize: 11, fontWeight: 500,
+              background: 'rgba(49,34,68,0.5)', color: '#cdd6f4',
+              textDecoration: 'none', border: '1px solid rgba(168,85,247,0.12)',
+            }}
+          >
+            Download
+          </a>
+        </div>
+      ) : (
+        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
+          Generated audio will appear here
+        </div>
+      )}
+    </div>
+  );
+
+  /* ---------- Video tab ---------- */
+  const renderVideoGenerate = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={csCard}>
+        <div style={csLabel}>Prompt</div>
+        <textarea
+          value={videoPrompt}
+          onChange={e => setVideoPrompt(e.target.value)}
+          placeholder="Describe the video scene..."
+          rows={5}
+          style={{ ...csInput, height: 120, resize: 'vertical' as const }}
+        />
+      </div>
+      <div style={csCard}>
+        <div style={csLabel}>Duration</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button onClick={() => setVideoDuration(6)} style={sizeBtn('6', videoDuration === 6)}>6s 1080P</button>
+          <button onClick={() => setVideoDuration(10)} style={sizeBtn('10', videoDuration === 10)}>10s 768P</button>
+        </div>
+      </div>
+      {errorBox}
+      <button
+        onClick={handleGenerateVideo}
+        disabled={!videoPrompt.trim() || generating}
+        style={!videoPrompt.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}
+      >
+        {generating ? 'Generating...' : 'Generate Video'}
+      </button>
+      {generating && tab === 'video' && (
+        <div style={{
+          padding: '10px 12px', borderRadius: 8,
+          background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.12)',
+          fontSize: 12, color: '#a6adc8', textAlign: 'center' as const,
+        }}>
+          Generating... {elapsed}s
+        </div>
+      )}
+    </div>
+  );
+
+  const renderVideoResults = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {lastVideo ? (
+        <div style={csCard}>
+          <video controls src={lastVideo} style={{ width: '100%', borderRadius: 10, display: 'block' }} />
+          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated video</div>
+          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{videoPrompt}</div>
+          <a
+            href={lastVideo}
+            download
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-block', marginTop: 10, padding: '6px 14px',
+              borderRadius: 6, fontSize: 11, fontWeight: 500,
+              background: 'rgba(49,34,68,0.5)', color: '#cdd6f4',
+              textDecoration: 'none', border: '1px solid rgba(168,85,247,0.12)',
+            }}
+          >
+            Download
+          </a>
+        </div>
+      ) : (
+        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
+          Generated videos will appear here
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginBottom: 8 }}>
+        <div style={pageTitle}>Creative Studio</div>
+        <div style={pageSubtitle}>Generate images, music, and video with MiniMax</div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{
+        display: 'inline-flex', gap: 2,
+        background: 'rgba(49, 34, 68, 0.5)', borderRadius: 10, padding: 3,
+        marginBottom: 24, alignSelf: 'flex-start',
+      }}>
+        {(['images', 'audio', 'video'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={tabBtn(t, tab === t)}>
+            {t === 'images' ? '\uD83D\uDDBC\uFE0F Images' : t === 'audio' ? '\uD83C\uDFB5 Audio' : '\uD83C\uDFAC Video'}
+          </button>
+        ))}
+      </div>
+
+      {/* Two-panel layout */}
+      <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+        {/* LEFT: Generate panel */}
+        <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
+          {tab === 'images' && renderImagesGenerate()}
+          {tab === 'audio' && renderAudioGenerate()}
+          {tab === 'video' && renderVideoGenerate()}
+        </div>
+
+        {/* RIGHT: Results + Library */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {tab === 'images' && renderImagesResults()}
+          {tab === 'audio' && renderAudioResults()}
+          {tab === 'video' && renderVideoResults()}
+        </div>
+      </div>
+    </div>
+  );
+}
