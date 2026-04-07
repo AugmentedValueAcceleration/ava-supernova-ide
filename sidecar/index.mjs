@@ -286,11 +286,12 @@ process.on('unhandledRejection', (err) => {
 async function handleInit(data) {
   try {
     const config = data.config || {};
-    let cwd = (config.cwd && config.cwd !== '.') ? config.cwd : (process.env.HOME || process.env.USERPROFILE || process.cwd());
-    // Validate path — resolve to absolute, reject path traversal
+    // SECURITY: cwd must be a specific project folder, never fallback to home directory.
+    // If no folder is set, use the process cwd (where the sidecar was launched from).
     const path = await import('path');
+    let cwd = (config.cwd && config.cwd !== '.' && config.cwd !== '~') ? config.cwd : process.cwd();
     cwd = path.default.resolve(cwd);
-    if (cwd.includes('..')) { cwd = process.env.HOME || process.env.USERPROFILE || process.cwd(); }
+    if (cwd.includes('..')) { cwd = process.cwd(); }
     // Change Node.js working directory so relative paths resolve correctly
     try { process.chdir(cwd); } catch { /* non-fatal */ }
     const projectRoot = detectProjectRoot(cwd) ?? undefined;
