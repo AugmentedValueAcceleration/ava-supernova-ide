@@ -1438,7 +1438,7 @@ export function CommandCentrePage() {
   // ── Article reader state ─────────────────────────────────────────────
   const [activeArticle, setActiveArticle] = useState<any>(null);
   const [activeArticleRelated, setActiveArticleRelated] = useState<any[]>([]);
-  const [articleLoading, setArticleLoading] = useState(false);
+  const [_articleLoading, setArticleLoading] = useState(false);
 
   const openArticle = useCallback((slug: string) => {
     setArticleLoading(true);
