@@ -10124,6 +10124,34 @@ const csPrimaryBtnDisabled: React.CSSProperties = {
 
 const PLATFORM_API = 'https://ava-supernova.com/api';
 
+function CSTokenBar() {
+  const [bal, setBal] = useState<{ used: number; limit: number } | null>(null);
+  useEffect(() => {
+    if (!checkConnected()) return;
+    apiFetch('/account-info').then((res: any) => {
+      if (res?.usage) setBal({ used: res.usage.free_tokens_used || 0, limit: res.usage.free_tokens_limit || 3000000 });
+    }).catch(() => {});
+  }, []);
+  if (!bal) return null;
+  const rem = Math.max(0, bal.limit - bal.used);
+  const pct = bal.limit > 0 ? (rem / bal.limit) * 100 : 0;
+  const fmt = (n: number) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${Math.round(n / 1000)}K`;
+  return (
+    <div style={{ width: 180, flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6c7086', marginBottom: 4 }}>
+        <span>Tokens Remaining</span><span>{fmt(rem)}</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: 'rgba(168,85,247,0.08)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${pct}%`,
+          background: pct < 10 ? '#ef4444' : pct < 30 ? '#eab308' : '#a855f7' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#585b70', marginTop: 2 }}>
+        <span>{fmt(bal.used)} used</span><span>{fmt(bal.limit)} limit</span>
+      </div>
+    </div>
+  );
+}
+
 export function CreativeStudioPage() {
   useLocale();
 
@@ -10713,44 +10741,13 @@ export function CreativeStudioPage() {
   );
 
   return (
-  // Token balance
-  const [tokenBalance, setTokenBalance] = useState<{ used: number; limit: number } | null>(null);
-  const refreshBalance = useCallback(() => {
-    if (!checkConnected()) return;
-    apiFetch('/account-info').then((res: any) => {
-      if (res?.usage) {
-        setTokenBalance({ used: res.usage.free_tokens_used || 0, limit: res.usage.free_tokens_limit || 3000000 });
-      }
-    }).catch(() => {});
-  }, []);
-  useEffect(() => { refreshBalance(); }, [refreshBalance]);
-
-  return (
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column' }}>
       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={pageTitle}>Creative Studio</div>
           <div style={pageSubtitle}>Generate images, music, and video with MiniMax</div>
         </div>
-        {tokenBalance && (
-          <div style={{ width: 180, flexShrink: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6c7086', marginBottom: 4 }}>
-              <span>Tokens Remaining</span>
-              <span>{tokenBalance.limit - tokenBalance.used >= 1000000 ? `${((tokenBalance.limit - tokenBalance.used) / 1000000).toFixed(1)}M` : `${Math.round((tokenBalance.limit - tokenBalance.used) / 1000)}K`}</span>
-            </div>
-            <div style={{ height: 6, borderRadius: 3, background: 'rgba(168,85,247,0.08)', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', borderRadius: 3, transition: 'width 0.5s',
-                width: `${Math.max(0, Math.min(100, ((tokenBalance.limit - tokenBalance.used) / tokenBalance.limit) * 100))}%`,
-                background: ((tokenBalance.limit - tokenBalance.used) / tokenBalance.limit) < 0.1 ? '#ef4444' : ((tokenBalance.limit - tokenBalance.used) / tokenBalance.limit) < 0.3 ? '#eab308' : '#a855f7',
-              }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#585b70', marginTop: 2 }}>
-              <span>{tokenBalance.used >= 1000000 ? `${(tokenBalance.used / 1000000).toFixed(1)}M` : `${Math.round(tokenBalance.used / 1000)}K`} used</span>
-              <span>{tokenBalance.limit >= 1000000 ? `${(tokenBalance.limit / 1000000).toFixed(1)}M` : `${Math.round(tokenBalance.limit / 1000)}K`} limit</span>
-            </div>
-          </div>
-        )}
+        <CSTokenBar />
       </div>
 
       {/* Tabs */}
