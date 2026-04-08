@@ -10126,12 +10126,16 @@ const PLATFORM_API = 'https://ava-supernova.com/api';
 
 function CSTokenBar() {
   const [bal, setBal] = useState<{ used: number; limit: number } | null>(null);
+  const connected = checkConnected();
   useEffect(() => {
-    if (!checkConnected()) return;
+    if (!connected) return;
     apiFetch('/account-info').then((res: any) => {
       if (res?.usage) setBal({ used: res.usage.free_tokens_used || 0, limit: res.usage.free_tokens_limit || 3000000 });
     }).catch(() => {});
-  }, []);
+  }, [connected]);
+  if (!connected) return (
+    <div style={{ fontSize: 10, color: '#585b70' }}>Connect account for token tracking</div>
+  );
   if (!bal) return null;
   const rem = Math.max(0, bal.limit - bal.used);
   const pct = bal.limit > 0 ? (rem / bal.limit) * 100 : 0;
