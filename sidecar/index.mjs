@@ -583,7 +583,7 @@ async function handleInit(data) {
     globalThis._sharedState = sharedState;
     globalThis._currentModel = resolved.model;
 
-    emit({ event: 'info', message: `Holo3: ${sharedState._debug_holo}, key prefix: ${(sharedState.holoApiKey || '').slice(0, 6) || 'none'}` });
+    emit({ event: 'info', message: `Holo3: ${sharedState._debug_holo ? 'configured' : 'not configured'}` });
     emit({ event: 'ready', model: resolved.model.id, provider: resolved.provider.name });
   } catch (err) {
     emitError(`Init failed: ${err.message}`);

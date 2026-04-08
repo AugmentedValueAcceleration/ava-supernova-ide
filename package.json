@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "bundle-sidecar": "node scripts/bundle-sidecar.mjs",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev --features devtools"
   },
   "dependencies": {
     "@ava/core": "workspace:*",
