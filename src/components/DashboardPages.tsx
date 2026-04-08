@@ -10124,19 +10124,37 @@ const csPrimaryBtnDisabled: React.CSSProperties = {
 
 const PLATFORM_API = 'https://ava-supernova.com/api';
 
-function CSTokenBar() {
-  const [bal, setBal] = useState<{ used: number; limit: number } | null>(null);
+function CSTokenBar({ refreshKey }: { refreshKey: number }) {
+  const [bal, setBal] = useState<{ used: number; limit: number; isUnlimited: boolean } | null>(null);
   const connected = checkConnected();
   useEffect(() => {
     if (!connected) return;
-    apiFetch('/account-info').then((res: any) => {
-      if (res?.usage) setBal({ used: res.usage.free_tokens_used || 0, limit: res.usage.free_tokens_limit || 3000000 });
+    apiFetch('/usage/summary').then((res: any) => {
+      if (res?.period) {
+        const freeUsed = res.period.free_tokens_used || 0;
+        const freeLimit = res.period.free_tokens_limit || 3000000;
+        const subUsed = res.period.tokens_used || 0;
+        const subLimit = res.period.tokens_limit || 0;
+        const isUnlimited = res.isUnlimited || false;
+        const hasSub = subLimit > 0 && (res.tier || 'free') !== 'free';
+        setBal({ used: hasSub ? subUsed : freeUsed, limit: hasSub ? subLimit : freeLimit, isUnlimited });
+      }
     }).catch(() => {});
-  }, [connected]);
+  }, [connected, refreshKey]);
   if (!connected) return (
     <div style={{ fontSize: 10, color: '#585b70' }}>Connect account for token tracking</div>
   );
   if (!bal) return null;
+  if (bal.isUnlimited) return (
+    <div style={{ width: 180, flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6c7086', marginBottom: 4 }}>
+        <span>Tokens</span><span style={{ color: '#a855f7', fontWeight: 600 }}>Unlimited</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49,34,68,0.5)' }}>
+        <div style={{ height: '100%', borderRadius: 3, width: '100%', background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
+      </div>
+    </div>
+  );
   const rem = Math.max(0, bal.limit - bal.used);
   const pct = bal.limit > 0 ? (rem / bal.limit) * 100 : 0;
   const fmt = (n: number) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${Math.round(n / 1000)}K`;
@@ -10162,6 +10180,7 @@ export function CreativeStudioPage() {
   const [tab, setTab] = useState<'images' | 'audio' | 'voice' | 'sfx' | 'video' | 'library'>('images');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Images state
   const [imagePrompt, setImagePrompt] = useState('');
@@ -10298,7 +10317,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'Image generation failed');
     }
-    setGenerating(false); refreshBalance();
+    setGenerating(false); setRefreshKey(k => k + 1);
   };
 
   /* ---------- Music generation ---------- */
@@ -10322,7 +10341,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'Music generation failed');
     }
-    setGenerating(false); refreshBalance();
+    setGenerating(false); setRefreshKey(k => k + 1);
   };
 
   /* ---------- Voice generation ---------- */
@@ -10345,7 +10364,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'Voice generation failed');
     }
-    setGenerating(false); refreshBalance();
+    setGenerating(false); setRefreshKey(k => k + 1);
   };
 
   /* ---------- SFX generation ---------- */
@@ -10368,7 +10387,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'SFX generation failed');
     }
-    setGenerating(false); refreshBalance();
+    setGenerating(false); setRefreshKey(k => k + 1);
   };
 
   /* ---------- Video generation ---------- */
@@ -10392,7 +10411,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'Video generation failed');
     }
-    setGenerating(false); refreshBalance();
+    setGenerating(false); setRefreshKey(k => k + 1);
   };
 
   /* ---------- Shared UI helpers ---------- */
@@ -10751,7 +10770,7 @@ export function CreativeStudioPage() {
           <div style={pageTitle}>Creative Studio</div>
           <div style={pageSubtitle}>Generate images, music, and video with MiniMax</div>
         </div>
-        <CSTokenBar />
+        <CSTokenBar refreshKey={refreshKey} />
       </div>
 
       {/* Tabs */}
