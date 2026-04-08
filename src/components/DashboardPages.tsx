@@ -6199,13 +6199,12 @@ export function JournalPage() {
 /* ===== 6. Learning ===== */
 export function LearningPage() {
   useLocale();
-  const connected = checkConnected();
   const { data: rawData, loading, error } = useApiData<any>('/learning', null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
   // Local-first: load from localStorage, merge with cloud
-  const [localCurricula, setLocalCurricula] = useState<any[]>(() => {
+  const [localCurricula] = useState<any[]>(() => {
     try { const saved = localStorage.getItem('ava-ide-learning'); return saved ? JSON.parse(saved) : []; } catch { return []; }
   });
 
@@ -6760,7 +6759,7 @@ export function LearningLibraryPage() {
 
 export function LibraryPage() {
   useLocale();
-  const [authKey, setAuthKey] = useState(0);
+  const [, setAuthKey] = useState(0);
   useEffect(() => {
     const handler = () => { if (!checkConnected()) { setFiles([]); setSelectedFile(null); } setAuthKey(k => k + 1); };
     window.addEventListener('ava-auth-changed', handler);
@@ -9122,7 +9121,7 @@ export function ConnectionsPage() {
 /* ===== 13. Support (Live Chat) ===== */
 export function SupportPage() {
   useLocale();
-  const [authKey, setAuthKey] = useState(0);
+  const [, setAuthKey] = useState(0);
   useEffect(() => {
     const handler = () => {
       if (!checkConnected()) { setConversations([]); setMessages([]); setActiveConvId(null); setInput(''); }
@@ -10499,7 +10498,7 @@ export function CreativeStudioPage() {
   const saveToLocal = async (type: 'images' | 'audio' | 'video' | 'voice' | 'sfx', url: string, title: string, prompt: string) => {
     try {
       const { writeTextFile, writeFile, readTextFile, mkdir, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-      const { homeDir } = await import('@tauri-apps/api/path');
+      await import('@tauri-apps/api/path');
       const dir = `.ava/creative/${type}`;
       await mkdir(dir, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
 
@@ -10700,7 +10699,7 @@ export function CreativeStudioPage() {
   };
 
   /* ---------- Shared UI helpers ---------- */
-  const sizeBtn = (value: string, active: boolean): React.CSSProperties => ({
+  const sizeBtn = (_value: string, active: boolean): React.CSSProperties => ({
     flex: 1,
     padding: '7px 0',
     borderRadius: 8,
@@ -11063,7 +11062,7 @@ export function CreativeStudioPage() {
         {/* SFX tab hidden — in development. MiniMax music model doesn't support short isolated sound effects yet. */}
         {(['images', 'audio', 'voice', /* 'sfx', */ 'video', 'library'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={tabBtn(t, tab === t)}>
-            {t === 'images' ? '\uD83D\uDDBC\uFE0F Images' : t === 'audio' ? '\uD83C\uDFB5 Audio' : t === 'voice' ? '\uD83C\uDF99\uFE0F Voice' : t === 'sfx' ? '\uD83D\uDD0A SFX' : t === 'video' ? '\uD83C\uDFAC Video' : '\uD83D\uDCDA Library'}
+            {t === 'images' ? '\uD83D\uDDBC\uFE0F Images' : t === 'audio' ? '\uD83C\uDFB5 Audio' : t === 'voice' ? '\uD83C\uDF99\uFE0F Voice' : t === 'video' ? '\uD83C\uDFAC Video' : '\uD83D\uDCDA Library'}
           </button>
         ))}
       </div>

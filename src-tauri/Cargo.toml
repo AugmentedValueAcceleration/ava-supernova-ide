@@ -1,6 +1,6 @@
 [package]
 name = "ava-supernova-ide"
-version = "0.10.0"
+version = "0.12.0"
 description = "Ava | Supernova IDE — AI-native code editor"
 authors = ["Augmented Value Acceleration"]
 edition = "2021"
@@ -13,14 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-
-[features]
-default = []
-devtools = ["tauri/devtools"]
-
-[profile.dev]
-# devtools enabled via: cargo run --features devtools
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
