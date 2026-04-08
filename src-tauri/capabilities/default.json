@@ -46,7 +46,15 @@
     },
     {
       "identifier": "fs:allow-write-file",
-      "allow": [{ "path": "$TEMP/**" }]
+      "allow": [{ "path": "$TEMP/**" }, { "path": "$HOME/.ava/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$HOME/.ava/**" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$HOME/.ava/**" }]
     }
   ]
 }

@@ -4518,10 +4518,10 @@ export function ChatHistoryPage() {
   const maxModelTokens = models.length > 0 ? Math.max(...models.map((m: any) => m.total_tokens || 0)) : 1;
 
   const tabStyle = (active: boolean) => ({
-    padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600 as const, cursor: 'pointer' as const,
-    border: 'none', transition: 'all 0.15s',
-    background: active ? '#a855f7' : 'transparent',
-    color: active ? '#fff' : '#6c7086',
+    padding: '6px 12px', fontSize: 12, fontWeight: 500 as const, cursor: 'pointer' as const,
+    border: 'none', background: 'transparent', transition: 'all 0.15s',
+    color: active ? '#cdd6f4' : '#585b70',
+    borderBottom: active ? '2px solid #a855f7' : '2px solid transparent',
   });
 
   return (
@@ -4531,7 +4531,7 @@ export function ChatHistoryPage() {
         <div style={{ ...pageSubtitle, marginBottom: 16 }}>Tokens, sessions, models</div>
 
         {/* ── Tabs ───────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: 'rgba(26, 16, 40, 0.6)', borderRadius: 10, padding: 4, width: 'fit-content' }}>
+        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
           <button style={tabStyle(activeTab === 'conversations')} onClick={() => setActiveTab('conversations')}>Conversations</button>
           <button style={tabStyle(activeTab === 'usage')} onClick={() => setActiveTab('usage')}>Usage</button>
         </div>
@@ -7524,9 +7524,7 @@ export function UsagePage() {
         {!connected && <NotConnectedBanner />}
 
         {/* Tab Toggle */}
-        <div style={{
-          display: 'inline-flex', gap: 2, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 10, padding: 3, marginBottom: 24,
-        }}>
+        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
           {(['session', 'alltime', 'audit'] as const).map(tab => (
             <button
               key={tab}
@@ -7537,10 +7535,10 @@ export function UsagePage() {
                 }
               }}
               style={{
-                padding: '7px 18px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                border: 'none', cursor: 'pointer',
-                background: activeTab === tab ? '#a855f7' : 'transparent',
-                color: activeTab === tab ? '#fff' : '#6c7086',
+                padding: '6px 12px', fontSize: 12, fontWeight: 500,
+                border: 'none', cursor: 'pointer', background: 'transparent',
+                color: activeTab === tab ? '#cdd6f4' : '#585b70',
+                borderBottom: activeTab === tab ? '2px solid #a855f7' : '2px solid transparent',
                 transition: 'all 0.15s',
               }}
             >
@@ -10009,6 +10007,69 @@ export function RoadmapPage() {
   );
 }
 
+/* ── Themed Audio Player ─────────────────────────────────────────────────── */
+
+function AvaAudioPlayer({ src }: { src: string }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const toggle = () => {
+    if (!ref.current) return;
+    if (playing) ref.current.pause(); else ref.current.play();
+    setPlaying(!playing);
+  };
+
+  const fmt = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+      borderRadius: 10, background: 'rgba(26, 16, 40, 0.8)',
+      border: '1px solid rgba(168, 85, 247, 0.12)',
+    }}>
+      <audio ref={ref} src={src} preload="metadata"
+        onLoadedMetadata={() => setDuration(ref.current?.duration || 0)}
+        onTimeUpdate={() => setProgress(ref.current?.currentTime || 0)}
+        onEnded={() => setPlaying(false)}
+      />
+      <button onClick={toggle} style={{
+        width: 32, height: 32, borderRadius: '50%',
+        background: playing ? 'rgba(168,85,247,0.3)' : 'rgba(168,85,247,0.15)',
+        border: '1px solid rgba(168,85,247,0.3)', color: '#a855f7',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', fontSize: 12, flexShrink: 0,
+      }}>
+        {playing ? '\u23F8' : '\u25B6'}
+      </button>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <div style={{
+          height: 4, borderRadius: 2, background: 'rgba(168,85,247,0.12)',
+          overflow: 'hidden', cursor: 'pointer',
+        }} onClick={e => {
+          if (!ref.current || !duration) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          ref.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+        }}>
+          <div style={{
+            height: '100%', width: `${duration ? (progress / duration) * 100 : 0}%`,
+            background: '#a855f7', borderRadius: 2, transition: 'width 0.1s',
+          }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#6c7086' }}>
+          <span>{fmt(progress)}</span>
+          <span>{fmt(duration)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ===== Creative Studio ===== */
 
 const csCard: React.CSSProperties = {
@@ -10066,7 +10127,7 @@ const PLATFORM_API = 'https://ava-supernova.com/api';
 export function CreativeStudioPage() {
   useLocale();
 
-  const [tab, setTab] = useState<'images' | 'audio' | 'video'>('images');
+  const [tab, setTab] = useState<'images' | 'audio' | 'voice' | 'sfx' | 'video' | 'library'>('images');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -10080,6 +10141,16 @@ export function CreativeStudioPage() {
   const [musicLyrics, setMusicLyrics] = useState('');
   const [lastAudio, setLastAudio] = useState<string | null>(null);
 
+  // Voice state
+  const [voiceText, setVoiceText] = useState('');
+  const [voiceId, setVoiceId] = useState('Calm_Woman');
+  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
+  const [lastVoice, setLastVoice] = useState<string | null>(null);
+
+  // SFX state
+  const [sfxPrompt, setSfxPrompt] = useState('');
+  const [lastSfx, setLastSfx] = useState<string | null>(null);
+
   // Video state
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoDuration, setVideoDuration] = useState<6 | 10>(6);
@@ -10087,6 +10158,59 @@ export function CreativeStudioPage() {
   const [elapsed, setElapsed] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Save asset to local ~/.ava/creative/ and update metadata.json
+  const saveToLocal = async (type: 'images' | 'audio' | 'video' | 'voice' | 'sfx', url: string, title: string, prompt: string) => {
+    try {
+      const { writeTextFile, writeFile, readTextFile, mkdir, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+      const { homeDir } = await import('@tauri-apps/api/path');
+      const dir = `.ava/creative/${type}`;
+      await mkdir(dir, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+
+      const id = `${type}_${Date.now()}`;
+      const ext = type === 'images' ? 'jpg' : type === 'video' ? 'mp4' : 'mp3';
+      const filename = `${id}.${ext}`;
+      const filePath = `${dir}/${filename}`;
+
+      let savedUrl = url;
+
+      // If data URI, write binary to disk but keep data URI for playback
+      if (url.startsWith('data:')) {
+        try {
+          const base64 = url.split(',')[1];
+          const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+          await writeFile(filePath, bytes, { baseDir: BaseDirectory.Home });
+          // Keep the data URI for playback — Tauri WebView can't load file:// URLs
+          // but data URIs work fine for audio/video elements
+          savedUrl = url;
+        } catch (e) {
+          console.warn('[creative] Failed to write binary file:', e);
+          savedUrl = url;
+        }
+      }
+
+      // Read existing metadata
+      const raw = await readTextFile('.ava/creative/metadata.json', { baseDir: BaseDirectory.Home }).catch(() => '[]');
+      const metadata: any[] = JSON.parse(raw || '[]');
+
+      metadata.unshift({
+        id,
+        type: type === 'images' ? 'image' : type === 'audio' ? 'music' : type,
+        asset_type: type === 'images' ? 'image' : type === 'audio' ? 'music' : type,
+        filename,
+        title,
+        prompt,
+        url: savedUrl,
+        created_at: new Date().toISOString(),
+      });
+
+      // Save metadata
+      await mkdir('.ava/creative', { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+      await writeTextFile('.ava/creative/metadata.json', JSON.stringify(metadata, null, 2), { baseDir: BaseDirectory.Home });
+    } catch (e) {
+      console.warn('[creative] Failed to save locally:', e);
+    }
+  };
 
   // Clear error when switching tabs
   useEffect(() => { setError(null); }, [tab]);
@@ -10111,9 +10235,19 @@ export function CreativeStudioPage() {
     };
   }
 
+  function requiresAuth(): boolean {
+    const key = getPlatformKey();
+    if (!key) {
+      setError('Creative Studio requires a platform account or MiniMax API key. Connect your account in Settings or add a MiniMax key under BYOK.');
+      return false;
+    }
+    return true;
+  }
+
   /* ---------- Image generation ---------- */
   const handleGenerateImage = async () => {
     if (!imagePrompt.trim() || generating) return;
+    if (!requiresAuth()) return;
     setGenerating(true);
     setError(null);
     try {
@@ -10125,8 +10259,10 @@ export function CreativeStudioPage() {
       });
       if (!res.ok) throw new Error(`Image generation failed (${res.status})`);
       const data = await res.json();
-      if (data.url) setLastImage(data.url);
-      else throw new Error(data.error || 'No image URL returned');
+      if (data.url) {
+        setLastImage(data.url);
+        await saveToLocal('images', data.url, imagePrompt.slice(0, 60), imagePrompt);
+      } else throw new Error(data.error || 'No image URL returned');
     } catch (e: any) {
       setError(e.message || 'Image generation failed');
     }
@@ -10136,6 +10272,7 @@ export function CreativeStudioPage() {
   /* ---------- Music generation ---------- */
   const handleGenerateMusic = async () => {
     if (!musicPrompt.trim() || generating) return;
+    if (!requiresAuth()) return;
     setGenerating(true);
     setError(null);
     try {
@@ -10146,10 +10283,58 @@ export function CreativeStudioPage() {
       });
       if (!res.ok) throw new Error(`Music generation failed (${res.status})`);
       const data = await res.json();
-      if (data.url) setLastAudio(data.url);
-      else throw new Error(data.error || 'No audio URL returned');
+      if (data.url) {
+        setLastAudio(data.url);
+        await saveToLocal('audio', data.url, musicPrompt.slice(0, 60), musicPrompt);
+      } else throw new Error(data.error || 'No audio URL returned');
     } catch (e: any) {
       setError(e.message || 'Music generation failed');
+    }
+    setGenerating(false);
+  };
+
+  /* ---------- Voice generation ---------- */
+  const handleGenerateVoice = async () => {
+    if (!voiceText.trim() || generating) return;
+    if (!requiresAuth()) return;
+    setGenerating(true); setError(null);
+    try {
+      const headers = authHeaders();
+      const res = await fetch(`${PLATFORM_API}/generate-voice`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ text: voiceText, voice_id: voiceId, speed: voiceSpeed }),
+      });
+      if (!res.ok) throw new Error(`Voice generation failed (${res.status})`);
+      const data = await res.json();
+      if (data.url) {
+        setLastVoice(data.url);
+        await saveToLocal('voice', data.url, voiceText.slice(0, 60), voiceText);
+      } else throw new Error(data.error || 'No voice URL returned');
+    } catch (e: any) {
+      setError(e.message || 'Voice generation failed');
+    }
+    setGenerating(false);
+  };
+
+  /* ---------- SFX generation ---------- */
+  const handleGenerateSfx = async () => {
+    if (!sfxPrompt.trim() || generating) return;
+    if (!requiresAuth()) return;
+    setGenerating(true); setError(null);
+    try {
+      const headers = authHeaders();
+      const res = await fetch(`${PLATFORM_API}/generate-music`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ prompt: `[SFX] ${sfxPrompt}. CRITICAL: This is a sound effect, NOT a song. Maximum 3 seconds. One single isolated sound only. No melody, no beat, no rhythm, no music, no vocals, no loops. Just the raw sound effect once, then silence.` }),
+      });
+      if (!res.ok) throw new Error(`SFX generation failed (${res.status})`);
+      const data = await res.json();
+      if (data.url) {
+        setLastSfx(data.url);
+        await saveToLocal('sfx', data.url, sfxPrompt.slice(0, 60), sfxPrompt);
+      } else throw new Error(data.error || 'No SFX URL returned');
+    } catch (e: any) {
+      setError(e.message || 'SFX generation failed');
     }
     setGenerating(false);
   };
@@ -10157,6 +10342,7 @@ export function CreativeStudioPage() {
   /* ---------- Video generation ---------- */
   const handleGenerateVideo = async () => {
     if (!videoPrompt.trim() || generating) return;
+    if (!requiresAuth()) return;
     setGenerating(true);
     setError(null);
     try {
@@ -10167,8 +10353,10 @@ export function CreativeStudioPage() {
       });
       if (!res.ok) throw new Error(`Video generation failed (${res.status})`);
       const data = await res.json();
-      if (data.url) setLastVideo(data.url);
-      else throw new Error(data.error || 'No video URL returned');
+      if (data.url) {
+        setLastVideo(data.url);
+        await saveToLocal('video', data.url, videoPrompt.slice(0, 60), videoPrompt);
+      } else throw new Error(data.error || 'No video URL returned');
     } catch (e: any) {
       setError(e.message || 'Video generation failed');
     }
@@ -10189,15 +10377,15 @@ export function CreativeStudioPage() {
     transition: 'all 0.15s',
   });
 
-  const tabBtn = (value: string, active: boolean): React.CSSProperties => ({
-    padding: '7px 18px',
-    borderRadius: 8,
+  const tabBtn = (_value: string, active: boolean): React.CSSProperties => ({
+    padding: '6px 12px',
     fontSize: 12,
     fontWeight: 500,
     border: 'none',
     cursor: 'pointer',
-    background: active ? '#a855f7' : 'transparent',
-    color: active ? '#fff' : '#6c7086',
+    background: 'transparent',
+    color: active ? '#cdd6f4' : '#585b70',
+    borderBottom: active ? '2px solid #a855f7' : '2px solid transparent',
     transition: 'all 0.15s',
   });
 
@@ -10317,7 +10505,7 @@ export function CreativeStudioPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {lastAudio ? (
         <div style={csCard}>
-          <audio controls src={lastAudio} style={{ width: '100%' }} />
+          <AvaAudioPlayer src={lastAudio} />
           <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated audio</div>
           <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{musicPrompt}</div>
           <a
@@ -10338,6 +10526,117 @@ export function CreativeStudioPage() {
       ) : (
         <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
           Generated audio will appear here
+        </div>
+      )}
+    </div>
+  );
+
+  /* ---------- Voice tab ---------- */
+  const VOICES = [
+    { id: 'Calm_Woman', label: 'Calm Woman' },
+    { id: 'Wise_Woman', label: 'Wise Woman' },
+    { id: 'Friendly_Person', label: 'Friendly' },
+    { id: 'Inspirational_girl', label: 'Inspirational' },
+    { id: 'Deep_Voice_Man', label: 'Deep Voice' },
+    { id: 'Calm_Man', label: 'Calm Man' },
+    { id: 'Newsman', label: 'Newscaster' },
+    { id: 'Lively_Girl', label: 'Lively' },
+    { id: 'Patient_Man', label: 'Patient' },
+    { id: 'Determined_Man', label: 'Determined' },
+  ];
+
+  const renderVoiceGenerate = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={csCard}>
+        <div style={csLabel}>Text</div>
+        <textarea
+          placeholder="Enter text to speak..."
+          value={voiceText}
+          onChange={e => setVoiceText(e.target.value)}
+          rows={5}
+          style={{ ...csInput, height: 120, resize: 'vertical' as const }}
+        />
+      </div>
+      <div style={csCard}>
+        <div style={csLabel}>Voice</div>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {VOICES.map(v => (
+            <button key={v.id} onClick={() => setVoiceId(v.id)} style={{
+              padding: '4px 10px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 500, cursor: 'pointer',
+              background: voiceId === v.id ? '#a855f7' : 'rgba(49,34,68,0.5)',
+              color: voiceId === v.id ? '#fff' : '#6c7086', transition: 'all 0.15s',
+            }}>{v.label}</button>
+          ))}
+        </div>
+      </div>
+      <div style={csCard}>
+        <div style={csLabel}>Speed</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[0.8, 1.0, 1.2, 1.5].map(s => (
+            <button key={s} onClick={() => setVoiceSpeed(s)} style={{
+              padding: '4px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+              background: voiceSpeed === s ? '#a855f7' : 'rgba(49,34,68,0.5)',
+              color: voiceSpeed === s ? '#fff' : '#6c7086', transition: 'all 0.15s',
+            }}>{s}x</button>
+          ))}
+        </div>
+      </div>
+      {errorBox}
+      <button onClick={handleGenerateVoice} disabled={!voiceText.trim() || generating}
+        style={!voiceText.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}>
+        {generating ? 'Generating...' : 'Generate Voice'}
+      </button>
+    </div>
+  );
+
+  const renderVoiceResults = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {lastVoice ? (
+        <div style={csCard}>
+          <AvaAudioPlayer src={lastVoice} />
+          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated voice — {VOICES.find(v => v.id === voiceId)?.label || voiceId}</div>
+          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{voiceText}</div>
+        </div>
+      ) : (
+        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
+          Generated voice will appear here
+        </div>
+      )}
+    </div>
+  );
+
+  /* ---------- SFX tab ---------- */
+  const renderSfxGenerate = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={csCard}>
+        <div style={csLabel}>Sound Effect</div>
+        <textarea
+          placeholder="Describe the sound... e.g. 'door slam', 'rain on window', 'sci-fi laser'"
+          value={sfxPrompt}
+          onChange={e => setSfxPrompt(e.target.value)}
+          rows={4}
+          style={{ ...csInput, height: 100, resize: 'vertical' as const }}
+        />
+      </div>
+      {errorBox}
+      <button onClick={handleGenerateSfx} disabled={!sfxPrompt.trim() || generating}
+        style={!sfxPrompt.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}>
+        {generating ? 'Generating...' : 'Generate SFX'}
+      </button>
+    </div>
+  );
+
+  const renderSfxResults = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {lastSfx ? (
+        <div style={csCard}>
+          <AvaAudioPlayer src={lastSfx} />
+          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated sound effect</div>
+          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{sfxPrompt}</div>
+        </div>
+      ) : (
+        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
+          Generated sound effects will appear here
         </div>
       )}
     </div>
@@ -10421,34 +10720,335 @@ export function CreativeStudioPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{
-        display: 'inline-flex', gap: 2,
-        background: 'rgba(49, 34, 68, 0.5)', borderRadius: 10, padding: 3,
-        marginBottom: 24, alignSelf: 'flex-start',
-      }}>
-        {(['images', 'audio', 'video'] as const).map(t => (
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
+        {/* SFX tab hidden — in development. MiniMax music model doesn't support short isolated sound effects yet. */}
+        {(['images', 'audio', 'voice', /* 'sfx', */ 'video', 'library'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={tabBtn(t, tab === t)}>
-            {t === 'images' ? '\uD83D\uDDBC\uFE0F Images' : t === 'audio' ? '\uD83C\uDFB5 Audio' : '\uD83C\uDFAC Video'}
+            {t === 'images' ? '\uD83D\uDDBC\uFE0F Images' : t === 'audio' ? '\uD83C\uDFB5 Audio' : t === 'voice' ? '\uD83C\uDF99\uFE0F Voice' : t === 'sfx' ? '\uD83D\uDD0A SFX' : t === 'video' ? '\uD83C\uDFAC Video' : '\uD83D\uDCDA Library'}
           </button>
         ))}
       </div>
 
-      {/* Two-panel layout */}
-      <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
-        {/* LEFT: Generate panel */}
-        <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
-          {tab === 'images' && renderImagesGenerate()}
-          {tab === 'audio' && renderAudioGenerate()}
-          {tab === 'video' && renderVideoGenerate()}
-        </div>
+      {tab === 'library' ? (
+        <CreativeLibraryTab />
+      ) : (
+        <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+          {/* LEFT: Generate panel */}
+          <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
+            {tab === 'images' && renderImagesGenerate()}
+            {tab === 'audio' && renderAudioGenerate()}
+            {tab === 'voice' && renderVoiceGenerate()}
+            {tab === 'sfx' && renderSfxGenerate()}
+            {tab === 'video' && renderVideoGenerate()}
+          </div>
 
-        {/* RIGHT: Results + Library */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {tab === 'images' && renderImagesResults()}
-          {tab === 'audio' && renderAudioResults()}
-          {tab === 'video' && renderVideoResults()}
+          {/* RIGHT: Results */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {tab === 'images' && renderImagesResults()}
+            {tab === 'audio' && renderAudioResults()}
+            {tab === 'voice' && renderVoiceResults()}
+            {tab === 'sfx' && renderSfxResults()}
+            {tab === 'video' && renderVideoResults()}
+          </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Creative Studio — Library Tab ──────────────────────────────────────── */
+
+type CreativeLibFilter = 'all' | 'images' | 'music' | 'video' | 'voice' | 'sfx' | 'documents' | 'spreadsheets' | 'presentations';
+
+function CreativeLibraryTab() {
+  const [filter, setFilter] = useState<CreativeLibFilter>('all');
+  const [assets, setAssets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const connected = checkConnected();
+  const [source, setSource] = useState<'local' | 'cloud'>('local');
+  const [selected, setSelected] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const FILTERS: { key: CreativeLibFilter; label: string; icon: string }[] = [
+    { key: 'all', label: 'All', icon: '📋' },
+    { key: 'images', label: 'Images', icon: '🖼️' },
+    { key: 'music', label: 'Music', icon: '🎵' },
+    { key: 'video', label: 'Video', icon: '🎬' },
+    { key: 'voice', label: 'Voice', icon: '🎙️' },
+    /* { key: 'sfx', label: 'SFX', icon: '🔊' }, — in development */
+    { key: 'documents', label: 'Documents', icon: '📄' },
+    { key: 'spreadsheets', label: 'Spreadsheets', icon: '📊' },
+    { key: 'presentations', label: 'Presentations', icon: '📽️' },
+  ];
+
+  // Fetch assets based on source toggle
+  useEffect(() => {
+    setLoading(true);
+    setAssets([]);
+    (async () => {
+      if (source === 'local') {
+        try {
+          const { readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+          const raw = await readTextFile('.ava/creative/metadata.json', { baseDir: BaseDirectory.Home }).catch(() => '[]');
+          setAssets(JSON.parse(raw || '[]'));
+        } catch { setAssets([]); }
+      } else if (connected) {
+        try {
+          const data = await apiFetch('/library');
+          const list = Array.isArray(data) ? data : (data?.files || data?.assets || data?.items || []);
+          setAssets(list);
+        } catch { setAssets([]); }
+      }
+      setLoading(false);
+    })();
+  }, [source, connected]);
+
+  const filtered = filter === 'all' ? assets : assets.filter((a: any) => {
+    const aType = (a.asset_type || a.type || '').toLowerCase();
+    const ext = (a.name || a.title || '').split('.').pop()?.toLowerCase() || '';
+    if (filter === 'images') return ['image', 'graphic'].includes(aType) || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+    if (filter === 'music') return aType === 'music';
+    if (filter === 'video') return aType === 'video' || ['mp4', 'webm', 'mov'].includes(ext);
+    if (filter === 'voice') return aType === 'voice';
+    if (filter === 'sfx') return aType === 'sfx';
+    if (filter === 'documents') return ['document', 'content'].includes(aType) || ['docx', 'pdf', 'md', 'txt', 'csv'].includes(ext);
+    if (filter === 'spreadsheets') return aType === 'spreadsheet' || ['xlsx', 'xls'].includes(ext);
+    if (filter === 'presentations') return aType === 'presentation' || ['pptx', 'ppt'].includes(ext);
+    return false;
+  });
+
+  const typeIcon = (type: string): string => {
+    if (['image', 'graphic'].includes(type)) return '🖼️';
+    if (type === 'music') return '🎵';
+    if (type === 'video') return '🎬';
+    if (type === 'voice') return '🎙️';
+    if (type === 'sfx') return '🔊';
+    if (type === 'presentation') return '📽️';
+    if (['document', 'content'].includes(type)) return '📄';
+    if (type === 'spreadsheet') return '📊';
+    return '📁';
+  };
+
+  const typeColor = (type: string): string => {
+    if (['image', 'graphic'].includes(type)) return '#60a5fa';
+    if (type === 'music') return '#f97316';
+    if (type === 'video') return '#a855f7';
+    if (type === 'voice') return '#ec4899';
+    if (type === 'sfx') return '#f59e0b';
+    if (['document', 'content'].includes(type)) return '#22c55e';
+    if (type === 'presentation') return '#eab308';
+    if (type === 'spreadsheet') return '#06b6d4';
+    return '#6c7086';
+  };
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Source toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <button
+          onClick={() => setSource('local')}
+          style={{
+            padding: '4px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+            background: source === 'local' ? 'rgba(168,85,247,0.2)' : 'transparent',
+            color: source === 'local' ? '#cdd6f4' : '#585b70', transition: 'all 0.15s',
+          }}
+        >
+          Local
+        </button>
+        <button
+          onClick={() => { if (connected) setSource('cloud'); }}
+          style={{
+            padding: '4px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500,
+            cursor: connected ? 'pointer' : 'not-allowed',
+            background: source === 'cloud' ? 'rgba(168,85,247,0.2)' : 'transparent',
+            color: source === 'cloud' ? '#cdd6f4' : '#585b70',
+            opacity: connected ? 1 : 0.3, transition: 'all 0.15s',
+          }}
+          title={connected ? 'Browse cloud assets' : 'Connect account to access cloud'}
+        >
+          Cloud
+        </button>
+        {!connected && <span style={{ fontSize: 9, color: '#585b70' }}>Connect account for cloud</span>}
       </div>
+
+      {/* Filter pills */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {FILTERS.map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)} style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 400, cursor: 'pointer',
+            background: filter === f.key ? 'rgba(168,85,247,0.2)' : 'transparent',
+            color: filter === f.key ? '#cdd6f4' : '#585b70', transition: 'all 0.15s',
+          }}>
+            {f.icon} {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11, color: '#6c7086' }}>{filtered.length} {filter === 'all' ? 'assets' : filter}</div>
+
+      {loading && <div style={{ padding: 24, textAlign: 'center' as const, color: '#6c7086', fontSize: 12 }}>Loading assets...</div>}
+
+      {!loading && filtered.length === 0 && (
+        <div style={{ ...card, padding: 24, textAlign: 'center' as const }}>
+          <div style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>✨</div>
+          <div style={{ fontSize: 13, color: '#6c7086' }}>{filter === 'all' ? 'No assets yet. Ask Ava to create something!' : `No ${filter} found.`}</div>
+        </div>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+          {/* Asset grid */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+              {filtered.map((asset: any, i: number) => (
+                <div
+                  key={asset.id || i}
+                  onClick={() => setSelected(selected?.id === asset.id ? null : asset)}
+                  style={{
+                    ...card, padding: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6,
+                    border: selected?.id === asset.id ? '1px solid #a855f7' : '1px solid rgba(168, 85, 247, 0.12)',
+                  }}
+                >
+                  {['image', 'graphic'].includes(asset.asset_type || '') && (asset.thumbnail_url || asset.url) ? (
+                    <img src={asset.thumbnail_url || asset.url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8 }} />
+                  ) : (
+                    <div style={{ width: '100%', height: 100, borderRadius: 8, background: 'rgba(49,34,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, opacity: 0.4 }}>
+                      {typeIcon(asset.asset_type || asset.type || '')}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, fontWeight: 500, color: '#cdd6f4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                    {asset.title || asset.name || 'Untitled'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 8, fontWeight: 500, padding: '1px 5px', borderRadius: 4, background: `${typeColor(asset.asset_type || '')}15`, color: typeColor(asset.asset_type || '') }}>
+                      {asset.asset_type || asset.type || 'file'}
+                    </span>
+                    <span style={{ fontSize: 8, color: '#585b70' }}>
+                      {asset.created_at ? new Date(asset.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Detail panel */}
+          {selected && (
+            <div style={{ width: 300, flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Preview */}
+              <div style={{ ...card, padding: 12 }}>
+                {['image', 'graphic'].includes(selected.asset_type || '') && (selected.thumbnail_url || selected.url) ? (
+                  <img src={selected.thumbnail_url || selected.url} alt="" style={{ width: '100%', borderRadius: 8, marginBottom: 10 }} />
+                ) : ['music', 'voice'].includes(selected.asset_type || '') && selected.url ? (
+                  <div style={{ marginBottom: 10 }}><AvaAudioPlayer src={selected.url} /></div>
+                ) : ['video'].includes(selected.asset_type || '') && selected.url ? (
+                  <video controls src={selected.url} style={{ width: '100%', borderRadius: 8, marginBottom: 10 }} />
+                ) : (
+                  <div style={{ width: '100%', height: 80, borderRadius: 8, background: 'rgba(49,34,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, opacity: 0.4, marginBottom: 10 }}>
+                    {typeIcon(selected.asset_type || selected.type || '')}
+                  </div>
+                )}
+
+                <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>
+                  {selected.title || selected.name || 'Untitled'}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 500, padding: '2px 8px', borderRadius: 4, background: `${typeColor(selected.asset_type || '')}15`, color: typeColor(selected.asset_type || '') }}>
+                    {selected.asset_type || selected.type || 'file'}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#585b70' }}>
+                    {selected.created_at ? new Date(selected.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                  </span>
+                </div>
+              </div>
+
+              {/* Prompt */}
+              {selected.prompt && (
+                <div style={{ ...card, padding: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 6 }}>Prompt</div>
+                  <div style={{ fontSize: 11, color: '#a6adc8', lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>
+                    {selected.prompt}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {selected.url && (
+                  <a
+                    href={selected.url}
+                    download={selected.title || 'download'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
+                      background: '#a855f7', color: '#fff', textAlign: 'center' as const,
+                      textDecoration: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    Download
+                  </a>
+                )}
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  style={{
+                    flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
+                    background: 'rgba(239,68,68,0.15)', color: '#f87171', border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+
+              {/* Delete confirmation */}
+              {confirmDelete && (
+                <div style={{
+                  ...card, padding: 16, border: '1px solid rgba(239,68,68,0.3)',
+                  background: 'rgba(239,68,68,0.05)',
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>Delete this asset?</div>
+                  <div style={{ fontSize: 11, color: '#a6adc8', marginBottom: 12, lineHeight: 1.4 }}>
+                    "{selected.title || 'Untitled'}" will be permanently removed. This cannot be undone.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      style={{
+                        flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
+                        background: 'rgba(49,34,68,0.5)', color: '#a6adc8', border: 'none', cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        const deleteId = selected.id;
+                        setAssets(prev => prev.filter(a => a.id !== deleteId));
+                        setSelected(null);
+                        setConfirmDelete(false);
+                        (async () => {
+                          try {
+                            const { writeTextFile, readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+                            const raw = await readTextFile('.ava/creative/metadata.json', { baseDir: BaseDirectory.Home }).catch(() => '[]');
+                            const meta = JSON.parse(raw || '[]').filter((a: any) => a.id !== deleteId);
+                            await writeTextFile('.ava/creative/metadata.json', JSON.stringify(meta, null, 2), { baseDir: BaseDirectory.Home });
+                          } catch { /* */ }
+                        })();
+                      }}
+                      style={{
+                        flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
+                        background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer',
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
