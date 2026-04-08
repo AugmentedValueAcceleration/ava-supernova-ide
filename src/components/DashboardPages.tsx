@@ -9719,6 +9719,33 @@ export function DocumentationPage() {
       ),
     },
     {
+      id: 'creative-studio', title: 'Creative Studio',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: '#a6adc8', lineHeight: 1.7 }}>
+            Generate images, music, voice, and video directly from the IDE using MiniMax's AI models. All generated assets are saved locally to <code style={{ color: '#a855f7', background: 'rgba(168,85,247,0.1)', padding: '1px 4px', borderRadius: 3 }}>~/.ava/creative/</code>.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[
+              { icon: '\uD83D\uDDBC\uFE0F', title: 'Images', desc: 'Generate images from text prompts. Choose aspect ratio (1:1, 3:4, 4:3).' },
+              { icon: '\uD83C\uDFB5', title: 'Audio / Music', desc: 'Generate music with optional lyrics. Full songs or instrumentals.' },
+              { icon: '\uD83C\uDF99\uFE0F', title: 'Voice', desc: 'Text-to-speech with multiple voice styles and speed control.' },
+              { icon: '\uD83C\uDFAC', title: 'Video', desc: 'Generate short videos from text prompts. 6 or 10 second clips.' },
+            ].map(s => (
+              <div key={s.title} style={{ ...card, padding: 14 }}>
+                <div style={{ fontSize: 20, marginBottom: 6 }}>{s.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{s.title}</div>
+                <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5 }}>{s.desc}</div>
+              </div>
+            ))}
+          </div>
+          <p style={{ fontSize: 11, color: '#585b70' }}>
+            Requires a connected account with available tokens. Generated assets are stored locally in the Library tab and can optionally be synced to cloud.
+          </p>
+        </div>
+      ),
+    },
+    {
       id: 'release-notes', title: t('dash.docs.release_notes'),
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -9832,28 +9859,28 @@ export function ReleaseNotesPage() {
 
   const fallbackReleases = [
     {
-      id: 'v0.21.4', version: '0.21.4', title: 'Docs Sync Publish', published_at: '2026-03-22',
-      tool_count: 54, body: 'Documentation sync and web submodule updates.', platform: 'extension',
-      highlights: ['Docs sync publish', 'Web submodule updates', 'Bug fixes for billing page'],
+      id: 'v0.12.0', version: '0.12.0', title: 'Security Hardening + Local-First Architecture', published_at: '2026-04-08',
+      tool_count: 59, body: 'Security hardening, local-first architecture, token display consistency across all platforms.', platform: 'ide',
+      highlights: ['Security: shell execute removed, XSS fixed, CSP tightened', 'Local-first: Tasks, Journal, Learning, Memory persist locally', 'Token bars show remaining consistently', 'Creative Studio token bar with subscription awareness', 'Help page: Docs tab, Support links for unconnected users'],
     },
     {
-      id: 'v0.21.0', version: '0.21.0', title: 'Qwen Free Models', published_at: '2026-03-20',
-      tool_count: 54, body: 'Added Qwen free models, pricing updates across all 12 models.', platform: 'extension',
-      highlights: ['Qwen free models added', 'Pricing updates — 54 tools, 12 models', 'Companion sync improvements'],
+      id: 'v0.11.0', version: '0.11.0', title: 'Qwen 3.6 Plus + Security Fixes', published_at: '2026-04-07',
+      tool_count: 59, body: 'Qwen 3.6 Plus as conductor model, security fixes for path traversal and cwd fallback.', platform: 'ide',
+      highlights: ['Qwen 3.6 Plus as sole reasoning model', 'Path traversal security fix', 'Category permissions with audit trail'],
     },
     {
-      id: 'v0.22.0', version: '0.22.0', title: 'Sidecar Integration', published_at: '2026-03-23',
-      tool_count: 54, body: 'Full local AI with 54 tools via Node.js sidecar.', platform: 'ide',
-      highlights: ['Node.js sidecar for local tool execution', '6 new dashboard pages', 'Chat media + avatars'],
+      id: 'v0.34.5', version: '0.34.5', title: 'Creative Studio + Token Balance', published_at: '2026-04-06',
+      tool_count: 59, body: 'Creative Studio with image, music, voice, and video generation via MiniMax.', platform: 'extension',
+      highlights: ['Creative Studio: image, music, voice, video generation', 'Token balance bar in Creative Studio', 'Live chat support'],
     },
     {
       id: 'v0.20.0', version: '0.20.0', title: 'Persona System', published_at: '2026-03-17',
-      tool_count: 54, body: '24 specialist personas orchestrated across 5 modes.', platform: 'core',
+      tool_count: 59, body: '24 specialist personas orchestrated across 5 modes.', platform: 'core',
       highlights: ['24 specialist personas across 5 modes', 'Persona orchestration via Conductor'],
     },
     {
       id: 'v0.19.0', version: '0.19.0', title: 'Companion Overhaul', published_at: '2026-03-15',
-      tool_count: 54, body: 'Full companion redesign with real-time sync.', platform: 'companion',
+      tool_count: 59, body: 'Full companion redesign with real-time sync.', platform: 'companion',
       highlights: ['Companion app overhaul', 'Real-time sync', 'Mobile-optimised chat'],
     },
   ];
