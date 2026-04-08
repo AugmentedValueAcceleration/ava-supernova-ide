@@ -10266,7 +10266,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'Image generation failed');
     }
-    setGenerating(false);
+    setGenerating(false); refreshBalance();
   };
 
   /* ---------- Music generation ---------- */
@@ -10290,7 +10290,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'Music generation failed');
     }
-    setGenerating(false);
+    setGenerating(false); refreshBalance();
   };
 
   /* ---------- Voice generation ---------- */
@@ -10313,7 +10313,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'Voice generation failed');
     }
-    setGenerating(false);
+    setGenerating(false); refreshBalance();
   };
 
   /* ---------- SFX generation ---------- */
@@ -10336,7 +10336,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'SFX generation failed');
     }
-    setGenerating(false);
+    setGenerating(false); refreshBalance();
   };
 
   /* ---------- Video generation ---------- */
@@ -10360,7 +10360,7 @@ export function CreativeStudioPage() {
     } catch (e: any) {
       setError(e.message || 'Video generation failed');
     }
-    setGenerating(false);
+    setGenerating(false); refreshBalance();
   };
 
   /* ---------- Shared UI helpers ---------- */
@@ -10713,10 +10713,44 @@ export function CreativeStudioPage() {
   );
 
   return (
+  // Token balance
+  const [tokenBalance, setTokenBalance] = useState<{ used: number; limit: number } | null>(null);
+  const refreshBalance = useCallback(() => {
+    if (!checkConnected()) return;
+    apiFetch('/account-info').then((res: any) => {
+      if (res?.usage) {
+        setTokenBalance({ used: res.usage.free_tokens_used || 0, limit: res.usage.free_tokens_limit || 3000000 });
+      }
+    }).catch(() => {});
+  }, []);
+  useEffect(() => { refreshBalance(); }, [refreshBalance]);
+
+  return (
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ marginBottom: 8 }}>
-        <div style={pageTitle}>Creative Studio</div>
-        <div style={pageSubtitle}>Generate images, music, and video with MiniMax</div>
+      <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={pageTitle}>Creative Studio</div>
+          <div style={pageSubtitle}>Generate images, music, and video with MiniMax</div>
+        </div>
+        {tokenBalance && (
+          <div style={{ width: 180, flexShrink: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6c7086', marginBottom: 4 }}>
+              <span>Tokens Remaining</span>
+              <span>{tokenBalance.limit - tokenBalance.used >= 1000000 ? `${((tokenBalance.limit - tokenBalance.used) / 1000000).toFixed(1)}M` : `${Math.round((tokenBalance.limit - tokenBalance.used) / 1000)}K`}</span>
+            </div>
+            <div style={{ height: 6, borderRadius: 3, background: 'rgba(168,85,247,0.08)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 3, transition: 'width 0.5s',
+                width: `${Math.max(0, Math.min(100, ((tokenBalance.limit - tokenBalance.used) / tokenBalance.limit) * 100))}%`,
+                background: ((tokenBalance.limit - tokenBalance.used) / tokenBalance.limit) < 0.1 ? '#ef4444' : ((tokenBalance.limit - tokenBalance.used) / tokenBalance.limit) < 0.3 ? '#eab308' : '#a855f7',
+              }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#585b70', marginTop: 2 }}>
+              <span>{tokenBalance.used >= 1000000 ? `${(tokenBalance.used / 1000000).toFixed(1)}M` : `${Math.round(tokenBalance.used / 1000)}K`} used</span>
+              <span>{tokenBalance.limit >= 1000000 ? `${(tokenBalance.limit / 1000000).toFixed(1)}M` : `${Math.round(tokenBalance.limit / 1000)}K`} limit</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
