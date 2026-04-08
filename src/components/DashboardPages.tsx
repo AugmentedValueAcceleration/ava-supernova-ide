@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { t, useLocale, getLocale } from '../lib/i18n';
-import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
+import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
 
@@ -172,6 +172,22 @@ function LoadingSpinner() {
   );
 }
 
+function StorageBadge() {
+  const connected = checkConnected();
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500,
+      padding: '2px 8px', borderRadius: 6,
+      background: connected ? 'rgba(96,165,250,0.10)' : 'rgba(166,227,161,0.10)',
+      color: connected ? '#60a5fa' : '#a6e3a1',
+      border: `1px solid ${connected ? 'rgba(96,165,250,0.20)' : 'rgba(166,227,161,0.20)'}`,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: connected ? '#60a5fa' : '#a6e3a1' }} />
+      {connected ? 'Cloud' : 'Local'}
+    </span>
+  );
+}
+
 function NotConnectedBanner() {
   return (
     <div style={{
@@ -206,15 +222,27 @@ function useApiData<T>(path: string, defaultValue: T): { data: T; loading: boole
   const [error, setError] = useState('');
 
   const fetch_ = useCallback(() => {
-    if (!checkConnected()) { setLoading(false); return; }
+    if (!checkConnected()) { setData(defaultValue); setLoading(false); return; }
     setLoading(true);
     setError('');
     apiFetch(path)
       .then((d) => { setData(d); setLoading(false); })
       .catch((e) => { setError(e.message || 'Failed to load'); setLoading(false); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
+
+  // Reset to default when auth changes (logout clears connection)
+  useEffect(() => {
+    const handler = () => {
+      if (!checkConnected()) { setData(defaultValue); setError(''); }
+      else fetch_();
+    };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetch_]);
 
   return { data, loading, error, refetch: fetch_ };
 }
@@ -328,7 +356,7 @@ const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
   return String(n);
 }
 
@@ -449,20 +477,34 @@ function setCachedWeather(data: WeatherData): void {
 
 // ── News fetching (direct HTTP) ────────────────────────────────────────────
 
+const PUBLIC_API = 'https://ava-supernova.com/api';
+
 async function fetchNewsDirect(category?: string): Promise<NewsArticle[]> {
   try {
     const url = category
-      ? `/news?category=${category}&limit=6`
-      : `/news?limit=6`;
-    const data = await apiFetch(url);
+      ? `${PUBLIC_API}/news?category=${category}&limit=6`
+      : `${PUBLIC_API}/news?limit=6`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const data = await res.json();
     return Array.isArray(data) ? data : (data.posts || data.articles || data.items || []);
   } catch { return []; }
 }
 
 async function fetchArticleDirect(slug: string): Promise<{ post: any; related: any[] } | null> {
   try {
-    const data = await apiFetch(`/news/${encodeURIComponent(slug)}`);
+    const res = await fetch(`${PUBLIC_API}/news/${encodeURIComponent(slug)}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const data = await res.json();
     return { post: data.post || null, related: data.related || [] };
+  } catch { return null; }
+}
+
+async function fetchReleasesDirect(locale: string, limit = 1): Promise<any> {
+  try {
+    const res = await fetch(`${PUBLIC_API}/releases?limit=${limit}&locale=${locale}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    return res.json();
   } catch { return null; }
 }
 
@@ -1459,7 +1501,13 @@ export function CommandCentrePage() {
   const curriculums: LearningCurriculum[] = Array.isArray(rawLearning) ? rawLearning : (rawLearning?.curriculums ?? rawLearning?.data ?? []);
   const { data: rawMemories2, loading: memoriesLoading } = useApiData<any>('/memories', null);
   const memories: MemoryEntry[] = Array.isArray(rawMemories2) ? rawMemories2 : (rawMemories2?.memories ?? rawMemories2?.entries ?? rawMemories2?.data ?? []);
-  const { data: releaseData, loading: releaseLoading, refetch: refetchRelease } = useApiData<any>(`/releases?limit=1&locale=${getLocale()}`, null);
+  const [releaseData, setReleaseData] = useState<any>(null);
+  const [releaseLoading, setReleaseLoading] = useState(true);
+  const refetchRelease = useCallback(() => {
+    setReleaseLoading(true);
+    fetchReleasesDirect(getLocale(), 1).then(d => { setReleaseData(d); setReleaseLoading(false); }).catch(() => setReleaseLoading(false));
+  }, []);
+  useEffect(() => { refetchRelease(); }, [refetchRelease]);
 
   const latestRelease: ReleaseInfo | null = useMemo(() => {
     if (!releaseData) return null;
@@ -1690,10 +1738,24 @@ export function AvaChatPage() {
   const fmtTokens = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
 
   // ── State ──────────────────────────────────────────────────────────────────
-  // Re-render on auth changes
+  // Re-render on auth changes — reset to local-first state on logout
   const [authRefreshChat, setAuthRefreshChat] = useState(0);
   useEffect(() => {
-    const handler = () => setAuthRefreshChat(n => n + 1);
+    const handler = () => {
+      setAuthRefreshChat(n => n + 1);
+      if (!checkConnected()) {
+        // Clear cloud state — snap back to local-first
+        setPlatformBalance(null);
+        setUsageWarning({ level: 'none', message: '' });
+        setChatBackend('local');
+        setMessages([{ id: `msg-reset-${Date.now()}`, role: 'ava' as const, text: t('dash.chat.welcome'), timestamp: Date.now() }]);
+        setConversationTitle(t('dash.chat.new_chat'));
+        setEnabledPacks(new Set());
+        setSecrets([]);
+        setTokenCount(0);
+        setContextPercent(0);
+      }
+    };
     window.addEventListener('ava-auth-changed', handler);
     return () => window.removeEventListener('ava-auth-changed', handler);
   }, []);
@@ -3583,7 +3645,7 @@ export function AvaChatPage() {
                 <div style={{ width: `${pct}%`, height: '100%', borderRadius: 4, background: color, transition: 'width 0.5s' }} />
               </div>
               <span style={{ fontSize: 9, fontFamily: 'monospace', color, opacity: pct <= 20 ? 0.9 : 0.4, flexShrink: 0 }}>
-                {remaining >= 1_000_000 ? `${(remaining / 1_000_000).toFixed(2)}M` : remaining >= 1000 ? `${(remaining / 1000).toFixed(1)}K` : remaining} left
+                {fmtTokens(remaining)} left
               </span>
             </div>
           </div>
@@ -4510,7 +4572,8 @@ export function ChatHistoryPage() {
   const hasSub = subLimit > 0 && (usage?.tier || 'free') !== 'free';
   const balanceUsed = hasSub ? subUsed : freeUsed;
   const balanceLimit = hasSub ? subLimit : freeLimit;
-  const balancePct = isUnlimited ? 0 : (balanceLimit > 0 ? Math.min((balanceUsed / balanceLimit) * 100, 100) : 0);
+  const balanceRemaining = Math.max(0, balanceLimit - balanceUsed);
+  const remainPct = isUnlimited ? 100 : (balanceLimit > 0 ? Math.min((balanceRemaining / balanceLimit) * 100, 100) : 0);
   const daily: any[] = usage?.daily || [];
   const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || 0)) : 1;
   const today = new Date().toISOString().slice(0, 10);
@@ -4556,16 +4619,20 @@ export function ChatHistoryPage() {
                     </>
                   ) : (
                     <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
-                        <span style={{ color: '#a6adc8' }}>{formatTokens(balanceUsed)} / {formatTokens(balanceLimit)} used</span>
-                        <span style={{ color: '#6c7086' }}>{balancePct.toFixed(0)}%</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                        <span style={{ color: '#a6adc8' }}>Tokens Remaining</span>
+                        <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{formatTokens(balanceRemaining)}</span>
                       </div>
                       <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
                         <div style={{
-                          width: `${balancePct}%`, height: '100%', borderRadius: 6,
-                          background: balancePct > 90 ? '#f87171' : balancePct > 70 ? '#f59e0b' : 'linear-gradient(90deg, #a855f7, #6366f1)',
+                          width: `${remainPct}%`, height: '100%', borderRadius: 6,
+                          background: remainPct < 10 ? '#f87171' : remainPct < 30 ? '#f59e0b' : 'linear-gradient(90deg, #a855f7, #6366f1)',
                           transition: 'width 0.5s',
                         }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#585b70', marginTop: 4 }}>
+                        <span>{formatTokens(balanceUsed)} used</span>
+                        <span>{formatTokens(balanceLimit)} limit</span>
                       </div>
                     </>
                   )}
@@ -4740,6 +4807,7 @@ export function MemoryPage() {
   const connected = checkConnected();
   const { data: rawMemories, loading, error } = useApiData<any[]>('/memories', []);
   const [memories, setMemories] = useState<any[]>([]);
+  const [localMemories, setLocalMemories] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -4748,10 +4816,27 @@ export function MemoryPage() {
   const [deletingAll, setDeletingAll] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(MEMORY_PAGE_SIZE);
 
+  // Load local memories from ~/.ava/memory.json via Tauri FS
   useEffect(() => {
-    const list = Array.isArray(rawMemories) ? rawMemories : (rawMemories as any)?.entries || (rawMemories as any)?.memories || [];
-    if (list.length > 0 || !loading) setMemories(list);
-  }, [rawMemories, loading]);
+    (async () => {
+      try {
+        const { readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+        const raw = await readTextFile('.ava/memory.json', { baseDir: BaseDirectory.Home });
+        const parsed = JSON.parse(raw || '{}');
+        const entries = parsed.entries || [];
+        setLocalMemories(entries);
+      } catch { /* file may not exist yet */ }
+    })();
+  }, []);
+
+  // Merge cloud + local memories (deduplicated)
+  useEffect(() => {
+    const cloudList = Array.isArray(rawMemories) ? rawMemories : (rawMemories as any)?.entries || (rawMemories as any)?.memories || [];
+    const cloudIds = new Set(cloudList.map((m: any) => m.id || m._id));
+    const localOnly = localMemories.filter((m: any) => !cloudIds.has(m.id || m._id));
+    const merged = [...cloudList, ...localOnly];
+    if (merged.length > 0 || (!loading && localMemories.length === 0)) setMemories(merged);
+  }, [rawMemories, loading, localMemories]);
 
   const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
     pattern:      { bg: 'rgba(59,130,246,0.10)', text: '#60a5fa', border: 'rgba(59,130,246,0.20)' },
@@ -4812,11 +4897,16 @@ export function MemoryPage() {
     }
   };
 
-  const handleDeleteAll = async () => {
-    setDeletingAll(true);
-    setConfirmDeleteAll(false);
+  const deleteLocal = async () => {
+    try {
+      const { writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+      const emptyStore = JSON.stringify({ version: 2, lastModified: new Date().toISOString(), entries: [] });
+      await writeTextFile('.ava/memory.json', emptyStore, { baseDir: BaseDirectory.Home }).catch(() => {});
+    } catch { /* not in Tauri or fs plugin not available */ }
+    try { window.dispatchEvent(new CustomEvent('ava-clear-memory')); } catch {}
+  };
 
-    // Step 1: Delete all platform memories (loop until done)
+  const deleteCloud = async () => {
     try {
       const key = getPlatformKey();
       if (key) {
@@ -4832,20 +4922,15 @@ export function MemoryPage() {
         }
       }
     } catch { /* best-effort */ }
+  };
 
-    // Step 2: Clear local memory files
-    try {
-      const { writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-      const emptyStore = JSON.stringify({ version: 2, lastModified: new Date().toISOString(), entries: [] });
-      await writeTextFile('.ava/memory.json', emptyStore, { baseDir: BaseDirectory.Home }).catch(() => {});
-    } catch { /* not in Tauri or fs plugin not available */ }
-
-    // Step 3: Reset sidecar memory manager via global event
-    try {
-      window.dispatchEvent(new CustomEvent('ava-clear-memory'));
-    } catch { /* best-effort */ }
-
+  const handleDeleteAll = async (scope: 'local' | 'cloud' | 'both') => {
+    setDeletingAll(true);
+    setConfirmDeleteAll(false);
+    if (scope === 'local' || scope === 'both') await deleteLocal();
+    if (scope === 'cloud' || scope === 'both') await deleteCloud();
     setMemories([]);
+    setLocalMemories([]);
     setDeletingAll(false);
   };
 
@@ -4861,7 +4946,10 @@ export function MemoryPage() {
         {/* Header */}
         <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={pageTitle}>{t('dash.memory.title')}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={pageTitle}>{t('dash.memory.title')}</div>
+              <StorageBadge />
+            </div>
             <div style={pageSubtitle}>{t('dash.memory.subtitle')}</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -4879,12 +4967,22 @@ export function MemoryPage() {
         {/* Delete All Confirmation */}
         {confirmDeleteAll && (
           <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)' }}>
-            <p style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>Are you sure you want to delete all memories?</p>
-            <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>This is permanent and cannot be undone. ALL memories will be deleted.</p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleDeleteAll} style={{ padding: '6px 14px', borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 12, border: 'none', cursor: 'pointer' }}>
-                Yes, delete all permanently
+            <p style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>Delete all memories?</p>
+            <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>This is permanent and cannot be undone.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => handleDeleteAll('local')} style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(166,227,161,0.15)', color: '#a6e3a1', fontSize: 12, border: '1px solid rgba(166,227,161,0.3)', cursor: 'pointer' }}>
+                Local Only
               </button>
+              {connected && (
+                <button onClick={() => handleDeleteAll('cloud')} style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(96,165,250,0.15)', color: '#60a5fa', fontSize: 12, border: '1px solid rgba(96,165,250,0.3)', cursor: 'pointer' }}>
+                  Cloud Only
+                </button>
+              )}
+              {connected && (
+                <button onClick={() => handleDeleteAll('both')} style={{ padding: '6px 14px', borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 12, border: 'none', cursor: 'pointer' }}>
+                  Both
+                </button>
+              )}
               <button onClick={() => setConfirmDeleteAll(false)} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.2)', background: 'transparent', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
                 Cancel
               </button>
@@ -4903,7 +5001,6 @@ export function MemoryPage() {
           </div>
         )}
 
-        {!connected && <NotConnectedBanner />}
 
         {/* Stats row */}
         {memories.length > 0 && (
@@ -5174,7 +5271,11 @@ export function TasksPage() {
   useLocale();
   const connected = checkConnected();
   const { data: rawTasks, loading, error } = useApiData<any>('/tasks', []);
-  const [tasks, setTasks] = useState<any[]>([]);
+
+  // Local-first: load from localStorage, always available
+  const [tasks, setTasks] = useState<any[]>(() => {
+    try { const saved = localStorage.getItem('ava-ide-tasks'); return saved ? JSON.parse(saved) : []; } catch { return []; }
+  });
   const [filter, setFilter] = useState<TaskFilter>('all');
   const [showForm, setShowForm] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -5202,9 +5303,21 @@ export function TasksPage() {
     return () => window.removeEventListener('ava-task-date-selected', handler);
   }, []);
 
+  // Persist to localStorage on every change
   useEffect(() => {
-    const list = Array.isArray(rawTasks) ? rawTasks : rawTasks?.tasks || [];
-    if (list.length > 0 || !loading) setTasks(list);
+    try { localStorage.setItem('ava-ide-tasks', JSON.stringify(tasks)); } catch {}
+  }, [tasks]);
+
+  // Merge cloud tasks when connected — add any cloud tasks not already local
+  useEffect(() => {
+    const cloudList = Array.isArray(rawTasks) ? rawTasks : rawTasks?.tasks || [];
+    if (cloudList.length === 0 || loading) return;
+    setTasks(prev => {
+      const localIds = new Set(prev.map((t: any) => t.id || t._id));
+      const newFromCloud = cloudList.filter((t: any) => !localIds.has(t.id || t._id));
+      if (newFromCloud.length === 0) return prev;
+      return [...prev, ...newFromCloud];
+    });
   }, [rawTasks, loading]);
 
   const stats = useMemo(() => {
@@ -5312,7 +5425,10 @@ export function TasksPage() {
       <div style={{ width: '100%' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div style={pageTitle}>{t('dash.tasks.title')}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={pageTitle}>{t('dash.tasks.title')}</div>
+            <StorageBadge />
+          </div>
           <button
             onClick={() => { resetForm(); setShowForm(!showForm); }}
             style={{
@@ -5331,8 +5447,6 @@ export function TasksPage() {
           </button>
         </div>
         <div style={pageSubtitle}>{t('dash.tasks.subtitle')}</div>
-
-        {!connected && <NotConnectedBanner />}
 
         {/* Stats bar */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
@@ -5717,26 +5831,50 @@ export function JournalPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
+  // Local-first: load from localStorage, merge with cloud if available
   useEffect(() => {
-    const content = userEntry?.content || journalData?.content || journalData?.entry || '';
-    setEntry(content);
-    setMood(userEntry?.mood || journalData?.mood || undefined);
-  }, [journalData]);
+    // Cloud data takes priority if available, otherwise load local
+    const cloudContent = userEntry?.content || journalData?.content || journalData?.entry || '';
+    const cloudMood = userEntry?.mood || journalData?.mood || undefined;
+    if (cloudContent) {
+      setEntry(cloudContent);
+      setMood(cloudMood);
+    } else {
+      // Load from localStorage
+      try {
+        const local = localStorage.getItem(`ava-ide-journal-${isoDate}`);
+        if (local) {
+          const parsed = JSON.parse(local);
+          setEntry(parsed.content || '');
+          setMood(parsed.mood || undefined);
+        } else {
+          setEntry('');
+          setMood(undefined);
+        }
+      } catch { setEntry(''); setMood(undefined); }
+    }
+  }, [journalData, isoDate]);
 
   const saveEntry = async () => {
-    if (!connected) return;
+    // Always save locally first
+    try { localStorage.setItem(`ava-ide-journal-${isoDate}`, JSON.stringify({ content: entry, mood, date: isoDate })); } catch {}
+
     setSaving(true);
     setSaveMsg('');
-    try {
-      await apiFetch('/journal', {
-        method: 'POST',
-        body: JSON.stringify({ date: isoDate, content: entry, mood }),
-      });
-      setSaveMsg(t('dash.journal.saved'));
-      setTimeout(() => setSaveMsg(''), 2000);
-    } catch (err: any) {
-      setSaveMsg(`Error: ${err.message}`);
+    if (connected) {
+      try {
+        await apiFetch('/journal', {
+          method: 'POST',
+          body: JSON.stringify({ date: isoDate, content: entry, mood }),
+        });
+        setSaveMsg(t('dash.journal.saved'));
+      } catch (err: any) {
+        setSaveMsg(t('dash.journal.saved') + ' (local)');
+      }
+    } else {
+      setSaveMsg(t('dash.journal.saved') + ' (local)');
     }
+    setTimeout(() => setSaveMsg(''), 2000);
     setSaving(false);
   };
 
@@ -5764,10 +5902,11 @@ export function JournalPage() {
     <div style={{ ...pageWrapper, display: 'flex', gap: 24 }}>
       {/* Main content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={pageTitle}>{t('dash.journal.title')}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={pageTitle}>{t('dash.journal.title')}</div>
+          <StorageBadge />
+        </div>
         <div style={pageSubtitle}>{t('dash.journal.subtitle')}</div>
-
-        {!connected && <NotConnectedBanner />}
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 20 }}>
@@ -6065,7 +6204,27 @@ export function LearningPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
-  const curricula: any[] = Array.isArray(rawData) ? rawData : rawData?.curricula || rawData?.courses || [];
+  // Local-first: load from localStorage, merge with cloud
+  const [localCurricula, setLocalCurricula] = useState<any[]>(() => {
+    try { const saved = localStorage.getItem('ava-ide-learning'); return saved ? JSON.parse(saved) : []; } catch { return []; }
+  });
+
+  const cloudCurricula: any[] = Array.isArray(rawData) ? rawData : rawData?.curricula || rawData?.courses || [];
+
+  // Merge: cloud + local (deduplicated by id)
+  const curricula: any[] = useMemo(() => {
+    if (cloudCurricula.length === 0) return localCurricula;
+    const cloudIds = new Set(cloudCurricula.map((c: any) => c.id || c._id));
+    const localOnly = localCurricula.filter((c: any) => !cloudIds.has(c.id || c._id));
+    return [...cloudCurricula, ...localOnly];
+  }, [cloudCurricula, localCurricula]);
+
+  // Persist to localStorage on change
+  useEffect(() => {
+    if (curricula.length > 0) {
+      try { localStorage.setItem('ava-ide-learning', JSON.stringify(curricula)); } catch {}
+    }
+  }, [curricula]);
 
   const levelColors: Record<string, { color: string; bg: string }> = {
     beginner:     { color: '#34d399', bg: 'rgba(52,211,153,0.10)' },
@@ -6225,10 +6384,11 @@ export function LearningPage() {
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
-        <div style={pageTitle}>{t('dash.learning.title')}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={pageTitle}>{t('dash.learning.title')}</div>
+          <StorageBadge />
+        </div>
         <div style={pageSubtitle}>{t('dash.learning.subtitle')}</div>
-
-        {!connected && <NotConnectedBanner />}
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 28 }}>
@@ -6600,6 +6760,12 @@ export function LearningLibraryPage() {
 
 export function LibraryPage() {
   useLocale();
+  const [authKey, setAuthKey] = useState(0);
+  useEffect(() => {
+    const handler = () => { if (!checkConnected()) { setFiles([]); setSelectedFile(null); } setAuthKey(k => k + 1); };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
   const connected = checkConnected();
   const [files, setFiles] = useState<LibraryFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -6889,6 +7055,16 @@ export function LibraryPage() {
 /* ===== 8. Personality ===== */
 export function PersonalityPage() {
   useLocale();
+  const [authKey, setAuthKey] = useState(0);
+  useEffect(() => {
+    const handler = () => {
+      if (!checkConnected()) { setTone('warm'); setEnergy('enthusiastic'); setStyle('conversational'); setDescription(''); }
+      setAuthKey(k => k + 1);
+    };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
+  void authKey;
   const connected = checkConnected();
   const [tone, setTone] = useState('warm');
   const [energy, setEnergy] = useState('enthusiastic');
@@ -6920,7 +7096,18 @@ export function PersonalityPage() {
     { value: 'structured', label: t('dash.personality.style.structured'), desc: t('dash.personality.style.structured_desc') },
   ];
 
+  // Local-first: load from localStorage, then override with cloud if available
   useEffect(() => {
+    try {
+      const local = localStorage.getItem('ava-ide-personality');
+      if (local) {
+        const p = JSON.parse(local);
+        if (p.tone) setTone(p.tone);
+        if (p.energy) setEnergy(p.energy);
+        if (p.style) setStyle(p.style);
+        if (p.description) setDescription(p.description);
+      }
+    } catch {}
     if (!connected) { setLoading(false); return; }
     apiFetch('/settings')
       .then((data: any) => {
@@ -6935,22 +7122,26 @@ export function PersonalityPage() {
   }, [connected]);
 
   const handleSave = async () => {
-    if (!connected) return;
+    // Always save locally
+    try { localStorage.setItem('ava-ide-personality', JSON.stringify({ tone, energy, style, description })); } catch {}
+
     setSaving(true);
-    try {
-      await apiFetch('/settings', {
-        method: 'POST',
-        body: JSON.stringify({
-          personality: { name: 'Ava', pronouns: 'she/her', tone, energy, style, description },
-          personality_name: 'Ava',
-          pronouns: 'she/her', tone, energy,
-          communication_style: style,
-          description,
-        }),
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch { /* ignore */ }
+    if (connected) {
+      try {
+        await apiFetch('/settings', {
+          method: 'POST',
+          body: JSON.stringify({
+            personality: { name: 'Ava', pronouns: 'she/her', tone, energy, style, description },
+            personality_name: 'Ava',
+            pronouns: 'she/her', tone, energy,
+            communication_style: style,
+            description,
+          }),
+        });
+      } catch { /* local save stands */ }
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
     setSaving(false);
   };
 
@@ -7149,6 +7340,16 @@ export function PersonalityPage() {
 /* ===== 8. Cloud Sync ===== */
 export function CloudSyncPage() {
   useLocale();
+  const [authKey, setAuthKey] = useState(0);
+  useEffect(() => {
+    const handler = () => {
+      if (!checkConnected()) { setCounts({}); setSyncResults({}); setSyncingTypes(new Set()); }
+      setAuthKey(k => k + 1);
+    };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
+  void authKey;
   const connected = checkConnected();
   const [syncingTypes, setSyncingTypes] = useState<Set<string>>(new Set());
   const [syncResults, setSyncResults] = useState<Record<string, { success: boolean; count?: number; error?: string }>>({});
@@ -7478,7 +7679,8 @@ export function UsagePage() {
   const hasSub = subLimit > 0 && (usage?.tier || 'free') !== 'free';
   const balanceUsed = hasSub ? subUsed : freeUsed;
   const balanceLimit = hasSub ? subLimit : freeLimit;
-  const balancePct = isUnlimited ? 0 : (balanceLimit > 0 ? Math.min((balanceUsed / balanceLimit) * 100, 100) : 0);
+  const balanceRemaining = Math.max(0, balanceLimit - balanceUsed);
+  const remainPct = isUnlimited ? 100 : (balanceLimit > 0 ? Math.min((balanceRemaining / balanceLimit) * 100, 100) : 0);
 
   // Cost estimate
   const MODEL_PRICING: Record<string, { input: number; output: number }> = {
@@ -7718,15 +7920,20 @@ export function UsagePage() {
                       </>
                     ) : (
                       <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
-                          <span style={{ color: '#a6adc8' }}>{formatTokens(balanceUsed)} / {formatTokens(balanceLimit)} used</span>
-                          <span style={{ color: '#6c7086' }}>{balancePct.toFixed(0)}%</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                          <span style={{ color: '#a6adc8' }}>Tokens Remaining</span>
+                          <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{formatTokens(balanceRemaining)}</span>
                         </div>
                         <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
                           <div style={{
-                            width: `${balancePct}%`, height: '100%', borderRadius: 6,
-                            background: balancePct > 90 ? '#f87171' : balancePct > 70 ? '#f59e0b' : 'linear-gradient(90deg, #a855f7, #6366f1)',
+                            width: `${remainPct}%`, height: '100%', borderRadius: 6,
+                            background: remainPct < 10 ? '#f87171' : remainPct < 30 ? '#f59e0b' : 'linear-gradient(90deg, #a855f7, #6366f1)',
+                            transition: 'width 0.5s',
                           }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#585b70', marginTop: 4 }}>
+                          <span>{formatTokens(balanceUsed)} used</span>
+                          <span>{formatTokens(balanceLimit)} limit</span>
                         </div>
                       </>
                     )}
@@ -7838,8 +8045,7 @@ export function UsagePage() {
 /* ===== 10. Settings ===== */
 export function SettingsPage() {
   useLocale();
-  const connected = checkConnected();
-  const [settings, setSettings] = useState<any>({
+  const defaultSettings = {
     autoMemory: true,
     memoryLocalOnly: false,
     contributeSharedLearning: false,
@@ -7848,7 +8054,26 @@ export function SettingsPage() {
     language: 'auto',
     temperature: 0.7,
     maxTokens: 8192,
-  });
+  };
+  const [authKey, setAuthKey] = useState(0);
+  useEffect(() => {
+    const handler = () => {
+      if (!checkConnected()) {
+        setSettings(defaultSettings);
+        setPersonality(null);
+        setUserAvatar('');
+        setAiAvatar('');
+        setProviderKeys({});
+      }
+      setAuthKey(k => k + 1);
+    };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  void authKey;
+  const connected = checkConnected();
+  const [settings, setSettings] = useState<any>(defaultSettings);
   const [personality, setPersonality] = useState<any>(null);
   const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
   const [aiAvatar, setAiAvatar] = useState<string>(() => localStorage.getItem('ava-ide-ai-avatar') || '');
@@ -8716,10 +8941,7 @@ export function SettingsPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    try { localStorage.removeItem('ava-ide-platform-key'); localStorage.removeItem('ava-ide-email'); localStorage.removeItem('ava-ide-tier'); } catch {}
-                    window.location.reload();
-                  }}
+                  onClick={() => { disconnectAccount(); window.location.reload(); }}
                   style={{
                     background: 'transparent', border: '1px solid rgba(248,113,113,0.40)',
                     borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 600,
@@ -8900,6 +9122,15 @@ export function ConnectionsPage() {
 /* ===== 13. Support (Live Chat) ===== */
 export function SupportPage() {
   useLocale();
+  const [authKey, setAuthKey] = useState(0);
+  useEffect(() => {
+    const handler = () => {
+      if (!checkConnected()) { setConversations([]); setMessages([]); setActiveConvId(null); setInput(''); }
+      setAuthKey(k => k + 1);
+    };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
   const connected = checkConnected();
   const [conversations, setConversations] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
@@ -8909,7 +9140,7 @@ export function SupportPage() {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load conversations on mount
+  // Load conversations on mount (and re-fetch on auth change)
   useEffect(() => {
     if (!connected) { setLoading(false); return; }
     apiFetch('/support/conversations')
@@ -8978,12 +9209,42 @@ export function SupportPage() {
   }, [input, sending, activeConvId, loadMessages]);
 
   if (!connected) {
+    const openExternal = (url: string) => {
+      import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => window.open(url, '_blank'));
+    };
+    const linkCard: React.CSSProperties = {
+      ...card, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', border: '1px solid rgba(168,85,247,0.12)',
+    };
     return (
       <div style={pageWrapper}>
-        <div style={{ textAlign: 'center', padding: 60 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
-          <div style={{ fontSize: 14, color: '#cdd6f4', marginBottom: 6 }}>Connect your account for live support</div>
-          <div style={{ fontSize: 12, color: '#6c7086' }}>Sign in to chat with Ava and the team</div>
+        <div style={{ maxWidth: 480, margin: '0 auto', padding: '40px 0' }}>
+          <div style={{ fontSize: 28, marginBottom: 16, textAlign: 'center' }}>Need help?</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={linkCard} onClick={() => openExternal('https://github.com/AugmentedValueAcceleration/ava-supernova/issues')}>
+              <span style={{ fontSize: 24 }}>🐙</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>GitHub Issues</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Report bugs, request features, or ask questions</div>
+              </div>
+            </div>
+            <div style={linkCard} onClick={() => openExternal('https://discord.gg/tuHZzUGxA6')}>
+              <span style={{ fontSize: 24 }}>💬</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Community</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Join the community for help and discussion</div>
+              </div>
+            </div>
+            <div style={linkCard} onClick={() => window.dispatchEvent(new CustomEvent('ava-support-nav-docs'))}>
+              <span style={{ fontSize: 24 }}>📖</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Documentation</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Guides, setup instructions, and API reference</div>
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: '#585b70' }}>
+            Connect your account for live chat support with the team
+          </div>
         </div>
       </div>
     );
@@ -9557,7 +9818,15 @@ const PLATFORM_LABELS: Record<string, string> = {
 export function ReleaseNotesPage() {
   useLocale();
   const connected = checkConnected();
-  const { data: apiReleases, loading } = useApiData<any[]>(`/releases?locale=${getLocale()}`, []);
+  const [apiReleases, setApiReleases] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    setLoading(true);
+    fetchReleasesDirect(getLocale(), 50).then(d => {
+      setApiReleases(Array.isArray(d) ? d : []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [platformTab, setPlatformTab] = useState<string>('all');
@@ -9928,9 +10197,15 @@ export function AccountPage() {
 }
 
 export function HelpPage() {
-  const [tab, setTab] = useState<'support' | 'releases' | 'roadmap'>('support');
+  const [tab, setTab] = useState<'support' | 'docs' | 'releases' | 'roadmap'>('support');
+  useEffect(() => {
+    const handler = () => setTab('docs');
+    window.addEventListener('ava-support-nav-docs', handler);
+    return () => window.removeEventListener('ava-support-nav-docs', handler);
+  }, []);
   const tabs = [
     { key: 'support' as const, label: 'Support' },
+    { key: 'docs' as const, label: 'Docs' },
     { key: 'releases' as const, label: 'Releases' },
     { key: 'roadmap' as const, label: 'Roadmap' },
   ];
@@ -9938,7 +10213,7 @@ export function HelpPage() {
     <div style={pageWrapper}>
       <div style={{ marginBottom: 16 }}>
         <h2 style={pageTitle}>Help</h2>
-        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Support, release notes, and product roadmap</p>
+        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Support, documentation, release notes, and roadmap</p>
       </div>
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
         {tabs.map(t => (
@@ -9951,6 +10226,7 @@ export function HelpPage() {
         ))}
       </div>
       {tab === 'support' && <SupportPage />}
+      {tab === 'docs' && <DocumentationPage />}
       {tab === 'releases' && <ReleaseNotesPage />}
       {tab === 'roadmap' && <RoadmapInner />}
     </div>
@@ -10126,7 +10402,16 @@ const PLATFORM_API = 'https://ava-supernova.com/api';
 
 function CSTokenBar({ refreshKey }: { refreshKey: number }) {
   const [bal, setBal] = useState<{ used: number; limit: number; isUnlimited: boolean } | null>(null);
+  const [authKey, setAuthKey] = useState(0);
   const connected = checkConnected();
+
+  // Clear on logout
+  useEffect(() => {
+    const handler = () => { if (!checkConnected()) setBal(null); setAuthKey(k => k + 1); };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
+
   useEffect(() => {
     if (!connected) return;
     apiFetch('/usage/summary').then((res: any) => {
@@ -10140,7 +10425,7 @@ function CSTokenBar({ refreshKey }: { refreshKey: number }) {
         setBal({ used: hasSub ? subUsed : freeUsed, limit: hasSub ? subLimit : freeLimit, isUnlimited });
       }
     }).catch(() => {});
-  }, [connected, refreshKey]);
+  }, [connected, refreshKey, authKey]);
   if (!connected) return (
     <div style={{ fontSize: 10, color: '#585b70' }}>Connect account for token tracking</div>
   );
@@ -10822,6 +11107,13 @@ function CreativeLibraryTab() {
   const [source, setSource] = useState<'local' | 'cloud'>('local');
   const [selected, setSelected] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Reset to local on logout
+  useEffect(() => {
+    const handler = () => { if (!checkConnected()) { setSource('local'); setAssets([]); setSelected(null); } };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
 
   const FILTERS: { key: CreativeLibFilter; label: string; icon: string }[] = [
     { key: 'all', label: 'All', icon: '📋' },

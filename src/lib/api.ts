@@ -17,6 +17,47 @@ export function isConnected(): boolean {
   return !!key && key.startsWith('sk-ava-');
 }
 
+/**
+ * Disconnect account — clears all account-specific data and resets to local-first state.
+ * Keeps local-only keys: BYOK, device ID, onboarded, consent, language, project folder, work hours.
+ */
+export function disconnectAccount() {
+  // Account identity
+  localStorage.removeItem('ava-ide-platform-key');
+  localStorage.removeItem('ava-ide-email');
+  localStorage.removeItem('ava-ide-tier');
+  localStorage.removeItem('ava-ide-user-name');
+
+  // Avatars (account-specific)
+  localStorage.removeItem('ava-ide-user-avatar');
+  localStorage.removeItem('ava-ide-ai-avatar');
+
+  // Cloud-synced data caches
+  localStorage.removeItem('ava-platform-balance');
+  localStorage.removeItem('ava-ide-platform-models');
+  localStorage.removeItem('ava-ide-session-stats');
+  localStorage.removeItem('ava-ide-sync-prefs');
+  localStorage.removeItem('ava-ide-settings');
+  localStorage.removeItem('ava-knowledge-packs');
+  localStorage.removeItem('ava-support-unread');
+
+  // Chat state — conversations belong to the account session
+  localStorage.removeItem('ava-ide-chat-history');
+  localStorage.removeItem('ava-ide-chat-current');
+  localStorage.removeItem('ava-ide-chat-model');
+  localStorage.removeItem('ava-ide-chat-mode');
+
+  // Secrets and sensitive keys
+  localStorage.removeItem('ava-ide-secrets');
+  localStorage.removeItem('ava-ide-holo-key');
+
+  // Reset backend to local — cloud is no longer available
+  localStorage.setItem('ava-ide-chat-backend', 'local');
+
+  // Notify all pages to reset to local state
+  window.dispatchEvent(new CustomEvent('ava-auth-changed'));
+}
+
 function getDeviceId(): string {
   let id = localStorage.getItem('ava-ide-device-id');
   if (!id) {

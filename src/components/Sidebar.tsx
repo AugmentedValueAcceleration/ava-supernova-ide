@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { readDir } from '@tauri-apps/plugin-fs';
 import type { ActivityItem, SidebarPosition } from '../App';
-import { validateKey, getStoredEmail, getStoredTier, isConnected, apiFetch } from '../lib/api';
+import { validateKey, getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
 import { t, useLocale } from '../lib/i18n';
 
 interface Props {
@@ -587,16 +587,10 @@ function AuthSection() {
   };
 
   const handleDisconnect = () => {
+    disconnectAccount();
     setPlatformKey('');
     setEmail('');
     setTier('free');
-    try {
-      localStorage.removeItem('ava-ide-platform-key');
-      localStorage.removeItem('ava-ide-email');
-      localStorage.removeItem('ava-ide-user-name');
-      localStorage.removeItem('ava-ide-tier');
-    } catch { /* */ }
-    window.dispatchEvent(new CustomEvent('ava-auth-changed'));
   };
 
   const inputStyle: React.CSSProperties = {
