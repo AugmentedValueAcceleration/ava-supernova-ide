@@ -2535,6 +2535,35 @@ export function AvaChatPage() {
         });
         break;
 
+      // Desktop automation events
+      case 'desktop_progress': {
+        const progressMsg = {
+          id: `desktop-${event.step}-${Date.now()}`,
+          role: 'ava' as const,
+          text: `**Desktop Step ${event.step}/${event.maxSteps}** — ${event.message || ''}${event.status === 'blocked' ? ' (blocked)' : ''}`,
+          timestamp: Date.now(),
+        };
+        setMessages(prev => [...prev, progressMsg]);
+        break;
+      }
+      case 'desktop_action_confirm':
+        setPendingConfirm({
+          id: event.id!,
+          toolName: 'desktop_control',
+          args: { actions: event.actions, step: event.step, thought: event.thought },
+        });
+        break;
+      case 'desktop_complete': {
+        const doneMsg = {
+          id: `desktop-done-${Date.now()}`,
+          role: 'ava' as const,
+          text: `**Desktop automation complete** — ${event.message || 'Task finished.'}`,
+          timestamp: Date.now(),
+        };
+        setMessages(prev => [...prev, doneMsg]);
+        break;
+      }
+
       case 'usage':
         if (event.usage) {
           const total = event.usage.total_tokens || (event.usage.prompt_tokens || 0) + (event.usage.completion_tokens || 0);
@@ -8735,22 +8764,159 @@ export function SettingsPage() {
           )}
         </div>
 
-        {/* 8. Computer Use — Coming Soon */}
-        <div style={sLabel}>COMPUTER USE</div>
+        {/* 8. Desktop Automation (Agent S3) */}
+        <div style={sLabel}>DESKTOP AUTOMATION</div>
         <div style={{
           background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 24 }}>🖥️</span>
+          {/* Enable toggle */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Desktop Automation</div>
-              <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>
-                Let Ava see your screen and interact with desktop apps. Currently being rebuilt with improved vision and accuracy.
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Enable Desktop Automation</div>
+              <div style={{ fontSize: 11, color: '#6c7086' }}>Let Ava see your screen and interact with desktop apps via Agent S3</div>
+            </div>
+            <ToggleSwitch value={settings.desktopEnabled ?? false} onChange={v => saveImmediate('desktopEnabled', v)} />
+          </div>
+
+          {settings.desktopEnabled && (<>
+            <div style={divider} />
+
+            {/* Allowed Apps */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Allowed Apps</div>
+              <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 8 }}>
+                Ava can only interact with these apps. Leave empty to allow all.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {(settings.desktopAllowedApps || []).map((app: string, i: number) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(168,85,247,0.12)', padding: '4px 10px', borderRadius: 6 }}>
+                    <span style={{ fontSize: 12, color: '#cdd6f4' }}>{app}</span>
+                    <button onClick={() => {
+                      const apps = [...(settings.desktopAllowedApps || [])];
+                      apps.splice(i, 1);
+                      saveImmediate('desktopAllowedApps', apps);
+                    }} style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 12, padding: 0 }}>x</button>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={e => {
+                e.preventDefault();
+                const input = (e.target as HTMLFormElement).elements.namedItem('newDesktopApp') as HTMLInputElement;
+                const val = input.value.trim();
+                if (val && !(settings.desktopAllowedApps || []).includes(val)) {
+                  saveImmediate('desktopAllowedApps', [...(settings.desktopAllowedApps || []), val]);
+                  input.value = '';
+                }
+              }} style={{ display: 'flex', gap: 8 }}>
+                <input name="newDesktopApp" placeholder="e.g. Notepad, Chrome, Blender..." style={{ ...inputStyle, maxWidth: 250, height: 34, borderRadius: 8, fontSize: 12 }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+                />
+                <button type="submit" style={{
+                  padding: '6px 14px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)',
+                  borderRadius: 8, color: '#a855f7', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>Add</button>
+              </form>
+            </div>
+
+            <div style={divider} />
+
+            {/* Permission Level */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Permission Level</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { id: 'view_only', label: 'View Only', desc: 'See screen, no interaction' },
+                  { id: 'navigate', label: 'Navigate', desc: 'Click, scroll — no typing' },
+                  { id: 'full', label: 'Full', desc: 'Click, type, drag — everything' },
+                  { id: 'restricted', label: 'Restricted', desc: 'Full minus dangerous buttons' },
+                ].map(p => (
+                  <button key={p.id} onClick={() => saveImmediate('desktopPermission', p.id)} style={{
+                    padding: '8px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                    background: (settings.desktopPermission || 'full') === p.id ? 'rgba(168,85,247,0.15)' : 'rgba(49,34,68,0.3)',
+                    border: `1px solid ${(settings.desktopPermission || 'full') === p.id ? 'rgba(168,85,247,0.4)' : 'rgba(168,85,247,0.08)'}`,
+                  }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: (settings.desktopPermission || 'full') === p.id ? '#a855f7' : '#cdd6f4' }}>{p.label}</div>
+                    <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{p.desc}</div>
+                  </button>
+                ))}
               </div>
             </div>
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', padding: '3px 10px', borderRadius: 6 }}>Coming Soon</span>
-          </div>
+
+            <div style={divider} />
+
+            {/* Confirmation Mode */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Confirmation</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { id: 'every_action', label: 'Every Action', desc: 'Approve each step' },
+                  { id: 'first_per_app', label: 'First Per App', desc: 'Ask once per app' },
+                  { id: 'session', label: 'Per Session', desc: 'Ask once at start' },
+                  { id: 'never', label: 'Autonomous', desc: 'No confirmation' },
+                ].map(c => (
+                  <button key={c.id} onClick={() => saveImmediate('desktopConfirmMode', c.id)} style={{
+                    padding: '8px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                    background: (settings.desktopConfirmMode || 'first_per_app') === c.id ? 'rgba(168,85,247,0.15)' : 'rgba(49,34,68,0.3)',
+                    border: `1px solid ${(settings.desktopConfirmMode || 'first_per_app') === c.id ? 'rgba(168,85,247,0.4)' : 'rgba(168,85,247,0.08)'}`,
+                  }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: (settings.desktopConfirmMode || 'first_per_app') === c.id ? '#a855f7' : '#cdd6f4' }}>{c.label}</div>
+                    <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{c.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={divider} />
+
+            {/* Safety Toggles */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Safety</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, color: '#cdd6f4' }}>Block dangerous buttons</div>
+                  <div style={{ fontSize: 10, color: '#6c7086' }}>Prevent clicks on delete, send, pay, format</div>
+                </div>
+                <ToggleSwitch value={settings.desktopBlockDangerous ?? true} onChange={v => saveImmediate('desktopBlockDangerous', v)} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, color: '#cdd6f4' }}>Log all actions</div>
+                  <div style={{ fontSize: 10, color: '#6c7086' }}>Save before/after screenshots for audit trail</div>
+                </div>
+                <ToggleSwitch value={settings.desktopLogActions ?? true} onChange={v => saveImmediate('desktopLogActions', v)} />
+              </div>
+            </div>
+
+            <div style={divider} />
+
+            {/* Max Steps + Action Delay */}
+            <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Max Steps</div>
+                <input
+                  type="number" min={5} max={100} step={5}
+                  value={settings.desktopMaxSteps || 50}
+                  onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 5 && v <= 100) saveImmediate('desktopMaxSteps', v); }}
+                  style={{ ...inputStyle, width: 100, height: 34, borderRadius: 8, fontSize: 12, fontFamily: 'monospace' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Action Delay (ms)</div>
+                <input
+                  type="number" min={150} max={5000} step={50}
+                  value={settings.desktopActionDelay || 500}
+                  onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 150 && v <= 5000) saveImmediate('desktopActionDelay', v); }}
+                  style={{ ...inputStyle, width: 100, height: 34, borderRadius: 8, fontSize: 12, fontFamily: 'monospace' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#a855f7'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+                />
+              </div>
+            </div>
+          </>)}
         </div>
 
         {/* 9. Danger Zone */}
