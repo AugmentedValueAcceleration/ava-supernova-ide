@@ -2576,6 +2576,27 @@ export function AvaChatPage() {
         setStreaming(false);
         setStatusText('');
         textareaRef.current?.focus();
+        // Mode transition: if switch_mode was approved, start new run in target mode
+        if (pendingModeTransitionRef.current) {
+          const { targetMode, context } = pendingModeTransitionRef.current;
+          pendingModeTransitionRef.current = null;
+          setTimeout(() => {
+            const transitionMsg = `[Continuing from previous mode]\n\n${context}\n\nProceed with the above in ${targetMode} mode.`;
+            // Inject as a new user message and send via sidecar
+            const modeMap: Record<string, (text: string) => string> = {
+              work: (t: string) => t,
+              plan: (t: string) => `[Plan Mode] ${t}`,
+              chat: (t: string) => `[Chat Mode] ${t}`,
+              teach: (t: string) => `[Teach Mode] ${t}`,
+              security: (t: string) => `[Security Audit Mode] ${t}`,
+              brainstorm: (t: string) => `[Brainstorm Mode] ${t}`,
+            };
+            const prefixed = (modeMap[targetMode] || modeMap.work)(transitionMsg);
+            setMessages(prev => [...prev, { id: mkId(), role: 'user' as const, text: `Switching to ${targetMode} mode...`, timestamp: Date.now() }]);
+            setStreaming(true);
+            getSidecar().send(prefixed);
+          }, 300);
+        }
         break;
 
       case 'cancelled':
@@ -3247,14 +3268,26 @@ export function AvaChatPage() {
   }, [input, messages, sendLocal, pendingAttachments, model, injectSecrets, secrets]);
 
   // ── Tool confirmation handlers ─────────────────────────────────────────
+  // Pending mode transition — scheduled by switch_mode tool approval
+  const pendingModeTransitionRef = useRef<{ targetMode: string; context: string } | null>(null);
+
   const approveConfirm = useCallback(async () => {
     if (!pendingConfirm) return;
     const sidecar = getSidecar();
-    const isAskUser = pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan';
-    if (isAskUser && confirmInput.trim()) {
+    const isInteractive = pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan' || pendingConfirm.toolName === 'switch_mode';
+    if (isInteractive && confirmInput.trim()) {
       await sidecar.confirm(pendingConfirm.id, true, confirmInput.trim());
     } else {
       await sidecar.confirm(pendingConfirm.id, true);
+    }
+    // Schedule mode transition if this was switch_mode
+    if (pendingConfirm.toolName === 'switch_mode' && pendingConfirm.args) {
+      const args = pendingConfirm.args as Record<string, unknown>;
+      const additions = confirmInput.trim() ? ` Additional context: ${confirmInput.trim()}` : '';
+      pendingModeTransitionRef.current = {
+        targetMode: (args.target_mode as string) || 'work',
+        context: ((args.context_summary as string) || '') + additions,
+      };
     }
     setPendingConfirm(null);
     setConfirmInput('');
