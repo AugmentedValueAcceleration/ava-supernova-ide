@@ -346,7 +346,7 @@ async function handleInit(data) {
     // Tools
     toolRegistry = new ToolRegistry();
     toolRegistry.registerBuiltins({
-      exclude: ['screenshot'], // IDE uses Tauri capture_screen via computer_use tool instead
+      exclude: ['screenshot', 'computer_use', 'computer_use_blackboard'], // computer_use disabled — coming back with improved integration
     });
     toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
 
@@ -445,6 +445,7 @@ async function handleInit(data) {
         personality: personalityPrefix || undefined,
         language,
         knowledgeContext,
+        excludeTools: ['computer_use'],
       })
     );
 
