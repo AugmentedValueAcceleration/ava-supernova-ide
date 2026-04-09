@@ -173,17 +173,21 @@ function LoadingSpinner() {
 }
 
 function StorageBadge() {
-  const connected = checkConnected();
+  const mode = (localStorage.getItem('ava-data-mode') as 'local' | 'cloud' | 'both') || 'local';
+  const styles = {
+    local: { bg: 'rgba(166,227,161,0.10)', fg: '#a6e3a1', border: 'rgba(166,227,161,0.20)', label: 'Local' },
+    cloud: { bg: 'rgba(96,165,250,0.10)', fg: '#60a5fa', border: 'rgba(96,165,250,0.20)', label: 'Cloud' },
+    both:  { bg: 'rgba(168,85,247,0.10)', fg: '#a855f7', border: 'rgba(168,85,247,0.20)', label: 'Both' },
+  };
+  const s = styles[mode];
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500,
       padding: '2px 8px', borderRadius: 6,
-      background: connected ? 'rgba(96,165,250,0.10)' : 'rgba(166,227,161,0.10)',
-      color: connected ? '#60a5fa' : '#a6e3a1',
-      border: `1px solid ${connected ? 'rgba(96,165,250,0.20)' : 'rgba(166,227,161,0.20)'}`,
+      background: s.bg, color: s.fg, border: `1px solid ${s.border}`,
     }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: connected ? '#60a5fa' : '#a6e3a1' }} />
-      {connected ? 'Cloud' : 'Local'}
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.fg }} />
+      {s.label}
     </span>
   );
 }
@@ -1827,8 +1831,8 @@ export function AvaChatPage() {
   useEffect(() => { if (!streaming) fetchBalance(); }, [streaming, fetchBalance]);
 
   // ── Local sidecar state ─────────────────────────────────────────────────
-  const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() => {
-    const saved = localStorage.getItem('ava-ide-chat-backend') as 'local' | 'cloud' | null;
+  const [chatBackend, setChatBackend] = useState<'local' | 'cloud' | 'both'>(() => {
+    const saved = localStorage.getItem('ava-ide-chat-backend') as 'local' | 'cloud' | 'both' | null;
     // Force local if not connected — Cloud needs a platform account
     if (!checkConnected()) return 'local';
     return saved || 'cloud';
@@ -2186,7 +2190,10 @@ export function AvaChatPage() {
 
   // ── Persist chat backend ─────────────────────────────────────────────────
   useEffect(() => {
-    try { localStorage.setItem('ava-ide-chat-backend', chatBackend); } catch { /* */ }
+    try {
+      localStorage.setItem('ava-ide-chat-backend', chatBackend);
+      localStorage.setItem('ava-data-mode', chatBackend);
+    } catch { /* */ }
   }, [chatBackend]);
 
   // Ref to hold the latest event handler — set synchronously, never null after mount
@@ -3518,36 +3525,48 @@ export function AvaChatPage() {
 
         {/* Right: backend toggle + tokens + new chat */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Local/Cloud toggle */}
+          {/* Local/Cloud/Both toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
               onClick={() => {
-                if (!connected) return; // Can't switch to Cloud without an account
-                setChatBackend(chatBackend === 'local' ? 'cloud' : 'local');
+                if (!connected) return;
+                const modes: Array<'local' | 'cloud' | 'both'> = ['local', 'cloud', 'both'];
+                const idx = modes.indexOf(chatBackend);
+                setChatBackend(modes[(idx + 1) % modes.length]);
               }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                background: chatBackend === 'local' ? 'rgba(166,227,161,0.1)' : 'rgba(108,112,134,0.1)',
-                border: `1px solid ${chatBackend === 'local' ? 'rgba(166,227,161,0.3)' : 'rgba(108,112,134,0.2)'}`,
+                background: chatBackend === 'cloud' ? 'rgba(96,165,250,0.1)'
+                  : chatBackend === 'both' ? 'rgba(168,85,247,0.1)'
+                  : 'rgba(166,227,161,0.1)',
+                border: `1px solid ${chatBackend === 'cloud' ? 'rgba(96,165,250,0.3)'
+                  : chatBackend === 'both' ? 'rgba(168,85,247,0.3)'
+                  : 'rgba(166,227,161,0.3)'}`,
                 borderRadius: 6, fontSize: 10, fontWeight: 600,
                 cursor: connected ? 'pointer' : 'not-allowed',
-                color: chatBackend === 'local' ? '#a6e3a1' : '#6c7086',
+                color: chatBackend === 'cloud' ? '#60a5fa'
+                  : chatBackend === 'both' ? '#a855f7'
+                  : '#a6e3a1',
                 opacity: connected ? 1 : 0.5,
               }}
               title={!connected
                 ? t('dash.chat.connect_for_cloud')
                 : chatBackend === 'local'
-                  ? t('dash.chat.local_mode_desc')
-                  : t('dash.chat.cloud_mode_desc')}
+                  ? 'Local — data stays on your machine. Click to switch to Cloud.'
+                  : chatBackend === 'cloud'
+                  ? 'Cloud — syncing to platform. Click to switch to Both.'
+                  : 'Both — local backup + cloud sync. Click to switch to Local.'}
             >
               <span style={{
                 width: 6, height: 6, borderRadius: '50%',
                 background: chatBackend === 'local'
                   ? (sidecarStatus === 'ready' ? '#a6e3a1' : sidecarStatus === 'starting' ? '#eab308' : '#ef4444')
-                  : (connected ? '#a6e3a1' : '#6c7086'),
+                  : chatBackend === 'cloud'
+                  ? (connected ? '#60a5fa' : '#6c7086')
+                  : (connected ? '#a855f7' : '#6c7086'),
                 ...(sidecarStatus === 'starting' ? { animation: 'avaPulse 1.5s infinite' } : {}),
               }} />
-              {chatBackend === 'local' ? t('dash.chat.local') : t('dash.chat.cloud')}
+              {chatBackend === 'local' ? t('dash.chat.local') : chatBackend === 'cloud' ? t('dash.chat.cloud') : 'Both'}
             </button>
           </div>
 
@@ -4888,8 +4907,24 @@ export function MemoryPage() {
   };
 
   const handleDelete = async (id: string | number) => {
+    const mode = (localStorage.getItem('ava-data-mode') as 'local' | 'cloud' | 'both') || 'local';
     try {
-      await apiFetch(`/memories/${id}`, { method: 'DELETE' });
+      // Delete from cloud if cloud or both
+      if (mode === 'cloud' || mode === 'both') {
+        await apiFetch(`/memories/${id}`, { method: 'DELETE' });
+      }
+      // Delete from local if local or both
+      if (mode === 'local' || mode === 'both') {
+        try {
+          const { readTextFile, writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+          const raw = await readTextFile('.ava/memory.json', { baseDir: BaseDirectory.Home });
+          const parsed = JSON.parse(raw || '{}');
+          parsed.entries = (parsed.entries || []).filter((m: any) => m.id !== id && m._id !== id);
+          parsed.lastModified = new Date().toISOString();
+          await writeTextFile('.ava/memory.json', JSON.stringify(parsed), { baseDir: BaseDirectory.Home });
+          setLocalMemories(parsed.entries);
+        } catch { /* file may not exist */ }
+      }
       setMemories(prev => prev.filter(m => (m.id || m._id) !== id));
       setConfirmDeleteId(null);
     } catch (err: any) {
