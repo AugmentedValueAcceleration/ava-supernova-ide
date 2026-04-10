@@ -603,10 +603,14 @@ async function handleMessage(data) {
     return;
   }
   if (isRunning) {
-    // Inject as mid-run interjection instead of rejecting
-    if (agent) {
-      agent.inject(data.content);
-      conversation?.addUserMessage(data.content);
+    // Mid-run interjection — forward to whichever runner is currently
+    // executing. AutoCoordinator routes to its active sub-agent (planning
+    // task agent or current Builder); plain Agent queues into its own
+    // pendingInterjections array. Without this routing the inject lands in
+    // the wrong agent and the model never sees the user's message.
+    const runner = autoCoordinator || agent;
+    if (runner) {
+      runner.inject(data.content);
       emit({ event: 'injected' });
     }
     return;
@@ -1054,12 +1058,15 @@ function handleClear() {
 }
 
 function handleInject(data) {
-  if (agent && isRunning) {
-    agent.inject(data.content);
-    emit({ event: 'injected' });
-  } else {
-    emitError('Cannot inject — no active run.');
+  if (isRunning) {
+    const runner = autoCoordinator || agent;
+    if (runner) {
+      runner.inject(data.content);
+      emit({ event: 'injected' });
+      return;
+    }
   }
+  emitError('Cannot inject — no active run.');
 }
 
 function handleSetMode(data) {
