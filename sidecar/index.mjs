@@ -84,6 +84,7 @@ let conversation = null;
 let toolRegistry = null;
 let memoryManager = null;
 let journalManager = null;
+let taskManager = null;
 let memoryAgentInstance = null;
 let currentAbort = null;
 let currentMode = 'work';
@@ -482,6 +483,10 @@ async function handleInit(data) {
     // Journal manager (local-first, stored in ~/.ava/journal/)
     journalManager = new JournalManager({ globalDir: AVA_HOME, projectRoot: cwd });
 
+    // Task manager — required so AutoCoordinator's TaskExecutor can pick up
+    // session tasks created by todo_write and dispatch a Builder per task.
+    taskManager = new TaskManager({ globalDir: AVA_HOME, projectRoot: cwd });
+
     // Project indexer
     let projectIndexer = null;
     try {
@@ -494,6 +499,7 @@ async function handleInit(data) {
     const sharedState = {
       memoryManager,
       journalManager,
+      taskManager,
       projectIndexer,
       platformKey: config.platformKey,
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
@@ -851,6 +857,50 @@ async function handleMessage(data) {
             break;
           case 'auto_agent_end':
             emit({ event: 'auto_agent_end', model: agentEvent.model, summary: agentEvent.summary });
+            break;
+          case 'execution_start':
+            emit({ event: 'execution_start', total: agentEvent.total });
+            break;
+          case 'task_start':
+            emit({
+              event: 'task_start',
+              taskId: agentEvent.taskId,
+              title: agentEvent.title,
+              index: agentEvent.index,
+              total: agentEvent.total,
+            });
+            break;
+          case 'task_complete':
+            emit({
+              event: 'task_complete',
+              taskId: agentEvent.taskId,
+              title: agentEvent.title,
+              summary: agentEvent.summary,
+            });
+            break;
+          case 'task_blocked':
+            emit({
+              event: 'task_blocked',
+              taskId: agentEvent.taskId,
+              title: agentEvent.title,
+              reason: agentEvent.reason,
+            });
+            break;
+          case 'task_failed':
+            emit({
+              event: 'task_failed',
+              taskId: agentEvent.taskId,
+              title: agentEvent.title,
+              error: agentEvent.error,
+            });
+            break;
+          case 'execution_complete':
+            emit({
+              event: 'execution_complete',
+              completed: agentEvent.completed,
+              blocked: agentEvent.blocked,
+              total: agentEvent.total,
+            });
             break;
           case 'done':
             // Final message content

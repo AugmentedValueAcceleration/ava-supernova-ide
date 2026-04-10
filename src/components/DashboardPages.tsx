@@ -2385,6 +2385,87 @@ export function AvaChatPage() {
         setStatusText('');
         break;
 
+      case 'execution_start': {
+        const total = (event as any).total ?? 0;
+        setStatusText(`Builder dispatched — ${total} task${total === 1 ? '' : 's'}`);
+        setMessages(prev => [...prev, {
+          id: mkId(),
+          role: 'system' as const,
+          text: `Builder dispatched — executing ${total} task${total === 1 ? '' : 's'}.`,
+          timestamp: Date.now(),
+        }]);
+        break;
+      }
+
+      case 'task_start': {
+        const ev = event as any;
+        const idx = (ev.index ?? 0) + 1;
+        const total = ev.total ?? 0;
+        setStatusText(`Task ${idx}/${total}: ${ev.title}`);
+        setMessages(prev => [...prev, {
+          id: mkId(),
+          role: 'system' as const,
+          text: `▶ Task ${idx}/${total}: ${ev.title}`,
+          timestamp: Date.now(),
+        }]);
+        // Update the React session task list to reflect in-progress state
+        setSessionTasks(prev => prev.map(t =>
+          t.title === ev.title ? { ...t, status: 'in_progress' } : t
+        ));
+        break;
+      }
+
+      case 'task_complete': {
+        const ev = event as any;
+        setMessages(prev => [...prev, {
+          id: mkId(),
+          role: 'system' as const,
+          text: `✓ ${ev.title}${ev.summary ? ` — ${ev.summary}` : ''}`,
+          timestamp: Date.now(),
+        }]);
+        setSessionTasks(prev => prev.map(t =>
+          t.title === ev.title ? { ...t, status: 'completed' } : t
+        ));
+        break;
+      }
+
+      case 'task_blocked': {
+        const ev = event as any;
+        setMessages(prev => [...prev, {
+          id: mkId(),
+          role: 'system' as const,
+          text: `⛔ ${ev.title} blocked: ${ev.reason}`,
+          timestamp: Date.now(),
+        }]);
+        break;
+      }
+
+      case 'task_failed': {
+        const ev = event as any;
+        setMessages(prev => [...prev, {
+          id: mkId(),
+          role: 'system' as const,
+          text: `⛔ ${ev.title} failed: ${ev.error}`,
+          timestamp: Date.now(),
+        }]);
+        break;
+      }
+
+      case 'execution_complete': {
+        const ev = event as any;
+        const headline = ev.blocked > 0
+          ? `Builder finished: ${ev.completed}/${ev.total} done, ${ev.blocked} blocked.`
+          : `Builder finished: all ${ev.completed} tasks done.`;
+        setStatusText('');
+        setMessages(prev => [...prev, {
+          id: mkId(),
+          role: 'system' as const,
+          text: headline,
+          timestamp: Date.now(),
+        }]);
+        break;
+      }
+
       case 'context_compression_start':
         setStatusText(t('dash.chat.status.compressing'));
         break;
