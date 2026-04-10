@@ -1675,9 +1675,6 @@ export function AvaChatPage() {
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
     'qwen3.5-plus': 'platform:qwen3.5-plus',
     'qwen-flash': 'platform:qwen-flash',
-    'MiniMax-M2.7': 'platform:MiniMax-M2.7',
-    'MiniMax-M2.5': 'platform:MiniMax-M2.5',
-    'MiniMax-M2': 'platform:MiniMax-M2',
     'deepseek-chat': 'deepseek:deepseek-chat',
     'deepseek-reasoner': 'deepseek:deepseek-reasoner',
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
@@ -1776,7 +1773,16 @@ export function AvaChatPage() {
     ];
   });
   const [input, setInput] = useState('');
-  const [model, setModel] = useState<string>(() => localStorage.getItem('ava-ide-chat-model') || 'auto');
+  const [model, setModel] = useState<string>(() => {
+    const stored = localStorage.getItem('ava-ide-chat-model') || 'auto';
+    // Migration: MiniMax is reserved for Creative Studio — never as chat coordinator.
+    // Reset any stuck MiniMax value so the sidecar resolver picks the right Qwen fallback.
+    if (stored.toLowerCase().includes('minimax')) {
+      localStorage.setItem('ava-ide-chat-model', 'auto');
+      return 'auto';
+    }
+    return stored;
+  });
   const [mode, setMode] = useState<AvaMode>(() => (localStorage.getItem('ava-ide-chat-mode') as AvaMode) || 'work');
   const [streaming, setStreaming] = useState(false);
   const [statusText, setStatusText] = useState('');
@@ -2014,7 +2020,14 @@ export function AvaChatPage() {
     : '';
 
   // ── Persist model & mode ──────────────────────────────────────────────────
-  useEffect(() => { try { localStorage.setItem('ava-ide-chat-model', model); } catch { /* */ } }, [model]);
+  useEffect(() => {
+    try {
+      // Guard: MiniMax is Creative Studio only — never persist as chat model.
+      if (!model.toLowerCase().includes('minimax')) {
+        localStorage.setItem('ava-ide-chat-model', model);
+      }
+    } catch { /* */ }
+  }, [model]);
   useEffect(() => {
     try { localStorage.setItem('ava-ide-chat-mode', mode); } catch { /* */ }
     window.dispatchEvent(new CustomEvent('ava-mode-changed'));
@@ -2594,7 +2607,7 @@ export function AvaChatPage() {
             const prefixed = (modeMap[targetMode] || modeMap.work)(transitionMsg);
             setMessages(prev => [...prev, { id: mkId(), role: 'user' as const, text: `Switching to ${targetMode} mode...`, timestamp: Date.now() }]);
             setStreaming(true);
-            getSidecar().send(prefixed);
+            getSidecar().sendMessage(prefixed);
           }, 300);
         }
         break;
@@ -3315,13 +3328,10 @@ export function AvaChatPage() {
   const activeModelName = useMemo(() => {
     if (model === 'auto') return '✦ Auto';
     if (model === 'qwen3.6-plus') return 'Qwen 3.6 Plus';
-    if (model === 'qwen3-omni-flash') return 'Qwen Omni Flash';
-    if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
-    if (model === 'qwen-flash') return 'Qwen Flash';
     if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
-    if (model === 'MiniMax-M2.7') return 'MiniMax M2.7';
-    if (model === 'MiniMax-M2.5') return 'MiniMax M2.5';
-    if (model === 'MiniMax-M2') return 'MiniMax M2';
+    if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
+    if (model === 'qwen3-omni-flash') return 'Qwen Omni Flash';
+    if (model === 'qwen-flash') return 'Qwen Flash';
     const byok = byokModels.find((m) => m.id === model);
     return byok ? byok.name : model;
   }, [model, byokModels]);
@@ -3399,35 +3409,10 @@ export function AvaChatPage() {
                 <div style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>Qwen</div>
                 {[
                   { id: 'qwen3.6-plus', name: 'Qwen 3.6 Plus', tag: 'New' },
-                  { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Plus', tag: '' },
+                  { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: '' },
+                  { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus', tag: '' },
                   { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash', tag: '' },
                   { id: 'qwen-flash', name: 'Qwen Flash', tag: '' },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => { setModel(m.id); setModelMenuOpen(false); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                      padding: '8px 10px', background: model === m.id ? 'rgba(168,85,247,0.15)' : 'transparent',
-                      border: 'none', borderRadius: 6, color: model === m.id ? '#e0b0ff' : '#cdd6f4',
-                      fontSize: 12, cursor: 'pointer', textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => { if (model !== m.id) e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
-                    onMouseLeave={(e) => { if (model !== m.id) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {model === m.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a6e3a1' }} />}
-                      {m.name}
-                    </span>
-                    <span style={{ fontSize: 10, color: '#a6e3a1', fontWeight: 500 }}>{m.tag}</span>
-                  </button>
-                ))}
-
-                {/* MiniMax family */}
-                <div style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>MiniMax</div>
-                {[
-                  { id: 'MiniMax-M2.7', name: 'MiniMax M2.7', tag: '' },
-                  { id: 'MiniMax-M2.5', name: 'MiniMax M2.5', tag: '' },
                 ].map((m) => (
                   <button
                     key={m.id}
