@@ -352,10 +352,13 @@ async function handleInit(data) {
     toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
 
     // Confirmation handler — pauses and waits for IDE response
-    toolRegistry.setConfirmationHandler(async (toolName, args) => {
+    // toolCallId is forwarded so the IDE frontend can attach the confirmation
+    // card to the exact tool call instance, fixing the first-ask race where
+    // the buttons rendered without working onClick handlers.
+    toolRegistry.setConfirmationHandler(async (toolName, args, toolCallId) => {
       const id = crypto.randomUUID().slice(0, 8);
       const toolCategory = toolRegistry.getCategoryForTool(toolName);
-      emit({ event: 'confirm_required', id, toolName, toolCategory, args });
+      emit({ event: 'confirm_required', id, toolCallId, toolName, toolCategory, args });
       return new Promise((resolve) => {
         pendingConfirmations.set(id, { resolve, toolName });
       });
