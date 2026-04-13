@@ -53,7 +53,11 @@ export const DEFAULT_DATASET_CONFIG: DatasetConfig = {
 let cachedBase: string | null = null;
 async function getBase(): Promise<string> {
   if (cachedBase) return cachedBase;
-  const home = await homeDir();
+  let home = await homeDir();
+  // homeDir() returns no trailing separator on Windows (e.g. "C:\Users\stewa")
+  // so a naive `${home}.ava/datasets` produces "C:\Users\stewa.ava/datasets"
+  // — a forbidden path. Normalise with an explicit trailing slash.
+  if (!home.endsWith('/') && !home.endsWith('\\')) home = `${home}/`;
   cachedBase = `${home}.ava/datasets`;
   return cachedBase;
 }
