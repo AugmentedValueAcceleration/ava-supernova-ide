@@ -3,6 +3,8 @@ import { t, useLocale, getLocale } from '../lib/i18n';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
+import { ContextBar } from './ContextBar';
+import { getToolHeader } from './tool-header';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -3687,25 +3689,9 @@ export function AvaChatPage() {
             </span>
           )}
 
-          {/* Context usage ring */}
-          {contextPercent > 0 && (() => {
-            const isWarning = contextPercent >= 80;
-            const isCritical = contextPercent >= 90;
-            const color = isCritical ? '#ef4444' : isWarning ? '#eab308' : '#a855f7';
-            const r = 9;
-            const circumference = 2 * Math.PI * r;
-            const dashOffset = circumference - (contextPercent / 100) * circumference;
-            return (
-              <div style={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={t('dash.chat.context').replace('{n}', String(contextPercent))}>
-                <svg width="22" height="22" viewBox="0 0 22 22" style={{ transform: 'rotate(-90deg)' }}>
-                  <circle cx="11" cy="11" r={r} fill="none" stroke="rgba(168, 85, 247, 0.12)" strokeWidth="2.5" />
-                  <circle cx="11" cy="11" r={r} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
-                    strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
-                </svg>
-                <span style={{ position: 'absolute', fontSize: 7, fontWeight: 700, color, fontFamily: 'monospace' }}>{contextPercent}</span>
-              </div>
-            );
-          })()}
+          {/* Context usage indicator moved to the top of the chat area
+              as a horizontal ContextBar (mirroring the VSCode extension's
+              v0.39.0 UX). The old circular ring lived here and is gone. */}
 
           {/* Tasks toggle */}
           <button
@@ -3769,6 +3755,14 @@ export function AvaChatPage() {
           </div>
         );
       })()}
+
+      {/* ── Context Bar (top of chat) ───────────────────────────────────
+           Mirrors the v0.39.0 extension UX — horizontal token-usage bar
+           always visible above the messages area. Escalates colour at
+           80/90%. Auto-compression triggers at 70% at the agent layer
+           (no manual trigger yet in the IDE — would need a sidecar
+           `compress` RPC method added). */}
+      <ContextBar contextPercent={contextPercent} isCompressing={statusText.toLowerCase().includes('compress')} />
 
       {/* ── Messages Area (flex-1, scrollable) ──────────────────────────── */}
       <div style={{
@@ -3938,25 +3932,33 @@ export function AvaChatPage() {
                     )}
                   </div>
 
-                  {/* Tool calls timeline */}
+                  {/* Tool calls timeline — uses tool-header helper to render
+                      readable labels ("Edit foo.tsx" instead of "file_edit")
+                      matching the VSCode extension's v0.39.0 UX. */}
                   {msg.toolCalls && msg.toolCalls.length > 0 && (
                     <div style={{ marginTop: 10, borderTop: '1px solid rgba(168, 85, 247, 0.12)', paddingTop: 8 }}>
-                      {msg.toolCalls.map((tc, idx) => (
-                        <div key={idx} style={{
-                          display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
-                          fontSize: 11, color: '#6c7086',
-                        }}>
-                          <span style={{
-                            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                            background: tc.status === 'running' ? '#eab308' : tc.status === 'done' ? '#a6e3a1' : '#ef4444',
-                            ...(tc.status === 'running' ? { animation: 'avaPulse 1.5s infinite' } : {}),
-                          }} />
-                          <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{tc.name}</span>
-                          <span style={{ fontSize: 10, color: '#45475a' }}>
-                            {tc.status === 'running' ? t('dash.chat.tool_running') : tc.status === 'done' ? t('dash.chat.tool_done') : t('dash.chat.tool_error')}
-                          </span>
-                        </div>
-                      ))}
+                      {msg.toolCalls.map((tc, idx) => {
+                        const header = getToolHeader(tc.name, tc.args);
+                        return (
+                          <div key={idx} style={{
+                            display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
+                            fontSize: 11, color: '#6c7086',
+                          }}>
+                            <span style={{
+                              width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                              background: tc.status === 'running' ? '#eab308' : tc.status === 'done' ? '#a6e3a1' : '#ef4444',
+                              ...(tc.status === 'running' ? { animation: 'avaPulse 1.5s infinite' } : {}),
+                            }} />
+                            <span style={{ fontWeight: 600, fontSize: 11, color: '#cdd6f4' }}>{header.verb}</span>
+                            {header.target && (
+                              <span style={{ fontFamily: 'monospace', fontSize: 11, opacity: 0.7 }}>{header.target}</span>
+                            )}
+                            <span style={{ fontSize: 10, color: '#45475a', marginLeft: 'auto' }}>
+                              {tc.status === 'running' ? t('dash.chat.tool_running') : tc.status === 'done' ? t('dash.chat.tool_done') : t('dash.chat.tool_error')}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
