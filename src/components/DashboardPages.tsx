@@ -8947,7 +8947,19 @@ export function BillingPage() {
   const planLimit = usage?.period?.plan_tokens_limit || 0;
   const topUpBalance = usage?.period?.topup_tokens_remaining || 0;
 
+  // Storage allowance (from /usage/summary). Falls back to tier defaults if
+  // the endpoint hasn't been updated yet — keeps the panel useful on older
+  // platform deploys.
+  const storage = usage?.storage || {
+    used_gb: 0,
+    base_gb: tier === 'free' ? 2 : tier === 'pro' ? 25 : tier === 'ultra' ? 100 : tier === 'enterprise' ? 500 : 2,
+    addon_gb: 0,
+    total_gb: tier === 'free' ? 2 : tier === 'pro' ? 25 : tier === 'ultra' ? 100 : tier === 'enterprise' ? 500 : 2,
+    percent_used: 0,
+  };
+
   const fmtTokens = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
+  const fmtStorage = (gb: number) => gb >= 1000 ? `${(gb / 1024).toFixed(2)} TB` : gb >= 10 ? `${Math.round(gb)} GB` : gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(gb * 1024)} MB`;
   const pct = (used: number, limit: number) => limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
   return (
@@ -9001,6 +9013,58 @@ export function BillingPage() {
               </div>
             </div>
           </div>
+
+          {/* Cloud Storage */}
+          <div style={{ ...card, marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div>
+                <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>Cloud Storage</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#cdd6f4' }}>
+                  {fmtStorage(storage.used_gb)} <span style={{ fontSize: 13, color: '#6c7086', fontWeight: 400 }}>of {fmtStorage(storage.total_gb)}</span>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: '#45475a', textAlign: 'right' }}>
+                {fmtStorage(storage.base_gb)} plan
+                {storage.addon_gb > 0 && <> + {fmtStorage(storage.addon_gb)} add-ons</>}
+              </div>
+            </div>
+            <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden', marginBottom: 10 }}>
+              <div style={{ height: '100%', width: `${storage.percent_used}%`, background: 'linear-gradient(90deg, #a855f7, #7c3aed)', borderRadius: 3, transition: 'width 0.5s' }} />
+            </div>
+            <div style={{ fontSize: 11, color: '#6c7086' }}>
+              Local files always work, even at cap. Cloud sync pauses on overflow — nothing is deleted.
+            </div>
+          </div>
+
+          {/* Storage Top-Up Packages */}
+          {tier !== 'free' && tier !== 'admin' && (
+            <>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Storage Add-ons</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                {[
+                  { size: '+50 GB', price: '$3', desc: 'A little more room' },
+                  { size: '+250 GB', price: '$12', desc: 'Creative studio scale', popular: true },
+                  { size: '+1 TB', price: '$45', desc: 'Power user' },
+                ].map((pkg) => (
+                  <div key={pkg.size} style={{
+                    ...card, textAlign: 'center', padding: '20px 16px', position: 'relative',
+                    borderColor: pkg.popular ? 'rgba(168,85,247,0.4)' : 'rgba(49, 34, 68, 0.5)',
+                  }}>
+                    {pkg.popular && <span style={{ position: 'absolute', top: -8, right: 12, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#a855f7', color: '#fff' }}>POPULAR</span>}
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', marginBottom: 2 }}>{pkg.size}</div>
+                    <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>{pkg.desc}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#a855f7', marginBottom: 4 }}>{pkg.price}<span style={{ fontSize: 11, fontWeight: 400, color: '#6c7086' }}>/mo</span></div>
+                    <a href="https://ava-supernova.com/dashboard/billing" target="_blank" rel="noopener noreferrer" style={{
+                      display: 'block', marginTop: 8, padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      background: pkg.popular ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'rgba(168,85,247,0.1)',
+                      color: pkg.popular ? '#fff' : '#a855f7', border: pkg.popular ? 'none' : '1px solid rgba(168,85,247,0.25)',
+                      textDecoration: 'none', textAlign: 'center',
+                    }}>Add</a>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Top-Up Balance */}
           {topUpBalance > 0 && (
