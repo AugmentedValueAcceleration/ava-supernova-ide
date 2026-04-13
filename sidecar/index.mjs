@@ -73,7 +73,17 @@ const {
   loadProjectInstructions,
   setLocale,
   resolveLocale,
+  installDatasetConsumer,
 } = core;
+
+// Install the dataset capture consumer once at sidecar boot. No-op for
+// any user who hasn't opted in via ~/.ava/datasets/config.json — defaults
+// are all-off, so this just opens the subscription. When the user toggles
+// capture on from the IDE Settings page, events start landing without a
+// sidecar restart (consumer reads config every 30s).
+if (typeof installDatasetConsumer === 'function') {
+  try { installDatasetConsumer(); } catch { /* ignore */ }
+}
 
 // ─── State ──────────────────────────────────────────────────────────────────
 

@@ -5,6 +5,15 @@ import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sideca
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
 import { ContextBar } from './ContextBar';
 import { getToolHeader } from './tool-header';
+import {
+  loadDatasetConfig as fsLoadDatasetConfig,
+  saveDatasetConfig as fsSaveDatasetConfig,
+  ALL_AVA_MODES as DC_ALL_MODES,
+  ALL_DATASETS as DC_ALL_DATASETS,
+  type DatasetConfig as DatasetCfg,
+  type AvaMode as DCAvaMode,
+  type DatasetName as DCDatasetName,
+} from '../lib/dataset-config';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -8210,6 +8219,47 @@ export function SettingsPage() {
   const connected = checkConnected();
   const [settings, setSettings] = useState<any>(defaultSettings);
   const [personality, setPersonality] = useState<any>(null);
+  // Dataset capture config — separate from `settings` because it lives in
+  // its own file (~/.ava/datasets/config.json) with its own granular schema
+  // and is read directly by the sidecar's dataset consumer.
+  const [datasetCfg, setDatasetCfg] = useState<DatasetCfg | null>(null);
+  useEffect(() => {
+    fsLoadDatasetConfig().then(setDatasetCfg).catch(() => setDatasetCfg(null));
+  }, []);
+  const writeDatasetCfg = useCallback((next: DatasetCfg) => {
+    setDatasetCfg(next);
+    fsSaveDatasetConfig(next).catch(() => {});
+  }, []);
+  const toggleDatasetMaster = useCallback((on: boolean) => {
+    if (!datasetCfg) return;
+    writeDatasetCfg({
+      ...datasetCfg,
+      enabled: on,
+      capture_modes: on && datasetCfg.capture_modes.length === 0
+        ? [...DC_ALL_MODES]
+        : datasetCfg.capture_modes,
+      capture_datasets: on && datasetCfg.capture_datasets.length === 0
+        ? [...DC_ALL_DATASETS]
+        : datasetCfg.capture_datasets,
+    });
+  }, [datasetCfg, writeDatasetCfg]);
+  const toggleDatasetMode = useCallback((m: DCAvaMode) => {
+    if (!datasetCfg) return;
+    const has = datasetCfg.capture_modes.includes(m);
+    writeDatasetCfg({
+      ...datasetCfg,
+      capture_modes: has ? datasetCfg.capture_modes.filter(x => x !== m) : [...datasetCfg.capture_modes, m],
+    });
+  }, [datasetCfg, writeDatasetCfg]);
+  const toggleDatasetKind = useCallback((k: DCDatasetName) => {
+    if (!datasetCfg) return;
+    const has = datasetCfg.capture_datasets.includes(k);
+    writeDatasetCfg({
+      ...datasetCfg,
+      capture_datasets: has ? datasetCfg.capture_datasets.filter(x => x !== k) : [...datasetCfg.capture_datasets, k],
+    });
+  }, [datasetCfg, writeDatasetCfg]);
+
   const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
   const [aiAvatar, setAiAvatar] = useState<string>(() => localStorage.getItem('ava-ide-ai-avatar') || '');
 
@@ -8554,6 +8604,88 @@ export function SettingsPage() {
               {settings.contributeSharedLearning ? t('dash.settings.contributing') : t('dash.settings.learnings_local')}
             </div>
           </div>
+        </div>
+
+        {/* 3.5 Help train Ava's own model — dataset capture opt-in */}
+        <div style={sLabel}>Help train Ava&apos;s own model</div>
+        <div style={{
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
+          padding: '18px 20px', marginBottom: 16,
+        }}>
+          {/* Master toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 16 }}>{'\uD83E\uDDEA'}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Capture Ava&apos;s actions as training data</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>
+                  Records Ava&apos;s tool choices, persona handoffs, memory ops, etc. to ~/.ava/datasets/.
+                  Local-only by default. Never captures your prompts or files — only her decisions and shape-only context.
+                </div>
+              </div>
+            </div>
+            <ToggleSwitch value={!!datasetCfg?.enabled} onChange={toggleDatasetMaster} />
+          </div>
+
+          {datasetCfg?.enabled && (
+            <>
+              <div style={divider} />
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 6 }}>Modes captured</div>
+              <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 10 }}>
+                Choose which thought modes feed the dataset. Toggle any off to keep that mode private.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                {DC_ALL_MODES.map((mode) => {
+                  const on = datasetCfg.capture_modes.includes(mode);
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => toggleDatasetMode(mode)}
+                      style={{
+                        padding: '4px 12px', fontSize: 11, borderRadius: 9999,
+                        border: on ? '1px solid #34d399' : '1px solid rgba(168, 85, 247, 0.12)',
+                        background: on ? 'rgba(52, 211, 153, 0.08)' : 'transparent',
+                        color: on ? '#34d399' : '#6c7086', cursor: 'pointer', transition: 'all 0.15s',
+                      }}
+                    >
+                      {mode}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={divider} />
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 6 }}>Dataset kinds</div>
+              <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 10 }}>
+                The 10 distinct training datasets Ava generates. All on by default; turn off any you&apos;d rather not contribute to.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {DC_ALL_DATASETS.map((kind) => {
+                  const on = datasetCfg.capture_datasets.includes(kind);
+                  return (
+                    <button
+                      key={kind}
+                      onClick={() => toggleDatasetKind(kind)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                        fontSize: 11, textAlign: 'left', borderRadius: 6,
+                        border: on ? '1px solid rgba(52, 211, 153, 0.4)' : '1px solid rgba(168, 85, 247, 0.12)',
+                        background: on ? 'rgba(52, 211, 153, 0.05)' : 'transparent',
+                        color: on ? '#a6adc8' : '#6c7086', cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ color: on ? '#34d399' : '#6c7086' }}>{on ? '\u25CF' : '\u25CB'}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{kind}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ fontSize: 10, color: '#6c7086', marginTop: 14 }}>
+                All capture is local and append-only. Nothing leaves your machine until you explicitly push to your private dataset repo (separate, opt-in).
+              </div>
+            </>
+          )}
         </div>
 
         {/* 4. Behavior */}
