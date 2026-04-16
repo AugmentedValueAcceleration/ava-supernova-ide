@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { readDir } from '@tauri-apps/plugin-fs';
 import type { ActivityItem, SidebarPosition } from '../App';
 import { validateKey, getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
+import { writeSharedPlatformKey } from '../lib/shared-config';
 import { t, useLocale } from '../lib/i18n';
 
 interface Props {
@@ -577,6 +578,9 @@ function AuthSection() {
         if (result.name) localStorage.setItem('ava-ide-user-name', result.name);
         if (result.tier) localStorage.setItem('ava-ide-tier', result.tier);
       } catch { /* */ }
+      // Mirror into ~/.ava/config.json so other surfaces (CLI, extension, prototypes)
+      // pick up this sign-in without the user having to repeat it.
+      void writeSharedPlatformKey(trimmed);
       setShowConnect(false);
       setKeyInput('');
       window.dispatchEvent(new CustomEvent('ava-auth-changed'));

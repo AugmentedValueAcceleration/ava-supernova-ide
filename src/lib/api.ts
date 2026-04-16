@@ -27,6 +27,8 @@ export function disconnectAccount() {
   localStorage.removeItem('ava-ide-email');
   localStorage.removeItem('ava-ide-tier');
   localStorage.removeItem('ava-ide-user-name');
+  // Clear from shared config so other surfaces see the disconnect on next read.
+  void import('./shared-config').then((m) => m.clearSharedPlatformKey());
 
   // Avatars (account-specific)
   localStorage.removeItem('ava-ide-user-avatar');

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { validateKey } from '../lib/api';
+import { writeSharedPlatformKey } from '../lib/shared-config';
 
 interface Props {
   onComplete: (navigateTo?: string) => void;
@@ -42,6 +43,8 @@ export default function WelcomeOverlay({ onComplete }: Props) {
       localStorage.setItem('ava-ide-platform-key', platformKey);
       if (result.email) localStorage.setItem('ava-ide-email', result.email);
       if (result.tier) localStorage.setItem('ava-ide-tier', result.tier);
+      // Mirror to shared config so CLI / extension / prototypes pick it up.
+      void writeSharedPlatformKey(platformKey);
       setPlatformStatus('valid');
       setPlatformEmail(result.email || '');
       if (result.name) { setUserName(result.name); localStorage.setItem('ava-ide-user-name', result.name); }
