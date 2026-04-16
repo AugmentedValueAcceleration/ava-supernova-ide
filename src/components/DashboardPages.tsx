@@ -6931,7 +6931,7 @@ export function LearningLibraryPage() {
           <div style={{ fontSize: 11, marginTop: 4 }}>Try a different search or ask Ava to create a custom path.</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {filtered.map((p: any) => {
             const lc = levelColors[p.level] || levelColors.beginner;
             const avgRating = p.rating_count > 0 ? (p.rating_sum / p.rating_count).toFixed(1) : null;
@@ -6939,7 +6939,7 @@ export function LearningLibraryPage() {
               <button
                 key={p.id}
                 onClick={() => handleSelect(p.id)}
-                style={{ ...card, textAlign: 'left' as const, cursor: 'pointer', border: '1px solid rgba(168,85,247,0.12)', transition: 'border-color 0.2s' }}
+                style={{ ...card, textAlign: 'left' as const, cursor: 'pointer', border: '1px solid rgba(168,85,247,0.12)', transition: 'border-color 0.2s', display: 'flex', flexDirection: 'column' as const, height: '100%' }}
                 onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
                 onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.12)')}
               >
