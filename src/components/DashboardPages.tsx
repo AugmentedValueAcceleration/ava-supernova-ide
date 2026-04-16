@@ -4932,6 +4932,17 @@ export function ChatHistoryPage() {
 /* ===== 3. Memory ===== */
 const MEMORY_PAGE_SIZE = 100;
 
+type MemoryViewMode = 'active' | 'stale' | 'archived';
+
+// Stale = no recall/update/create activity in the last 90 days. Matches the
+// extension's definition so both surfaces classify the same way.
+function isMemoryStale(entry: any): boolean {
+  const lastActivity = entry.last_recalled_at ?? entry.updated_at ?? entry.created_at;
+  if (!lastActivity) return false;
+  const daysSince = (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24);
+  return daysSince > 90;
+}
+
 export function MemoryPage() {
   useLocale();
   const connected = checkConnected();
@@ -4940,6 +4951,7 @@ export function MemoryPage() {
   const [localMemories, setLocalMemories] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<MemoryViewMode>('active');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -4980,20 +4992,45 @@ export function MemoryPage() {
 
   const ALL_CATEGORIES = ['pattern', 'preference', 'architecture', 'bug-fix', 'convention', 'decision', 'general'];
 
+  // Category counts are computed from the current view-mode subset so the
+  // badge numbers match what the user will actually see when they pick a
+  // category. Without this, "Preference (5)" in Active view could include
+  // archived entries.
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const m of memories) {
+    const source = viewMode === 'active' ? memories.filter(m => !m.archived && !isMemoryStale(m))
+      : viewMode === 'stale' ? memories.filter(m => !m.archived && isMemoryStale(m))
+      : memories.filter(m => m.archived);
+    for (const m of source) {
       const cat = m.category || 'general';
       counts[cat] = (counts[cat] || 0) + 1;
     }
     return counts;
-  }, [memories]);
+  }, [memories, viewMode]);
 
   const globalCount = memories.filter(m => m.scope === 'global').length;
   const projectCount = memories.filter(m => m.scope === 'project').length;
 
+  // Split into active / stale / archived buckets. Archived wins over stale so
+  // an archived-and-stale entry appears only in Archived.
+  const { activeMemories, staleMemories, archivedMemories } = useMemo(() => {
+    const active: any[] = [];
+    const stale: any[] = [];
+    const archived: any[] = [];
+    for (const m of memories) {
+      if (m.archived) archived.push(m);
+      else if (isMemoryStale(m)) stale.push(m);
+      else active.push(m);
+    }
+    return { activeMemories: active, staleMemories: stale, archivedMemories: archived };
+  }, [memories]);
+
+  const viewEntries = viewMode === 'active' ? activeMemories
+    : viewMode === 'stale' ? staleMemories
+    : archivedMemories;
+
   const filtered = useMemo(() => {
-    let result = memories;
+    let result = viewEntries;
     if (categoryFilter) result = result.filter(m => (m.category || 'general') === categoryFilter);
     if (search) {
       const q = search.toLowerCase();
@@ -5004,10 +5041,13 @@ export function MemoryPage() {
       );
     }
     return result;
-  }, [memories, categoryFilter, search]);
+  }, [viewEntries, categoryFilter, search]);
 
   // Reset display limit when filters change
-  useEffect(() => { setDisplayLimit(MEMORY_PAGE_SIZE); }, [categoryFilter, search]);
+  useEffect(() => { setDisplayLimit(MEMORY_PAGE_SIZE); }, [categoryFilter, search, viewMode]);
+  // Clear category filter when switching view mode so a category with no
+  // entries in the new view doesn't leave the list empty.
+  useEffect(() => { setCategoryFilter(null); }, [viewMode]);
 
   const displayed = filtered.slice(0, displayLimit);
   const hasMore = displayLimit < filtered.length;
@@ -5168,6 +5208,32 @@ export function MemoryPage() {
           </div>
         )}
 
+        {/* View mode tabs — active / stale / archived */}
+        {memories.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid rgba(168, 85, 247, 0.12)' }}>
+            {([
+              { key: 'active' as MemoryViewMode, label: 'Active', count: activeMemories.length, color: '#a855f7' },
+              { key: 'stale' as MemoryViewMode, label: 'Stale', count: staleMemories.length, color: '#f59e0b' },
+              { key: 'archived' as MemoryViewMode, label: 'Archived', count: archivedMemories.length, color: '#6c7086' },
+            ]).map(tab => {
+              const active = viewMode === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setViewMode(tab.key)}
+                  style={{
+                    padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    background: 'transparent', border: 'none', borderBottom: active ? `2px solid ${tab.color}` : '2px solid transparent',
+                    color: active ? tab.color : '#6c7086', marginBottom: -1,
+                  }}
+                >
+                  {tab.label} <span style={{ opacity: 0.6, fontSize: 11 }}>({tab.count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Search bar */}
         <div style={{ position: 'relative', marginBottom: 16 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -5199,7 +5265,7 @@ export function MemoryPage() {
               color: categoryFilter === null ? '#a855f7' : '#6c7086',
             }}
           >
-            {t('dash.memory.all')} ({memories.length})
+            {t('dash.memory.all')} ({viewEntries.length})
           </button>
           {ALL_CATEGORIES.filter(c => categoryCounts[c]).map(cat => {
             const cs = getCatStyle(cat);

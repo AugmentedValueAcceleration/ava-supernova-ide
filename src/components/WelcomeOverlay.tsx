@@ -179,7 +179,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
               <span style={{ fontWeight: 600 }}>Supernova IDE</span>
             </h1>
             <p style={{ fontSize: 14, color: '#6c7086', lineHeight: 1.7, maxWidth: 400, margin: '0 auto' }}>
-              The AI-native development environment. 54 tools. 6 modes. 24 specialists. One brain that remembers you.
+              The AI-native development environment. 61 tools. 6 modes. 24 specialists. One brain that remembers you.
             </p>
           </div>
         )}

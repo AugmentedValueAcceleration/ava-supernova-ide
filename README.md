@@ -5,7 +5,7 @@ The standalone AI-native development environment. Built with Tauri v2, React 19,
 ## Features
 
 ### Chat with Full AI Power
-- **Local mode** — Node.js sidecar runs @ava/core with all 54 tools, 6 modes, 24 personas, 5-layer memory
+- **Local mode** — Node.js sidecar runs @ava/core with all 61 tools, 6 modes, 24 personas, 5-layer memory
 - **Cloud mode** — Platform API with managed tokens, usage tracking, billing
 - **Toggle freely** — switch between Local and Cloud from the chat header
 - **Model picker** — Qwen 3.6 Plus, MiniMax M2.7, DeepSeek, Kimi, Zhipu, Mistral + BYOK
