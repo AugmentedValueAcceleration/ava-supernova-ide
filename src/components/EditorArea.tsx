@@ -16,13 +16,13 @@ import {
   SettingsPage,
   ConnectionsPage,
   SupportPage,
-  DocumentationPage,
   ReleaseNotesPage,
   RoadmapPage,
   PlannerPage,
   AccountPage,
   HelpPage,
 } from './DashboardPages';
+import { DocumentationPage } from './DocumentationPage';
 import { useState, useEffect } from 'react';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { t, useLocale } from '../lib/i18n';
