@@ -661,6 +661,151 @@ fn setup_panic_hotkey(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
+// ─── Playwright Subprocess Manager ─────────────────────────────────────────
+//
+// Manages the Node subprocess that drives headed Chromium via Playwright.
+// NDJSON over stdio — same contract proven in prototype B3 (Session 2).
+//
+// Lifecycle:
+//   - browser_launch: spawns `node browser-worker.js` with piped stdio
+//   - browser_send: writes a JSON command to stdin, reads response from stdout
+//   - browser_close: sends close command, waits for exit, force-kills if hung
+//
+// The subprocess is NOT spawned via tauri-plugin-shell (which wraps
+// Command in an async way that makes line-by-line NDJSON harder). Instead
+// we use std::process directly and manage the pipes ourselves. The Node
+// binary path comes from the bundled sidecar (binaries/node).
+
+use std::process::{Command, Stdio, Child, ChildStdin, ChildStdout};
+use std::io::{BufRead, BufReader, Write};
+
+struct BrowserProcess {
+    child: Child,
+    stdin: ChildStdin,
+    reader: BufReader<ChildStdout>,
+}
+
+static BROWSER_PROCESS: Mutex<Option<BrowserProcess>> = Mutex::new(None);
+
+/// Launch the browser worker subprocess using the bundled Node binary.
+#[tauri::command]
+fn browser_launch(app: AppHandle) -> Result<serde_json::Value, String> {
+    let mut guard = BROWSER_PROCESS.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
+    if guard.is_some() {
+        return Err("Browser worker already running".into());
+    }
+
+    // Resolve the bundled Node binary path — Tauri puts sidecars next to the exe
+    let resource_dir = app.path().resource_dir().map_err(|e| format!("Resource dir: {e}"))?;
+    let node_path = resource_dir.join("binaries").join(if cfg!(windows) { "node.exe" } else { "node" });
+    let worker_path = resource_dir.join("resources").join("browser-worker.mjs");
+
+    let mut child = Command::new(&node_path)
+        .arg(&worker_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn browser worker: {e}"))?;
+
+    let stdin = child.stdin.take().ok_or("Failed to capture stdin")?;
+    let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
+    let reader = BufReader::new(stdout);
+
+    *guard = Some(BrowserProcess { child, stdin, reader });
+    drop(guard);
+
+    // Send a ping to verify the worker is alive
+    browser_send_raw("ping", None)
+}
+
+/// Send a command to the browser worker and wait for the response.
+#[tauri::command]
+fn browser_send(action: String, params: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    browser_send_raw(&action, params.as_ref())
+}
+
+fn browser_send_raw(action: &str, params: Option<&serde_json::Value>) -> Result<serde_json::Value, String> {
+    let mut guard = BROWSER_PROCESS.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
+    let proc = guard.as_mut().ok_or("Browser worker not running — call browser_launch first")?;
+
+    let id = format!("cmd-{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+
+    let mut cmd = serde_json::json!({ "id": id, "action": action });
+    if let Some(p) = params {
+        cmd["params"] = p.clone();
+    }
+
+    let line = serde_json::to_string(&cmd).map_err(|e| format!("JSON encode: {e}"))?;
+    proc.stdin.write_all(line.as_bytes()).map_err(|e| format!("stdin write: {e}"))?;
+    proc.stdin.write_all(b"\n").map_err(|e| format!("stdin newline: {e}"))?;
+    proc.stdin.flush().map_err(|e| format!("stdin flush: {e}"))?;
+
+    // Read lines until we get a response with our correlation id.
+    // Timeout after 30s to avoid blocking the Tauri invoke thread forever.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut buf = String::new();
+    loop {
+        if std::time::Instant::now() > deadline {
+            return Err(format!("Timeout waiting for response to '{action}'"));
+        }
+        buf.clear();
+        let n = proc.reader.read_line(&mut buf).map_err(|e| format!("stdout read: {e}"))?;
+        if n == 0 {
+            return Err("Browser worker closed stdout unexpectedly".into());
+        }
+        let trimmed = buf.trim();
+        if trimmed.is_empty() { continue; }
+        if let Ok(resp) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if resp.get("id").and_then(|v| v.as_str()) == Some(&id) {
+                return Ok(resp);
+            }
+            // Response for a different id — skip (shouldn't happen in practice)
+        }
+    }
+}
+
+/// Close the browser worker gracefully, force-kill if it hangs.
+#[tauri::command]
+fn browser_close() -> Result<serde_json::Value, String> {
+    // Try graceful close first
+    let close_result = browser_send_raw("close", None);
+
+    let mut guard = BROWSER_PROCESS.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
+    if let Some(mut proc) = guard.take() {
+        // Give the process 3 seconds to exit on its own
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        loop {
+            match proc.child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => {
+                    if std::time::Instant::now() > deadline {
+                        // Force kill — on Windows, taskkill /T takes the whole tree
+                        #[cfg(target_os = "windows")]
+                        {
+                            if let Some(pid) = proc.child.id().into() {
+                                let _ = Command::new("taskkill")
+                                    .args(["/PID", &pid.to_string(), "/T", "/F"])
+                                    .output();
+                            }
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            let _ = proc.child.kill();
+                        }
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                Err(_) => break,
+            }
+        }
+    }
+
+    close_result.or(Ok(serde_json::json!({ "ok": true, "closed": true })))
+}
+
 // ─── App Entry Point ────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -697,6 +842,9 @@ pub fn run() {
             desktop_mode_start,
             desktop_mode_stop,
             desktop_kill,
+            browser_launch,
+            browser_send,
+            browser_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
