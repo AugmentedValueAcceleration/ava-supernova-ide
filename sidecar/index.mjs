@@ -74,6 +74,7 @@ const {
   setLocale,
   resolveLocale,
   installDatasetConsumer,
+  BudgetTracker,
 } = core;
 
 // Install the dataset capture consumer once at sidecar boot. No-op for
@@ -606,6 +607,32 @@ async function handleInit(data) {
       uiaProvider: uiaBridge,
       // Desktop Automation mode — Playwright-backed browser via Tauri worker
       browserProvider: browserBridge,
+      // Desktop safety gate — the @ava/core tools call these on every
+      // mutative action. Permission level and budget are read per call;
+      // the approval handler emits a confirm_required NDJSON event and
+      // awaits the IDE response, reusing the pendingConfirmations map
+      // the generic ToolRegistry confirmation path already uses.
+      desktopPermissionLevel: config.desktopPermissionLevel || 'ask',
+      desktopPrivilegedOptIn: !!config.desktopPrivilegedOptIn,
+      desktopBudget: BudgetTracker ? new BudgetTracker() : undefined,
+      desktopApprovalHandler: async (toolName, args, classification) => {
+        const id = crypto.randomUUID().slice(0, 8);
+        emit({
+          event: 'confirm_required',
+          id,
+          toolName,
+          toolCategory: 'system',
+          args,
+          desktopClassification: {
+            riskClass: classification.riskClass,
+            reasons: classification.reasons,
+            requiresSecretHandle: classification.requiresSecretHandle,
+          },
+        });
+        return new Promise((resolve) => {
+          pendingConfirmations.set(id, { resolve, toolName });
+        });
+      },
       _debug_holo: !!(config.holoApiKey || process.env.HAI_API_KEY) ? 'BYOK' : (config.platformKey ? 'platform' : 'none'),
       computerUseSettings: config.computerUseSettings || undefined,
     };
