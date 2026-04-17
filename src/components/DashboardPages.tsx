@@ -9346,6 +9346,71 @@ export function ConnectionsPage() {
 
 /* Full ConnectionsPage implementation preserved in git — swap back when backend is ready */
 
+/* ===== 12b. Remote Devices (D7) ===== */
+export function RemoteDevicesPage() {
+  useLocale();
+  const [devices, setDevices] = useState<Array<{
+    id: string; name: string; fingerprint: string;
+    lastSeen: string; paired: boolean;
+  }>>([]);
+
+  // In production: read from ~/.ava/remote-devices.json
+  // For now, empty state with explanation
+
+  return (
+    <div style={pageWrapper}>
+      <h1 style={pageTitle}>Remote Devices</h1>
+      <p style={pageSubtitle}>Manage companion devices that can pair with this IDE for remote desktop automation.</p>
+
+      {devices.length === 0 ? (
+        <div style={{ ...card, textAlign: 'center', padding: '32px 20px', marginBottom: 24 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>{'📱'}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>No devices paired yet</div>
+          <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.5, maxWidth: 400, margin: '0 auto' }}>
+            When you pair your companion app with this IDE during desktop automation mode,
+            the device will appear here. You can revoke access at any time.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {devices.map(d => (
+            <div key={d.id} style={{ ...card, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 22 }}>{'📱'}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{d.name}</div>
+                <div style={{ fontSize: 11, color: '#6c7086' }}>
+                  Last seen: {new Date(d.lastSeen).toLocaleDateString()} · {d.fingerprint.slice(0, 12)}...
+                </div>
+              </div>
+              <button
+                onClick={() => setDevices(prev => prev.filter(x => x.id !== d.id))}
+                style={{
+                  padding: '4px 12px', borderRadius: 6, fontSize: 11,
+                  background: 'rgba(243,139,168,0.1)', color: '#f38ba8',
+                  border: '1px solid rgba(243,139,168,0.3)', cursor: 'pointer',
+                }}
+              >
+                Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ ...card, padding: '14px 18px', marginTop: 24 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>How pairing works</div>
+        <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.6 }}>
+          1. Start desktop automation mode (@@) in this IDE<br />
+          2. Open the companion app on your phone<br />
+          3. Select this IDE session from the sessions list<br />
+          4. First-time devices need approval from this desktop<br />
+          5. Once paired, the companion can drive the trajectory remotely
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ===== 13. Support (Live Chat) ===== */
 export function SupportPage() {
   useLocale();

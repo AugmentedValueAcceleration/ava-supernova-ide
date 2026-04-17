@@ -61,7 +61,15 @@ export default function DesktopModePanel({ onExit }: Props) {
   const [approval, setApproval] = useState<ApprovalPending | null>(null);
   const [budgetHeader, setBudgetHeader] = useState('');
   const [outcome, setOutcome] = useState<string | null>(null);
+  const [whitelistApps, setWhitelistApps] = useState<string[]>([]);
+  const [addAppInput, setAddAppInput] = useState('');
+  const [showAddApp, setShowAddApp] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ── D6: Failure recovery state ────────────────────────────────────
+  type FailureKind = 'stuck' | 'budget_hit' | 'captcha' | null;
+  const [failure, setFailure] = useState<FailureKind>(null);
+  const [failureDetail, setFailureDetail] = useState('');
 
   // ── Kill switch listener ──────────────────────────────────────────
   useEffect(() => {
@@ -77,6 +85,26 @@ export default function DesktopModePanel({ onExit }: Props) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [steps, approval]);
 
+  // ── D5: Whitelist authoring ─────────────────────────────────────────
+  const handleAddApp = useCallback(() => {
+    const app = addAppInput.trim();
+    if (!app) return;
+    setWhitelistApps(prev => [...prev, app]);
+    setAddAppInput('');
+    setShowAddApp(false);
+  }, [addAppInput]);
+
+  // ── D6: Failure recovery actions ──────────────────────────────────
+  const handleFailureAction = useCallback((action: 'retry' | 'change' | 'extend' | 'solve' | 'stop') => {
+    setFailure(null);
+    setFailureDetail('');
+    if (action === 'stop') {
+      handleKill('stop');
+    }
+    // In production: send the action to the conductor
+    // retry → conductor.retry(), extend → conductor.extend(), etc.
+  }, []);
+
   // ── First-run: start trajectory ───────────────────────────────────
   const handleStart = useCallback(async () => {
     if (!task.trim()) return;
@@ -84,6 +112,7 @@ export default function DesktopModePanel({ onExit }: Props) {
       await invoke('desktop_mode_start');
     } catch { /* ok if already started */ }
 
+    setWhitelistApps(whitelist.split(',').map(s => s.trim()).filter(Boolean));
     setPhase('active');
     setBudgetHeader('Starting...');
 
@@ -254,6 +283,10 @@ export default function DesktopModePanel({ onExit }: Props) {
         <div style={{ display: 'flex', gap: 6 }}>
           {phase === 'active' && (
             <>
+              <button onClick={() => setShowAddApp(true)} title="Allow another app"
+                style={{ padding: '2px 8px', fontSize: 10, borderRadius: 4, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.accent, cursor: 'pointer' }}>
+                + Allow app
+              </button>
               <button onClick={() => handleKill('pause')} title="Pause"
                 style={{ padding: '2px 8px', fontSize: 10, borderRadius: 4, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.yellow, cursor: 'pointer' }}>
                 Pause
@@ -345,6 +378,111 @@ export default function DesktopModePanel({ onExit }: Props) {
               <button onClick={handleReject}
                 style={{ padding: '6px 16px', borderRadius: 6, fontSize: 12, background: 'transparent', color: theme.red, border: `1px solid ${theme.red}`, cursor: 'pointer' }}>
                 Reject
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* D5: Inline whitelist authoring */}
+        {showAddApp && (
+          <div style={{
+            padding: 12, borderRadius: 8, border: `1px solid ${theme.accent}`,
+            background: theme.accent + '10', marginBottom: 8, display: 'flex', gap: 8, alignItems: 'center',
+          }}>
+            <span style={{ fontSize: 12, color: theme.accent, whiteSpace: 'nowrap' }}>Allow app:</span>
+            <input
+              value={addAppInput}
+              onChange={e => setAddAppInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddApp(); if (e.key === 'Escape') setShowAddApp(false); }}
+              autoFocus
+              placeholder="Notion, Slack..."
+              style={{
+                flex: 1, padding: '4px 8px', background: theme.surface,
+                border: `1px solid ${theme.border}`, borderRadius: 4, color: theme.text,
+                fontSize: 12, outline: 'none',
+              }}
+            />
+            <button onClick={handleAddApp}
+              style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, background: theme.accent, color: theme.bg, border: 'none', cursor: 'pointer' }}>
+              Add
+            </button>
+            <button onClick={() => setShowAddApp(false)}
+              style={{ padding: '4px 8px', borderRadius: 4, fontSize: 11, background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* D6: Failure recovery dialogs */}
+        {failure === 'stuck' && (
+          <div style={{
+            padding: 16, borderRadius: 8, border: `1px solid ${theme.yellow}`,
+            background: theme.yellow + '10', marginBottom: 8,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: theme.yellow, marginBottom: 6 }}>Stuck</div>
+            <div style={{ fontSize: 13, color: theme.text, marginBottom: 12, lineHeight: 1.5 }}>
+              {failureDetail || "I've tried three approaches and keep ending up in the same place."}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => handleFailureAction('retry')}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, background: theme.surface, color: theme.text, border: `1px solid ${theme.border}`, cursor: 'pointer' }}>
+                Keep trying
+              </button>
+              <button onClick={() => handleFailureAction('change')}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, background: theme.surface, color: theme.text, border: `1px solid ${theme.border}`, cursor: 'pointer' }}>
+                Change approach
+              </button>
+              <button onClick={() => handleFailureAction('stop')}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, background: theme.red + '20', color: theme.red, border: `1px solid ${theme.red}`, cursor: 'pointer' }}>
+                Stop
+              </button>
+            </div>
+          </div>
+        )}
+
+        {failure === 'budget_hit' && (
+          <div style={{
+            padding: 16, borderRadius: 8, border: `1px solid ${theme.orange}`,
+            background: theme.orange + '10', marginBottom: 8,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: theme.orange, marginBottom: 6 }}>Budget cap reached</div>
+            <div style={{ fontSize: 13, color: theme.text, marginBottom: 12, lineHeight: 1.5 }}>
+              {failureDetail || 'Hit the step/token limit before finishing.'}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => handleFailureAction('extend')}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, background: theme.surface, color: theme.text, border: `1px solid ${theme.border}`, cursor: 'pointer' }}>
+                Another 30 steps
+              </button>
+              <button onClick={() => handleFailureAction('change')}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, background: theme.surface, color: theme.text, border: `1px solid ${theme.border}`, cursor: 'pointer' }}>
+                Adjust plan
+              </button>
+              <button onClick={() => handleFailureAction('stop')}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, background: theme.red + '20', color: theme.red, border: `1px solid ${theme.red}`, cursor: 'pointer' }}>
+                Stop
+              </button>
+            </div>
+          </div>
+        )}
+
+        {failure === 'captcha' && (
+          <div style={{
+            padding: 16, borderRadius: 8, border: `1px solid ${theme.purple}`,
+            background: theme.purple + '10', marginBottom: 8,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: theme.purple, marginBottom: 6 }}>Human verification needed</div>
+            <div style={{ fontSize: 13, color: theme.text, marginBottom: 12, lineHeight: 1.5 }}>
+              {failureDetail || "Hit a 'Verify you're human' challenge. Please solve it in the browser window — I'll wait."}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => handleFailureAction('solve')}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: theme.purple, color: theme.bg, border: 'none', cursor: 'pointer' }}>
+                I solved it — continue
+              </button>
+              <button onClick={() => handleFailureAction('stop')}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, background: theme.red + '20', color: theme.red, border: `1px solid ${theme.red}`, cursor: 'pointer' }}>
+                Stop
               </button>
             </div>
           </div>
