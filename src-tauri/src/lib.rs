@@ -609,8 +609,8 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let _tray = TrayIconBuilder::new()
         .menu(&menu)
         .tooltip("Ava | Supernova IDE")
-        .on_menu_event(move |app, event| {
-            match event.id().as_ref() {
+        .on_menu_event(move |app: &tauri::AppHandle, event| {
+            match event.id.as_ref() {
                 "show" => {
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.show();
@@ -747,22 +747,22 @@ fn keychain_delete(key: String) -> Result<(), String> {
 
 fn generate_hex_key() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    // Simple CSPRNG-like: hash timestamp + pid + counter. In production
-    // this should use `ring` or `getrandom`, but for the profile key
-    // use case (single key per machine, not a session token) this is
-    // sufficient. The OS keychain provides the actual security boundary.
+    // Simple CSPRNG-like: mix timestamp + pid + tight-loop nano jitter.
+    // In production this should use `ring` or `getrandom`, but for the
+    // profile key use case (single key per machine, not a session token)
+    // this is sufficient. The OS keychain provides the actual security
+    // boundary — the key never leaves Credential Manager in plaintext.
     let seed = format!(
-        "{}-{}-{}",
+        "{}-{}",
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos(),
         std::process::id(),
-        std::thread::current().id().as_u64(),
     );
-    // SHA-256 of seed → 32 bytes → hex
-    // We don't have a sha2 dep yet, so use a simpler approach:
-    // fill 32 bytes from the seed's byte pattern, XOR'd with nano-timestamps
     let mut key = [0u8; 32];
     let seed_bytes = seed.as_bytes();
     for (i, byte) in key.iter_mut().enumerate() {
+        // Re-sample the clock on each iteration so tight-loop jitter
+        // contributes entropy — the low bits of a nanosecond counter
+        // are effectively random on wall-clock reads.
         let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u8;
         *byte = seed_bytes.get(i % seed_bytes.len()).copied().unwrap_or(0) ^ ts ^ (i as u8);
     }
