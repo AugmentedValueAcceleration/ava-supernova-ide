@@ -1,6 +1,9 @@
 use base64::Engine as _;
 use serde::Serialize;
 use std::io::Cursor;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager};
 
 // ─── Computer Use: Screenshot + Input Commands ──────────────────────────────
 
@@ -508,6 +511,156 @@ fn get_dpi_scale() -> Result<f64, String> {
     }
 }
 
+// ─── Desktop Mode Kill Switch ──────────────────────────────────────────────
+//
+// Three kill layers, any of which aborts the active trajectory:
+//   1. Triple-Escape — global hotkey, always active during desktop mode
+//   2. Stop button — frontend sends this command
+//   3. Budget trip — automatic, handled by the TypeScript budget tracker
+//
+// On kill: we emit "desktop:kill" to the frontend, which tears down the
+// trajectory, and Narrator reports what was done so far.
+
+static DESKTOP_MODE_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+struct EscapeTracker {
+    timestamps: Vec<std::time::Instant>,
+}
+
+impl EscapeTracker {
+    fn new() -> Self {
+        Self { timestamps: Vec::new() }
+    }
+
+    fn press(&mut self) -> bool {
+        let now = std::time::Instant::now();
+        self.timestamps.push(now);
+        // Keep only presses within the last 800ms
+        self.timestamps.retain(|t| now.duration_since(*t).as_millis() < 800);
+        // Triple-Escape detected
+        self.timestamps.len() >= 3
+    }
+
+    fn reset(&mut self) {
+        self.timestamps.clear();
+    }
+}
+
+/// Activate desktop mode — enables the panic kill hotkey.
+#[tauri::command]
+fn desktop_mode_start(app: AppHandle) -> Result<(), String> {
+    DESKTOP_MODE_ACTIVE.store(true, Ordering::SeqCst);
+    // Reset the escape tracker in case stale state from a previous session
+    if let Some(tracker) = app.try_state::<Mutex<EscapeTracker>>() {
+        if let Ok(mut t) = tracker.lock() {
+            t.reset();
+        }
+    }
+    Ok(())
+}
+
+/// Deactivate desktop mode — disables the panic kill hotkey.
+#[tauri::command]
+fn desktop_mode_stop() -> Result<(), String> {
+    DESKTOP_MODE_ACTIVE.store(false, Ordering::SeqCst);
+    Ok(())
+}
+
+/// Kill the active trajectory — callable from frontend stop button or
+/// companion kill message. Emits "desktop:kill" to all listeners.
+#[tauri::command]
+fn desktop_kill(app: AppHandle, level: String) -> Result<(), String> {
+    let valid_levels = ["pause", "stop", "panic"];
+    if !valid_levels.contains(&level.as_str()) {
+        return Err(format!("Invalid kill level: {level}. Must be pause, stop, or panic."));
+    }
+    DESKTOP_MODE_ACTIVE.store(false, Ordering::SeqCst);
+    app.emit("desktop:kill", serde_json::json!({ "level": level }))
+        .map_err(|e| format!("Failed to emit kill: {e}"))?;
+    Ok(())
+}
+
+// ─── System Tray ──────────────────────────────────────────────────────────
+//
+// Tray mode keeps the IDE alive after the main window closes so the
+// companion can still pair remotely and watchers can still fire.
+//
+// Menu:
+//   - Show Ava          — brings the main window back
+//   - Stop Desktop Mode — kills any active trajectory
+//   - Quit Ava          — full exit, no tray persistence
+
+fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri::tray::TrayIconBuilder;
+    use tauri::menu::{MenuBuilder, MenuItemBuilder};
+
+    let show = MenuItemBuilder::with_id("show", "Show Ava").build(app)?;
+    let stop = MenuItemBuilder::with_id("stop_desktop", "Stop Desktop Mode").build(app)?;
+    let quit = MenuItemBuilder::with_id("quit", "Quit Ava").build(app)?;
+
+    let menu = MenuBuilder::new(app)
+        .item(&show)
+        .separator()
+        .item(&stop)
+        .separator()
+        .item(&quit)
+        .build()?;
+
+    let _tray = TrayIconBuilder::new()
+        .menu(&menu)
+        .tooltip("Ava | Supernova IDE")
+        .on_menu_event(move |app, event| {
+            match event.id().as_ref() {
+                "show" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let _ = window.unminimize();
+                    }
+                }
+                "stop_desktop" => {
+                    DESKTOP_MODE_ACTIVE.store(false, Ordering::SeqCst);
+                    let _ = app.emit("desktop:kill", serde_json::json!({ "level": "stop" }));
+                }
+                "quit" => {
+                    DESKTOP_MODE_ACTIVE.store(false, Ordering::SeqCst);
+                    app.exit(0);
+                }
+                _ => {}
+            }
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
+fn setup_panic_hotkey(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+
+    let escape: Shortcut = "Escape".parse()?;
+    let app_handle = app.handle().clone();
+
+    app.global_shortcut().on_shortcut(escape, move |_app, _shortcut, event| {
+        if event.state != ShortcutState::Pressed {
+            return;
+        }
+        if !DESKTOP_MODE_ACTIVE.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Some(tracker) = app_handle.try_state::<Mutex<EscapeTracker>>() {
+            if let Ok(mut t) = tracker.lock() {
+                if t.press() {
+                    t.reset();
+                    DESKTOP_MODE_ACTIVE.store(false, Ordering::SeqCst);
+                    let _ = app_handle.emit("desktop:kill", serde_json::json!({ "level": "panic" }));
+                }
+            }
+        }
+    })?;
+
+    Ok(())
+}
+
 // ─── App Entry Point ────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -518,6 +671,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .manage(Mutex::new(EscapeTracker::new()))
+        .setup(|app| {
+            setup_tray(app)?;
+            setup_panic_hotkey(app)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             capture_screen,
             click,
@@ -534,6 +694,9 @@ pub fn run() {
             find_ui_element,
             click_element,
             focus_window,
+            desktop_mode_start,
+            desktop_mode_stop,
+            desktop_kill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
