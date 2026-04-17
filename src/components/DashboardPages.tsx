@@ -1648,7 +1648,7 @@ export function CommandCentrePage() {
 export function AvaChatPage() {
   useLocale();
   // ── Types ──────────────────────────────────────────────────────────────────
-  type AvaMode = 'work' | 'plan' | 'chat' | 'teach' | 'security' | 'brainstorm';
+  type AvaMode = 'work' | 'plan' | 'chat' | 'teach' | 'security' | 'brainstorm' | 'desktop';
   interface ChatMessage {
     id: string;
     role: 'ava' | 'user' | 'error' | 'system';
@@ -1683,10 +1683,10 @@ export function AvaChatPage() {
     'auto': 'auto',
     'qwen3.6-plus': 'platform:qwen3.6-plus',
     'kimi-k2.5': 'platform:kimi-k2.5',
-    'qwen3-omni-flash': 'platform:qwen3-omni-flash',
+    'qwen3.5-omni-flash': 'platform:qwen3.5-omni-flash',
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
     'qwen3.5-plus': 'platform:qwen3.5-plus',
-    'qwen-flash': 'platform:qwen-flash',
+    'qwen3.5-flash': 'platform:qwen-flash',
     'deepseek-chat': 'deepseek:deepseek-chat',
     'deepseek-reasoner': 'deepseek:deepseek-reasoner',
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
@@ -1702,12 +1702,13 @@ export function AvaChatPage() {
     { id: 'teach', label: t('mode.teach'), icon: '??', prefix: '[Teach Mode] ', placeholder: t('mode.teach.placeholder') },
     { id: 'security', label: t('mode.security'), icon: '!!', prefix: '[Security Audit Mode] ', placeholder: t('mode.security.placeholder') },
     { id: 'brainstorm', label: t('mode.brainstorm'), icon: '**', prefix: '[Brainstorm Mode] ', placeholder: t('mode.brainstorm.placeholder') },
+    { id: 'desktop', label: 'Desktop Automation', icon: '@@', prefix: '[Desktop Automation Mode] ', placeholder: 'Open Notepad, launch Chrome, control your screen...' },
   ];
 
   // ── BYOK model map — fetched from platform, fallback to hardcoded ──────────
   const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
-    Qwen: [{ id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash' }, { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus' }, { id: 'qwen-flash', name: 'Qwen Flash' }],
+    Qwen: [{ id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3.5-omni-flash', name: 'Qwen 3.5 Omni Flash' }, { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
     MiniMax: [{ id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' }],
     Moonshot: [{ id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
@@ -3270,8 +3271,8 @@ export function AvaChatPage() {
                     // Use model's actual context window for percentage
                     const MODEL_CTX: Record<string, number> = {
                       'qwen3.6-plus': 1048576, 'kimi-k2.5': 262144, 'MiniMax-M2.7': 204800, 'MiniMax-M2.5': 1048576,
-                      'qwen3-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
-                      'qwen-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
+                      'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
+                      'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
                     setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
@@ -3339,15 +3340,39 @@ export function AvaChatPage() {
   const send = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed && pendingAttachments.length === 0) return;
+
+    // Desktop Automation mode: `@@` prefix switches the chat to desktop mode
+    // so Ava uses the sidecar's agent loop with the restricted desktop tool
+    // set. If there's task text after @@, it becomes the first message of
+    // this turn. The setMode call persists desktop mode for subsequent
+    // messages; the `forceDesktopPrefixThisTurn` flag below makes sure THIS
+    // turn's message carries the desktop tag even though React state hasn't
+    // committed yet. Prefer this over the old overlay — the sidecar's
+    // single-call loop is 5-10× faster than the persona wave.
+    let forceDesktopPrefixThisTurn = false;
+    let effectiveTrimmed = trimmed;
+    if (trimmed.startsWith('@@')) {
+      const preset = trimmed.slice(2).trim();
+      setMode('desktop');
+      localStorage.setItem('ava-ide-chat-mode', 'desktop');
+      if (!preset) {
+        // Bare `@@` — just switch mode, don't send anything this turn.
+        setInput('');
+        return;
+      }
+      effectiveTrimmed = preset;
+      forceDesktopPrefixThisTurn = true;
+    }
+
     setInput('');
     if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
 
     // Inject secrets — replace @secret:Label with actual values before sending
-    const { text: injectedText, usedSecrets } = injectSecrets(trimmed);
+    const { text: injectedText, usedSecrets } = injectSecrets(effectiveTrimmed);
 
     // Show the raw user text (with @secret:Label visible as masked) in the chat UI
     // Replace @secret:Label with masked dots for display
-    const displayText = trimmed.replace(/@secret:(\S+)/g, (_m, label) => {
+    const displayText = effectiveTrimmed.replace(/@secret:(\S+)/g, (_m, label) => {
       const s = secrets.find(sec => sec.label === label);
       return s ? '\u2022\u2022\u2022\u2022\u2022\u2022' : _m;
     });
@@ -3368,10 +3393,21 @@ export function AvaChatPage() {
 
     trackMessage(model);
 
+    // Resolve the mode prefix tag for THIS turn. Needed because the agent
+    // detects mode via detectModeFromMessages() on the user message prefix.
+    // When the @@ shortcut is used, `setMode('desktop')` hasn't committed
+    // yet — force the desktop tag so the first turn lands in desktop mode.
+    let outgoingText = injectedText;
+    const effectiveMode: AvaMode = forceDesktopPrefixThisTurn ? 'desktop' : mode;
+    const effectiveModeInfo = MODES.find(m => m.id === effectiveMode);
+    if (effectiveModeInfo?.prefix) {
+      outgoingText = effectiveModeInfo.prefix + injectedText;
+    }
+
     // Always use sidecar — both Local and Cloud modes run the full agent
-    // Send the injected text (with real secret values) to the sidecar
-    sendLocal(injectedText, userMsg.attachments);
-  }, [input, messages, sendLocal, pendingAttachments, model, injectSecrets, secrets]);
+    // Send the prefixed, secret-injected text to the sidecar
+    sendLocal(outgoingText, userMsg.attachments);
+  }, [input, messages, sendLocal, pendingAttachments, model, injectSecrets, secrets, mode]);
 
   // ── Tool confirmation handlers ─────────────────────────────────────────
   // Pending mode transition — scheduled by switch_mode tool approval
@@ -3423,8 +3459,11 @@ export function AvaChatPage() {
     if (model === 'qwen3.6-plus') return 'Qwen 3.6 Plus';
     if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
     if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
-    if (model === 'qwen3-omni-flash') return 'Qwen Omni Flash';
-    if (model === 'qwen-flash') return 'Qwen Flash';
+    if (model === 'qwen3.5-omni-flash') return 'Qwen 3.5 Omni Flash';
+    if (model === 'qwen3.5-flash') return 'Qwen 3.5 Flash';
+    // Legacy display-name fallbacks for clients that still have old IDs saved
+    if (model === 'qwen3-omni-flash') return 'Qwen 3.5 Omni Flash';
+    if (model === 'qwen-flash') return 'Qwen 3.5 Flash';
     const byok = byokModels.find((m) => m.id === model);
     return byok ? byok.name : model;
   }, [model, byokModels]);
@@ -3504,8 +3543,8 @@ export function AvaChatPage() {
                   { id: 'qwen3.6-plus', name: 'Qwen 3.6 Plus', tag: 'New' },
                   { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: '' },
                   { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus', tag: '' },
-                  { id: 'qwen3-omni-flash', name: 'Qwen Omni Flash', tag: '' },
-                  { id: 'qwen-flash', name: 'Qwen Flash', tag: '' },
+                  { id: 'qwen3.5-omni-flash', name: 'Qwen 3.5 Omni Flash', tag: '' },
+                  { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash', tag: '' },
                 ].map((m) => (
                   <button
                     key={m.id}
@@ -7895,10 +7934,10 @@ export function UsagePage() {
 
   // Cost estimate
   const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-    'qwen3-omni-flash': { input: 0.065, output: 0.26 },
+    'qwen3.5-omni-flash': { input: 0.065, output: 0.26 },
     'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
     'qwen3.5-plus': { input: 0.20, output: 1.20 },
-    'qwen-flash': { input: 0.05, output: 0.40 },
+    'qwen3.5-flash': { input: 0.05, output: 0.40 },
     'MiniMax-M2.7': { input: 0.30, output: 1.20 },
     'MiniMax-M2.5': { input: 0.15, output: 1.20 },
     'deepseek-chat': { input: 0.14, output: 0.28 },
@@ -9929,7 +9968,7 @@ const ROADMAP_THEMES = [
     { label: '10 knowledge packs (game dev, web, mobile, API, DevOps, systems, data science)', shipped: true },
     { label: 'Self-improvement vault', shipped: true }, { label: 'Flat system prompt (80% token reduction)', shipped: true },
     { label: 'Direct mode — no auto-orchestration', shipped: true }, { label: 'Qwen 3.6 + MiniMax M2.7 multimodal', shipped: true },
-    { label: 'Listen-first intent gate — Qwen Flash classifier, soft-nudge style signals', shipped: true },
+    { label: 'Listen-first intent gate — Qwen 3.5 Flash classifier, soft-nudge style signals', shipped: true },
     { label: 'Hard exploration budget — blocks runaway reads before they burn tokens', shipped: true },
     { label: 'Compression overhaul — 70% trigger, task continuity preserved post-compress', shipped: true },
     { label: 'Tool schema aligned with model conventions (write/read/edit)', shipped: true },

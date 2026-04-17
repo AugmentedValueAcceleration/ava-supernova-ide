@@ -88,6 +88,11 @@ export default function App() {
     return () => window.removeEventListener('ava-navigate-dashboard', handler);
   }, [handleDashboardSelect]);
 
+  // Desktop Automation mode is now a regular chat mode (7th mode).
+  // `@@` prefix switches the chat to desktop mode in AvaChatPage; no
+  // fullscreen overlay needed. The old ava-enter-desktop-mode event
+  // is retained as a no-op target to avoid breaking external dispatchers.
+
   const toggleSidebarPosition = useCallback(() => {
     setSidebarPosition(p => {
       const next = p === 'left' ? 'right' : 'left';

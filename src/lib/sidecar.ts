@@ -95,6 +95,9 @@ export interface SidecarEvent {
   amount?: number;
   window?: string;
   settings?: ComputerUseSettings;
+  // browser automation — browser_send forwarding
+  browserAction?: string;
+  params?: Record<string, unknown>;
 }
 
 type EventListener = (event: SidecarEvent) => void;
@@ -406,6 +409,25 @@ export class SidecarManager {
         case 'focus_window':
           result = await invoke('focus_window', { name: event.text });
           break;
+
+        // ── Browser automation (Session 2 prototype, wired in for desktop mode)
+        // These proxy to the Rust commands that manage a headed Chromium
+        // via Playwright. They let the sidecar drive the visible browser
+        // the same way the Session 2 prototype did, but inside the normal
+        // agent loop.
+        case 'browser_launch':
+          result = await invoke('browser_launch');
+          break;
+        case 'browser_send':
+          result = await invoke('browser_send', {
+            action: event.browserAction,
+            params: event.params,
+          });
+          break;
+        case 'browser_close':
+          result = await invoke('browser_close');
+          break;
+
         default:
           throw new Error(`Unknown computer use action: ${action}`);
       }

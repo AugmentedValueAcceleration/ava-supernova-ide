@@ -318,6 +318,11 @@ struct UIElementInfo {
 
 /// List all clickable UI elements in the foreground window.
 /// Returns structured data: name, type, bounding box, centre coordinates.
+///
+/// Walks from the ACTUAL foreground window (not the desktop root) which
+/// gets us into the app's own tree immediately instead of wasting 2-3
+/// depth levels on window chrome. Depth 8 is deep enough for nested
+/// controls (list items, tree nodes, tab children) without going crazy.
 #[tauri::command]
 fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
     #[cfg(target_os = "windows")]
@@ -325,15 +330,23 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
         use uiautomation::UIAutomation;
 
         let automation = UIAutomation::new().map_err(|e| format!("UIA init failed: {e}"))?;
-        let root = automation.get_root_element().map_err(|e| format!("Root failed: {e}"))?;
-
-        // Get the foreground window
-        let _focused = automation.get_focused_element().map_err(|e| format!("Focus failed: {e}"))?;
         let walker = automation.get_control_view_walker().map_err(|e| format!("Walker failed: {e}"))?;
 
-        // Walk the focused window's children (max 50 elements to avoid overwhelming)
+        // Prefer the actual foreground window (what the user is looking at).
+        // Fall back to the desktop root only if we can't resolve it (e.g.
+        // Start menu is open, or no window has focus).
+        let foreground_hwnd = unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+        let start_element = if !foreground_hwnd.is_null() {
+            automation.element_from_handle(uiautomation::types::Handle::from(foreground_hwnd as isize))
+                .ok()
+        } else {
+            None
+        };
+        let root = automation.get_root_element().map_err(|e| format!("Root failed: {e}"))?;
+        let start = start_element.as_ref().unwrap_or(&root);
+
         let mut elements = Vec::new();
-        collect_elements(&walker, &root, &mut elements, 0, 3); // depth 3
+        collect_elements(&walker, start, &mut elements, 0, 8);
 
         Ok(elements)
     }
@@ -352,7 +365,7 @@ fn collect_elements(
     depth: u32,
     max_depth: u32,
 ) {
-    if depth > max_depth || elements.len() >= 100 {
+    if depth > max_depth || elements.len() >= 300 {
         return;
     }
 
@@ -376,16 +389,40 @@ fn collect_element_recursive(
     // Get element info
     let name = element.get_name().unwrap_or_default();
     let control_type = element.get_localized_control_type().unwrap_or_default();
+    let automation_id = element.get_automation_id().unwrap_or_default();
     let rect = element.get_bounding_rectangle().unwrap_or_default();
 
-    // Only include elements that have a name and a visible bounding box
+    // A useful element is:
+    //   - visible (non-zero bounding box), AND
+    //   - identifiable: has a name OR an AutomationId OR is an interactable
+    //     control type even when unnamed (buttons, list items, menu items
+    //     often lack a .Name but still matter).
     let w = rect.get_width() as i32;
     let h = rect.get_height() as i32;
     let x = rect.get_left() as i32;
     let y = rect.get_top() as i32;
-    if !name.is_empty() && w > 0 && h > 0 {
+    let ct_lower = control_type.to_lowercase();
+    let is_interactable_type =
+        ct_lower.contains("button") || ct_lower.contains("link") ||
+        ct_lower.contains("menu item") || ct_lower.contains("menuitem") ||
+        ct_lower.contains("list item") || ct_lower.contains("listitem") ||
+        ct_lower.contains("edit") || ct_lower.contains("text") ||
+        ct_lower.contains("tab") || ct_lower.contains("check") ||
+        ct_lower.contains("radio") || ct_lower.contains("combo") ||
+        ct_lower.contains("hyperlink") || ct_lower.contains("document");
+    let identifiable = !name.is_empty() || !automation_id.is_empty() || is_interactable_type;
+
+    if identifiable && w > 0 && h > 0 {
+        // Prefer name, fall back to automation_id, fall back to control_type
+        let display_name = if !name.is_empty() {
+            name.clone()
+        } else if !automation_id.is_empty() {
+            automation_id.clone()
+        } else {
+            control_type.clone()
+        };
         elements.push(UIElementInfo {
-            name: name.clone(),
+            name: display_name,
             control_type,
             x,
             y,
@@ -795,26 +832,65 @@ struct BrowserProcess {
 
 static BROWSER_PROCESS: Mutex<Option<BrowserProcess>> = Mutex::new(None);
 
-/// Launch the browser worker subprocess using the bundled Node binary.
+/// Launch the browser worker subprocess.
+///
+/// Spawns the bundled `browser-worker.mjs` using Node. In dev the worker
+/// lives at `packages/ide/src-tauri/resources/browser-worker.mjs` and
+/// `node` must resolve it — playwright is installed in the IDE's
+/// node_modules so the worker can `import { chromium } from 'playwright'`.
+/// In production Tauri copies the worker into the app's resource_dir.
+///
+/// Idempotent: if the worker is already running, returns ok with
+/// `{alreadyRunning: true}` instead of erroring. That way callers can
+/// call launch freely before every operation without guarding.
 #[tauri::command]
 fn browser_launch(app: AppHandle) -> Result<serde_json::Value, String> {
     let mut guard = BROWSER_PROCESS.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
     if guard.is_some() {
-        return Err("Browser worker already running".into());
+        return Ok(serde_json::json!({ "ok": true, "alreadyRunning": true }));
     }
 
-    // Resolve the bundled Node binary path — Tauri puts sidecars next to the exe
-    let resource_dir = app.path().resource_dir().map_err(|e| format!("Resource dir: {e}"))?;
-    let node_path = resource_dir.join("binaries").join(if cfg!(windows) { "node.exe" } else { "node" });
-    let worker_path = resource_dir.join("resources").join("browser-worker.mjs");
+    // In dev the working directory is packages/ide/src-tauri. The worker
+    // lives at resources/browser-worker.mjs relative to that. In production
+    // Tauri's resource_dir() resolves to the bundled copy.
+    let resource_dir = app.path().resource_dir().ok();
+    let worker_candidates: Vec<std::path::PathBuf> = {
+        let mut v: Vec<std::path::PathBuf> = Vec::new();
+        // Production / bundled
+        if let Some(dir) = resource_dir.as_ref() {
+            v.push(dir.join("resources").join("browser-worker.mjs"));
+        }
+        // Dev — cwd-relative
+        if let Ok(cwd) = std::env::current_dir() {
+            v.push(cwd.join("resources").join("browser-worker.mjs"));
+            v.push(cwd.join("src-tauri").join("resources").join("browser-worker.mjs"));
+        }
+        v
+    };
+    let worker_path = worker_candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .ok_or_else(|| "browser-worker.mjs not found in resource dir or dev paths".to_string())?;
 
-    let mut child = Command::new(&node_path)
+    // The worker runs via plain `node` — must be on PATH or in the bundled
+    // binaries directory. Playwright is imported from the IDE's node_modules,
+    // so we set CWD to the package so Node's module resolution works.
+    let node_cmd = if cfg!(windows) { "node.exe" } else { "node" };
+    let package_root = worker_path
+        .parent() // resources/
+        .and_then(|p| p.parent()) // src-tauri/
+        .and_then(|p| p.parent()) // packages/ide/
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    let mut child = Command::new(node_cmd)
         .arg(&worker_path)
+        .current_dir(&package_root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
-        .map_err(|e| format!("Failed to spawn browser worker: {e}"))?;
+        .map_err(|e| format!("Failed to spawn browser worker ({}): {e}", node_cmd))?;
 
     let stdin = child.stdin.take().ok_or("Failed to capture stdin")?;
     let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;

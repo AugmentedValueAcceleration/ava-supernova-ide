@@ -336,13 +336,13 @@ async function handleInit(data) {
     }
 
     // Resolve model — try BYOK first, then fall back to platform
-    let activeModel = config.activeModel || 'platform:qwen3-omni-flash';
+    let activeModel = config.activeModel || 'platform:qwen3.5-flash';
     emit({ event: 'info', message: `Resolving model: ${activeModel}` });
     let resolved = providerRegistry.resolveModel(activeModel);
 
     // If BYOK model not found, try platform models
     if (!resolved && config.platformKey) {
-      const platformFallbacks = ['platform:qwen3-omni-flash', 'platform:qwen3.5-omni-plus', 'platform:qwen3.5-plus', 'platform:qwen-flash'];
+      const platformFallbacks = ['platform:qwen3.5-flash', 'platform:qwen3.5-omni-flash', 'platform:qwen3.5-omni-plus', 'platform:qwen3.5-plus'];
       for (const fb of platformFallbacks) {
         resolved = providerRegistry.resolveModel(fb);
         if (resolved) { activeModel = fb; break; }
@@ -360,6 +360,86 @@ async function handleInit(data) {
       exclude: ['screenshot', 'computer_use', 'computer_use_blackboard'], // computer_use disabled — coming back with improved integration
     });
     toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
+
+    // ── Desktop Automation Mode — Tools live in @ava/core ───────────────
+    // The desktop_* and browser_* tool classes are registered by
+    // toolRegistry.registerBuiltins() above. They call into the Tauri
+    // layer via the providers on sharedState (uiaProvider, inputProvider,
+    // browserProvider, windowProvider). Nothing is registered inline here.
+    // MODE_ALLOWED_TOOLS keeps them off outside of `desktop` mode.
+    //
+    // DELETED (replaced by core tools): browser_navigate, browser_snapshot,
+    // browser_click, browser_type, browser_close, desktop_list_elements,
+    // desktop_click_by_name, desktop_type, desktop_key_press,
+    // desktop_focus_window. Also deleted: desktop_screenshot and
+    // desktop_click_xy — spec §2 classifies pixel-based targeting as a
+    // failure mode; the pivot uses UIA tree + Playwright DOM exclusively.
+
+    // Browser bridge — fulfils the @ava/core BrowserProvider contract by
+    // round-tripping through the IDE frontend via computerUseRequest, which
+    // calls the Rust browser_launch + browser_send Tauri commands. The
+    // Playwright worker (src-tauri/resources/browser-worker.mjs) handles
+    // the actual navigate/snapshot/click/type/close operations.
+    let browserLaunched = false;
+    async function ensureBrowser() {
+      if (browserLaunched) return;
+      try {
+        await computerUseRequest('browser_launch');
+        browserLaunched = true;
+      } catch (launchErr) {
+        const msg = String(launchErr.message || launchErr);
+        if (/already running/i.test(msg)) {
+          browserLaunched = true;
+          return;
+        }
+        throw new Error(
+          `browser_launch failed: ${msg}. The Ava browser worker could not start — ` +
+          `check that Playwright is installed and the Tauri dev server has picked up the latest Rust changes.`
+        );
+      }
+    }
+    async function browserSend(action, params) {
+      await ensureBrowser();
+      const res = await computerUseRequest('browser_send', { browserAction: action, params });
+      const payload = res?.data ?? res?.result ?? res;
+      if (payload && typeof payload === 'object' && payload.ok === false) {
+        throw new Error(payload.error || `browser ${action} returned ok:false`);
+      }
+      return payload?.result ?? payload;
+    }
+    const browserBridge = {
+      async navigate(url) {
+        const result = await browserSend('navigate', { url });
+        return { url: result?.url ?? url, title: result?.title ?? '' };
+      },
+      async snapshot() {
+        // The worker returns { title, url, links[], buttons[], inputs[] };
+        // flatten into our typed BrowserSnapshot shape.
+        const raw = await browserSend('snapshot', {});
+        const elements = [];
+        for (const l of raw?.links || []) {
+          elements.push({ tag: 'link', selector: l.selector, text: l.text, href: l.href });
+        }
+        for (const b of raw?.buttons || []) {
+          elements.push({ tag: 'button', selector: b.selector, text: b.text });
+        }
+        for (const i of raw?.inputs || []) {
+          elements.push({ tag: i.type === 'textarea' ? 'textarea' : 'input', selector: i.selector, placeholder: i.placeholder });
+        }
+        return { url: raw?.url ?? '', title: raw?.title ?? '', elements };
+      },
+      async click(selector) { await browserSend('click', { selector }); },
+      async type(text) { await browserSend('type', { text }); },
+      async key(key) { await browserSend('key', { key }); },
+      async close() {
+        try { await computerUseRequest('browser_close'); }
+        catch (err) {
+          const msg = String(err.message || err);
+          if (!/not running|already closed/i.test(msg)) throw err;
+        }
+        browserLaunched = false;
+      },
+    };
 
     // Confirmation handler — pauses and waits for IDE response
     // toolCallId is forwarded so the IDE frontend can attach the confirmation
@@ -524,14 +604,16 @@ async function handleInit(data) {
       windowProvider: windowBridge,
       holoApiKey: process.env.HAI_API_KEY || config.holoApiKey,
       uiaProvider: uiaBridge,
+      // Desktop Automation mode — Playwright-backed browser via Tauri worker
+      browserProvider: browserBridge,
       _debug_holo: !!(config.holoApiKey || process.env.HAI_API_KEY) ? 'BYOK' : (config.platformKey ? 'platform' : 'none'),
       computerUseSettings: config.computerUseSettings || undefined,
     };
 
     // Memory Agent — curates briefs instead of raw memory dumps
-    const qwenFlash = providerRegistry.resolveModel('platform:qwen3-omni-flash')
-      || providerRegistry.resolveModel('platform:qwen-flash')
-      || providerRegistry.resolveModel('qwen:qwen3-omni-flash');
+    const qwenFlash = providerRegistry.resolveModel('platform:qwen3.5-flash')
+      || providerRegistry.resolveModel('platform:qwen3.5-omni-flash')
+      || providerRegistry.resolveModel('qwen:qwen3.5-flash');
     if (qwenFlash && memoryManager) {
       memoryAgentInstance = new MemoryAgent({
         memoryManager,
@@ -659,7 +741,7 @@ async function handleMessage(data) {
       const hasImages = data.attachments.some(a => a.mimeType?.startsWith('image/'));
       const currentModel = globalThis._currentModel;
       if (hasImages && currentModel && !currentModel.supportsVision) {
-        emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.5 Plus or Qwen Omni Flash to analyse images.` });
+        emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.6 Plus or Qwen 3.5 Omni Flash to analyse images.` });
       }
       const parts = [];
       if (data.content) parts.push({ type: 'text', text: data.content });

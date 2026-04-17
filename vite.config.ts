@@ -8,6 +8,16 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
+  // @ava/core has playwright as an optional peer dep for server-side use.
+  // It's only referenced by the Desktop Automation sidecar (Node subprocess),
+  // never by the Vite-bundled frontend — but pnpm hoists playwright-core
+  // into the workspace and Vite's dep scanner follows the peer link,
+  // triggering "Failed to resolve https" because playwright-core requires
+  // Node built-ins. Exclude it explicitly so the frontend bundle stays clean.
+  optimizeDeps: {
+    exclude: ["playwright", "playwright-core"],
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

@@ -3,7 +3,6 @@ import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { getPlatformKey, apiStreamUrl } from '../lib/api';
 import { t, useLocale } from '../lib/i18n';
-import DesktopModePanel from './DesktopModePanel';
 
 interface Props {
   activeTab: BottomTab;
@@ -50,7 +49,6 @@ interface CliLine {
 }
 
 function AvaCliPanel() {
-  const [desktopMode, setDesktopMode] = useState(false);
   const [lines, setLines] = useState<CliLine[]>([
     { type: 'system', text: 'Ava | Supernova CLI — type a message and press Enter' },
   ]);
@@ -59,11 +57,6 @@ function AvaCliPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const currentResponse = useRef('');
-
-  // Desktop mode: activated by typing @@ as the first characters
-  if (desktopMode) {
-    return <DesktopModePanel onExit={() => setDesktopMode(false)} />;
-  }
 
   // Auto-scroll
   useEffect(() => {
@@ -94,11 +87,15 @@ function AvaCliPanel() {
     setInput('');
     setBusy(true);
 
-    // Detect @@ desktop mode prefix
+    // `@@` prefix → run this single turn in desktop mode. The terminal
+    // panel doesn't persist chat mode (the main chat does that); here
+    // we just prepend the desktop tag so the agent picks up the mode
+    // for this message.
+    let effectiveText = trimmed;
     if (trimmed.startsWith('@@')) {
-      setDesktopMode(true);
-      setBusy(false);
-      return;
+      const preset = trimmed.slice(2).trim();
+      if (!preset) { setInput(''); setBusy(false); return; }
+      effectiveText = `[Desktop Automation Mode] ${preset}`;
     }
 
     appendLine({ type: 'user', text: trimmed });
@@ -159,7 +156,7 @@ function AvaCliPanel() {
       sidecar.onAny(handler);
 
       try {
-        await sidecar.sendMessage(trimmed);
+        await sidecar.sendMessage(effectiveText);
       } catch (err: any) {
         appendLine({ type: 'error', text: err.message });
         sidecar.offAny(handler);
@@ -181,7 +178,7 @@ function AvaCliPanel() {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'qwen3-omni-flash',
+            model: 'qwen3.5-flash',
             messages: [{ role: 'user', content: trimmed }],
           }),
         });
