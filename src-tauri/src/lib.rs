@@ -5,6 +5,55 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
+// Tracks the last window Ava successfully targeted (via focus_window or the
+// post-launch re-focus in launch_app). type_text / key_press restore this
+// window to foreground before sending keystrokes so the input lands in the
+// right place even after the Ava IDE approval dialog pulled focus back to
+// itself. Stores the HWND as isize (the native handle value) so the static
+// is Send+Sync-friendly; only Windows consumes it.
+static LAST_FOCUSED_HWND: Mutex<Option<isize>> = Mutex::new(None);
+
+#[cfg(target_os = "windows")]
+fn record_target_hwnd(hwnd_isize: isize) {
+    if let Ok(mut guard) = LAST_FOCUSED_HWND.lock() {
+        *guard = Some(hwnd_isize);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn restore_last_target() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE,
+    };
+    let Some(hwnd_isize) = ({
+        let guard = match LAST_FOCUSED_HWND.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        *guard
+    }) else {
+        return;
+    };
+    unsafe {
+        let hwnd = hwnd_isize as windows_sys::Win32::Foundation::HWND;
+        let current = GetForegroundWindow();
+        if current as isize == hwnd_isize {
+            return; // already focused — no-op
+        }
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+        }
+        SetForegroundWindow(hwnd);
+    }
+    // Small settle delay so the new foreground actually owns the input
+    // queue before we start typing. 50 ms is enough on Windows 10/11
+    // without being perceptible to the user.
+    std::thread::sleep(std::time::Duration::from_millis(50));
+}
+
+#[cfg(not(target_os = "windows"))]
+fn restore_last_target() {}
+
 // ─── Computer Use: Screenshot + Input Commands ──────────────────────────────
 
 #[derive(Serialize)]
@@ -94,6 +143,10 @@ fn right_click(x: i32, y: i32) -> Result<(), String> {
 #[tauri::command]
 fn type_text(text: String) -> Result<(), String> {
     use enigo::{Enigo, Keyboard, Settings};
+    // Pull the last targeted window back to foreground before typing so
+    // the keystrokes land in the right app even when the Ava IDE approval
+    // dialog stole focus mid-trajectory.
+    restore_last_target();
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
     enigo.text(&text).map_err(|e| format!("Type failed: {e}"))?;
     Ok(())
@@ -103,6 +156,9 @@ fn type_text(text: String) -> Result<(), String> {
 #[tauri::command]
 fn key_press(key: String) -> Result<(), String> {
     use enigo::{Enigo, Keyboard, Settings, Key, Direction};
+    // Same focus-restore as type_text: the IDE approval dialog keeps
+    // stealing foreground, so we pull the target window back.
+    restore_last_target();
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
 
     // Handle combo keys: "ctrl+n", "meta+r", "ctrl+shift+s", etc.
@@ -470,27 +526,84 @@ fn find_ui_element(name: String) -> Result<UIElementInfo, String> {
     }
 }
 
+/// Run a UIA closure on a dedicated thread with a fresh COM apartment state.
+///
+/// `UIAutomation::new()` internally calls `CoInitializeEx(STA)`. If the
+/// Tauri worker thread already initialized COM in a different apartment
+/// model (which Tauri's own runtime does on some threads), UIA init fails
+/// with `RPC_E_CHANGED_MODE` — "Cannot change thread mode after it is set."
+///
+/// By spawning a fresh std::thread for each call, we guarantee a clean COM
+/// slate. Cost is small (<10 ms per call) and this eliminates the whole
+/// bug class rather than trying to coordinate thread state across commands.
+#[cfg(target_os = "windows")]
+fn with_uia<T, F>(label: &'static str, f: F) -> Result<T, String>
+where
+    F: FnOnce(&uiautomation::UIAutomation) -> Result<T, String> + Send + 'static,
+    T: Send + 'static,
+{
+    let handle = std::thread::Builder::new()
+        .name(format!("uia-{label}"))
+        .spawn(move || {
+            let automation = uiautomation::UIAutomation::new()
+                .map_err(|e| format!("UIA init failed: {e}"))?;
+            f(&automation)
+        })
+        .map_err(|e| format!("UIA thread spawn failed: {e}"))?;
+    match handle.join() {
+        Ok(result) => result,
+        Err(_) => Err(format!("UIA thread panicked during {label}")),
+    }
+}
+
 /// Focus a window by name — brings it to the foreground.
+///
+/// Runs the UIA work on a dedicated thread (see `with_uia` above) so the
+/// call doesn't trip over COM apartment state inherited from whatever
+/// else ran on the Tauri worker pool before it.
+///
+/// On success also calls `SetForegroundWindow` via the returned window's
+/// HWND — `set_focus()` alone doesn't always steal foreground when another
+/// process owns it (Windows has anti-focus-stealing policy). The raw API
+/// call is how we bring a freshly-launched Notepad / Chrome / … forward
+/// after the approval dialog in the IDE pulled focus back to us.
 #[tauri::command]
 fn focus_window(name: String) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
-        use uiautomation::UIAutomation;
+        with_uia("focus_window", move |automation| {
+            let root = automation.get_root_element().map_err(|e| format!("Root failed: {e}"))?;
+            let walker = automation.get_control_view_walker().map_err(|e| format!("Walker failed: {e}"))?;
+            let name_lower = name.to_lowercase();
 
-        let automation = UIAutomation::new().map_err(|e| format!("UIA init failed: {e}"))?;
-        let root = automation.get_root_element().map_err(|e| format!("Root failed: {e}"))?;
-        let walker = automation.get_control_view_walker().map_err(|e| format!("Walker failed: {e}"))?;
-
-        let name_lower = name.to_lowercase();
-
-        // Walk top-level windows to find the target
-        if let Ok(child) = walker.get_first_child(&root) {
+            let child = walker.get_first_child(&root).map_err(|e| format!("Walk failed: {e}"))?;
             let mut current = child;
             loop {
                 let win_name = current.get_name().unwrap_or_default();
-                if win_name.to_lowercase().contains(&name_lower) {
-                    // Found it — try to set focus
-                    current.set_focus().map_err(|e| format!("Focus failed: {e}"))?;
+                if !win_name.is_empty() && win_name.to_lowercase().contains(&name_lower) {
+                    // Try to grab an HWND and call SetForegroundWindow directly —
+                    // UIA's set_focus() is advisory and blocked by the OS's
+                    // anti-focus-stealing policy when another process owns it.
+                    if let Ok(handle) = current.get_native_window_handle() {
+                        let hwnd_isize: isize = handle.into();
+                        unsafe {
+                            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                                SetForegroundWindow, ShowWindow, IsIconic,
+                                SW_RESTORE,
+                            };
+                            let hwnd = hwnd_isize as windows_sys::Win32::Foundation::HWND;
+                            if IsIconic(hwnd) != 0 {
+                                ShowWindow(hwnd, SW_RESTORE);
+                            }
+                            SetForegroundWindow(hwnd);
+                        }
+                        // Remember for the next type_text / key_press call so
+                        // the IDE's approval dialog stealing focus doesn't
+                        // misroute keystrokes.
+                        record_target_hwnd(hwnd_isize);
+                    }
+                    // Best-effort UIA focus as a secondary signal
+                    let _ = current.set_focus();
                     return Ok(win_name);
                 }
                 match walker.get_next_sibling(&current) {
@@ -498,9 +611,8 @@ fn focus_window(name: String) -> Result<String, String> {
                     Err(_) => break,
                 }
             }
-        }
-
-        Err(format!("Window '{}' not found", name))
+            Err(format!("Window '{}' not found", name))
+        })
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -806,6 +918,139 @@ fn generate_hex_key() -> String {
     key.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+// ─── Desktop Launch App ────────────────────────────────────────────────────
+//
+// Narrow replacement for `bash` in Desktop Automation mode. Spawns a named
+// executable or full path via std::process::Command — no shell, no pipes,
+// no redirection. Pair args must be separate; the caller can't smuggle a
+// command line. A hard denylist refuses shell / scripting / registry /
+// admin tools so the blast radius stays firmly at "open an app".
+//
+// Windows PATH resolution handles bare names like "notepad", "calc",
+// "chrome" by itself. Full paths also work. Protocol URLs (mailto:, http:)
+// are NOT supported here — those would need ShellExecute; keep it simple.
+
+#[derive(Serialize)]
+struct LaunchAppResult {
+    pid: u32,
+    launched: String,
+}
+
+/// Launch a named executable or full path. Refuses shell / script / admin
+/// tools by basename. Never invokes a shell interpreter.
+#[tauri::command]
+fn launch_app(name: String) -> Result<LaunchAppResult, String> {
+    const DENYLIST: &[&str] = &[
+        "bash", "sh", "zsh", "fish", "wsl", "wsl.exe",
+        "cmd", "cmd.exe", "powershell", "pwsh", "powershell_ise",
+        "reg", "regedit", "regedt32",
+        "taskkill", "sc", "net", "net1", "wmic", "mshta",
+        "rundll32", "cscript", "wscript",
+        "gpedit", "mmc", "eventvwr",
+    ];
+
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("launch_app: name is required".into());
+    }
+
+    // Derive the basename (last path segment, stripped of .exe) for the
+    // denylist check. Handles both `\` and `/` separators and arbitrary
+    // casing from the caller. Full paths to denylisted binaries are also
+    // rejected — the user can't sneak "C:\Windows\System32\cmd.exe" through.
+    let basename = trimmed
+        .rsplit(|c: char| c == '\\' || c == '/')
+        .next()
+        .unwrap_or(trimmed)
+        .to_lowercase();
+    let stripped = basename
+        .strip_suffix(".exe")
+        .unwrap_or(&basename)
+        .to_string();
+
+    if DENYLIST.iter().any(|deny| *deny == stripped) {
+        return Err(format!(
+            "launch_app refused: '{stripped}' is on the denylist. Shells, scripting hosts, registry editors and admin tools cannot be launched from desktop mode."
+        ));
+    }
+
+    let child = std::process::Command::new(trimmed)
+        .spawn()
+        .map_err(|e| format!("launch_app failed to spawn '{trimmed}': {e}"))?;
+
+    let pid = child.id();
+
+    // Poll for the process's first top-level window for up to 3 s, then
+    // record it as the type_text / key_press target. This closes the
+    // "IDE steals focus on the approval dialog" gap — by the time Ava
+    // calls type_text, we already know where the keystrokes should go,
+    // even without an explicit focus_window call.
+    #[cfg(target_os = "windows")]
+    {
+        record_process_main_window(pid, std::time::Duration::from_millis(3000));
+    }
+
+    Ok(LaunchAppResult {
+        pid,
+        launched: trimmed.to_string(),
+    })
+}
+
+/// Poll EnumWindows for up to `timeout` looking for the first visible top-level
+/// window owned by `target_pid`. Records it via `record_target_hwnd` on find.
+/// No-op if no window appears in time.
+#[cfg(target_os = "windows")]
+fn record_process_main_window(target_pid: u32, timeout: std::time::Duration) {
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindow, GetWindowThreadProcessId, IsWindowVisible, GW_OWNER,
+    };
+
+    // Use a thread-local-like static that the enum callback can write into.
+    // A fresh AtomicIsize per call would require passing a pointer through
+    // LPARAM; the simpler pattern is a module static reset on each call.
+    static FOUND_HWND: AtomicIsize = AtomicIsize::new(0);
+    static TARGET_PID: AtomicIsize = AtomicIsize::new(0);
+
+    unsafe extern "system" fn enum_cb(hwnd: HWND, _: LPARAM) -> BOOL {
+        let target = TARGET_PID.load(Ordering::Relaxed) as u32;
+        if target == 0 {
+            return 0; // stop
+        }
+        if unsafe { IsWindowVisible(hwnd) } == 0 {
+            return 1;
+        }
+        // Only main/top-level windows — skip owned popups.
+        let owner = unsafe { GetWindow(hwnd, GW_OWNER) };
+        if !owner.is_null() {
+            return 1;
+        }
+        let mut win_pid: u32 = 0;
+        unsafe { GetWindowThreadProcessId(hwnd, &mut win_pid) };
+        if win_pid == target {
+            FOUND_HWND.store(hwnd as isize, Ordering::Relaxed);
+            return 0; // stop enumerating
+        }
+        1
+    }
+
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        FOUND_HWND.store(0, Ordering::Relaxed);
+        TARGET_PID.store(target_pid as isize, Ordering::Relaxed);
+        unsafe {
+            EnumWindows(Some(enum_cb), 0);
+        }
+        let hwnd = FOUND_HWND.load(Ordering::Relaxed);
+        if hwnd != 0 {
+            record_target_hwnd(hwnd);
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
 // ─── Playwright Subprocess Manager ─────────────────────────────────────────
 //
 // Manages the Node subprocess that drives headed Chromium via Playwright.
@@ -1029,6 +1274,7 @@ pub fn run() {
             browser_launch,
             browser_send,
             browser_close,
+            launch_app,
             profile_key_get,
             profile_key_delete,
             keychain_set,

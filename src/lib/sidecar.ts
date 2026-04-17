@@ -401,13 +401,16 @@ export class SidecarManager {
           result = await invoke('list_ui_elements');
           break;
         case 'find_ui_element':
-          result = await invoke('find_ui_element', { name: event.text });
+          // Accept either event.name (uiaBridge) or event.text (legacy
+          // inline tools that used { text: … } arg shape). Rust command
+          // wants `name`.
+          result = await invoke('find_ui_element', { name: event.name ?? event.text });
           break;
         case 'click_element':
-          result = await invoke('click_element', { name: event.text });
+          result = await invoke('click_element', { name: event.name ?? event.text });
           break;
         case 'focus_window':
-          result = await invoke('focus_window', { name: event.text });
+          result = await invoke('focus_window', { name: event.name ?? event.text });
           break;
 
         // ── Browser automation (Session 2 prototype, wired in for desktop mode)
@@ -415,6 +418,9 @@ export class SidecarManager {
         // via Playwright. They let the sidecar drive the visible browser
         // the same way the Session 2 prototype did, but inside the normal
         // agent loop.
+        case 'launch_app':
+          result = await invoke('launch_app', { name: event.name ?? event.text });
+          break;
         case 'browser_launch':
           result = await invoke('browser_launch');
           break;

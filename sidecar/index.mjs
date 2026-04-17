@@ -254,6 +254,14 @@ const windowBridge = {
   },
 };
 
+/** App launcher bridge — narrow scoped replacement for `bash` in desktop mode. */
+const appLauncherBridge = {
+  async launch(app) {
+    const result = await computerUseRequest('launch_app', { name: app });
+    return result.data;
+  },
+};
+
 /** UI Automation bridge — structured element detection */
 const uiaBridge = {
   async listElements() {
@@ -605,7 +613,9 @@ async function handleInit(data) {
       windowProvider: windowBridge,
       holoApiKey: process.env.HAI_API_KEY || config.holoApiKey,
       uiaProvider: uiaBridge,
-      // Desktop Automation mode — Playwright-backed browser via Tauri worker
+      // Desktop Automation mode — narrow app launcher (replaces bash) +
+      // Playwright-backed browser via Tauri worker.
+      appLauncherProvider: appLauncherBridge,
       browserProvider: browserBridge,
       // Desktop safety gate — the @ava/core tools call these on every
       // mutative action. Permission level and budget are read per call;
@@ -741,6 +751,17 @@ async function handleMessage(data) {
   isRunning = true;
   const abortController = new AbortController();
   currentAbort = abortController;
+
+  // Clear any active desktop-trajectory plan AND the per-turn mutative
+  // counter at the start of each new user turn. A fresh message may be a
+  // follow-up that needs its own approval scope — we don't blanket-approve
+  // reversible actions from the previous task. The 5 min TTL on the plan
+  // object is a second belt-and-braces. The counter is what the gate uses
+  // to enforce "plan first" on the 2nd+ mutative action of a turn.
+  if (globalThis._sharedState) {
+    globalThis._sharedState.desktopActivePlan = null;
+    globalThis._sharedState.desktopMutativeActionsThisTurn = 0;
+  }
 
   try {
     // Sync conversation from UI history if provided (ensures sidecar sees full chat window)
