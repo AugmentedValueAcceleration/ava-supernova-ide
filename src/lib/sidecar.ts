@@ -98,6 +98,18 @@ export interface SidecarEvent {
   // browser automation — browser_send forwarding
   browserAction?: string;
   params?: Record<string, unknown>;
+  // desktop safety gate — richer payload on confirm_required events
+  toolCategory?: string;
+  desktopClassification?: {
+    riskClass: 'observational' | 'navigational' | 'mutative-reversible' | 'mutative-irreversible' | 'privileged';
+    reasons: string[];
+    requiresSecretHandle: boolean;
+  };
+  // computer_use_request for UIA / window targeting — the sidecar bridge
+  // sends `name`, legacy inline tools sent `text`. Both accepted for back
+  // compat by the computer-use handler; include `name` here so TypeScript
+  // doesn't complain at the `event.name ?? event.text` fallback.
+  name?: string;
 }
 
 type EventListener = (event: SidecarEvent) => void;

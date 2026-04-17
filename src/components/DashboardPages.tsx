@@ -1859,7 +1859,14 @@ export function AvaChatPage() {
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
   const [pendingConfirm, setPendingConfirm] = useState<{
-    id: string; toolName: string; args: Record<string, unknown>;
+    id: string;
+    toolName: string;
+    args: Record<string, unknown>;
+    desktopClassification?: {
+      riskClass: 'observational' | 'navigational' | 'mutative-reversible' | 'mutative-irreversible' | 'privileged';
+      reasons: string[];
+      requiresSecretHandle: boolean;
+    };
   } | null>(null);
   const [confirmInput, setConfirmInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<{ name: string; dataUri: string; mimeType: string }[]>([]);
@@ -2646,6 +2653,7 @@ export function AvaChatPage() {
           id: event.id!,
           toolName: event.toolName || 'unknown',
           args: event.args || {},
+          desktopClassification: event.desktopClassification,
         });
         break;
 
@@ -4174,25 +4182,69 @@ export function AvaChatPage() {
       </div>
 
       {/* ── Tool Confirmation — inline banner above input ──────────────── */}
-      {pendingConfirm && (
+      {pendingConfirm && (() => {
+        // Per-card data derived once — cheaper than inline ternaries, and
+        // puts the "what is this?" decision in one place.
+        const isPlanCard = pendingConfirm.toolName === 'desktop_plan_approve';
+        const planSummary = isPlanCard ? (pendingConfirm.args?.summary as string | undefined) : undefined;
+        const planSteps = isPlanCard
+          ? ((pendingConfirm.args?.steps as Array<{ description?: string }> | undefined) || [])
+          : [];
+        const cls = pendingConfirm.desktopClassification;
+        const isDesktopTool = !!cls;
+        // Per-tool human-facing action line — simpler than a JSON dump.
+        const desktopActionLine = (() => {
+          const args = pendingConfirm.args || {};
+          switch (pendingConfirm.toolName) {
+            case 'desktop_launch_app':     return `Launch ${(args.app as string) || '?'}`;
+            case 'desktop_click_by_name':  return `Click "${(args.name as string) || '?'}"`;
+            case 'desktop_focus_window':   return `Focus window: ${(args.title as string) || '?'}`;
+            case 'desktop_type':           return `Type: "${String(args.text || '').slice(0, 80)}"`;
+            case 'desktop_key_press':      return `Press ${(args.key as string) || '?'}`;
+            case 'browser_navigate':       return `Open ${(args.url as string) || '?'}`;
+            case 'browser_click':          return `Click ${(args.target_text as string) || (args.selector as string) || '?'}`;
+            case 'browser_type':           return `Type into field: "${String(args.text || '').slice(0, 80)}"`;
+            case 'browser_close':          return 'Close the browser';
+            default:                       return null;
+          }
+        })();
+        // Risk badge colour by class — irreversible / privileged are the
+        // ones the user really needs to notice.
+        const riskColour = (() => {
+          switch (cls?.riskClass) {
+            case 'mutative-irreversible': return { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.45)', fg: '#f87171' };
+            case 'privileged':            return { bg: 'rgba(239,68,68,0.18)', border: 'rgba(239,68,68,0.6)',  fg: '#ef4444' };
+            case 'mutative-reversible':   return { bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.35)', fg: '#eab308' };
+            case 'navigational':          return { bg: 'rgba(168,85,247,0.12)', border: 'rgba(168,85,247,0.3)', fg: '#a855f7' };
+            default:                      return { bg: 'rgba(168,85,247,0.12)', border: 'rgba(168,85,247,0.3)', fg: '#a855f7' };
+          }
+        })();
+
+        return (
         <div style={{
-          margin: '0 16px', padding: '12px 16px',
-          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 10,
+          margin: '0 16px', padding: '14px 18px',
+          background: 'rgba(26, 16, 40, 0.6)', border: `1px solid ${riskColour.border}`, borderRadius: 10,
           borderBottom: 'none', borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#eab308', animation: 'avaPulse 1.5s infinite' }} />
-              <span style={{ fontSize: 12, color: '#cdd6f4' }}>
-                {t('dash.chat.ava_wants_to_run')} <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span>
-              </span>
+          {/* Header — dot + headline + action buttons */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: isPlanCard || isDesktopTool ? 10 : 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: riskColour.fg, animation: 'avaPulse 1.5s infinite', flexShrink: 0 }} />
+              <div style={{ fontSize: 13, color: '#cdd6f4', fontWeight: 600 }}>
+                {isPlanCard
+                  ? 'Ava wants your approval to run this plan:'
+                  : desktopActionLine
+                    ? `Ava wants to: ${desktopActionLine}`
+                    : <>Ava wants to run <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span></>
+                }
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               <button
                 onClick={denyConfirm}
                 style={{
-                  padding: '4px 12px', background: 'transparent', border: '1px solid #45475a',
-                  borderRadius: 6, color: '#6c7086', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                  padding: '5px 14px', background: 'transparent', border: '1px solid #45475a',
+                  borderRadius: 6, color: '#9399b2', fontSize: 12, fontWeight: 500, cursor: 'pointer',
                 }}
               >
                 {t('tool.deny')}
@@ -4200,28 +4252,84 @@ export function AvaChatPage() {
               <button
                 onClick={approveConfirm}
                 style={{
-                  padding: '4px 12px', background: '#a855f7',
-                  border: 'none', borderRadius: 6, color: '#fff', fontSize: 11,
+                  padding: '5px 14px', background: '#a855f7',
+                  border: 'none', borderRadius: 6, color: '#fff', fontSize: 12,
                   fontWeight: 600, cursor: 'pointer',
                 }}
               >
-                {t('plan.approve')}
+                {isPlanCard ? 'Approve plan' : t('plan.approve')}
               </button>
-              <button
-                onClick={approveAlwaysCategory}
-                style={{
-                  padding: '4px 12px', background: 'transparent', border: '1px solid #a855f7',
-                  borderRadius: 6, color: '#a855f7', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                }}
-                title="Auto-approve this tool category for the rest of the session"
-              >
-                Always Allow
-              </button>
+              {!isPlanCard && cls?.riskClass !== 'mutative-irreversible' && cls?.riskClass !== 'privileged' && (
+                <button
+                  onClick={approveAlwaysCategory}
+                  style={{
+                    padding: '5px 12px', background: 'transparent', border: '1px solid #a855f7',
+                    borderRadius: 6, color: '#a855f7', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                  }}
+                  title="Auto-approve this tool category for the rest of the session"
+                >
+                  Always
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Collapsible args preview */}
-          <details style={{ marginBottom: (pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan') ? 8 : 0 }}>
+          {/* Plan card body — summary + numbered steps */}
+          {isPlanCard && (
+            <div style={{
+              padding: '10px 12px', background: 'rgba(10, 6, 18, 0.6)',
+              border: '1px solid rgba(168,85,247,0.18)', borderRadius: 8, marginBottom: 6,
+            }}>
+              {planSummary && (
+                <div style={{ fontSize: 13, color: '#f5c2e7', marginBottom: 10, fontStyle: 'italic' }}>
+                  "{planSummary}"
+                </div>
+              )}
+              <ol style={{
+                margin: 0, paddingLeft: 22,
+                fontSize: 13, color: '#cdd6f4', lineHeight: '1.7',
+              }}>
+                {planSteps.map((s, i) => (
+                  <li key={i} style={{ marginBottom: 2 }}>{s.description || '(unnamed step)'}</li>
+                ))}
+              </ol>
+              <div style={{ fontSize: 11, color: '#6c7086', marginTop: 10, lineHeight: 1.4 }}>
+                Approving this plan covers all the reversible steps above. Dangerous actions
+                (Send, Pay, Delete, destructive key combos) will still ask for fresh approval
+                even inside this plan.
+              </div>
+            </div>
+          )}
+
+          {/* Non-plan desktop tools — risk badge + classifier reasons */}
+          {!isPlanCard && isDesktopTool && cls && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{
+                padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+                background: riskColour.bg, color: riskColour.fg,
+                border: `1px solid ${riskColour.border}`, textTransform: 'uppercase', letterSpacing: 0.3,
+              }}>
+                {cls.riskClass.replace('mutative-', '')}
+              </span>
+              {cls.requiresSecretHandle && (
+                <span style={{
+                  padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+                  background: 'rgba(59,130,246,0.12)', color: '#60a5fa',
+                  border: '1px solid rgba(59,130,246,0.4)',
+                }}>
+                  SENSITIVE
+                </span>
+              )}
+              {cls.reasons.length > 0 && (
+                <span style={{ fontSize: 11, color: '#9399b2' }}>
+                  {cls.reasons[0]}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Collapsible raw args — always available, just not front-and-centre */}
+          <details style={{ marginTop: isPlanCard || isDesktopTool ? 6 : 0, marginBottom: (pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan') ? 8 : 0 }}>
             <summary style={{ fontSize: 10, color: '#585b70', cursor: 'pointer', userSelect: 'none' }}>{t('dash.chat.view_arguments')}</summary>
             <pre style={{
               fontSize: 10, color: '#6c7086', fontFamily: 'monospace',
@@ -4250,7 +4358,8 @@ export function AvaChatPage() {
             />
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Input Bar (fixed at bottom) ─────────────────────────────────── */}
       <div style={{
