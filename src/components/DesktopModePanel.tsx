@@ -1,6 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import {
+  DesktopConductor,
+  GroundingLayer,
+  ExecutorLayer,
+  type DesktopConductorEvent,
+  type ApprovalHandler,
+} from '@ava/core';
+import {
+  uiaGrounding,
+  playwrightGrounding,
+  makeOmniParserGrounding,
+  nativeExecutor,
+  browserExecutor,
+  makePlatformLLM,
+} from '../lib/desktop-backends';
 
 // ── Types (mirrors @ava/core/desktop — kept inline to avoid build dep) ────
 
@@ -61,7 +76,7 @@ export default function DesktopModePanel({ onExit }: Props) {
   const [approval, setApproval] = useState<ApprovalPending | null>(null);
   const [budgetHeader, setBudgetHeader] = useState('');
   const [outcome, setOutcome] = useState<string | null>(null);
-  const [whitelistApps, setWhitelistApps] = useState<string[]>([]);
+  const [, setWhitelistApps] = useState<string[]>([]);
   const [addAppInput, setAddAppInput] = useState('');
   const [showAddApp, setShowAddApp] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -105,6 +120,11 @@ export default function DesktopModePanel({ onExit }: Props) {
     // retry → conductor.retry(), extend → conductor.extend(), etc.
   }, []);
 
+  // Conductor lives across renders — kept in a ref so we can abort it from
+  // kill handlers without putting it in React state (re-render on every event).
+  const conductorRef = useRef<DesktopConductor | null>(null);
+  const pendingApprovalRef = useRef<((d: { approved: boolean; reason?: string }) => void) | null>(null);
+
   // ── First-run: start trajectory ───────────────────────────────────
   const handleStart = useCallback(async () => {
     if (!task.trim()) return;
@@ -112,26 +132,87 @@ export default function DesktopModePanel({ onExit }: Props) {
       await invoke('desktop_mode_start');
     } catch { /* ok if already started */ }
 
-    setWhitelistApps(whitelist.split(',').map(s => s.trim()).filter(Boolean));
+    const parsedWhitelist = whitelist.split(',').map(s => s.trim()).filter(Boolean);
+    setWhitelistApps(parsedWhitelist);
     setPhase('active');
     setBudgetHeader('Starting...');
+    setSteps([]);
 
-    // In production, this would call the DesktopConductor via the sidecar.
-    // For now, we emit a placeholder event so the UI can be tested.
-    setSteps([{
-      step: 1,
-      narratorLine: 'Observing the screen...',
-      planner: { kind: 'observe_more', riskClass: 'observational' },
-      actor: { ok: true, latencyMs: 0 },
-      verifier: { status: 'verified', detail: 'Initial observation' },
-      budgetHeader: 'Step 1/30 · 0K / 500K tokens · 00:00',
-      expanded: false,
-    }]);
-    setBudgetHeader('Step 1/30 · 0K / 500K tokens · 00:00');
-  }, [task]);
+    // Wire up the grounding layer with all three tiers registered.
+    const grounding = new GroundingLayer({ omniEnabled: true });
+    grounding.registerBackend(uiaGrounding);
+    grounding.registerBackend(playwrightGrounding);
+    grounding.registerBackend(makeOmniParserGrounding());
+
+    const executor = new ExecutorLayer();
+    executor.registerNative(nativeExecutor);
+    executor.registerBrowser(browserExecutor);
+
+    const llm = makePlatformLLM();
+
+    // Approval handler wires the conductor's approval request into our
+    // existing approval card state — conductor waits for the promise.
+    const approvalHandler: ApprovalHandler = {
+      requestApproval: (action, summary) => new Promise((resolve) => {
+        pendingApprovalRef.current = resolve;
+        setApproval({
+          step: steps.length + 1,
+          summary,
+          reversible: action.riskClass !== 'mutative-irreversible',
+          action: { kind: action.kind, target: action.target, reasoning: action.reasoning },
+        });
+      }),
+    };
+
+    const onEvent = (ev: DesktopConductorEvent) => {
+      switch (ev.type) {
+        case 'step_start':
+          setBudgetHeader(ev.budgetHeader);
+          break;
+        case 'narrator_complete':
+          setSteps(prev => [...prev, {
+            step: ev.step,
+            narratorLine: ev.update.line,
+            planner: { kind: ev.update.audit.action.kind, target: ev.update.audit.action.target, riskClass: ev.update.audit.action.riskClass },
+            actor: { ok: ev.update.audit.result.ok, latencyMs: ev.update.audit.result.latencyMs },
+            verifier: { status: ev.update.audit.verification.status, detail: ev.update.audit.verification.detail },
+            budgetHeader: '',
+            expanded: false,
+          }]);
+          break;
+        case 'step_complete':
+          setBudgetHeader(ev.budgetHeader);
+          break;
+        case 'budget_exceeded':
+          setFailure('budget_hit');
+          setFailureDetail(`Hit the ${ev.reason.replace('_', ' ')} cap at step ${ev.step}.`);
+          break;
+        case 'trajectory_complete':
+          setOutcome(`Trajectory ${ev.outcome} after ${ev.steps} step${ev.steps === 1 ? '' : 's'}.`);
+          setPhase('complete');
+          break;
+        case 'error':
+          setOutcome(`Error at step ${ev.step}: ${ev.error}`);
+          setPhase('complete');
+          break;
+      }
+    };
+
+    const conductor = new DesktopConductor(
+      grounding, executor, llm, approvalHandler, onEvent,
+      { task, whitelist: parsedWhitelist, permissionLevel: permission },
+    );
+    conductorRef.current = conductor;
+
+    conductor.run().catch((e) => {
+      setOutcome(`Trajectory crashed: ${e instanceof Error ? e.message : String(e)}`);
+      setPhase('complete');
+    });
+  }, [task, whitelist, permission, steps.length]);
 
   // ── Kill handlers ─────────────────────────────────────────────────
   const handleKill = useCallback(async (level: KillLevel) => {
+    conductorRef.current?.abort();
     try {
       await invoke('desktop_kill', { level });
     } catch (e) {
@@ -142,12 +223,14 @@ export default function DesktopModePanel({ onExit }: Props) {
   // ── Approval handlers ─────────────────────────────────────────────
   const handleApprove = useCallback(() => {
     setApproval(null);
-    // In production: send approval response to conductor
+    pendingApprovalRef.current?.({ approved: true });
+    pendingApprovalRef.current = null;
   }, []);
 
   const handleReject = useCallback(() => {
     setApproval(null);
-    // In production: send rejection to conductor
+    pendingApprovalRef.current?.({ approved: false, reason: 'User rejected the action' });
+    pendingApprovalRef.current = null;
   }, []);
 
   // ── Exit desktop mode ─────────────────────────────────────────────
