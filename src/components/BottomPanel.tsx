@@ -3,6 +3,7 @@ import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { getPlatformKey, apiStreamUrl } from '../lib/api';
 import { t, useLocale } from '../lib/i18n';
+import DesktopModePanel from './DesktopModePanel';
 
 interface Props {
   activeTab: BottomTab;
@@ -49,6 +50,7 @@ interface CliLine {
 }
 
 function AvaCliPanel() {
+  const [desktopMode, setDesktopMode] = useState(false);
   const [lines, setLines] = useState<CliLine[]>([
     { type: 'system', text: 'Ava | Supernova CLI — type a message and press Enter' },
   ]);
@@ -57,6 +59,11 @@ function AvaCliPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const currentResponse = useRef('');
+
+  // Desktop mode: activated by typing @@ as the first characters
+  if (desktopMode) {
+    return <DesktopModePanel onExit={() => setDesktopMode(false)} />;
+  }
 
   // Auto-scroll
   useEffect(() => {
@@ -86,6 +93,13 @@ function AvaCliPanel() {
     if (!trimmed || busy) return;
     setInput('');
     setBusy(true);
+
+    // Detect @@ desktop mode prefix
+    if (trimmed.startsWith('@@')) {
+      setDesktopMode(true);
+      setBusy(false);
+      return;
+    }
 
     appendLine({ type: 'user', text: trimmed });
     currentResponse.current = '';
