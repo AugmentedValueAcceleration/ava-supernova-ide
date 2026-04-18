@@ -1871,6 +1871,20 @@ export function AvaChatPage() {
   const [confirmInput, setConfirmInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<{ name: string; dataUri: string; mimeType: string }[]>([]);
 
+  // Secret-grant prompt — populated when the sidecar emits a
+  // secret_grant_request because Ava called secret_request. User types
+  // the value into the masked input; it goes to the sidecar's session-
+  // lived working set and Ava receives back an opaque `{{secret:<id>}}`
+  // handle. The raw value never appears in chat history, tool args,
+  // thinking, or the model's context — it only materialises at tool
+  // execute time via argsPreprocessor substitution in the sidecar.
+  const [pendingSecretGrant, setPendingSecretGrant] = useState<{
+    grantId: string;
+    label: string;
+    reason: string;
+  } | null>(null);
+  const [secretGrantInput, setSecretGrantInput] = useState('');
+
   // ── Usage warning state ──────────────────────────────────────────────
   const [usageWarning, setUsageWarning] = useState<{ level: string; message: string }>({ level: 'none', message: '' });
   const fetchUsageWarning = useCallback(async () => {
@@ -2655,6 +2669,15 @@ export function AvaChatPage() {
           args: event.args || {},
           desktopClassification: event.desktopClassification,
         });
+        break;
+
+      case 'secret_grant_request':
+        setPendingSecretGrant({
+          grantId: event.grantId || '',
+          label: event.label || 'secret',
+          reason: event.reason || '',
+        });
+        setSecretGrantInput('');
         break;
 
       case 'usage':
@@ -4180,6 +4203,94 @@ export function AvaChatPage() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* ── Secret Grant — inline banner above input ────────────────────── */}
+      {pendingSecretGrant && (
+        <div style={{
+          margin: '0 16px', padding: '14px 18px',
+          background: 'rgba(10, 20, 40, 0.7)',
+          border: '1px solid rgba(59, 130, 246, 0.45)', borderRadius: 10,
+          borderBottom: 'none', borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>
+              Ava is asking for a secret: <span style={{ color: '#60a5fa', fontFamily: 'monospace' }}>{pendingSecretGrant.label}</span>
+            </div>
+          </div>
+          {pendingSecretGrant.reason && (
+            <div style={{ fontSize: 11, color: '#9399b2', marginBottom: 10, paddingLeft: 24 }}>
+              {pendingSecretGrant.reason}
+            </div>
+          )}
+          <div style={{ paddingLeft: 24 }}>
+            <input
+              type="password"
+              value={secretGrantInput}
+              onChange={(e) => setSecretGrantInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && secretGrantInput.trim() && pendingSecretGrant) {
+                  void getSidecar().respondToSecretGrant(pendingSecretGrant.grantId, secretGrantInput);
+                  setPendingSecretGrant(null);
+                  setSecretGrantInput('');
+                }
+                if (e.key === 'Escape' && pendingSecretGrant) {
+                  void getSidecar().respondToSecretGrant(pendingSecretGrant.grantId, null);
+                  setPendingSecretGrant(null);
+                  setSecretGrantInput('');
+                }
+              }}
+              placeholder={`Enter your ${pendingSecretGrant.label}…`}
+              autoFocus
+              style={{
+                width: '100%', padding: '8px 12px', marginBottom: 8,
+                background: 'rgba(10, 6, 18, 0.9)',
+                border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 6,
+                color: '#cdd6f4', fontSize: 12, fontFamily: 'monospace', outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                onClick={() => {
+                  if (!pendingSecretGrant) return;
+                  void getSidecar().respondToSecretGrant(pendingSecretGrant.grantId, null);
+                  setPendingSecretGrant(null);
+                  setSecretGrantInput('');
+                }}
+                style={{
+                  padding: '5px 14px', background: 'transparent', border: '1px solid #45475a',
+                  borderRadius: 6, color: '#9399b2', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                }}
+              >
+                Deny
+              </button>
+              <button
+                onClick={() => {
+                  if (!pendingSecretGrant || !secretGrantInput.trim()) return;
+                  void getSidecar().respondToSecretGrant(pendingSecretGrant.grantId, secretGrantInput);
+                  setPendingSecretGrant(null);
+                  setSecretGrantInput('');
+                }}
+                disabled={!secretGrantInput.trim()}
+                style={{
+                  padding: '5px 14px', background: '#3b82f6',
+                  border: 'none', borderRadius: 6, color: '#fff', fontSize: 12,
+                  fontWeight: 600, cursor: secretGrantInput.trim() ? 'pointer' : 'not-allowed',
+                  opacity: secretGrantInput.trim() ? 1 : 0.5,
+                }}
+              >
+                Grant
+              </button>
+              <div style={{ marginLeft: 'auto', fontSize: 10, color: '#6c7086' }}>
+                Session-lived. Not saved. Never enters chat history.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Tool Confirmation — inline banner above input ──────────────── */}
       {pendingConfirm && (() => {

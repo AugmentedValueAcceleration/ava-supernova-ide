@@ -105,6 +105,12 @@ export interface SidecarEvent {
     reasons: string[];
     requiresSecretHandle: boolean;
   };
+  // secret_grant_request — companion to secret_request tool. Sidecar
+  // emits this when Ava asks for a credential; frontend prompts the
+  // user and sends a secret_grant_response back.
+  grantId?: string;
+  label?: string;
+  reason?: string;
   // computer_use_request for UIA / window targeting — the sidecar bridge
   // sends `name`, legacy inline tools sent `text`. Both accepted for back
   // compat by the computer-use handler; include `name` here so TypeScript
@@ -293,6 +299,21 @@ export class SidecarManager {
    */
   async confirm(id: string, approved: boolean, response?: string, alwaysAllowCategory?: boolean): Promise<void> {
     await this.send({ cmd: 'confirm', id, approved, response, alwaysAllowCategory });
+  }
+
+  /**
+   * Respond to a secret_request grant prompt. Either grants with the
+   * provided value (session-lived, cleared on new chat) or denies.
+   * The sidecar's secret working set is in-memory only; the raw value
+   * leaves the IDE only at tool execute time, via the argsPreprocessor
+   * substitution of `{{secret:<id>}}` handles.
+   */
+  async respondToSecretGrant(grantId: string, value: string | null): Promise<void> {
+    if (value === null) {
+      await this.send({ cmd: 'secret_grant_response', grantId, deny: true });
+    } else {
+      await this.send({ cmd: 'secret_grant_response', grantId, value });
+    }
   }
 
   /**

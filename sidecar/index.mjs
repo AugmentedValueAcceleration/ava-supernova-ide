@@ -108,6 +108,74 @@ const pendingConfirmations = new Map();
 const pendingComputerUse = new Map();
 let computerUseRequestId = 0;
 
+// ─── Secret working set ─────────────────────────────────────────────────────
+//
+// Session-lived in-memory store for granted secret values. Keyed by the
+// opaque id that `secret_request` hands back to Ava as `{{secret:<id>}}`.
+// When a tool's args contain a handle, the argsPreprocessor below
+// substitutes the real value at execute time — the value never enters
+// Ava's tool args, reasoning, or chat history. Cleared on chat reset.
+//
+// Persistence (OS keychain) is a separate follow-up feature; for now
+// every session starts empty and the user re-enters values if needed.
+const secretWorkingSet = new Map(); // Map<id, { label: string, value: string }>
+const pendingSecretGrants = new Map(); // Map<grantId, { resolve, label }>
+
+function clearSecretWorkingSet() {
+  secretWorkingSet.clear();
+}
+
+async function requestSecretGrant(label, reason) {
+  const grantId = crypto.randomUUID().slice(0, 8);
+  return new Promise((resolve) => {
+    pendingSecretGrants.set(grantId, { resolve, label });
+    emit({
+      event: 'secret_grant_request',
+      grantId,
+      label,
+      reason: reason || '',
+    });
+  });
+}
+
+function handleSecretGrantResponse(data) {
+  const pending = pendingSecretGrants.get(data.grantId);
+  if (!pending) return;
+  pendingSecretGrants.delete(data.grantId);
+  if (data.deny || typeof data.value !== 'string' || data.value.length === 0) {
+    pending.resolve(null);
+    return;
+  }
+  const id = crypto.randomUUID();
+  secretWorkingSet.set(id, { label: pending.label, value: data.value });
+  pending.resolve({ id, label: pending.label });
+}
+
+// Recursively replace `{{secret:<id>}}` tokens in strings with the
+// working-set value for that id. Non-string / non-object values
+// pass through. Unknown ids are left as the literal handle (safer
+// than throwing — the downstream tool will then see a placeholder
+// it can surface meaningfully rather than an unhelpful exception).
+function substituteSecretHandles(args) {
+  const HANDLE_RE = /\{\{secret:([^}\s]+)\}\}/g;
+  const walk = (v) => {
+    if (typeof v === 'string') {
+      return v.replace(HANDLE_RE, (match, id) => {
+        const entry = secretWorkingSet.get(id);
+        return entry ? entry.value : match;
+      });
+    }
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const [k, val] of Object.entries(v)) out[k] = walk(val);
+      return out;
+    }
+    return v;
+  };
+  return walk(args);
+}
+
 /**
  * Send a computer use command to Tauri frontend and wait for the response.
  * The frontend calls the Tauri Rust command and sends back the result.
@@ -479,6 +547,12 @@ async function handleInit(data) {
       });
     });
 
+    // Secret handle substitution — runs after user approval, before the
+    // tool's execute(). Confirmation dialogs still see the opaque handle
+    // (safe to display); the tool receives the real value. This is the
+    // mechanism that makes `secret_request` useful end-to-end in the IDE.
+    toolRegistry.setArgsPreprocessor((_toolName, args) => substituteSecretHandles(args));
+
     // Audit callback — log all tool executions
     const auditLog = [];
     toolRegistry.setAuditCallback((entry) => {
@@ -701,6 +775,7 @@ async function handleInit(data) {
       toolRegistry,
       cwd,
       sharedState,
+      secretGranter: requestSecretGrant,
     });
 
     // Conductor (persona orchestration)
@@ -710,6 +785,7 @@ async function handleInit(data) {
       toolRegistry,
       cwd,
       sharedState,
+      secretGranter: requestSecretGrant,
     });
 
     // Auto Mode — detect available providers
@@ -1229,6 +1305,8 @@ function handleClear() {
       conversation.setSystemPrompt(systemMsg.content);
     }
   }
+  // Clear secret working set on chat reset — session-lived only.
+  clearSecretWorkingSet();
   emit({ event: 'cleared' });
 }
 
@@ -1302,6 +1380,7 @@ async function handleSetModel(data) {
       toolRegistry,
       cwd,
       sharedState,
+      secretGranter: requestSecretGrant,
     });
 
     conductor = new Conductor({
@@ -1310,6 +1389,7 @@ async function handleSetModel(data) {
       toolRegistry,
       cwd,
       sharedState,
+      secretGranter: requestSecretGrant,
     });
 
     // Disable auto coordinator when specific model selected
@@ -1368,6 +1448,9 @@ rl.on('line', async (line) => {
       break;
     case 'confirm':
       handleConfirm(data);
+      break;
+    case 'secret_grant_response':
+      handleSecretGrantResponse(data);
       break;
     case 'clear':
       handleClear();
