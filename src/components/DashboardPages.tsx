@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
@@ -2363,10 +2365,44 @@ export function AvaChatPage() {
       sidecar.setModel(SIDECAR_MODEL_MAP[model] || `platform:${model}`).catch(() => {});
     }
     if (mode !== prevModeRef.current) {
+      const previousMode = prevModeRef.current;
       prevModeRef.current = mode;
       sidecar.setMode(mode).catch(() => {});
+      // Arm / disarm the Triple-Escape panic hotkey as the user enters
+      // and leaves desktop mode. The Rust side only fires the global
+      // shortcut when DESKTOP_MODE_ACTIVE is true, so forgetting this
+      // call leaves the kill-switch silently disabled.
+      if (mode === 'desktop' && previousMode !== 'desktop') {
+        invoke('desktop_mode_start').catch(() => {});
+      } else if (previousMode === 'desktop' && mode !== 'desktop') {
+        invoke('desktop_mode_stop').catch(() => {});
+      }
     }
   }, [model, mode, sidecarReady]);
+
+  // ── Desktop kill-switch listener ──────────────────────────────────────
+  // Triple-Escape, tray "Stop Desktop Mode", or manual desktop_kill all
+  // emit this event from Rust. We cancel the active agent run, dismiss
+  // any pending approval, and flip the chat out of desktop mode so the
+  // hotkey disarms cleanly.
+  useEffect(() => {
+    if (!sidecarReady) return;
+    let unlisten: UnlistenFn | undefined;
+    listen<{ level: 'pause' | 'stop' | 'panic' }>('desktop:kill', (event) => {
+      const level = event.payload?.level ?? 'stop';
+      const sidecar = getSidecar();
+      sidecar.cancel().catch(() => {});
+      if (level === 'panic') {
+        // Hardest stop — also wipe any in-flight approval so the UI
+        // doesn't hang waiting for the user to click something that no
+        // longer exists.
+        setPendingConfirm(null);
+        setPendingSecretGrant(null);
+      }
+      setMode('work');
+    }).then((fn) => { unlisten = fn; }).catch(() => {});
+    return () => { if (unlisten) unlisten(); };
+  }, [sidecarReady]);
 
   // ── Sidecar event handler (for local mode streaming) ──────────────────
   const handleSidecarEvent = useCallback((event: SidecarEvent) => {
