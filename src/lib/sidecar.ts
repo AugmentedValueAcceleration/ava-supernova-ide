@@ -433,6 +433,9 @@ export class SidecarManager {
         case 'list_ui_elements':
           result = await invoke('list_ui_elements');
           break;
+        case 'get_foreground_window_title':
+          result = await invoke('get_foreground_window_title');
+          break;
         case 'find_ui_element':
           // Accept either event.name (uiaBridge) or event.text (legacy
           // inline tools that used { text: … } arg shape). Rust command

@@ -352,7 +352,53 @@ const uiaBridge = {
     const result = await computerUseRequest('focus_window', { name });
     return result.data;
   },
+  async foregroundWindowTitle() {
+    const result = await computerUseRequest('get_foreground_window_title');
+    return typeof result?.data === 'string' ? result.data : '';
+  },
 };
+
+/**
+ * Snapshot current desktop state for injection into the model's context
+ * at the start of a desktop-mode turn. Gives Ava real eyes instead of
+ * making her guess. Short timeout + swallowed errors — a failed capture
+ * must never block the agent from running.
+ *
+ * Returns an empty string on failure, which callers detect to skip the
+ * inject entirely rather than pollute context with noise.
+ */
+async function captureDesktopContext() {
+  try {
+    const [title, elementsRaw] = await Promise.all([
+      uiaBridge.foregroundWindowTitle().catch(() => ''),
+      uiaBridge.listElements().catch(() => []),
+    ]);
+
+    const elements = Array.isArray(elementsRaw) ? elementsRaw : [];
+    // Trim to the highest-signal subset: interactable controls, named
+    // elements, first ones encountered in tree order. The full list can
+    // easily be 50+ entries which wastes context.
+    const isInteresting = (e) => {
+      if (!e) return false;
+      const ct = String(e.control_type || '').toLowerCase();
+      if (ct.includes('group') || ct.includes('pane') || ct === 'custom') return false;
+      return Boolean(e.name);
+    };
+    const interesting = elements.filter(isInteresting).slice(0, 12);
+
+    if (!title && interesting.length === 0) return '';
+
+    const lines = [];
+    if (title) lines.push(`Foreground window: "${title}"`);
+    if (interesting.length > 0) {
+      const bits = interesting.map((e) => `${e.control_type}: "${e.name}"`);
+      lines.push(`Visible controls: ${bits.join(' · ')}`);
+    }
+    return `[Desktop state] ${lines.join(' — ')}`;
+  } catch {
+    return '';
+  }
+}
 
 // ─── NDJSON I/O ─────────────────────────────────────────────────────────────
 
@@ -861,6 +907,18 @@ async function handleMessage(data) {
     globalThis._sharedState.desktopMutativeActionsThisTurn = 0;
   }
 
+  // Desktop-mode state snapshot — capture foreground window + visible
+  // controls and prepend them to the user message as a [Desktop state]
+  // block. Without this, Ava can't see what's already open and ends up
+  // second-guessing herself across turns ("is Notepad already open? did
+  // the user see the first result?") burning hundreds of thinking tokens
+  // per turn on state she could just be told. Kept outside the main
+  // try/catch so a UIA hiccup never blocks the agent.
+  let desktopStatePrefix = '';
+  if (currentMode === 'desktop' && typeof data.content === 'string') {
+    desktopStatePrefix = await captureDesktopContext();
+  }
+
   try {
     // Sync conversation from UI history if provided (ensures sidecar sees full chat window)
     if (data.history && Array.isArray(data.history) && data.history.length > 0) {
@@ -890,7 +948,10 @@ async function handleMessage(data) {
         emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.6 Plus or Qwen 3.5 Omni Flash to analyse images.` });
       }
       const parts = [];
-      if (data.content) parts.push({ type: 'text', text: data.content });
+      const prefixedContent = desktopStatePrefix && data.content
+        ? `${desktopStatePrefix}\n\n${data.content}`
+        : data.content;
+      if (prefixedContent) parts.push({ type: 'text', text: prefixedContent });
       for (const att of data.attachments) {
         if (att.mimeType?.startsWith('image/')) {
           let imageUrl = att.dataUri;
@@ -916,9 +977,12 @@ async function handleMessage(data) {
           }
         }
       }
-      conversation.addUserMessage(parts.length > 0 ? parts : data.content);
+      conversation.addUserMessage(parts.length > 0 ? parts : (prefixedContent ?? data.content));
     } else {
-      conversation.addUserMessage(data.content);
+      const userContent = desktopStatePrefix && data.content
+        ? `${desktopStatePrefix}\n\n${data.content}`
+        : data.content;
+      conversation.addUserMessage(userContent);
     }
     let messages = conversation.getMessages();
 

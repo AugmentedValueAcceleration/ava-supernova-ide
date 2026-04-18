@@ -682,6 +682,34 @@ fn desktop_mode_start() -> Result<(), String> {
     Ok(())
 }
 
+/// Cheap read-only peek at the foreground window title. Used by the
+/// sidecar's desktop-context capture to inject state into every
+/// desktop-mode turn, so Ava doesn't have to guess what's focused.
+/// Pure Win32 — no UIA cost, no side effects.
+#[tauri::command]
+fn get_foreground_window_title() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
+        unsafe {
+            let hwnd = GetForegroundWindow();
+            if hwnd.is_null() {
+                return Ok(String::new());
+            }
+            let mut buf: [u16; 512] = [0; 512];
+            let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+            if len <= 0 {
+                return Ok(String::new());
+            }
+            Ok(String::from_utf16_lossy(&buf[..len as usize]))
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(String::new())
+    }
+}
+
 /// Deactivate desktop mode — disables the panic kill hotkey.
 #[tauri::command]
 fn desktop_mode_stop() -> Result<(), String> {
@@ -1269,6 +1297,7 @@ pub fn run() {
             desktop_mode_start,
             desktop_mode_stop,
             desktop_kill,
+            get_foreground_window_title,
             browser_launch,
             browser_send,
             browser_close,
