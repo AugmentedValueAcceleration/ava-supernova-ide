@@ -28,6 +28,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["ava-ide"]
+      }
+    },
     "updater": {
       "endpoints": [
         "https://github.com/AugmentedValueAcceleration/ava-supernova-ide/releases/latest/download/latest.json"

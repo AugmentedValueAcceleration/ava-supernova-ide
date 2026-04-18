@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { readDir } from '@tauri-apps/plugin-fs';
 import type { ActivityItem, SidebarPosition } from '../App';
-import { validateKey, getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
-import { writeSharedPlatformKey } from '../lib/shared-config';
+import { getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
 import { t, useLocale } from '../lib/i18n';
+import { SignInPanel } from './SignInPanel';
 
 interface Props {
   activePanel: ActivityItem;
@@ -532,9 +532,6 @@ function AuthSection() {
   const [email, setEmail] = useState(() => getStoredEmail() || '');
   const [tier, setTier] = useState(() => getStoredTier() || 'free');
   const [showConnect, setShowConnect] = useState(false);
-  const [keyInput, setKeyInput] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
   const [usePlatform, setUsePlatform] = useState(true);
 
@@ -557,38 +554,18 @@ function AuthSection() {
     free: '#a6adc8', pro: '#a855f7', ultra: '#f9e2af', enterprise: '#89b4fa', admin: '#f38ba8',
   };
 
-  const handleConnect = async () => {
-    const trimmed = keyInput.trim();
-    if (!trimmed.startsWith('sk-ava-')) { setError('Key must start with sk-ava-'); return; }
-    setError('');
-    setLoading(true);
+  // OAuth sign-in completed via SignInPanel — it persists the key to
+  // localStorage + ~/.ava/config.json and dispatches `ava-auth-changed`
+  // itself, so we just refresh our visible state and close the panel.
+  const handleSignedIn = useCallback((account: { email?: string; tier?: string; name?: string }) => {
     try {
-      const result = await validateKey(trimmed);
-      if (!result.valid) {
-        setError(result.error || 'Invalid API key');
-        setLoading(false);
-        return;
-      }
-      setPlatformKey(trimmed);
-      setEmail(result.email || '');
-      setTier(result.tier || 'free');
-      try {
-        localStorage.setItem('ava-ide-platform-key', trimmed);
-        if (result.email) localStorage.setItem('ava-ide-email', result.email);
-        if (result.name) localStorage.setItem('ava-ide-user-name', result.name);
-        if (result.tier) localStorage.setItem('ava-ide-tier', result.tier);
-      } catch { /* */ }
-      // Mirror into ~/.ava/config.json so other surfaces (CLI, extension, prototypes)
-      // pick up this sign-in without the user having to repeat it.
-      void writeSharedPlatformKey(trimmed);
-      setShowConnect(false);
-      setKeyInput('');
-      window.dispatchEvent(new CustomEvent('ava-auth-changed'));
-    } catch {
-      setError('Could not reach platform');
-    }
-    setLoading(false);
-  };
+      const stored = localStorage.getItem('ava-ide-platform-key') || '';
+      setPlatformKey(stored);
+    } catch { /* non-fatal */ }
+    if (account.email) setEmail(account.email);
+    if (account.tier) setTier(account.tier);
+    setShowConnect(false);
+  }, [setPlatformKey, setEmail, setTier]);
 
   const handleDisconnect = () => {
     disconnectAccount();
@@ -677,28 +654,12 @@ function AuthSection() {
             </>
           ) : (
             <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 10, color: '#a6adc8', marginBottom: 6 }}>
-                {t('dash.auth.step1')}<br/>
-                {t('dash.auth.step2')}<br/>
-                {t('dash.auth.step3')}
-              </div>
-              <input
-                type="password"
-                placeholder="sk-ava-..."
-                value={keyInput}
-                onChange={(e) => { setKeyInput(e.target.value); setError(''); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleConnect(); }}
-                style={{ ...inputStyle, marginBottom: 4, fontFamily: 'monospace', fontSize: 11 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+              <SignInPanel
+                onSignedIn={handleSignedIn}
+                onSkipAccount={() => setShowConnect(false)}
               />
-              {error && <div style={{ fontSize: 10, color: '#f38ba8', marginBottom: 4 }}>{error}</div>}
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={handleConnect} disabled={loading}
-                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', background: '#a855f7', color: '#fff', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>
-                  {loading ? t('dash.auth.connecting') : t('dash.auth.connect')}
-                </button>
-                <button onClick={() => { setShowConnect(false); setKeyInput(''); setError(''); }}
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <button onClick={() => setShowConnect(false)}
                   style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: '1px solid rgba(168, 85, 247, 0.12)', background: 'transparent', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>
                   {t('dash.support.cancel')}
                 </button>

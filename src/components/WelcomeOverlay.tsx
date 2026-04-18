@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { validateKey } from '../lib/api';
-import { writeSharedPlatformKey } from '../lib/shared-config';
+import { SignInPanel } from './SignInPanel';
+import type { SignInAccount } from '../lib/sign-in';
 
 interface Props {
   onComplete: (navigateTo?: string) => void;
@@ -19,8 +19,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
   const [consentChecked, setConsentChecked] = useState(false);
 
   // Step 2 state (was step 1 before consent gate)
-  const [platformKey, setPlatformKey] = useState('');
-  const [platformStatus, setPlatformStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [platformStatus, setPlatformStatus] = useState<'idle' | 'valid'>('idle');
   const [platformEmail, setPlatformEmail] = useState('');
   const [byokProvider, setByokProvider] = useState('Qwen');
   const [byokKey, setByokKey] = useState('');
@@ -35,23 +34,18 @@ export default function WelcomeOverlay({ onComplete }: Props) {
 
   const totalSteps = 5;
 
-  const handleValidatePlatform = useCallback(async () => {
-    if (!platformKey.startsWith('sk-ava-')) return;
-    setPlatformStatus('validating');
-    const result = await validateKey(platformKey);
-    if (result.valid) {
-      localStorage.setItem('ava-ide-platform-key', platformKey);
-      if (result.email) localStorage.setItem('ava-ide-email', result.email);
-      if (result.tier) localStorage.setItem('ava-ide-tier', result.tier);
-      // Mirror to shared config so CLI / extension / prototypes pick it up.
-      void writeSharedPlatformKey(platformKey);
-      setPlatformStatus('valid');
-      setPlatformEmail(result.email || '');
-      if (result.name) { setUserName(result.name); localStorage.setItem('ava-ide-user-name', result.name); }
-    } else {
-      setPlatformStatus('invalid');
+  // OAuth sign-in completed (the SignInPanel handles the browser + deep-link
+  // round-trip + localStorage persistence itself; all we do here is pick up
+  // the account for the "What should Ava call you?" UI and flip the step
+  // indicator so the user knows they're connected).
+  const handleSignedIn = useCallback((account: SignInAccount) => {
+    setPlatformStatus('valid');
+    setPlatformEmail(account.email || '');
+    if (account.name && !userName) {
+      setUserName(account.name);
+      try { localStorage.setItem('ava-ide-user-name', account.name); } catch { /* non-fatal */ }
     }
-  }, [platformKey]);
+  }, [userName]);
 
   const handleSaveByok = useCallback(() => {
     if (!byokKey.trim()) return;
@@ -194,37 +188,14 @@ export default function WelcomeOverlay({ onComplete }: Props) {
             <p style={{ fontSize: 12, color: '#6c7086', textAlign: 'center', marginBottom: 20 }}>Choose how you want to use Ava</p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {/* Platform */}
-              <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 4 }}>Platform Account</div>
-                <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>Cloud mode, managed tokens, sync</div>
-                <input
-                  type="text"
-                  value={platformKey}
-                  onChange={e => { setPlatformKey(e.target.value); setPlatformStatus('idle'); }}
-                  placeholder="sk-ava-..."
-                  style={{ ...inputStyle, height: 34, fontSize: 12, marginBottom: 8 }}
-                />
-                <button
-                  onClick={handleValidatePlatform}
-                  disabled={!platformKey.startsWith('sk-ava-') || platformStatus === 'validating'}
-                  style={{
-                    width: '100%', height: 32, borderRadius: 6, border: 'none',
-                    background: platformStatus === 'valid' ? '#a6e3a1' : '#a855f7',
-                    color: platformStatus === 'valid' ? '#11111b' : '#fff',
-                    fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                    opacity: !platformKey.startsWith('sk-ava-') ? 0.4 : 1,
-                  }}
-                >
-                  {platformStatus === 'validating' ? 'Checking...' : platformStatus === 'valid' ? `Connected as ${platformEmail}` : platformStatus === 'invalid' ? 'Invalid key' : 'Connect'}
-                </button>
-              </div>
-
-              {/* Name input — shown after platform connect */}
-              {platformStatus === 'valid' && (
-                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#cba6f7', marginBottom: 4 }}>What should Ava call you?</div>
-                  <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 8 }}>So Ava knows who she's working with</div>
+              {/* Platform — OAuth sign-in (GitHub / Email) */}
+              {platformStatus === 'valid' ? (
+                <div style={{ background: 'rgba(166, 227, 161, 0.08)', border: '1px solid rgba(166, 227, 161, 0.3)', borderRadius: 12, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#a6e3a1', marginBottom: 4 }}>Connected ✓</div>
+                  <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>
+                    {platformEmail ? `Signed in as ${platformEmail}` : 'Signed in'}
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#cba6f7', marginBottom: 6 }}>What should Ava call you?</div>
                   <input
                     type="text"
                     placeholder="Your name"
@@ -238,6 +209,11 @@ export default function WelcomeOverlay({ onComplete }: Props) {
                     onBlur={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
                   />
                 </div>
+              ) : (
+                <SignInPanel
+                  onSignedIn={handleSignedIn}
+                  onSkipAccount={() => { /* BYOK column is right there — no-op */ }}
+                />
               )}
 
               {/* BYOK */}

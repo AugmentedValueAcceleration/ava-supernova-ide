@@ -34,6 +34,7 @@
     "core:window:allow-unminimize",
     "updater:default",
     "dialog:default",
+    "deep-link:default",
     "fs:default",
     {
       "identifier": "fs:allow-read-dir",
