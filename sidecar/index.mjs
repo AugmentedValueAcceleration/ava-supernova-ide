@@ -100,6 +100,10 @@ let memoryAgentInstance = null;
 let currentAbort = null;
 let currentMode = 'work';
 let isRunning = false;
+// Module-scoped so the handleMessage finally block can auto-close the
+// Ava browser at end of turn. Toggled by the browserBridge inside
+// handleInit.
+let browserLaunched = false;
 
 /** Map<confirmId, { resolve: Function }> */
 const pendingConfirmations = new Map();
@@ -457,7 +461,9 @@ async function handleInit(data) {
     // calls the Rust browser_launch + browser_send Tauri commands. The
     // Playwright worker (src-tauri/resources/browser-worker.mjs) handles
     // the actual navigate/snapshot/click/type/close operations.
-    let browserLaunched = false;
+    //
+    // NOTE: `browserLaunched` lives at module scope so handleMessage's
+    // finally block can auto-close at end of turn.
     async function ensureBrowser() {
       if (browserLaunched) return;
       try {

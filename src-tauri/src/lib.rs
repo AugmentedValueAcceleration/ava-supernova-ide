@@ -663,7 +663,10 @@ fn get_dpi_scale() -> Result<f64, String> {
 // ─── Desktop Mode Kill Switch ──────────────────────────────────────────────
 //
 // Three kill layers, any of which aborts the active trajectory:
-//   1. Triple-Escape — global hotkey, always active during desktop mode
+//   1. Ctrl+Alt+K — global hotkey, single press, armed during desktop mode.
+//      (Plain Escape was tried first and failed — on Windows the OS either
+//      refuses to register it as a global shortcut or steals Escape from
+//      every other app while registered, both of which we want to avoid.)
 //   2. Stop button — frontend sends this command
 //   3. Budget trip — automatic, handled by the TypeScript budget tracker
 //
@@ -672,39 +675,10 @@ fn get_dpi_scale() -> Result<f64, String> {
 
 static DESKTOP_MODE_ACTIVE: AtomicBool = AtomicBool::new(false);
 
-struct EscapeTracker {
-    timestamps: Vec<std::time::Instant>,
-}
-
-impl EscapeTracker {
-    fn new() -> Self {
-        Self { timestamps: Vec::new() }
-    }
-
-    fn press(&mut self) -> bool {
-        let now = std::time::Instant::now();
-        self.timestamps.push(now);
-        // Keep only presses within the last 800ms
-        self.timestamps.retain(|t| now.duration_since(*t).as_millis() < 800);
-        // Triple-Escape detected
-        self.timestamps.len() >= 3
-    }
-
-    fn reset(&mut self) {
-        self.timestamps.clear();
-    }
-}
-
 /// Activate desktop mode — enables the panic kill hotkey.
 #[tauri::command]
-fn desktop_mode_start(app: AppHandle) -> Result<(), String> {
+fn desktop_mode_start() -> Result<(), String> {
     DESKTOP_MODE_ACTIVE.store(true, Ordering::SeqCst);
-    // Reset the escape tracker in case stale state from a previous session
-    if let Some(tracker) = app.try_state::<Mutex<EscapeTracker>>() {
-        if let Ok(mut t) = tracker.lock() {
-            t.reset();
-        }
-    }
     Ok(())
 }
 
@@ -786,25 +760,23 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 fn setup_panic_hotkey(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-    let escape: Shortcut = "Escape".parse()?;
+    // Ctrl+Alt+K — single-press kill. K as in "Kill". Chosen because:
+    //   * it's not bound by any common Windows shortcut
+    //   * it registers cleanly via RegisterHotKey (plain Escape does not)
+    //   * it doesn't steal Escape from other apps for the whole session
+    let kill: Shortcut = "Ctrl+Alt+K".parse()?;
     let app_handle = app.handle().clone();
 
-    app.global_shortcut().on_shortcut(escape, move |_app, _shortcut, event| {
+    app.global_shortcut().on_shortcut(kill, move |_app, _shortcut, event| {
         if event.state != ShortcutState::Pressed {
             return;
         }
         if !DESKTOP_MODE_ACTIVE.load(Ordering::SeqCst) {
             return;
         }
-        if let Some(tracker) = app_handle.try_state::<Mutex<EscapeTracker>>() {
-            if let Ok(mut t) = tracker.lock() {
-                if t.press() {
-                    t.reset();
-                    DESKTOP_MODE_ACTIVE.store(false, Ordering::SeqCst);
-                    let _ = app_handle.emit("desktop:kill", serde_json::json!({ "level": "panic" }));
-                }
-            }
-        }
+        // Single-press fires immediately — no tracker, no 800ms window.
+        DESKTOP_MODE_ACTIVE.store(false, Ordering::SeqCst);
+        let _ = app_handle.emit("desktop:kill", serde_json::json!({ "level": "panic" }));
     })?;
 
     Ok(())
@@ -1247,7 +1219,6 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
-        .manage(Mutex::new(EscapeTracker::new()))
         .setup(|app| {
             setup_tray(app)?;
             setup_panic_hotkey(app)?;

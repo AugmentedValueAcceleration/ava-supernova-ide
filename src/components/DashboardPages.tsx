@@ -2355,8 +2355,13 @@ export function AvaChatPage() {
   }, [canChat]); // Restart sidecar when chat ability changes
 
   // ── Send model/mode changes to running sidecar (no restart) ────────────
-  const prevModelRef = useRef(model);
-  const prevModeRef = useRef(mode);
+  // Initialised to null so the first effect pass after mount is treated
+  // as a transition. That matters because `mode` may be hydrated from
+  // localStorage as 'desktop' on startup — without the null sentinel,
+  // the effect would see mode === prevModeRef and skip, leaving the
+  // kill-switch silently disarmed for an entire session.
+  const prevModelRef = useRef<string | null>(null);
+  const prevModeRef = useRef<AvaMode | null>(null);
   useEffect(() => {
     if (!sidecarReady) return;
     const sidecar = getSidecar();
@@ -2368,10 +2373,9 @@ export function AvaChatPage() {
       const previousMode = prevModeRef.current;
       prevModeRef.current = mode;
       sidecar.setMode(mode).catch(() => {});
-      // Arm / disarm the Triple-Escape panic hotkey as the user enters
-      // and leaves desktop mode. The Rust side only fires the global
-      // shortcut when DESKTOP_MODE_ACTIVE is true, so forgetting this
-      // call leaves the kill-switch silently disabled.
+      // Arm / disarm the Ctrl+Alt+K panic hotkey when entering or
+      // leaving desktop mode. The Rust side only fires the global
+      // shortcut when DESKTOP_MODE_ACTIVE is true.
       if (mode === 'desktop' && previousMode !== 'desktop') {
         invoke('desktop_mode_start').catch(() => {});
       } else if (previousMode === 'desktop' && mode !== 'desktop') {
@@ -2381,10 +2385,10 @@ export function AvaChatPage() {
   }, [model, mode, sidecarReady]);
 
   // ── Desktop kill-switch listener ──────────────────────────────────────
-  // Triple-Escape, tray "Stop Desktop Mode", or manual desktop_kill all
-  // emit this event from Rust. We cancel the active agent run, dismiss
-  // any pending approval, and flip the chat out of desktop mode so the
-  // hotkey disarms cleanly.
+  // Ctrl+Alt+K global hotkey, tray "Stop Desktop Mode", or manual
+  // desktop_kill all emit this event from Rust. We cancel the active
+  // agent run, dismiss any pending approval, and flip the chat out of
+  // desktop mode so the hotkey disarms cleanly.
   useEffect(() => {
     if (!sidecarReady) return;
     let unlisten: UnlistenFn | undefined;
