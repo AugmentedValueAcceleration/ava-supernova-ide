@@ -412,7 +412,23 @@ async function handleInit(data) {
       const res = await computerUseRequest('browser_send', { browserAction: action, params });
       const payload = res?.data ?? res?.result ?? res;
       if (payload && typeof payload === 'object' && payload.ok === false) {
-        throw new Error(payload.error || `browser ${action} returned ok:false`);
+        // Stale-state recovery: if the worker reports a dead browser (user
+        // closed Chromium, crash, disconnect), fully reset both sidecar and
+        // Rust state and retry once. Without this, every second browser task
+        // would fail and Ava would have to restart the session manually.
+        const errMsg = String(payload.error || '');
+        if (/browser has been closed|not connected|disconnected|launch first/i.test(errMsg)) {
+          try { await computerUseRequest('browser_close'); } catch {}
+          browserLaunched = false;
+          await ensureBrowser();
+          const retry = await computerUseRequest('browser_send', { browserAction: action, params });
+          const retryPayload = retry?.data ?? retry?.result ?? retry;
+          if (retryPayload && typeof retryPayload === 'object' && retryPayload.ok === false) {
+            throw new Error(retryPayload.error || `browser ${action} failed after reset`);
+          }
+          return retryPayload?.result ?? retryPayload;
+        }
+        throw new Error(errMsg || `browser ${action} returned ok:false`);
       }
       return payload?.result ?? payload;
     }
@@ -1086,6 +1102,22 @@ async function handleMessage(data) {
   } finally {
     isRunning = false;
     currentAbort = null;
+
+    // Auto-close the Ava browser at end of turn if Ava forgot.
+    // Prompt-level "please call browser_close" is unreliable; the model
+    // sometimes includes it in the plan and sometimes doesn't. Leaving
+    // Chromium sitting on top of the IDE is always the wrong outcome —
+    // Ava's browser is not the user's personal browser and has no
+    // reason to persist between conversation turns. If the user wants
+    // to keep browser state for a follow-up question, the stale-state
+    // auto-recovery in browserSend handles the reopen transparently.
+    if (browserLaunched) {
+      try {
+        await computerUseRequest('browser_close');
+        emit({ event: 'info', message: 'Ava browser auto-closed at end of turn.' });
+      } catch { /* non-fatal — worker may already be dead */ }
+      browserLaunched = false;
+    }
   }
 }
 

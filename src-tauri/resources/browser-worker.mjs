@@ -21,8 +21,17 @@ let page = null;
 // run immediately without requiring a separate 'launch' command. Rust's
 // browser_launch only spawns the Node process — it never sent a 'launch'
 // action, which is why the first navigate errored with "launch first".
+//
+// We also detect a dead browser (user X-closed Chromium, process crashed,
+// Playwright lost connection) via isConnected() and relaunch transparently.
+// Without this check, the second task after a close-and-reopen sees a
+// stale Browser reference and fails with "browser has been closed."
 async function ensureChromium() {
-  if (browser) return;
+  if (browser && browser.isConnected && browser.isConnected()) return;
+  // Stale or never-launched — clean any dangling refs and relaunch.
+  if (page) { try { await page.close(); } catch {} page = null; }
+  if (context) { try { await context.close(); } catch {} context = null; }
+  if (browser) { try { await browser.close(); } catch {} browser = null; }
   browser = await chromium.launch({
     headless: false,
     args: ['--window-size=1280,800', '--no-first-run', '--no-default-browser-check'],
