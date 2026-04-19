@@ -1030,21 +1030,24 @@ async function handleMessage(data) {
         emit({ event: 'info', message: `Memory brief failed: ${err.message}` });
       }
     } else if (memoryManager && data.content && data.content.length > 5) {
-      // Fallback: raw recall (no Memory Agent available)
+      // Fallback pointer (no Memory Agent available). Previous code dumped
+      // up to 5 memories verbatim (~1.5K chars) every turn — redundant with
+      // the memory_recall tool. Now we just list the topic categories so Ava
+      // knows what's available and reaches for memory_recall on demand.
       try {
         const memories = await memoryManager.recall({ query: data.content, limit: 5, scope: 'all' });
         if (memories && memories.length > 0) {
-          const memoryContext = memories
-            .map(m => `[${m.scope || 'global'}/${m.entry?.category || m.category || 'general'}] ${(m.entry?.content || m.content || '').slice(0, 300)}`)
-            .join('\n');
+          const categories = [...new Set(
+            memories.map(m => m.entry?.category || m.category || 'general')
+          )];
           const currentMsgs = conversation.getMessages();
           currentMsgs.push({
             role: 'system',
-            content: `[Relevant memories for this message]\n${memoryContext}\n\nUse these if relevant. Don't mention them unless asked about memory.`,
+            content: `[Memory pointer] ${memories.length} related memor${memories.length === 1 ? 'y' : 'ies'} found across: ${categories.join(', ')}. Call memory_recall with a specific query if relevant to the user's question.`,
           });
           conversation.setMessages(currentMsgs);
           messages = conversation.getMessages();
-          emit({ event: 'info', message: `Recalled ${memories.length} relevant memories` });
+          emit({ event: 'info', message: `Memory pointer: ${memories.length} entries across ${categories.length} categor${categories.length === 1 ? 'y' : 'ies'}` });
         }
       } catch (err) {
         emit({ event: 'info', message: `Memory recall failed: ${err.message}` });
