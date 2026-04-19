@@ -28,6 +28,12 @@ import {
   dashboardBillingUrl,
   type PlanTier as AvaPlanTier,
 } from '@ava/core/billing';
+// Data Mode gate — every cloud write must check includesCloud() before
+// calling apiFetch. The toggle UI lives in this file too (mode switcher
+// in the chat header); setDataMode() writes to localStorage and the
+// helpers below read from there so a single localStorage value is the
+// source of truth across the IDE.
+import { includesCloud as dataModeIncludesCloud } from '../lib/data-mode';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -693,8 +699,8 @@ function WorkingHoursClock() {
       localStorage.setItem('ava-ide-work-end', String(e));
       window.dispatchEvent(new CustomEvent('ava-working-hours-changed'));
     } catch {}
-    // Sync to platform for connected users
-    if (checkConnected()) {
+    // Cloud sync only when Data Mode allows it.
+    if (checkConnected() && dataModeIncludesCloud()) {
       apiFetch('/settings', { method: 'POST', body: JSON.stringify({ work_start: s, work_end: e }) }).catch(() => {});
     }
   }, []);
@@ -1193,6 +1199,10 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
   }, [tasks, today]);
 
   const handleComplete = async (id: string) => {
+    if (!dataModeIncludesCloud()) {
+      onRefresh();
+      return;
+    }
     try {
       await apiFetch(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) });
       onRefresh();
@@ -2114,7 +2124,7 @@ export function AvaChatPage() {
   useEffect(() => { if (tasksPanelOpen) fetchUserTasks(); }, [tasksPanelOpen, fetchUserTasks]);
 
   const handleToggleTask = useCallback(async (taskId: string) => {
-    if (!checkConnected()) return;
+    if (!checkConnected() || !dataModeIncludesCloud()) return;
     try {
       const task = allTasks.find(t => t.id === taskId);
       const newStatus = task?.status === 'done' ? 'todo' : 'done';
@@ -5883,7 +5893,11 @@ export function TasksPage() {
       done: false,
       status: 'todo',
     };
-    if (!connected) {
+    // Local-only path: Data Mode = Local, OR user not connected. Both
+    // cases skip the cloud write — we just add to the React state and
+    // return. (When Data Mode flips back to Cloud/Both, the Sync tab's
+    // bulk push will upload whatever isn't already there.)
+    if (!connected || !dataModeIncludesCloud()) {
       setTasks((t) => [...t, newTask]);
       resetForm();
       return;
@@ -5916,7 +5930,7 @@ export function TasksPage() {
           : tt
       )
     );
-    if (connected) {
+    if (connected && dataModeIncludesCloud()) {
       try {
         await apiFetch(`/tasks/${id}`, {
           method: 'PATCH',
@@ -5930,7 +5944,7 @@ export function TasksPage() {
     const id = task.id || task._id;
     setTasks((t) => t.filter((tt) => (tt.id || tt._id) !== id));
     setConfirmDeleteId(null);
-    if (connected) {
+    if (connected && dataModeIncludesCloud()) {
       try { await apiFetch(`/tasks/${id}`, { method: 'DELETE' }); } catch { /* */ }
     }
   };
@@ -6383,7 +6397,10 @@ export function JournalPage() {
 
     setSaving(true);
     setSaveMsg('');
-    if (connected) {
+    // Cloud write only when Data Mode allows it. Local mode keeps
+    // the localStorage write above and skips the /journal POST
+    // entirely, so the entry stays on device.
+    if (connected && dataModeIncludesCloud()) {
       try {
         await apiFetch('/journal', {
           method: 'POST',
@@ -7647,7 +7664,9 @@ export function PersonalityPage() {
     try { localStorage.setItem('ava-ide-personality', JSON.stringify({ tone, energy, style, description })); } catch {}
 
     setSaving(true);
-    if (connected) {
+    // Cloud sync only when Data Mode permits it. Local mode keeps the
+    // localStorage save above but skips POST /settings.
+    if (connected && dataModeIncludesCloud()) {
       try {
         await apiFetch('/settings', {
           method: 'POST',
@@ -7671,7 +7690,7 @@ export function PersonalityPage() {
     setEnergy('enthusiastic');
     setStyle('conversational');
     setDescription('');
-    if (connected) {
+    if (connected && dataModeIncludesCloud()) {
       try {
         await apiFetch('/settings', {
           method: 'POST',
@@ -8667,8 +8686,9 @@ export function SettingsPage() {
     const key = type === 'user' ? 'ava-ide-user-avatar' : 'ava-ide-ai-avatar';
     localStorage.setItem(key, resized);
     if (type === 'user') setUserAvatar(resized); else setAiAvatar(resized);
-    // Sync to platform if connected
-    if (connected) {
+    // Cloud sync only when Data Mode allows it — Local mode keeps the
+    // avatar on-device only.
+    if (connected && dataModeIncludesCloud()) {
       apiFetch('/settings', {
         method: 'POST',
         body: JSON.stringify({ [`${type}_avatar`]: resized }),
@@ -8681,7 +8701,7 @@ export function SettingsPage() {
     const key = type === 'user' ? 'ava-ide-user-avatar' : 'ava-ide-ai-avatar';
     localStorage.removeItem(key);
     if (type === 'user') setUserAvatar(''); else setAiAvatar('');
-    if (connected) {
+    if (connected && dataModeIncludesCloud()) {
       apiFetch('/settings', {
         method: 'POST',
         body: JSON.stringify({ [`${type}_avatar`]: null }),
@@ -8742,7 +8762,7 @@ export function SettingsPage() {
     if (key === 'holoApiKey') {
       localStorage.setItem('ava-ide-holo-key', value || '');
     }
-    if (connected) {
+    if (connected && dataModeIncludesCloud()) {
       apiFetch('/settings', {
         method: 'POST',
         body: JSON.stringify(updated),
@@ -8754,7 +8774,10 @@ export function SettingsPage() {
     const key = providerInputs[providerId]?.trim();
     if (!key) return;
     setSavingProvider(providerId);
-    if (connected) {
+    // Provider keys never leave the device in Local mode. OS keychain
+    // on the extension holds the BYOK keys locally; mirroring to cloud
+    // is opt-in via Data Mode.
+    if (connected && dataModeIncludesCloud()) {
       apiFetch('/settings/provider-key', {
         method: 'POST',
         body: JSON.stringify({ provider: providerId, apiKey: key }),
@@ -8767,7 +8790,7 @@ export function SettingsPage() {
   };
 
   const handleRemoveProviderKey = (providerId: string) => {
-    if (connected) {
+    if (connected && dataModeIncludesCloud()) {
       apiFetch('/settings/provider-key', {
         method: 'DELETE',
         body: JSON.stringify({ provider: providerId }),
