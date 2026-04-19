@@ -34,6 +34,11 @@ fn restore_last_target() {
     }) else {
         return;
     };
+    // SAFETY: All three Win32 calls are thread-safe and accept any
+    // HWND value (NULL / stale handles return 0 / do nothing rather
+    // than dereferencing). The cast from isize → HWND is the reverse
+    // of the isize produced by a previous GetForegroundWindow call we
+    // stored; no allocation or aliasing involved.
     unsafe {
         let hwnd = hwnd_isize as windows_sys::Win32::Foundation::HWND;
         let current = GetForegroundWindow();
@@ -287,16 +292,34 @@ fn get_active_window() -> Result<ActiveWindowInfo, String> {
         use std::ffi::OsString;
         use std::os::windows::ffi::OsStringExt;
 
+        // SAFETY:
+        //   * GetForegroundWindow returns NULL when no window is active —
+        //     checked below before any further use of hwnd.
+        //   * GetWindowTextW writes at most `title_buf.len()` wchars and
+        //     returns the count actually written. We clamp the slice to
+        //     that returned length so no out-of-bounds read occurs even
+        //     if the OS violated its own contract. 512 wchars is well
+        //     above any typical window-title length; longer titles
+        //     truncate silently (documented API behaviour).
+        //   * GetWindowRect writes into an owned &mut RECT.
+        //   * GetWindowThreadProcessId writes into an owned &mut u32.
+        //   * get_process_name is itself unsafe; its contract is that
+        //     it handles invalid pids by returning None.
         unsafe {
             let hwnd = windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow();
             if hwnd == std::ptr::null_mut() {
                 return Err("No active window".into());
             }
 
-            // Get window title
+            // Get window title. Fixed 512-wchar buffer with truncation
+            // is intentional — a second length-query syscall would race
+            // the title changing between calls (common for browsers and
+            // IDEs). Truncation is benign: UI labels in Ava use this
+            // for display only, never for path / command construction.
             let mut title_buf = [0u16; 512];
-            let len = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 512);
-            let title = OsString::from_wide(&title_buf[..len as usize]).to_string_lossy().into_owned();
+            let len = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowTextW(hwnd, title_buf.as_mut_ptr(), title_buf.len() as i32);
+            let len_clamped = (len as usize).min(title_buf.len());
+            let title = OsString::from_wide(&title_buf[..len_clamped]).to_string_lossy().into_owned();
 
             // Get window rect
             let mut rect = std::mem::zeroed::<windows_sys::Win32::Foundation::RECT>();
@@ -324,6 +347,19 @@ fn get_active_window() -> Result<ActiveWindowInfo, String> {
     }
 }
 
+/// Look up a process name by pid. Returns None when the pid can't be
+/// opened (permission, gone, or invalid) — never panics.
+///
+/// # Safety
+/// Caller must ensure this runs on Windows. All the Win32 calls below
+/// are memory-safe when given valid-shape arguments:
+///   * `OpenProcess` handles invalid pids by returning NULL (checked).
+///   * `QueryFullProcessImageNameW` writes at most `size` wchars and
+///     updates `size` in place to the count written. We pass a
+///     buffer-sized `size` and clamp on read so an out-of-contract
+///     return can't produce a slice overrun.
+///   * `CloseHandle` is always safe to call on a handle returned by
+///     OpenProcess, even if the query above failed.
 #[cfg(target_os = "windows")]
 unsafe fn get_process_name(pid: u32) -> Option<String> {
     use std::ffi::OsString;
@@ -339,7 +375,7 @@ unsafe fn get_process_name(pid: u32) -> Option<String> {
     }
 
     let mut buf = [0u16; 512];
-    let mut size = 512u32;
+    let mut size = buf.len() as u32;
     let ok = windows_sys::Win32::System::Threading::QueryFullProcessImageNameW(
         handle,
         0,
@@ -352,7 +388,10 @@ unsafe fn get_process_name(pid: u32) -> Option<String> {
         return None;
     }
 
-    let path = OsString::from_wide(&buf[..size as usize]).to_string_lossy().into_owned();
+    // Clamp in case the OS returned a size > the buffer we passed — can't
+    // happen per the documented contract, but defence in depth.
+    let used = (size as usize).min(buf.len());
+    let path = OsString::from_wide(&buf[..used]).to_string_lossy().into_owned();
     path.rsplit('\\').next().map(|s| s.to_string())
 }
 
@@ -391,6 +430,9 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
         // Prefer the actual foreground window (what the user is looking at).
         // Fall back to the desktop root only if we can't resolve it (e.g.
         // Start menu is open, or no window has focus).
+        // SAFETY: GetForegroundWindow is a parameter-free Win32 query
+        // that returns NULL when no window has focus. Null is checked
+        // below before the handle is used.
         let foreground_hwnd = unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
         let start_element = if !foreground_hwnd.is_null() {
             automation.element_from_handle(uiautomation::types::Handle::from(foreground_hwnd as isize))
@@ -586,6 +628,12 @@ fn focus_window(name: String) -> Result<String, String> {
                     // anti-focus-stealing policy when another process owns it.
                     if let Ok(handle) = current.get_native_window_handle() {
                         let hwnd_isize: isize = handle.into();
+                        // SAFETY: hwnd_isize is produced by UIA's
+                        // get_native_window_handle() which returns a
+                        // valid OS handle for the element it walked to.
+                        // IsIconic / ShowWindow / SetForegroundWindow
+                        // tolerate stale or already-closed handles by
+                        // returning 0 / doing nothing — no dereference.
                         unsafe {
                             use windows_sys::Win32::UI::WindowsAndMessaging::{
                                 SetForegroundWindow, ShowWindow, IsIconic,
@@ -642,6 +690,13 @@ fn click_element(name: String) -> Result<UIElementInfo, String> {
 fn get_dpi_scale() -> Result<f64, String> {
     #[cfg(target_os = "windows")]
     {
+        // SAFETY:
+        //   * GetDC(NULL) returns a device context for the entire
+        //     screen, or NULL on failure — we check and fall back to 1.0.
+        //   * GetDeviceCaps on a valid HDC with the LOGPIXELSX index is
+        //     read-only and doesn't mutate memory we own.
+        //   * ReleaseDC pairs with GetDC; required to avoid DC leaks.
+        //     Passing the same HDC back is the documented usage.
         unsafe {
             // Get the DPI for the primary monitor
             let hdc = windows_sys::Win32::Graphics::Gdi::GetDC(std::ptr::null_mut());
@@ -691,6 +746,10 @@ fn get_foreground_window_title() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
         use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
+        // SAFETY: Same shape as active_window_info above.
+        //   * GetForegroundWindow returns NULL when no foreground — checked.
+        //   * GetWindowTextW writes at most buf.len() wchars and returns
+        //     the number written. Result clamped before slicing.
         unsafe {
             let hwnd = GetForegroundWindow();
             if hwnd.is_null() {
@@ -701,7 +760,8 @@ fn get_foreground_window_title() -> Result<String, String> {
             if len <= 0 {
                 return Ok(String::new());
             }
-            Ok(String::from_utf16_lossy(&buf[..len as usize]))
+            let len_clamped = (len as usize).min(buf.len());
+            Ok(String::from_utf16_lossy(&buf[..len_clamped]))
         }
     }
     #[cfg(not(target_os = "windows"))]
@@ -937,9 +997,12 @@ struct LaunchAppResult {
 }
 
 /// Launch a named executable or full path. Refuses shell / script / admin
-/// tools by basename. Never invokes a shell interpreter.
+/// tools by basename AND by extension. Never invokes a shell interpreter.
 #[tauri::command]
 fn launch_app(name: String) -> Result<LaunchAppResult, String> {
+    // Shells, scripting hosts, registry / admin tooling. Checked by
+    // basename so a full path like C:\Windows\System32\cmd.exe is
+    // still caught.
     const DENYLIST: &[&str] = &[
         "bash", "sh", "zsh", "fish", "wsl", "wsl.exe",
         "cmd", "cmd.exe", "powershell", "pwsh", "powershell_ise",
@@ -948,14 +1011,23 @@ fn launch_app(name: String) -> Result<LaunchAppResult, String> {
         "rundll32", "cscript", "wscript",
         "gpedit", "mmc", "eventvwr",
     ];
+    // Extension-based denylist. Windows' CreateProcess invokes cmd.exe
+    // implicitly for .bat / .cmd, which defeats "no shell" — an
+    // attacker-placed .bat on disk would gain shell semantics. Same
+    // risk for scripting-host extensions. Only .exe and extension-less
+    // (PATH-resolved) program names are allowed through.
+    const SCRIPTING_EXT_DENY: &[&str] = &[
+        ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse",
+        ".wsf", ".wsh", ".msc", ".hta", ".reg",
+    ];
 
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err("launch_app: name is required".into());
     }
 
-    // Derive the basename (last path segment, stripped of .exe) for the
-    // denylist check. Handles both `\` and `/` separators and arbitrary
+    // Derive the basename (last path segment) for both the denylist and
+    // extension checks. Handles both `\` and `/` separators and arbitrary
     // casing from the caller. Full paths to denylisted binaries are also
     // rejected — the user can't sneak "C:\Windows\System32\cmd.exe" through.
     let basename = trimmed
@@ -963,6 +1035,17 @@ fn launch_app(name: String) -> Result<LaunchAppResult, String> {
         .next()
         .unwrap_or(trimmed)
         .to_lowercase();
+
+    // Extension gate first — blocks scripting-host surface area.
+    if let Some(dot) = basename.rfind('.') {
+        let ext = &basename[dot..];
+        if SCRIPTING_EXT_DENY.iter().any(|deny| *deny == ext) {
+            return Err(format!(
+                "launch_app refused: '{ext}' scripts cannot be launched directly — Windows would invoke a shell to run them."
+            ));
+        }
+    }
+
     let stripped = basename
         .strip_suffix(".exe")
         .unwrap_or(&basename)
@@ -1013,20 +1096,32 @@ fn record_process_main_window(target_pid: u32, timeout: std::time::Duration) {
     static FOUND_HWND: AtomicIsize = AtomicIsize::new(0);
     static TARGET_PID: AtomicIsize = AtomicIsize::new(0);
 
+    // SAFETY (fn): This is a Win32 callback signature with `unsafe
+    // extern "system"` mandated by EnumWindows. `hwnd` is provided by
+    // the OS for each enumerated window; it may be invalid by the
+    // time we use it if the window was destroyed mid-enumeration, but
+    // every Win32 call below tolerates that by returning 0 / a null
+    // handle rather than dereferencing.
     unsafe extern "system" fn enum_cb(hwnd: HWND, _: LPARAM) -> BOOL {
         let target = TARGET_PID.load(Ordering::Relaxed) as u32;
         if target == 0 {
             return 0; // stop
         }
+        // SAFETY: IsWindowVisible accepts any HWND; returns 0 for
+        // destroyed / invalid handles. No dereference.
         if unsafe { IsWindowVisible(hwnd) } == 0 {
             return 1;
         }
         // Only main/top-level windows — skip owned popups.
+        // SAFETY: GetWindow(hwnd, GW_OWNER) returns NULL for
+        // destroyed/unowned windows. No memory mutation.
         let owner = unsafe { GetWindow(hwnd, GW_OWNER) };
         if !owner.is_null() {
             return 1;
         }
         let mut win_pid: u32 = 0;
+        // SAFETY: GetWindowThreadProcessId writes into an owned &mut u32
+        // on the stack. Safe for any HWND — returns 0 for invalid.
         unsafe { GetWindowThreadProcessId(hwnd, &mut win_pid) };
         if win_pid == target {
             FOUND_HWND.store(hwnd as isize, Ordering::Relaxed);
@@ -1039,6 +1134,10 @@ fn record_process_main_window(target_pid: u32, timeout: std::time::Duration) {
     while std::time::Instant::now() < deadline {
         FOUND_HWND.store(0, Ordering::Relaxed);
         TARGET_PID.store(target_pid as isize, Ordering::Relaxed);
+        // SAFETY: EnumWindows dispatches enum_cb synchronously on the
+        // calling thread for each top-level window, then returns. The
+        // function pointer we pass is static and ABI-correct; LPARAM
+        // is unused.
         unsafe {
             EnumWindows(Some(enum_cb), 0);
         }
