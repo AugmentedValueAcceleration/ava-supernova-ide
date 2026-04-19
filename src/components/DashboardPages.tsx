@@ -9438,8 +9438,19 @@ export function SettingsPage() {
 export function BillingPage() {
   useLocale();
   const connected = checkConnected();
-  const { data: usage, loading } = useApiData<any>('/usage/summary', null);
+  const { data: usage, loading, refetch } = useApiData<any>('/usage/summary', null);
   const tier = localStorage.getItem('ava-ide-tier') || 'free';
+
+  // Ask the server to recalculate storage on mount so the Billing panel
+  // shows a fresh number instead of whatever the nightly pg_cron last
+  // wrote. Fire-and-forget: if the call fails we just keep the cached
+  // value. Silent — no user-facing error on network blips.
+  useEffect(() => {
+    if (!connected) return;
+    apiFetch('/usage/recalculate-storage', { method: 'POST' })
+      .then(() => refetch())
+      .catch(() => { /* non-fatal */ });
+  }, [connected, refetch]);
 
   const tierConfig: Record<string, { label: string; color: string; bg: string; limit: string }> = {
     free:       { label: t('dash.billing.plan.free'), color: '#a6e3a1', bg: 'rgba(166,227,161,0.10)', limit: t('dash.billing.tokens.free') },
@@ -9539,6 +9550,21 @@ export function BillingPage() {
               <div style={{ fontSize: 11, color: '#45475a', textAlign: 'right' }}>
                 {fmtStorage(storage.base_gb)} plan
                 {storage.addon_gb > 0 && <> + {fmtStorage(storage.addon_gb)} add-ons</>}
+                <button
+                  onClick={() => {
+                    apiFetch('/usage/recalculate-storage', { method: 'POST' })
+                      .then(() => refetch())
+                      .catch(() => { /* non-fatal */ });
+                  }}
+                  title="Recalculate storage usage"
+                  style={{
+                    display: 'block', marginTop: 4, marginLeft: 'auto', padding: 0,
+                    fontSize: 10, color: '#6c7086', background: 'transparent',
+                    border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  Refresh {'\u21bb'}
+                </button>
               </div>
             </div>
             <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden', marginBottom: 10 }}>
