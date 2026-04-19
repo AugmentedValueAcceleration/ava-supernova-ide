@@ -26,9 +26,6 @@ import {
   TOKEN_TOPUPS,
   STORAGE_ADDONS,
   dashboardBillingUrl,
-  upgradeUrl,
-  tokenTopupUrl,
-  storageAddonUrl,
   type PlanTier as AvaPlanTier,
 } from '@ava/core/billing';
 
@@ -9504,8 +9501,10 @@ export function BillingPage() {
             }}>Manage Plan</a>
           </div>
 
-          {/* Token Pools */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+          {/* Token Pools — Plan Tokens hidden on Free. Free users only have
+              the free 3M pool; showing a second bar against a non-existent
+              plan pool was meaningless and confused users. */}
+          <div style={{ display: 'grid', gridTemplateColumns: tier === 'free' ? '1fr' : '1fr 1fr', gap: 16, marginTop: 16 }}>
             {/* Free Pool */}
             <div style={card}>
               <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Free Tokens</div>
@@ -9515,15 +9514,17 @@ export function BillingPage() {
                 <div style={{ height: '100%', width: `${pct(freeUsed, freeLimit)}%`, background: 'linear-gradient(90deg, #a6e3a1, #94e2d5)', borderRadius: 3, transition: 'width 0.5s' }} />
               </div>
             </div>
-            {/* Plan Pool */}
-            <div style={card}>
-              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Plan Tokens</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#89b4fa', marginBottom: 4 }}>{planLimit > 0 ? fmtTokens(planLimit - planUsed) : '—'}</div>
-              <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>{planLimit > 0 ? `of ${fmtTokens(planLimit)} remaining` : 'Upgrade for plan tokens'}</div>
-              <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct(planUsed, planLimit)}%`, background: 'linear-gradient(90deg, #89b4fa, #74c7ec)', borderRadius: 3, transition: 'width 0.5s' }} />
+            {/* Plan Pool — paid tiers only */}
+            {tier !== 'free' && (
+              <div style={card}>
+                <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Plan Tokens</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#89b4fa', marginBottom: 4 }}>{planLimit > 0 ? fmtTokens(planLimit - planUsed) : '—'}</div>
+                <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>{planLimit > 0 ? `of ${fmtTokens(planLimit)} remaining` : 'Upgrade for plan tokens'}</div>
+                <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct(planUsed, planLimit)}%`, background: 'linear-gradient(90deg, #89b4fa, #74c7ec)', borderRadius: 3, transition: 'width 0.5s' }} />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Cloud Storage */}
@@ -9548,31 +9549,25 @@ export function BillingPage() {
             </div>
           </div>
 
-          {/* Storage Add-ons — canonical data from @ava/core/billing */}
-          {tier !== 'free' && tier !== 'admin' && (
+          {/* Storage Add-ons — visible to everyone (Free too), non-interactive
+              until the checkout flow is live. Canonical data from @ava/core. */}
+          {tier !== 'admin' && (
             <>
               <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Storage Add-ons</h2>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                {STORAGE_ADDONS.map((addon, idx) => {
-                  const popular = idx === 1; // 250GB is the middle / popular pick
+                {STORAGE_ADDONS.map((addon) => {
                   const desc = addon.id === '50gb' ? 'A little more room'
                     : addon.id === '250gb' ? 'Creative studio scale'
                     : 'Power user';
                   return (
                     <div key={addon.id} style={{
                       ...card, textAlign: 'center', padding: '20px 16px', position: 'relative',
-                      borderColor: popular ? 'rgba(168,85,247,0.4)' : 'rgba(49, 34, 68, 0.5)',
+                      borderColor: 'rgba(49, 34, 68, 0.5)', opacity: 0.85,
                     }}>
-                      {popular && <span style={{ position: 'absolute', top: -8, right: 12, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#a855f7', color: '#fff' }}>POPULAR</span>}
+                      <span style={{ position: 'absolute', top: 8, right: 10, fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(168,85,247,0.10)', color: '#a855f7', letterSpacing: 0.5 }}>COMING SOON</span>
                       <div style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', marginBottom: 2 }}>{addon.label}</div>
                       <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>{desc}</div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: '#a855f7', marginBottom: 4 }}>${addon.price}<span style={{ fontSize: 11, fontWeight: 400, color: '#6c7086' }}>/mo</span></div>
-                      <a href={storageAddonUrl(addon.id)} target="_blank" rel="noopener noreferrer" style={{
-                        display: 'block', marginTop: 8, padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        background: popular ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'rgba(168,85,247,0.1)',
-                        color: popular ? '#fff' : '#a855f7', border: popular ? 'none' : '1px solid rgba(168,85,247,0.25)',
-                        textDecoration: 'none', textAlign: 'center',
-                      }}>Add</a>
                     </div>
                   );
                 })}
@@ -9591,11 +9586,11 @@ export function BillingPage() {
             </div>
           )}
 
-          {/* Token Top-Up Packages — canonical data from @ava/core/billing */}
+          {/* Token Top-Up Packages — visible to everyone, non-interactive
+              until checkout ships. Canonical data from @ava/core/billing. */}
           <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Top-Up Packages</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            {TOKEN_TOPUPS.map((pkg, idx) => {
-              const popular = idx === 1; // 10M is the middle / best-value pick
+            {TOKEN_TOPUPS.map((pkg) => {
               const desc = pkg.id === 'tokens_3m' ? 'Quick boost'
                 : pkg.id === 'tokens_10m' ? 'Best value'
                 : 'Power user';
@@ -9603,46 +9598,44 @@ export function BillingPage() {
               return (
                 <div key={pkg.id} style={{
                   ...card, textAlign: 'center', padding: '20px 16px', position: 'relative',
-                  borderColor: popular ? 'rgba(168,85,247,0.4)' : 'rgba(49, 34, 68, 0.5)',
+                  borderColor: 'rgba(49, 34, 68, 0.5)', opacity: 0.85,
                 }}>
-                  {popular && <span style={{ position: 'absolute', top: -8, right: 12, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#a855f7', color: '#fff' }}>POPULAR</span>}
+                  <span style={{ position: 'absolute', top: 8, right: 10, fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(168,85,247,0.10)', color: '#a855f7', letterSpacing: 0.5 }}>COMING SOON</span>
                   <div style={{ fontSize: 24, fontWeight: 700, color: '#cdd6f4', marginBottom: 2 }}>{tokensLabel}</div>
                   <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>{desc}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#a855f7', marginBottom: 12 }}>${pkg.price}</div>
-                  <a href={tokenTopupUrl(pkg.id)} target="_blank" rel="noopener noreferrer" style={{
-                    display: 'block', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                    background: popular ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'rgba(168,85,247,0.1)',
-                    color: popular ? '#fff' : '#a855f7', border: popular ? 'none' : '1px solid rgba(168,85,247,0.25)',
-                    textDecoration: 'none', textAlign: 'center',
-                  }}>Buy</a>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#a855f7' }}>${pkg.price}</div>
                 </div>
               );
             })}
           </div>
 
-          {/* Upgrade cards — show every tier above the user's current one.
-              Free and Pro users need a visible way to move up; the original
-              Billing page exposed only "Manage Plan" which took them to the
-              signed-in portal rather than the pricing page. */}
-          {tier !== 'enterprise' && tier !== 'admin' && (
+          {/* Plans — all four tiers shown for full transparency. Current tier
+              flagged "Your plan". Free always visible so paid users can see
+              where they'd land on missed renewal / cancellation. */}
+          {tier !== 'admin' && (
             <>
-              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 32, marginBottom: 12 }}>Upgrade</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 32, marginBottom: 12 }}>Plans</h2>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: (tier === 'free') ? '1fr 1fr 1fr' : tier === 'pro' ? '1fr 1fr' : '1fr',
+                gridTemplateColumns: '1fr 1fr 1fr 1fr',
                 gap: 12,
               }}>
-                {(tier === 'free' ? (['pro', 'ultra', 'enterprise'] as const)
-                  : tier === 'pro' ? (['ultra', 'enterprise'] as const)
-                  : (['enterprise'] as const)
-                ).map((target: Exclude<AvaPlanTier, 'free' | 'admin'>) => {
+                {(['free', 'pro', 'ultra', 'enterprise'] as const).map((target: Exclude<AvaPlanTier, 'admin'>) => {
                   const plan = PLANS[target];
+                  const isCurrent = target === tier;
                   const highlight = target === 'ultra';
                   return (
                     <div key={target} style={{
                       ...card, padding: '20px 18px', position: 'relative',
-                      borderColor: highlight ? 'rgba(168,85,247,0.4)' : 'rgba(49, 34, 68, 0.5)',
+                      borderColor: isCurrent
+                        ? 'rgba(166,227,161,0.45)'
+                        : highlight
+                        ? 'rgba(168,85,247,0.4)'
+                        : 'rgba(49, 34, 68, 0.5)',
                     }}>
+                      {isCurrent && (
+                        <span style={{ position: 'absolute', top: 8, right: 10, fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(166,227,161,0.12)', color: '#a6e3a1', letterSpacing: 0.5 }}>YOUR PLAN</span>
+                      )}
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>{plan.name}</div>
                       <div style={{ marginBottom: 12 }}>
                         <span style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>${plan.price}</span>
@@ -9656,12 +9649,15 @@ export function BillingPage() {
                           </li>
                         ))}
                       </ul>
-                      <a href={upgradeUrl(target)} target="_blank" rel="noopener noreferrer" style={{
+                      <div style={{
                         display: 'block', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        background: highlight ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'rgba(168,85,247,0.1)',
-                        color: highlight ? '#fff' : '#a855f7', border: highlight ? 'none' : '1px solid rgba(168,85,247,0.25)',
-                        textDecoration: 'none', textAlign: 'center',
-                      }}>Upgrade to {plan.name}</a>
+                        background: 'rgba(49, 34, 68, 0.3)',
+                        color: isCurrent ? '#a6e3a1' : '#6c7086',
+                        border: '1px solid rgba(49, 34, 68, 0.5)',
+                        textAlign: 'center',
+                      }}>
+                        {isCurrent ? 'Current plan' : 'Coming soon'}
+                      </div>
                     </div>
                   );
                 })}
