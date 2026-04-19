@@ -856,8 +856,23 @@ const ARTICLE_CATEGORIES: Record<string, { label: string; icon: string }> = {
   'industry':     { label: 'Industry & Policy',    icon: '📰' },
 };
 
+// Escape raw HTML before any markdown conversion. The companion's
+// renderer already does this; the IDE article reader didn't because
+// its input (news articles) is admin-curated and trusted. Defence in
+// depth: if the news_articles table is ever compromised, or a third-
+// party feed is ever plugged in, HTML / event-handler / <script>
+// injection doesn't reach dangerouslySetInnerHTML.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderMarkdown(md: string): string {
-  let html = md
+  let html = escapeHtml(md)
     .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="art-code"><code>$2</code></pre>')
     .replace(/`([^`]+)`/g, '<code class="art-inline">$1</code>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
