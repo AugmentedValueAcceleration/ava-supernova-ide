@@ -14,11 +14,29 @@ const PROVIDERS = [
   { id: 'Mistral', name: 'Mistral', placeholder: '...' },
 ];
 
+// Mode = mindset. This is the single most useful concept to hand a
+// new user — once they get "modes change how Ava thinks", everything
+// else clicks. Shown as a 6-card picker that previews a real example
+// prompt per mode, instead of a generic welcome splash.
+const MODES = [
+  { id: 'code',       name: 'Work',       prefix: '>>', tagline: 'Builder. Ships code.',                  example: 'add a cancel button to the upload form' },
+  { id: 'plan',       name: 'Plan',       prefix: '::', tagline: 'Strategist. Read-only. Thinks first.',  example: 'should I extract this logic into a service?' },
+  { id: 'chat',       name: 'Chat',       prefix: '..', tagline: 'Friend. No tools. Just talk.',           example: 'how do I feel about this launch date?' },
+  { id: 'teach',      name: 'Teach',      prefix: '??', tagline: 'Tutor. Builds a curriculum for you.',   example: 'teach me Rust async from zero' },
+  { id: 'security',   name: 'Security',   prefix: '!!', tagline: 'Auditor. OWASP scan + report.',          example: 'audit this API for injection risks' },
+  { id: 'brainstorm', name: 'Brainstorm', prefix: '**', tagline: 'Ideator. Challenges your ideas.',         example: 'what should I build with 2 weeks free?' },
+];
+
 export default function WelcomeOverlay({ onComplete }: Props) {
   const [step, setStep] = useState(0);
   const [consentChecked, setConsentChecked] = useState(false);
 
-  // Step 2 state (was step 1 before consent gate)
+  // Step 1: the mode picker is a teaching tool, not a setting. We
+  // persist the selection locally so if they pick Plan we can land
+  // them in Plan mode when they click "Open Ava Chat" on the final
+  // step. Default Work — most users start with a ship-something task.
+  const [selectedMode, setSelectedMode] = useState(MODES[0]);
+
   const [platformStatus, setPlatformStatus] = useState<'idle' | 'valid'>('idle');
   const [platformEmail, setPlatformEmail] = useState('');
   const [byokProvider, setByokProvider] = useState('Qwen');
@@ -28,11 +46,14 @@ export default function WelcomeOverlay({ onComplete }: Props) {
   // Name state (shown after platform connect)
   const [userName, setUserName] = useState('');
 
-  // Step 4 state (was step 3)
   const [workStart, setWorkStart] = useState(9);
   const [workEnd, setWorkEnd] = useState(17);
 
-  const totalSteps = 5;
+  // Consent → Modes → Desktop Automation → Connect → Hours → Ready.
+  // Desktop Automation is its own step because it's the biggest
+  // capability that separates the IDE from the VS Code extension —
+  // treating it as a footnote would undersell the differentiator.
+  const totalSteps = 6;
 
   // OAuth sign-in completed (the SignInPanel handles the browser + deep-link
   // round-trip + localStorage persistence itself; all we do here is pick up
@@ -67,8 +88,13 @@ export default function WelcomeOverlay({ onComplete }: Props) {
 
   const finish = useCallback((navigateTo?: string) => {
     localStorage.setItem('ava-ide-onboarded', 'true');
+    // Persist the picked mode so the chat opens in the right mindset
+    // the first time — users who chose Plan on step 1 don't want to
+    // land in Work and have to switch. Chat surfaces read this key
+    // on mount; if it's not set they default to Work.
+    try { localStorage.setItem('ava-ide-initial-mode', selectedMode.id); } catch { /* non-fatal */ }
     onComplete(navigateTo);
-  }, [onComplete]);
+  }, [onComplete, selectedMode]);
 
   const recordConsent = useCallback(() => {
     const timestamp = new Date().toISOString();
@@ -162,27 +188,121 @@ export default function WelcomeOverlay({ onComplete }: Props) {
           </div>
         )}
 
-        {/* Step 1: Welcome */}
+        {/* Step 1: Modes — six-card picker. Teaches the mindset
+            metaphor before we ask them for anything. Clicking a mode
+            previews an example prompt so the concept lands concretely. */}
         {step === 1 && (
-          <div style={{ textAlign: 'center' }}>
-            <img src="/icon.png" width={72} height={72} style={{
-              borderRadius: 16, margin: '0 auto 24px', display: 'block',
-              boxShadow: '0 8px 32px rgba(168,85,247,0.3)',
-              animation: 'avaPulse 2s ease-in-out infinite',
-            }} alt="Ava" />
-            <h1 style={{ fontSize: 24, fontWeight: 300, color: '#cdd6f4', marginBottom: 8 }}>
-              Welcome to <span style={{ fontWeight: 600 }}>Ava</span>{' '}
-              <span style={{ color: '#a855f7', fontWeight: 600 }}>|</span>{' '}
-              <span style={{ fontWeight: 600 }}>Supernova IDE</span>
-            </h1>
-            <p style={{ fontSize: 14, color: '#6c7086', lineHeight: 1.7, maxWidth: 400, margin: '0 auto' }}>
-              The AI-native development environment. 61 tools. 6 modes. 24 specialists. One brain that remembers you.
-            </p>
+          <div>
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <img src="/icon.png" width={40} height={40} style={{ borderRadius: 10, margin: '0 auto 12px', display: 'block' }} alt="Ava" />
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Pick the mindset you&rsquo;re in</h2>
+              <p style={{ fontSize: 12, color: '#6c7086' }}>
+                Modes change how Ava thinks — the tools she uses, the risks she takes. Switch any time.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+              {MODES.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedMode(m)}
+                  style={{
+                    textAlign: 'left',
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    background: selectedMode.id === m.id ? 'rgba(168, 85, 247, 0.12)' : 'rgba(26, 16, 40, 0.6)',
+                    border: selectedMode.id === m.id ? '1px solid rgba(168, 85, 247, 0.5)' : '1px solid rgba(168, 85, 247, 0.12)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#a855f7' }}>{m.prefix}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{m.name}</span>
+                  </div>
+                  <p style={{ fontSize: 10, color: '#6c7086', marginTop: 3, marginBottom: 0 }}>{m.tagline}</p>
+                </button>
+              ))}
+            </div>
+
+            <div style={{
+              borderRadius: 10, background: 'rgba(26, 16, 40, 0.6)',
+              border: '1px solid rgba(168, 85, 247, 0.12)', padding: '10px 12px',
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 }}>
+                Try this in {selectedMode.name} mode
+              </div>
+              <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#a6adc8' }}>
+                <span style={{ color: '#a855f7' }}>{selectedMode.prefix}</span> {selectedMode.example}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Step 2: Get Connected */}
+        {/* Step 2: Desktop Automation — the IDE's unique differentiator
+            vs the VS Code extension. The extension has every tool the
+            IDE has EXCEPT native OS control. Calling this out explicitly
+            so users understand why they'd run the IDE instead of (or
+            alongside) the extension. */}
         {step === 2 && (
+          <div>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>🖥️</div>
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Ava has hands here</h2>
+              <p style={{ fontSize: 12, color: '#6c7086', maxWidth: 400, margin: '0 auto' }}>
+                This is what separates the IDE from the extension — she can drive your desktop.
+              </p>
+            </div>
+
+            <div style={{
+              background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)',
+              borderRadius: 12, padding: 18, marginBottom: 12,
+            }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 18, marginBottom: 6 }}>📸</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>See your screen</div>
+                  <p style={{ fontSize: 10, color: '#6c7086', lineHeight: 1.5, margin: 0 }}>
+                    Ask her to describe what&rsquo;s open, review a design, or spot the bug you&rsquo;re staring at.
+                  </p>
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, marginBottom: 6 }}>🖱️</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Drive any app</div>
+                  <p style={{ fontSize: 10, color: '#6c7086', lineHeight: 1.5, margin: 0 }}>
+                    Keyboard, mouse, other windows. Automate the boring five-click workflows.
+                  </p>
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, marginBottom: 6 }}>🌐</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Run a browser for you</div>
+                  <p style={{ fontSize: 10, color: '#6c7086', lineHeight: 1.5, margin: 0 }}>
+                    Research, fill forms, reproduce bugs. Playwright-backed, visible window.
+                  </p>
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, marginBottom: 6 }}>🛑</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>You stay in charge</div>
+                  <p style={{ fontSize: 10, color: '#6c7086', lineHeight: 1.5, margin: 0 }}>
+                    Opt in per session. One-shot plan approval. Ctrl+Alt+K kill switch.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              border: '1px solid rgba(166, 227, 161, 0.25)', background: 'rgba(166, 227, 161, 0.06)',
+              borderRadius: 10, padding: '10px 12px',
+            }}>
+              <p style={{ fontSize: 11, color: '#a6e3a1', margin: 0, lineHeight: 1.5 }}>
+                Opt in when you want it — from the chat header. Off by default, kill-switch always one hotkey away.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Get Connected */}
+        {step === 3 && (
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 6, textAlign: 'center' }}>Get Connected</h2>
             <p style={{ fontSize: 12, color: '#6c7086', textAlign: 'center', marginBottom: 20 }}>Choose how you want to use Ava</p>
@@ -251,8 +371,8 @@ export default function WelcomeOverlay({ onComplete }: Props) {
           </div>
         )}
 
-        {/* Step 3: Working Hours */}
-        {step === 3 && (
+        {/* Step 4: Working Hours */}
+        {step === 4 && (
           <div style={{ textAlign: 'center' }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>Set Your Hours</h2>
             <p style={{ fontSize: 12, color: '#6c7086', marginBottom: 24 }}>
@@ -292,22 +412,37 @@ export default function WelcomeOverlay({ onComplete }: Props) {
           </div>
         )}
 
-        {/* Step 4: Ready */}
-        {step === 4 && (
+        {/* Step 5: Ready */}
+        {step === 5 && (
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>🚀</div>
-            <h2 style={{ fontSize: 20, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>You're Ready</h2>
-            <p style={{ fontSize: 13, color: '#6c7086', marginBottom: 24 }}>Ava is waiting. Where do you want to start?</p>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>You&rsquo;re ready</h2>
+            <p style={{ fontSize: 13, color: '#6c7086', marginBottom: 20 }}>
+              {selectedMode.id !== 'code'
+                ? `Start in ${selectedMode.name} mode — switch any time with the pill in the chat header.`
+                : 'Ava is waiting. Where do you want to start?'}
+            </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               {[
                 { label: 'Open Ava Chat', icon: '💬', nav: 'Ava Chat' },
                 { label: 'Documentation', icon: '📖', nav: 'Documentation' },
                 { label: 'Command Centre', icon: '⚡', nav: 'Command Centre' },
+                { label: 'Meet Ava', icon: '✨', nav: 'meet-ava-external' },
               ].map(a => (
                 <button
                   key={a.label}
-                  onClick={() => finish(a.nav)}
+                  onClick={() => {
+                    // "Meet Ava" opens the brand page in the user's
+                    // browser and still closes onboarding. Other
+                    // buttons navigate to an internal page.
+                    if (a.nav === 'meet-ava-external') {
+                      try { window.open('https://ava-supernova.com/meet-ava', '_blank'); } catch { /* non-fatal */ }
+                      finish();
+                    } else {
+                      finish(a.nav);
+                    }
+                  }}
                   style={{
                     background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
                     padding: '16px 8px', cursor: 'pointer', transition: 'border-color 0.15s',
