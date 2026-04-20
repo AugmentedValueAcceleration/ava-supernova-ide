@@ -28,6 +28,7 @@ import {
   dashboardBillingUrl,
   type PlanTier as AvaPlanTier,
 } from '@ava/core/billing';
+import { IdePurchaseCard } from './_IdePurchaseCard';
 // Data Mode gate — every cloud write must check includesCloud() before
 // calling apiFetch. The toggle UI lives in this file too (mode switcher
 // in the chat header); setDataMode() writes to localStorage and the
@@ -9613,28 +9614,26 @@ export function BillingPage() {
             </div>
           </div>
 
-          {/* Storage Add-ons — visible to everyone (Free too), non-interactive
-              until the checkout flow is live. Canonical data from @ava/core. */}
+          {/* Storage Add-ons — unified purchase card shape. Canonical data
+              (label, subtitle, popular, effectiveRate) from @ava/core/billing.
+              Non-interactive state today; onClick slots in when checkout ships. */}
           {tier !== 'admin' && (
             <>
               <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Storage Add-ons</h2>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                {STORAGE_ADDONS.map((addon) => {
-                  const desc = addon.id === '50gb' ? 'A little more room'
-                    : addon.id === '250gb' ? 'Creative studio scale'
-                    : 'Power user';
-                  return (
-                    <div key={addon.id} style={{
-                      ...card, textAlign: 'center', padding: '20px 16px', position: 'relative',
-                      borderColor: 'rgba(49, 34, 68, 0.5)', opacity: 0.85,
-                    }}>
-                      <span style={{ position: 'absolute', top: 8, right: 10, fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(168,85,247,0.10)', color: '#a855f7', letterSpacing: 0.5 }}>COMING SOON</span>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', marginBottom: 2 }}>{addon.label}</div>
-                      <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>{desc}</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: '#a855f7', marginBottom: 4 }}>${addon.price}<span style={{ fontSize: 11, fontWeight: 400, color: '#6c7086' }}>/mo</span></div>
-                    </div>
-                  );
-                })}
+                {STORAGE_ADDONS.map((addon) => (
+                  <IdePurchaseCard
+                    key={addon.id}
+                    title={addon.label}
+                    subtitle={addon.subtitle}
+                    price={`$${addon.price}`}
+                    priceSuffix="/mo"
+                    effectiveRate={addon.effectiveRate}
+                    popular={addon.popular}
+                    state="coming_soon"
+                    ctaLabel="Coming soon"
+                  />
+                ))}
               </div>
             </>
           )}
@@ -9650,27 +9649,24 @@ export function BillingPage() {
             </div>
           )}
 
-          {/* Token Top-Up Packages — visible to everyone, non-interactive
-              until checkout ships. Canonical data from @ava/core/billing. */}
+          {/* Token Top-Up Packages — unified purchase card shape.
+              Same visual language as Storage Add-ons above + the extension
+              + the website pricing page. Effective rate makes the 10M
+              "Best value" honest — 20-40% cheaper per token. */}
           <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Top-Up Packages</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            {TOKEN_TOPUPS.map((pkg) => {
-              const desc = pkg.id === 'tokens_3m' ? 'Quick boost'
-                : pkg.id === 'tokens_10m' ? 'Best value'
-                : 'Power user';
-              const tokensLabel = pkg.tokens >= 1_000_000 ? `${pkg.tokens / 1_000_000}M` : `${pkg.tokens / 1000}K`;
-              return (
-                <div key={pkg.id} style={{
-                  ...card, textAlign: 'center', padding: '20px 16px', position: 'relative',
-                  borderColor: 'rgba(49, 34, 68, 0.5)', opacity: 0.85,
-                }}>
-                  <span style={{ position: 'absolute', top: 8, right: 10, fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(168,85,247,0.10)', color: '#a855f7', letterSpacing: 0.5 }}>COMING SOON</span>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: '#cdd6f4', marginBottom: 2 }}>{tokensLabel}</div>
-                  <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>{desc}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#a855f7' }}>${pkg.price}</div>
-                </div>
-              );
-            })}
+            {TOKEN_TOPUPS.map((pkg) => (
+              <IdePurchaseCard
+                key={pkg.id}
+                title={pkg.label}
+                subtitle={pkg.subtitle}
+                price={`$${pkg.price}`}
+                effectiveRate={pkg.effectiveRate}
+                popular={pkg.popular}
+                state="coming_soon"
+                ctaLabel="Coming soon"
+              />
+            ))}
           </div>
 
           {/* Plans — all four tiers shown for full transparency. Current tier
@@ -11679,3 +11675,4 @@ function CreativeLibraryTab() {
     </div>
   );
 }
+
