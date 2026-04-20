@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { initLocale, useLocale } from './lib/i18n';
 import { TickEngine } from './lib/tick-engine';
+import { refreshTier } from './lib/api';
 import TitleBar from './components/TitleBar';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
@@ -142,6 +143,21 @@ export default function App() {
     const handler = () => setCurrentMode(localStorage.getItem('ava-ide-chat-mode') || 'work');
     window.addEventListener('ava-mode-changed', handler);
     return () => window.removeEventListener('ava-mode-changed', handler);
+  }, []);
+
+  // Re-fetch tier from the platform on launch and whenever the IDE
+  // window regains focus. Covers the common "upgraded on the website,
+  // come back to the IDE" flow without requiring a sign-out/sign-in.
+  useEffect(() => {
+    void refreshTier();
+    const onFocus = () => { void refreshTier(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshTier(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   const cycleMode = useCallback(() => {

@@ -229,3 +229,30 @@ export async function validateKey(key: string): Promise<{ valid: boolean; email?
     return { valid: false, error: 'Could not reach platform' };
   }
 }
+
+/**
+ * Re-fetch the user's current tier from the platform and update the
+ * localStorage cache. Called on app launch and on window focus so an
+ * upgrade made on the website propagates to the IDE without requiring
+ * a sign-out/sign-in cycle. No-op when not connected.
+ */
+export async function refreshTier(): Promise<string | null> {
+  const key = getPlatformKey();
+  if (!key) return null;
+  try {
+    const res = await fetch(`${PLATFORM_URL}/account-info`, {
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const nextTier = (data.tier || data.plan || 'free') as string;
+    const prev = getStoredTier();
+    if (nextTier !== prev) {
+      localStorage.setItem('ava-ide-tier', nextTier);
+      window.dispatchEvent(new CustomEvent('ava-tier-changed', { detail: { tier: nextTier } }));
+    }
+    return nextTier;
+  } catch {
+    return null;
+  }
+}

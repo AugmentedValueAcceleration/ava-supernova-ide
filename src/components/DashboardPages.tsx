@@ -9478,7 +9478,18 @@ export function BillingPage() {
   useLocale();
   const connected = checkConnected();
   const { data: usage, loading, refetch } = useApiData<any>('/usage/summary', null);
-  const tier = localStorage.getItem('ava-ide-tier') || 'free';
+  // Tier tracked as state so the panel re-renders when refreshTier() picks
+  // up a platform upgrade (ava-tier-changed event from lib/api.ts).
+  const [tier, setTier] = useState<string>(() => localStorage.getItem('ava-ide-tier') || 'free');
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const next = (e as CustomEvent).detail?.tier as string | undefined;
+      if (next) setTier(next);
+      else setTier(localStorage.getItem('ava-ide-tier') || 'free');
+    };
+    window.addEventListener('ava-tier-changed', onChange);
+    return () => window.removeEventListener('ava-tier-changed', onChange);
+  }, []);
 
   // Ask the server to recalculate storage on mount so the Billing panel
   // shows a fresh number instead of whatever the nightly pg_cron last
