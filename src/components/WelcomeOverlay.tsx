@@ -20,7 +20,7 @@ const PROVIDERS = [
 // prompt per mode, instead of a generic welcome splash.
 const MODES = [
   { id: 'code',       name: 'Work',       prefix: '>>', tagline: 'Builder. Ships code.',                  example: 'add a cancel button to the upload form' },
-  { id: 'plan',       name: 'Plan',       prefix: '::', tagline: 'Strategist. Read-only. Thinks first.',  example: 'should I extract this logic into a service?' },
+  { id: 'plan',       name: 'Plan',       prefix: '::', tagline: 'Architect. Read-only. Thinks first.',   example: 'should I extract this logic into a service?' },
   { id: 'chat',       name: 'Chat',       prefix: '..', tagline: 'Friend. No tools. Just talk.',           example: 'how do I feel about this launch date?' },
   { id: 'teach',      name: 'Teach',      prefix: '??', tagline: 'Tutor. Builds a curriculum for you.',   example: 'teach me Rust async from zero' },
   { id: 'security',   name: 'Security',   prefix: '!!', tagline: 'Auditor. OWASP scan + report.',          example: 'audit this API for injection risks' },
