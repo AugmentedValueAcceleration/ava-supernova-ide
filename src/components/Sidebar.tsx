@@ -709,7 +709,7 @@ const NAV_ITEMS = [
   { id: 'command-centre', icon: '\u26A1', label: 'Command Centre', desc: 'Your daily overview' },
   { id: 'ava-chat',    icon: '\uD83D\uDCAC', label: 'Chat',    desc: 'Talk, build, create' },
   { id: 'planner',     icon: '\uD83D\uDCCB', label: 'Planner', desc: 'Tasks, journal, learning' },
-  { id: 'learning-library', icon: '\uD83D\uDCDA', label: 'Learning Library', desc: 'Browse learning paths' },
+  { id: 'library', icon: '\uD83D\uDCDA', label: 'Library', desc: 'Courses, assets, documents' },
   { id: 'creative-studio', icon: '\uD83C\uDFA8', label: 'Creative Studio', desc: 'Images, music, video, voice' },
   { id: 'memory',      icon: '\uD83E\uDDE0', label: 'Memory',  desc: 'Patterns, preferences, decisions' },
   { id: 'chat-history', icon: '\uD83D\uDCCA', label: 'History', desc: 'Tokens, sessions, models' },

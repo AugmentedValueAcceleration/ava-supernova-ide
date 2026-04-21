@@ -7333,7 +7333,70 @@ export function LearningLibraryPage() {
   );
 }
 
+// ── Unified Library (Courses / Assets / Documents) ─────────────────────
+//
+// Mirrors the extension's v0.48.4 Library restructure. Tabs:
+//   - Courses: embeds the existing LearningLibraryPage (no
+//     duplication — same component, same data).
+//   - Assets: images and media creative_assets (was the entire page
+//     before this restructure).
+//   - Documents: filters to document + spreadsheet asset types, with
+//     a "+ New document" action that routes users to Creative Studio
+//     for the full blank-or-template picker (porting that modal to
+//     the IDE is a separate pass).
+//
+// The 'learning-library' page id and LearningLibraryPage export stay
+// available so deep links keep working, but the sidebar no longer
+// exposes a separate entry — both surfaces are reached via Library.
 export function LibraryPage() {
+  useLocale();
+  const [tab, setTab] = useState<'courses' | 'assets' | 'documents'>('assets');
+
+  const tabBtnStyle = (active: boolean): React.CSSProperties => ({
+    padding: '8px 16px', borderRadius: 0, border: 'none', cursor: 'pointer',
+    fontSize: 12, fontWeight: active ? 600 : 500,
+    background: 'transparent',
+    color: active ? '#c084fc' : '#6c7086',
+    borderBottom: active ? '2px solid #a855f7' : '2px solid transparent',
+    marginBottom: -1,
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{
+        padding: '20px 32px 0', flexShrink: 0,
+        borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
+        background: 'rgba(12, 8, 20, 0.4)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 0 }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>Library</h1>
+            <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
+              Your courses, assets, and documents — everything Ava has made for you.
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 2 }}>
+          <button onClick={() => setTab('courses')} style={tabBtnStyle(tab === 'courses')}>Courses</button>
+          <button onClick={() => setTab('assets')} style={tabBtnStyle(tab === 'assets')}>Assets</button>
+          <button onClick={() => setTab('documents')} style={tabBtnStyle(tab === 'documents')}>Documents</button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {tab === 'courses' && <LearningLibraryPage />}
+        {tab === 'assets' && <LibraryAssetsView kind="assets" />}
+        {tab === 'documents' && <LibraryAssetsView kind="documents" />}
+      </div>
+    </div>
+  );
+}
+
+// ── Library assets/documents grid — shared by the Assets and Documents
+// tabs. `kind='assets'` filters to images + media; `kind='documents'`
+// filters to document + spreadsheet and exposes a "+ New document"
+// shortcut to Creative Studio's creation picker.
+function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   useLocale();
   const [, setAuthKey] = useState(0);
   useEffect(() => {
@@ -7397,33 +7460,75 @@ export function LibraryPage() {
   // longer needed here. FILE_TYPE_EXTENSIONS is still referenced via
   // the filter tabs below — keeping the map, dropping the helper.
 
-  const filtered = filter === 'all' ? files : files.filter((f) => f.type === filter);
+  // Split the fetched list by kind so the Assets tab only sees visual
+  // media (image/presentation) and Documents only sees textual files
+  // (document/spreadsheet). Filter tabs below are then scoped to the
+  // kinds that actually appear in the current view — no empty "0"
+  // pills for the tab the user isn't looking at.
+  const kindFiles = useMemo(() => files.filter((f) =>
+    kind === 'assets'
+      ? (f.type === 'image' || f.type === 'presentation')
+      : (f.type === 'document' || f.type === 'spreadsheet')
+  ), [files, kind]);
+  const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => f.type === filter);
 
   const typeCounts = useMemo(() => ({
-    all: files.length,
-    image: files.filter((f) => f.type === 'image').length,
-    document: files.filter((f) => f.type === 'document').length,
-    spreadsheet: files.filter((f) => f.type === 'spreadsheet').length,
-    presentation: files.filter((f) => f.type === 'presentation').length,
-  }), [files]);
+    all: kindFiles.length,
+    image: kindFiles.filter((f) => f.type === 'image').length,
+    document: kindFiles.filter((f) => f.type === 'document').length,
+    spreadsheet: kindFiles.filter((f) => f.type === 'spreadsheet').length,
+    presentation: kindFiles.filter((f) => f.type === 'presentation').length,
+  }), [kindFiles]);
+
+  // Kind-scoped filter tabs. Assets shows image + presentation;
+  // Documents shows document + spreadsheet. "All" is kept in both so
+  // users can clear any sub-filter without swapping tabs.
+  const filterOptions = useMemo(() => {
+    const base: { id: LibraryFileType | 'all'; label: string; count: number }[] = [
+      { id: 'all', label: t('dash.library.all'), count: typeCounts.all },
+    ];
+    if (kind === 'assets') {
+      base.push(
+        { id: 'image', label: t('dash.library.images'), count: typeCounts.image },
+        { id: 'presentation', label: t('dash.library.slides'), count: typeCounts.presentation },
+      );
+    } else {
+      base.push(
+        { id: 'document', label: t('dash.library.docs'), count: typeCounts.document },
+        { id: 'spreadsheet', label: t('dash.library.sheets'), count: typeCounts.spreadsheet },
+      );
+    }
+    return base;
+  }, [kind, typeCounts]);
+
+  const handleNewDocument = () => {
+    // Documents tab "+ New document" shortcut — routes to Creative
+    // Studio where the blank/template picker lives. Porting that modal
+    // inline is a follow-up (see NewDocumentModal in the extension).
+    window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'creative-studio' }));
+  };
 
   return (
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '24px 32px 0', flexShrink: 0 }}>
-        <h1 style={pageTitle}>{t('dash.library.title')}</h1>
-        <p style={{ ...pageSubtitle, marginBottom: 20 }}>{t('dash.library.subtitle')}</p>
-
+      <div style={{ padding: '16px 32px 0', flexShrink: 0 }}>
         {/* Filter tabs + view toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {([
-              { id: 'all', label: t('dash.library.all'), count: typeCounts.all },
-              { id: 'image', label: t('dash.library.images'), count: typeCounts.image },
-              { id: 'document', label: t('dash.library.docs'), count: typeCounts.document },
-              { id: 'spreadsheet', label: t('dash.library.sheets'), count: typeCounts.spreadsheet },
-              { id: 'presentation', label: t('dash.library.slides'), count: typeCounts.presentation },
-            ] as { id: LibraryFileType | 'all'; label: string; count: number }[]).map((tab) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {kind === 'documents' && (
+              <button
+                onClick={handleNewDocument}
+                style={{
+                  padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.35)',
+                  cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  background: 'rgba(168,85,247,0.15)', color: '#e0b0ff',
+                  display: 'flex', alignItems: 'center', gap: 6, marginRight: 6,
+                }}
+              >
+                + New document
+              </button>
+            )}
+            {filterOptions.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setFilter(tab.id)}
