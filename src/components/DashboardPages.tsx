@@ -2322,6 +2322,19 @@ export function AvaChatPage() {
         const workStart = Number(localStorage.getItem('ava-ide-work-start')) || 9;
         const workEnd = Number(localStorage.getItem('ava-ide-work-end')) || 17;
 
+        // Data Mode + per-category sync prefs → localOnly flags passed
+        // into the sidecar. Same formula as the VS Code extension's
+        // setupAgent: the category pref OR the global Data Mode resolving
+        // to local means no cloud writes from the generator / learning
+        // tools. Mirrors the flags added in extension v0.48.4.
+        const idesSyncPrefs = (() => {
+          try { return JSON.parse(localStorage.getItem('ava-ide-sync-prefs') || '{}') as Record<string, boolean>; }
+          catch { return {}; }
+        })();
+        const idesCloudAllowed = dataModeIncludesCloud();
+        const generationLocalOnly = idesSyncPrefs.generations === false || !idesCloudAllowed;
+        const learningLocalOnly = idesSyncPrefs.learning === false || !idesCloudAllowed;
+
         const config: SidecarConfig = {
           providers,
           platformKey: getPlatformKey() || undefined,
@@ -2337,6 +2350,8 @@ export function AvaChatPage() {
           _devPlatformFallback: !!getPlatformKey(),
           // Computer Use — pass HAI key if configured
           holoApiKey: localStorage.getItem('ava-ide-holo-key') || undefined,
+          generationLocalOnly,
+          learningLocalOnly,
         } as SidecarConfig;
 
         await sidecar.start(config);
@@ -2947,6 +2962,14 @@ export function AvaChatPage() {
     const sidecar = getSidecar();
     sidecar.cancel().catch(() => {
       sidecar.stop().then(() => {
+        // Same Data Mode resolution as the primary start() site above —
+        // kept inline here rather than lifted so the hard-stop fallback
+        // doesn't depend on closure state from outside this callback.
+        const fallbackSyncPrefs = (() => {
+          try { return JSON.parse(localStorage.getItem('ava-ide-sync-prefs') || '{}') as Record<string, boolean>; }
+          catch { return {}; }
+        })();
+        const fallbackCloudAllowed = dataModeIncludesCloud();
         sidecar.start({
           providers: {},
           platformKey: getPlatformKey() || undefined,
@@ -2957,6 +2980,8 @@ export function AvaChatPage() {
           autoMemory: true,
           _devPlatformFallback: true,
           holoApiKey: localStorage.getItem('ava-ide-holo-key') || undefined,
+          generationLocalOnly: fallbackSyncPrefs.generations === false || !fallbackCloudAllowed,
+          learningLocalOnly: fallbackSyncPrefs.learning === false || !fallbackCloudAllowed,
         } as SidecarConfig).catch(() => {});
       }).catch(() => {});
     });
@@ -7055,23 +7080,19 @@ export function LearningPage() {
 /* ===== 7. Library ===== */
 type LibraryFileType = 'image' | 'document' | 'spreadsheet' | 'presentation';
 interface LibraryFile {
+  /** creative_assets.id — present on cloud rows, absent on locally-scanned files.
+   *  Required for the cloud delete path; absence flags the item as local. */
+  id?: string;
   name: string;
   path: string;
   folder: string;
   type: LibraryFileType;
   size: number;
   modified: string;
-  url?: string; // platform URL for images
+  url?: string;          // platform storage URL (cloud) or local-resolved path
+  prompt?: string;       // generation prompt for cloud assets
+  source?: 'cloud' | 'local';
 }
-
-const FILE_TYPE_EXTENSIONS: Record<string, LibraryFileType> = {
-  '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image',
-  '.webp': 'image', '.svg': 'image', '.ico': 'image', '.bmp': 'image',
-  '.docx': 'document', '.doc': 'document', '.pdf': 'document',
-  '.txt': 'document', '.md': 'document', '.rtf': 'document', '.html': 'document',
-  '.xlsx': 'spreadsheet', '.xls': 'spreadsheet', '.csv': 'spreadsheet',
-  '.pptx': 'presentation', '.ppt': 'presentation',
-};
 
 const FILE_TYPE_ICONS: Record<LibraryFileType, string> = {
   image: '\uD83D\uDDBC\uFE0F',
@@ -7327,32 +7348,54 @@ export function LibraryPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
 
-  // Fetch files from platform API
+  // Fetch files from the platform's creative_assets table — this is the
+  // same endpoint the VS Code extension uses. Previously the IDE pointed
+  // at `/library` which doesn't exist on the server (404 silently
+  // handled as empty list), so this page has been showing no cloud
+  // results for anyone. Switched to /creative-assets and wired the
+  // response shape accordingly.
   useEffect(() => {
     if (!connected) { setLoading(false); return; }
     setLoading(true);
-    apiFetch('/library')
-      .then((res) => res.json())
-      .then((data) => {
-        const items = Array.isArray(data) ? data : data?.files || [];
-        setFiles(items.map((f: any) => ({
-          name: f.name || f.filename || '',
-          path: f.path || f.url || '',
-          folder: f.folder || f.directory || '',
-          type: f.type || f.fileType || detectFileType(f.name || f.filename || ''),
-          size: f.size || 0,
-          modified: f.modified || f.updated_at || f.created_at || '',
-          url: f.url || f.download_url || '',
-        })));
+    apiFetch('/creative-assets')
+      .then((data: unknown) => {
+        const d = data as { assets?: unknown[] } | undefined;
+        const items = Array.isArray(d?.assets) ? d!.assets : [];
+        setFiles(items.map((f: any) => {
+          // asset_type from the server is one of:
+          //   image | music | video | voice | document | spreadsheet
+          // LibraryFileType is narrower (no music/video/voice), so media
+          // kinds coalesce to 'image' for the grid filter (images already
+          // covers general visual media; a dedicated Music/Video filter
+          // is a follow-up once the tabbed Library port lands in IDE).
+          const kind = String(f.asset_type || f.type || 'image').toLowerCase();
+          const libraryType: LibraryFileType =
+            kind === 'spreadsheet' ? 'spreadsheet' :
+            kind === 'document' ? 'document' :
+            'image';
+          return {
+            id: f.id,
+            name: f.title || 'Untitled',
+            path: f.url || '',
+            folder: f.source || 'Creative Studio',
+            type: libraryType,
+            size: 0,  // creative_assets schema doesn't carry size
+            modified: f.created_at || '',
+            url: f.url || f.thumbnail_url || '',
+            prompt: f.prompt || '',
+            source: 'cloud',
+          };
+        }));
       })
       .catch(() => setFiles([]))
       .finally(() => setLoading(false));
   }, [connected]);
 
-  const detectFileType = (name: string): LibraryFileType => {
-    const ext = '.' + name.split('.').pop()?.toLowerCase();
-    return FILE_TYPE_EXTENSIONS[ext] || 'document';
-  };
+  // detectFileType() used to derive a LibraryFileType from a filename
+  // for the legacy /library endpoint. The creative-assets endpoint
+  // carries asset_type on the row so extension-based detection is no
+  // longer needed here. FILE_TYPE_EXTENSIONS is still referenced via
+  // the filter tabs below — keeping the map, dropping the helper.
 
   const filtered = filter === 'all' ? files : files.filter((f) => f.type === filter);
 
@@ -7557,49 +7600,184 @@ export function LibraryPage() {
         )}
       </div>
 
-      {/* Selected file detail panel */}
+      {/* Selected file detail panel — Download, Copy URL, Delete actions
+          route through Tauri / the platform API. The raw storage URL is
+          never exposed to the user directly (mirrors the extension's
+          policy after v0.48.4): Download writes silently to the OS
+          Downloads folder; Copy URL is the only escape hatch for users
+          who want to share. */}
       {selectedFile && (
+        <LibraryDetailPanel
+          file={selectedFile}
+          onClose={() => setSelectedFile(null)}
+          onDeleted={(id) => setFiles(prev => prev.filter(f => f.id !== id))}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Library detail panel (cloud asset actions) ──────────────────────────
+
+function LibraryDetailPanel({
+  file,
+  onClose,
+  onDeleted,
+}: {
+  file: LibraryFile;
+  onClose: () => void;
+  onDeleted: (id: string) => void;
+}) {
+  useLocale();
+  const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState<null | 'download' | 'delete'>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const isCloud = file.source === 'cloud';
+  const colors = FILE_TYPE_COLORS[file.type];
+
+  const deriveFilename = (): string => {
+    if (file.url) {
+      try {
+        const last = new URL(file.url).pathname.split('/').pop();
+        if (last && last.includes('.')) return last;
+      } catch { /* fall through */ }
+    }
+    return file.name || 'download';
+  };
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const handleDownload = async () => {
+    if (!file.url) return;
+    setBusy('download');
+    try {
+      const [{ downloadDir, join }, { writeFile }] = await Promise.all([
+        import('@tauri-apps/api/path'),
+        import('@tauri-apps/plugin-fs'),
+      ]);
+      const res = await fetch(file.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = new Uint8Array(await res.arrayBuffer());
+      const dir = await downloadDir();
+      const safeName = deriveFilename()
+        .replace(/[\\/]/g, '_')
+        .replace(/[^a-zA-Z0-9._ -]/g, '_')
+        .slice(0, 200) || 'download';
+      const path = await join(dir, safeName);
+      await writeFile(path, buf);
+      showToast(`Downloaded: ${safeName}`);
+    } catch (err) {
+      showToast(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    if (!isCloud || !file.id) {
+      showToast('Only cloud assets can be deleted from this dashboard.');
+      return;
+    }
+    setBusy('delete');
+    try {
+      await apiFetch(`/creative-assets/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
+      onDeleted(file.id);
+      onClose();
+    } catch (err) {
+      showToast(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!file.url) return;
+    try {
+      await navigator.clipboard.writeText(file.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      showToast('Clipboard unavailable.');
+    }
+  };
+
+  const pillBtn = (extra: React.CSSProperties = {}): React.CSSProperties => ({
+    padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+    background: 'transparent', color: '#cdd6f4',
+    border: '1px solid rgba(168, 85, 247, 0.25)',
+    cursor: 'pointer', flexShrink: 0, ...extra,
+  });
+
+  return (
+    <div style={{
+      borderTop: '1px solid rgba(168, 85, 247, 0.12)', background: 'rgba(26, 16, 40, 0.6)', padding: '16px 32px',
+      flexShrink: 0, display: 'flex', alignItems: 'center', gap: 16, position: 'relative',
+    }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: 10, flexShrink: 0,
+        background: colors.bg, border: `1px solid ${colors.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+      }}>{FILE_TYPE_ICONS[file.type]}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</div>
+        <div style={{ fontSize: 11, color: '#6c7086', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <span>{file.type}</span>
+          {file.folder && <span>{file.folder}</span>}
+          {file.modified && <span>{new Date(file.modified).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
+          {file.prompt && <span style={{ fontStyle: 'italic', color: '#9b8caa' }}>"{file.prompt.slice(0, 60)}"</span>}
+        </div>
+      </div>
+
+      <button
+        onClick={handleDownload}
+        disabled={!file.url || busy !== null}
+        style={{
+          padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+          background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff',
+          border: 'none', cursor: busy ? 'default' : 'pointer', flexShrink: 0,
+          opacity: busy === 'download' ? 0.6 : 1,
+        }}
+      >
+        {busy === 'download' ? 'Downloading…' : 'Download'}
+      </button>
+
+      {isCloud && file.url && (
+        <button onClick={handleCopy} style={pillBtn()}>
+          {copied ? 'Copied ✓' : 'Copy URL'}
+        </button>
+      )}
+
+      {isCloud && file.id && (
+        <button
+          onClick={handleDelete}
+          disabled={busy !== null}
+          style={pillBtn(confirmDelete
+            ? { borderColor: 'rgba(239, 68, 68, 0.6)', color: '#fca5a5', background: 'rgba(239, 68, 68, 0.1)' }
+            : { color: '#9b8caa' })}
+        >
+          {busy === 'delete' ? 'Deleting…' : (confirmDelete ? 'Confirm delete' : 'Delete')}
+        </button>
+      )}
+
+      <button onClick={onClose} style={pillBtn({ color: '#6c7086', border: '1px solid #45475a' })}>
+        Close
+      </button>
+
+      {toast && (
         <div style={{
-          borderTop: '1px solid rgba(168, 85, 247, 0.12)', background: 'rgba(26, 16, 40, 0.6)', padding: '16px 32px',
-          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 16,
+          position: 'absolute', top: -40, right: 32,
+          padding: '8px 16px', borderRadius: 8,
+          background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168,85,247,0.3)',
+          color: '#cdd6f4', fontSize: 12, fontWeight: 500, zIndex: 10,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
         }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 10, flexShrink: 0,
-            background: FILE_TYPE_COLORS[selectedFile.type].bg,
-            border: `1px solid ${FILE_TYPE_COLORS[selectedFile.type].border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
-          }}>{FILE_TYPE_ICONS[selectedFile.type]}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>{selectedFile.name}</div>
-            <div style={{ fontSize: 11, color: '#6c7086', display: 'flex', gap: 16 }}>
-              <span>{selectedFile.type}</span>
-              <span>{formatFileSize(selectedFile.size)}</span>
-              {selectedFile.folder && <span>{selectedFile.folder}</span>}
-              {selectedFile.modified && <span>{new Date(selectedFile.modified).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
-            </div>
-          </div>
-          {selectedFile.url && (
-            <a
-              href={selectedFile.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff',
-                textDecoration: 'none', flexShrink: 0,
-              }}
-            >
-              {t('dash.library.open')}
-            </a>
-          )}
-          <button
-            onClick={() => setSelectedFile(null)}
-            style={{
-              padding: '8px 12px', borderRadius: 8, border: '1px solid #45475a',
-              background: 'transparent', color: '#6c7086', fontSize: 12, cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >{t('dash.library.close')}</button>
+          {toast}
         </div>
       )}
     </div>
@@ -10750,7 +10928,11 @@ function CSTokenBar({ refreshKey }: { refreshKey: number }) {
 export function CreativeStudioPage() {
   useLocale();
 
-  const [tab, setTab] = useState<'images' | 'audio' | 'voice' | 'sfx' | 'video' | 'library'>('images');
+  // Library tab removed — browsing generated assets now lives in the
+  // top-level Library page. Creative Studio stays as a pure creation
+  // surface (images / audio / voice / video). Matches the extension's
+  // v0.48.4 restructure.
+  const [tab, setTab] = useState<'images' | 'audio' | 'voice' | 'sfx' | 'video'>('images');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -11349,16 +11531,16 @@ export function CreativeStudioPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
         {/* SFX tab hidden — in development. MiniMax music model doesn't support short isolated sound effects yet. */}
-        {(['images', 'audio', 'voice', /* 'sfx', */ 'video', 'library'] as const).map(t => (
+        {(['images', 'audio', 'voice', /* 'sfx', */ 'video'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={tabBtn(t, tab === t)}>
             {t === 'images' ? '\uD83D\uDDBC\uFE0F Images' : t === 'audio' ? '\uD83C\uDFB5 Audio' : t === 'voice' ? '\uD83C\uDF99\uFE0F Voice' : t === 'video' ? '\uD83C\uDFAC Video' : '\uD83D\uDCDA Library'}
           </button>
         ))}
       </div>
 
-      {tab === 'library' ? (
-        <CreativeLibraryTab />
-      ) : (
+      {/* Library tab removed — browsing lives in the top-level Library
+          page now. Creative Studio is pure creation surface. */}
+      {false ? null : (
         <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
           {/* LEFT: Generate panel */}
           <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
@@ -11387,7 +11569,11 @@ export function CreativeStudioPage() {
 
 type CreativeLibFilter = 'all' | 'images' | 'music' | 'video' | 'voice' | 'sfx' | 'documents' | 'spreadsheets' | 'presentations';
 
-function CreativeLibraryTab() {
+// Dead code after the library tab removal from Creative Studio —
+// export keeps noUnusedLocals happy for one release so a targeted
+// prune can land as its own commit. Pick up next time this file's
+// open. Renamed to _CreativeLibraryTab to signal "retained but unused".
+export function _CreativeLibraryTab() {
   const [filter, setFilter] = useState<CreativeLibFilter>('all');
   const [assets, setAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

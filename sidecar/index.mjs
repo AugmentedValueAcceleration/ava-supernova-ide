@@ -787,6 +787,16 @@ async function handleInit(data) {
       },
       _debug_holo: !!(config.holoApiKey || process.env.HAI_API_KEY) ? 'BYOK' : (config.platformKey ? 'platform' : 'none'),
       computerUseSettings: config.computerUseSettings || undefined,
+      // Creative asset cloud sync — gates generate_image / _music / _video /
+      // _voice tools' post-write upload. Same formula as learningLocalOnly
+      // in the VS Code extension: truthy when the user's Data Mode resolves
+      // to local or they've explicitly turned off generation sync. The IDE
+      // frontend computes this from its Data Mode state and passes it in
+      // via the init config so the sidecar doesn't need to know anything
+      // about localStorage / settings storage.
+      generationLocalOnly: !!config.generationLocalOnly,
+      learningLocalOnly: !!config.learningLocalOnly,
+      clientSurface: 'ide',
     };
 
     // Memory Agent — curates briefs instead of raw memory dumps

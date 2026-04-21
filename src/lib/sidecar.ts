@@ -36,6 +36,14 @@ export interface SidecarConfig {
   permissionMode?: 'strict' | 'balanced' | 'autonomous';
   language?: string;
   autoMemory?: boolean;
+  /** Truthy when the user's Data Mode resolves to local, or they've
+   *  explicitly disabled generation sync. Gates creative-asset cloud
+   *  upload inside the generate_* tools (mirrors the VS Code
+   *  extension's `generationLocalOnly` in setupAgent sharedState). */
+  generationLocalOnly?: boolean;
+  /** Same pattern for the learning_* sync path — Data Mode local or
+   *  per-category pref off means no cloud push from the tools. */
+  learningLocalOnly?: boolean;
 }
 
 export interface SidecarToolCall {
