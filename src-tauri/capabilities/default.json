@@ -50,15 +50,19 @@
     },
     {
       "identifier": "fs:allow-write-file",
-      "allow": [{ "path": "$TEMP/**" }, { "path": "$HOME/.ava/**" }]
+      "allow": [{ "path": "**" }]
     },
     {
       "identifier": "fs:allow-write-text-file",
-      "allow": [{ "path": "$HOME/.ava/**" }]
+      "allow": [{ "path": "**" }]
     },
     {
       "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "$HOME/.ava/**" }]
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [{ "path": "**" }]
     }
   ]
 }

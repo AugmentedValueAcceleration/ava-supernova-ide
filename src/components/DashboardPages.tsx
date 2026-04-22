@@ -7114,6 +7114,99 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Extension → LibraryFileType mapping used by the local scan. Anything
+// outside this set is skipped so we don't pollute the Library with
+// random source files from the project.
+const LIBRARY_FILE_EXT: Record<string, LibraryFileType> = {
+  // Images
+  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', bmp: 'image',
+  // Office docs
+  doc: 'document', docx: 'document', txt: 'document', md: 'document', rtf: 'document', pdf: 'document',
+  xls: 'spreadsheet', xlsx: 'spreadsheet', csv: 'spreadsheet',
+  ppt: 'presentation', pptx: 'presentation', key: 'presentation',
+  // Media — coalesced to 'image' for the single filter axis; the
+  // tab split (Assets vs Documents) handles the important distinction.
+  mp3: 'image', wav: 'image', m4a: 'image', ogg: 'image', flac: 'image',
+  mp4: 'image', mov: 'image', webm: 'image', mkv: 'image',
+};
+
+/** Media-kind classification that survives the LibraryFileType coalesce
+ *  above — used by the preview modal to pick inline playback vs thumbnail.
+ *  Keeping it as a derived helper (not a column on LibraryFile) so cloud
+ *  rows coming back with asset_type='music'/'video'/'voice' keep working
+ *  without a schema change here. */
+function classifyMediaKind(file: LibraryFile): 'image' | 'music' | 'video' | 'voice' | 'document' | 'spreadsheet' | 'presentation' {
+  if (file.type === 'document' || file.type === 'spreadsheet' || file.type === 'presentation') return file.type;
+  const name = (file.path || file.name || '').toLowerCase();
+  const ext = name.includes('.') ? name.split('.').pop()! : '';
+  if (['mp3', 'wav', 'm4a', 'ogg', 'flac'].includes(ext)) {
+    // Voice generations land in .ava/creative/voice/; music in .ava/creative/music/.
+    return name.includes('/voice/') || name.includes('\\voice\\') ? 'voice' : 'music';
+  }
+  if (['mp4', 'mov', 'webm', 'mkv'].includes(ext)) return 'video';
+  return 'image';
+}
+
+/** Recursive Tauri fs scan rooted at a project folder. Only surfaces
+ *  the known creative-asset buckets (`.ava/creative/*`) plus the
+ *  top-level `images/` / `documents/` directories some workflows use.
+ *  Everything else in the repo is invisible to the Library to avoid
+ *  leaking random source files into a user-facing gallery. */
+async function scanLocalLibrary(projectFolder: string): Promise<LibraryFile[]> {
+  if (!projectFolder) return [];
+  try {
+    const { readDir, stat } = await import('@tauri-apps/plugin-fs');
+    const { join } = await import('@tauri-apps/api/path');
+    const results: LibraryFile[] = [];
+    const rootsToScan = [
+      '.ava/creative',
+      'images',
+      'documents',
+    ];
+    async function walk(absDir: string, relPrefix: string): Promise<void> {
+      let entries: { name: string; isDirectory?: boolean; isFile?: boolean }[] = [];
+      try { entries = await readDir(absDir); } catch { return; }
+      for (const ent of entries) {
+        if (!ent.name || ent.name.startsWith('.')) continue;
+        const absPath = await join(absDir, ent.name);
+        const relPath = relPrefix ? `${relPrefix}/${ent.name}` : ent.name;
+        if (ent.isDirectory) {
+          await walk(absPath, relPath);
+          continue;
+        }
+        const ext = ent.name.includes('.') ? ent.name.split('.').pop()!.toLowerCase() : '';
+        const type = LIBRARY_FILE_EXT[ext];
+        if (!type) continue;
+        let size = 0; let modified = '';
+        try {
+          const s = await stat(absPath);
+          size = Number(s.size || 0);
+          modified = s.mtime ? new Date(s.mtime as unknown as string).toISOString() : '';
+        } catch { /* stat may fail on some platforms — keep entry without metadata */ }
+        results.push({
+          name: ent.name,
+          path: relPath,
+          folder: relPrefix.split('/').slice(-1)[0] || 'root',
+          type,
+          size,
+          modified,
+          url: `file://${absPath}`,
+          source: 'local',
+        });
+      }
+    }
+    for (const rel of rootsToScan) {
+      const abs = await join(projectFolder, rel);
+      await walk(abs, rel);
+    }
+    // Most-recent first (matches cloud asset ordering).
+    results.sort((a, b) => (b.modified || '').localeCompare(a.modified || ''));
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 /* ===== 6b. Learning Library ===== */
 export function LearningLibraryPage() {
   useLocale();
@@ -7400,16 +7493,30 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   useLocale();
   const [, setAuthKey] = useState(0);
   useEffect(() => {
-    const handler = () => { if (!checkConnected()) { setFiles([]); setSelectedFile(null); } setAuthKey(k => k + 1); };
+    const handler = () => { if (!checkConnected()) { setCloudFiles([]); setSelectedFile(null); } setAuthKey(k => k + 1); };
     window.addEventListener('ava-auth-changed', handler);
     return () => window.removeEventListener('ava-auth-changed', handler);
   }, []);
   const connected = checkConnected();
-  const [files, setFiles] = useState<LibraryFile[]>([]);
+  const [cloudFiles, setCloudFiles] = useState<LibraryFile[]>([]);
+  const [localFiles, setLocalFiles] = useState<LibraryFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'cloud' | 'local'>('all');
   const [filter, setFilter] = useState<LibraryFileType | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
+
+  // Watch projectFolder — re-scan when the user opens a different project.
+  // App.tsx persists the folder in localStorage['projectFolder'] and emits
+  // 'ava-folder-changed' on change.
+  const [projectFolder, setProjectFolder] = useState<string | null>(() => {
+    try { return (localStorage.getItem('projectFolder') as string | null) || null; } catch { return null; }
+  });
+  useEffect(() => {
+    const handler = (e: Event) => setProjectFolder(((e as CustomEvent).detail as string) || null);
+    window.addEventListener('ava-folder-changed', handler);
+    return () => window.removeEventListener('ava-folder-changed', handler);
+  }, []);
 
   // Fetch files from the platform's creative_assets table — this is the
   // same endpoint the VS Code extension uses. Previously the IDE pointed
@@ -7424,17 +7531,11 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       .then((data: unknown) => {
         const d = data as { assets?: unknown[] } | undefined;
         const items = Array.isArray(d?.assets) ? d!.assets : [];
-        setFiles(items.map((f: any) => {
-          // asset_type from the server is one of:
-          //   image | music | video | voice | document | spreadsheet
-          // LibraryFileType is narrower (no music/video/voice), so media
-          // kinds coalesce to 'image' for the grid filter (images already
-          // covers general visual media; a dedicated Music/Video filter
-          // is a follow-up once the tabbed Library port lands in IDE).
-          const kind = String(f.asset_type || f.type || 'image').toLowerCase();
+        setCloudFiles(items.map((f: any) => {
+          const mediaKind = String(f.asset_type || f.type || 'image').toLowerCase();
           const libraryType: LibraryFileType =
-            kind === 'spreadsheet' ? 'spreadsheet' :
-            kind === 'document' ? 'document' :
+            mediaKind === 'spreadsheet' ? 'spreadsheet' :
+            mediaKind === 'document' ? 'document' :
             'image';
           return {
             id: f.id,
@@ -7450,9 +7551,21 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           };
         }));
       })
-      .catch(() => setFiles([]))
+      .catch(() => setCloudFiles([]))
       .finally(() => setLoading(false));
   }, [connected]);
+
+  // Local scan — independent of connection state (local files exist
+  // whether or not the user is signed in). Re-runs whenever the
+  // project folder changes.
+  useEffect(() => {
+    let cancelled = false;
+    if (!projectFolder) { setLocalFiles([]); return; }
+    scanLocalLibrary(projectFolder).then((rows) => {
+      if (!cancelled) setLocalFiles(rows);
+    });
+    return () => { cancelled = true; };
+  }, [projectFolder]);
 
   // detectFileType() used to derive a LibraryFileType from a filename
   // for the legacy /library endpoint. The creative-assets endpoint
@@ -7460,16 +7573,22 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // longer needed here. FILE_TYPE_EXTENSIONS is still referenced via
   // the filter tabs below — keeping the map, dropping the helper.
 
-  // Split the fetched list by kind so the Assets tab only sees visual
-  // media (image/presentation) and Documents only sees textual files
-  // (document/spreadsheet). Filter tabs below are then scoped to the
-  // kinds that actually appear in the current view — no empty "0"
-  // pills for the tab the user isn't looking at.
-  const kindFiles = useMemo(() => files.filter((f) =>
-    kind === 'assets'
-      ? (f.type === 'image' || f.type === 'presentation')
-      : (f.type === 'document' || f.type === 'spreadsheet')
-  ), [files, kind]);
+  // Merge cloud + local per the source filter, then split by kind so
+  // the Assets tab only sees visual media (image/presentation) and
+  // Documents only sees textual files (document/spreadsheet). The
+  // type-specific filter tabs below are scoped to the kinds that
+  // actually appear in the current view — no empty "0" pills.
+  const kindFiles = useMemo(() => {
+    const src: LibraryFile[] =
+      sourceFilter === 'cloud' ? cloudFiles :
+      sourceFilter === 'local' ? localFiles :
+      [...cloudFiles, ...localFiles];
+    return src.filter((f) =>
+      kind === 'assets'
+        ? (f.type === 'image' || f.type === 'presentation')
+        : (f.type === 'document' || f.type === 'spreadsheet')
+    );
+  }, [cloudFiles, localFiles, sourceFilter, kind]);
   const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => f.type === filter);
 
   const typeCounts = useMemo(() => ({
@@ -7479,6 +7598,24 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     spreadsheet: kindFiles.filter((f) => f.type === 'spreadsheet').length,
     presentation: kindFiles.filter((f) => f.type === 'presentation').length,
   }), [kindFiles]);
+
+  // Source filter counts use the kind-filtered, NOT source-filtered view
+  // so the numbers stay honest when the user is on one source and wants
+  // to see how many the other one has. Derived independently to avoid
+  // circular filter state.
+  const kindAll = useMemo(() => {
+    const all = [...cloudFiles, ...localFiles];
+    return all.filter((f) =>
+      kind === 'assets'
+        ? (f.type === 'image' || f.type === 'presentation')
+        : (f.type === 'document' || f.type === 'spreadsheet')
+    );
+  }, [cloudFiles, localFiles, kind]);
+  const sourceCounts = useMemo(() => ({
+    all: kindAll.length,
+    cloud: kindAll.filter((f) => f.source === 'cloud').length,
+    local: kindAll.filter((f) => f.source === 'local').length,
+  }), [kindAll]);
 
   // Kind-scoped filter tabs. Assets shows image + presentation;
   // Documents shows document + spreadsheet. "All" is kept in both so
@@ -7501,18 +7638,63 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     return base;
   }, [kind, typeCounts]);
 
+  const [newDocOpen, setNewDocOpen] = useState(false);
   const handleNewDocument = () => {
-    // Documents tab "+ New document" shortcut — routes to Creative
-    // Studio where the blank/template picker lives. Porting that modal
-    // inline is a follow-up (see NewDocumentModal in the extension).
-    window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'creative-studio' }));
+    if (!projectFolder) {
+      // Without a project root we have nowhere to write; fall back to
+      // Creative Studio which prompts for a folder at its own pace.
+      window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'creative-studio' }));
+      return;
+    }
+    setNewDocOpen(true);
+  };
+
+  const refreshLocalFiles = () => {
+    if (!projectFolder) return;
+    scanLocalLibrary(projectFolder).then(setLocalFiles);
   };
 
   return (
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '16px 32px 0', flexShrink: 0 }}>
-        {/* Filter tabs + view toggle */}
+        {/* Source filter — separate row so the two axes (where it lives
+            vs what kind of file it is) read as distinct. Labels kept to
+            single words so the row stays compact. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500 }}>Source</span>
+          {([
+            { id: 'all', label: 'All', count: sourceCounts.all },
+            { id: 'cloud', label: 'Cloud', count: sourceCounts.cloud },
+            { id: 'local', label: 'Local', count: sourceCounts.local },
+          ] as const).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSourceFilter(s.id)}
+              style={{
+                padding: '4px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                fontSize: 11, fontWeight: sourceFilter === s.id ? 600 : 400,
+                background: sourceFilter === s.id ? 'rgba(168,85,247,0.2)' : 'transparent',
+                color: sourceFilter === s.id ? '#e0b0ff' : '#6c7086',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {s.label}
+              <span style={{
+                fontSize: 9, padding: '1px 5px', borderRadius: 8,
+                background: sourceFilter === s.id ? 'rgba(168,85,247,0.3)' : 'rgba(49, 34, 68, 0.5)',
+                color: sourceFilter === s.id ? '#fff' : '#6c7086',
+              }}>{s.count}</span>
+            </button>
+          ))}
+          {!projectFolder && (
+            <span style={{ fontSize: 10, color: '#6c7086', fontStyle: 'italic' }}>
+              Open a folder to see local files
+            </span>
+          )}
+        </div>
+
+        {/* Type filter + view toggle */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {kind === 'documents' && (
@@ -7705,45 +7887,90 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         )}
       </div>
 
-      {/* Selected file detail panel — Download, Copy URL, Delete actions
-          route through Tauri / the platform API. The raw storage URL is
-          never exposed to the user directly (mirrors the extension's
-          policy after v0.48.4): Download writes silently to the OS
-          Downloads folder; Copy URL is the only escape hatch for users
-          who want to share. */}
+      {/* Full-screen preview modal — context-aware actions per source
+          and kind. Matches the extension's v0.48.4 Library modal.
+          - Cloud:  Download (silent host-fetch to $DOWNLOAD), Copy URL,
+                    Delete (platform API).
+          - Local:  Open (plugin-opener — uses default app, LibreOffice
+                    picks up office docs), Reveal (opener in parent
+                    folder), Download (copies into $DOWNLOAD), Delete
+                    (fs.remove). */}
       {selectedFile && (
-        <LibraryDetailPanel
+        <LibraryPreviewModal
           file={selectedFile}
+          projectFolder={projectFolder}
           onClose={() => setSelectedFile(null)}
-          onDeleted={(id) => setFiles(prev => prev.filter(f => f.id !== id))}
+          onDeleted={(id, src) => {
+            if (src === 'cloud') setCloudFiles(prev => prev.filter(f => f.id !== id));
+            else setLocalFiles(prev => prev.filter(f => f.path !== id));
+          }}
+        />
+      )}
+
+      {newDocOpen && projectFolder && (
+        <NewDocumentModal
+          projectFolder={projectFolder}
+          onClose={() => setNewDocOpen(false)}
+          onCreated={() => { setNewDocOpen(false); refreshLocalFiles(); }}
         />
       )}
     </div>
   );
 }
 
-// ── Library detail panel (cloud asset actions) ──────────────────────────
+// ── Library preview modal + media player ───────────────────────────────
+//
+// Full-screen overlay shown when a grid tile is clicked. Matches the
+// extension's v0.48.4 Library UX:
+//   - Cloud items: inline image/video/audio playback via the storage
+//     URL; actions = Download (host-fetch, silent), Copy URL, Delete.
+//   - Local items: icon placeholder (inline preview of local files
+//     would need the Tauri asset protocol + Rust rebuild — out of
+//     scope for this port); actions = Open (system default app,
+//     LibreOffice for office docs), Reveal in explorer, Download
+//     (copy to $DOWNLOAD), Delete.
+// onDeleted reports (id, source) so the caller can drop it from the
+// right state slice — local rows key on `path`, cloud rows on `id`.
 
-function LibraryDetailPanel({
+function LibraryPreviewModal({
   file,
+  projectFolder,
   onClose,
   onDeleted,
 }: {
   file: LibraryFile;
+  projectFolder: string | null;
   onClose: () => void;
-  onDeleted: (id: string) => void;
+  onDeleted: (id: string, source: 'cloud' | 'local') => void;
 }) {
   useLocale();
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [busy, setBusy] = useState<null | 'download' | 'delete'>(null);
+  const [busy, setBusy] = useState<null | 'download' | 'delete' | 'open' | 'reveal'>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const isCloud = file.source === 'cloud';
-  const colors = FILE_TYPE_COLORS[file.type];
+  const mediaKind = classifyMediaKind(file);
+  const isImage = mediaKind === 'image';
+  const isVideo = mediaKind === 'video';
+  const isAudio = mediaKind === 'music' || mediaKind === 'voice';
+  const isOfficeDoc = mediaKind === 'document' || mediaKind === 'spreadsheet' || mediaKind === 'presentation';
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const resolveLocalAbsPath = async (): Promise<string | null> => {
+    if (isCloud || !projectFolder) return null;
+    try {
+      const { join } = await import('@tauri-apps/api/path');
+      return await join(projectFolder, file.path);
+    } catch { return null; }
+  };
 
   const deriveFilename = (): string => {
-    if (file.url) {
+    if (isCloud && file.url) {
       try {
         const last = new URL(file.url).pathname.split('/').pop();
         if (last && last.includes('.')) return last;
@@ -7752,139 +7979,553 @@ function LibraryDetailPanel({
     return file.name || 'download';
   };
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
+  const handleOpen = async () => {
+    const abs = await resolveLocalAbsPath();
+    if (!abs) return;
+    setBusy('open');
+    try {
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(abs);
+      onClose();
+    } catch (err) {
+      showToast(`Open failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally { setBusy(null); }
+  };
+
+  const handleReveal = async () => {
+    const abs = await resolveLocalAbsPath();
+    if (!abs) return;
+    setBusy('reveal');
+    try {
+      const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+      await revealItemInDir(abs);
+      onClose();
+    } catch (err) {
+      showToast(`Reveal failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally { setBusy(null); }
   };
 
   const handleDownload = async () => {
-    if (!file.url) return;
     setBusy('download');
     try {
-      const [{ downloadDir, join }, { writeFile }] = await Promise.all([
+      const [{ downloadDir, join }, fsPlugin] = await Promise.all([
         import('@tauri-apps/api/path'),
         import('@tauri-apps/plugin-fs'),
       ]);
-      const res = await fetch(file.url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const buf = new Uint8Array(await res.arrayBuffer());
-      const dir = await downloadDir();
       const safeName = deriveFilename()
         .replace(/[\\/]/g, '_')
         .replace(/[^a-zA-Z0-9._ -]/g, '_')
         .slice(0, 200) || 'download';
-      const path = await join(dir, safeName);
-      await writeFile(path, buf);
+      const dir = await downloadDir();
+      const destPath = await join(dir, safeName);
+
+      let buf: Uint8Array;
+      if (isCloud) {
+        if (!file.url) throw new Error('No cloud URL on this asset.');
+        const res = await fetch(file.url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        buf = new Uint8Array(await res.arrayBuffer());
+      } else {
+        const abs = await resolveLocalAbsPath();
+        if (!abs) throw new Error('Could not resolve local path.');
+        buf = await fsPlugin.readFile(abs);
+      }
+      await fsPlugin.writeFile(destPath, buf);
       showToast(`Downloaded: ${safeName}`);
     } catch (err) {
       showToast(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(null);
-    }
+    } finally { setBusy(null); }
   };
 
   const handleDelete = async () => {
     if (!confirmDelete) { setConfirmDelete(true); return; }
-    if (!isCloud || !file.id) {
-      showToast('Only cloud assets can be deleted from this dashboard.');
-      return;
-    }
     setBusy('delete');
     try {
-      await apiFetch(`/creative-assets/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
-      onDeleted(file.id);
+      if (isCloud) {
+        if (!file.id) { showToast('Cloud asset has no id.'); return; }
+        await apiFetch(`/creative-assets/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
+        onDeleted(file.id, 'cloud');
+      } else {
+        const abs = await resolveLocalAbsPath();
+        if (!abs) { showToast('Could not resolve local path.'); return; }
+        // Note: local fs deletes under the project folder currently need
+        // a capability extension; today the user's project folder is not
+        // in the write allowlist. When that lands, the call below starts
+        // working without code changes.
+        const { remove } = await import('@tauri-apps/plugin-fs');
+        await remove(abs);
+        onDeleted(file.path, 'local');
+      }
       onClose();
     } catch (err) {
       showToast(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(null);
-    }
+    } finally { setBusy(null); }
   };
 
   const handleCopy = async () => {
-    if (!file.url) return;
+    if (!isCloud || !file.url) return;
     try {
       await navigator.clipboard.writeText(file.url);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      showToast('Clipboard unavailable.');
-    }
+    } catch { showToast('Clipboard unavailable.'); }
   };
 
-  const pillBtn = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-    padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-    background: 'transparent', color: '#cdd6f4',
-    border: '1px solid rgba(168, 85, 247, 0.25)',
-    cursor: 'pointer', flexShrink: 0, ...extra,
-  });
+  const actionBtn = (
+    label: string,
+    onClick: () => void,
+    opts: { primary?: boolean; danger?: boolean; disabled?: boolean } = {},
+  ): React.ReactElement => (
+    <button
+      onClick={onClick}
+      disabled={opts.disabled || busy !== null}
+      style={{
+        padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: opts.primary ? 600 : 500,
+        cursor: (opts.disabled || busy) ? 'default' : 'pointer', flexShrink: 0,
+        background: opts.primary
+          ? 'linear-gradient(135deg, #a855f7, #7c3aed)'
+          : opts.danger
+            ? (confirmDelete ? 'rgba(239, 68, 68, 0.15)' : 'transparent')
+            : 'transparent',
+        color: opts.primary ? '#fff' : opts.danger ? (confirmDelete ? '#fca5a5' : '#9b8caa') : '#cdd6f4',
+        border: opts.primary
+          ? 'none'
+          : opts.danger
+            ? `1px solid ${confirmDelete ? 'rgba(239, 68, 68, 0.6)' : 'rgba(168, 85, 247, 0.2)'}`
+            : '1px solid rgba(168, 85, 247, 0.25)',
+        opacity: (opts.disabled || busy) ? 0.6 : 1,
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)', padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'relative', width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto',
+          borderRadius: 16, border: '1px solid rgba(168, 85, 247, 0.2)',
+          background: '#1a1028', boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
+        }}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Close preview"
+          style={{
+            position: 'absolute', top: 12, right: 12, zIndex: 10,
+            width: 32, height: 32, borderRadius: 16,
+            background: 'rgba(0,0,0,0.35)', color: '#fff', border: 'none', cursor: 'pointer',
+            fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >×</button>
+
+        {/* Preview area */}
+        {isImage && isCloud && file.url ? (
+          <img src={file.url} alt={file.name} style={{ width: '100%', maxHeight: '50vh', objectFit: 'contain', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }} />
+        ) : isVideo && isCloud && file.url ? (
+          <LibraryMediaPlayer src={file.url} kind="video" />
+        ) : isAudio && isCloud && file.url ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '40px 20px', background: 'rgba(0,0,0,0.25)' }}>
+            <span style={{ fontSize: 48, opacity: 0.6 }}>{'🎵'}</span>
+            <div style={{ width: 'min(92%, 480px)' }}>
+              <LibraryMediaPlayer src={file.url} kind="audio" />
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 10, padding: '56px 20px', background: 'rgba(0,0,0,0.25)',
+            borderTopLeftRadius: 16, borderTopRightRadius: 16,
+          }}>
+            <span style={{ fontSize: 56, opacity: 0.4 }}>{FILE_TYPE_ICONS[file.type]}</span>
+            {!isCloud && (
+              <p style={{ fontSize: 11, color: '#6c7086', margin: 0 }}>
+                Inline preview unavailable for local files — use Open to view in your default app.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Meta + actions */}
+        <div style={{ padding: 20 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {file.name}
+          </h3>
+          <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 11 }}>
+            <span style={{
+              padding: '2px 8px', borderRadius: 4, fontWeight: 500,
+              background: isCloud ? 'rgba(168,85,247,0.15)' : 'rgba(108,112,134,0.15)',
+              color: isCloud ? '#c084fc' : '#9b8caa',
+            }}>
+              {isCloud ? '☁ cloud' : '💾 local'}
+            </span>
+            <span style={{ padding: '2px 8px', borderRadius: 4, fontWeight: 500, background: 'rgba(168,85,247,0.08)', color: '#a6adc8' }}>
+              {mediaKind}
+            </span>
+            {file.modified && (
+              <span style={{ color: '#6c7086' }}>
+                {new Date(file.modified).toLocaleString()}
+              </span>
+            )}
+            {file.size > 0 && <span style={{ color: '#6c7086' }}>{formatFileSize(file.size)}</span>}
+          </div>
+          {file.prompt && (
+            <p style={{ marginTop: 12, fontSize: 12, color: '#a6adc8', lineHeight: 1.5, fontStyle: 'italic' }}>
+              "{file.prompt}"
+            </p>
+          )}
+
+          <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {!isCloud && actionBtn(
+              busy === 'open' ? 'Opening…' : (isOfficeDoc ? 'Open (LibreOffice)' : 'Open'),
+              handleOpen,
+              { primary: true, disabled: !projectFolder },
+            )}
+            {!isCloud && actionBtn(busy === 'reveal' ? 'Revealing…' : 'Reveal', handleReveal, { disabled: !projectFolder })}
+            {actionBtn(
+              busy === 'download' ? 'Downloading…' : 'Download',
+              handleDownload,
+              { primary: isCloud, disabled: isCloud && !file.url },
+            )}
+            {isCloud && file.url && actionBtn(copied ? 'Copied ✓' : 'Copy URL', handleCopy)}
+            <div style={{ flex: 1 }} />
+            {actionBtn(
+              busy === 'delete' ? 'Deleting…' : (confirmDelete ? 'Confirm delete' : 'Delete'),
+              handleDelete,
+              { danger: true, disabled: isCloud && !file.id },
+            )}
+          </div>
+        </div>
+
+        {toast && (
+          <div style={{
+            position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+            padding: '8px 16px', borderRadius: 8,
+            background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168,85,247,0.3)',
+            color: '#cdd6f4', fontSize: 12, fontWeight: 500,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}>
+            {toast}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Minimal audio/video player styled to the IDE purple palette. Native
+// browser controls look out of place against the dashboard — custom
+// play/scrub/time bar matches Creative Studio's existing players.
+function formatClockTime(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function LibraryMediaPlayer({ src, kind }: { src: string; kind: 'audio' | 'video' }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const el = (): HTMLMediaElement | null => (kind === 'audio' ? audioRef.current : videoRef.current);
+
+  useEffect(() => {
+    const m = el();
+    if (!m) return;
+    const onTime = () => setCurrent(m.currentTime);
+    const onMeta = () => setDuration(m.duration || 0);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    const onEnded = () => setPlaying(false);
+    m.addEventListener('timeupdate', onTime);
+    m.addEventListener('loadedmetadata', onMeta);
+    m.addEventListener('durationchange', onMeta);
+    m.addEventListener('play', onPlay);
+    m.addEventListener('pause', onPause);
+    m.addEventListener('ended', onEnded);
+    return () => {
+      m.removeEventListener('timeupdate', onTime);
+      m.removeEventListener('loadedmetadata', onMeta);
+      m.removeEventListener('durationchange', onMeta);
+      m.removeEventListener('play', onPlay);
+      m.removeEventListener('pause', onPause);
+      m.removeEventListener('ended', onEnded);
+    };
+  }, [kind]);
+
+  const toggle = () => {
+    const m = el();
+    if (!m) return;
+    if (playing) m.pause(); else void m.play();
+  };
+
+  const scrubTo = (clientX: number) => {
+    const track = trackRef.current;
+    const m = el();
+    if (!track || !m || !duration) return;
+    const rect = track.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    m.currentTime = pct * duration;
+  };
+
+  const playedPct = duration > 0 ? (current / duration) * 100 : 0;
 
   return (
     <div style={{
-      borderTop: '1px solid rgba(168, 85, 247, 0.12)', background: 'rgba(26, 16, 40, 0.6)', padding: '16px 32px',
-      flexShrink: 0, display: 'flex', alignItems: 'center', gap: 16, position: 'relative',
+      position: 'relative', width: '100%', borderRadius: 8, overflow: 'hidden',
+      background: kind === 'video' ? '#000' : 'rgba(26, 16, 40, 0.6)',
+      border: kind === 'video' ? 'none' : '1px solid rgba(168, 85, 247, 0.2)',
     }}>
-      <div style={{
-        width: 48, height: 48, borderRadius: 10, flexShrink: 0,
-        background: colors.bg, border: `1px solid ${colors.border}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
-      }}>{FILE_TYPE_ICONS[file.type]}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</div>
-        <div style={{ fontSize: 11, color: '#6c7086', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <span>{file.type}</span>
-          {file.folder && <span>{file.folder}</span>}
-          {file.modified && <span>{new Date(file.modified).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
-          {file.prompt && <span style={{ fontStyle: 'italic', color: '#9b8caa' }}>"{file.prompt.slice(0, 60)}"</span>}
-        </div>
-      </div>
+      {kind === 'video' ? (
+        <video
+          ref={videoRef} src={src} preload="metadata" onClick={toggle}
+          style={{ width: '100%', maxHeight: '60vh', display: 'block', cursor: 'pointer' }}
+        />
+      ) : (
+        <audio ref={audioRef} src={src} preload="metadata" style={{ display: 'none' }} />
+      )}
 
-      <button
-        onClick={handleDownload}
-        disabled={!file.url || busy !== null}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '10px 12px', fontSize: 11, color: '#cdd6f4',
+        ...(kind === 'video' ? {
+          position: 'absolute', left: 0, right: 0, bottom: 0,
+          background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
+        } : {}),
+      }}>
+        <button
+          onClick={toggle}
+          aria-label={playing ? 'Pause' : 'Play'}
+          style={{
+            flexShrink: 0, width: 30, height: 30, borderRadius: 15,
+            background: '#a855f7', color: '#fff', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {playing ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72c0 .78.86 1.25 1.52.83l10.76-6.86a1 1 0 000-1.66L9.52 4.31C8.86 3.89 8 4.36 8 5.14z"/></svg>
+          )}
+        </button>
+        <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.7, minWidth: 34, textAlign: 'right' }}>{formatClockTime(current)}</span>
+        <div
+          ref={trackRef}
+          onClick={e => scrubTo(e.clientX)}
+          style={{
+            position: 'relative', flex: 1, height: 6, borderRadius: 3, cursor: 'pointer',
+            background: kind === 'video' ? 'rgba(255,255,255,0.2)' : 'rgba(168, 85, 247, 0.15)',
+          }}
+        >
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: `${playedPct}%`, background: '#a855f7', borderRadius: 3 }} />
+          <div style={{ position: 'absolute', top: '50%', left: `${playedPct}%`, width: 12, height: 12, borderRadius: 6, background: '#a855f7', transform: 'translate(-50%, -50%)', boxShadow: '0 2px 4px rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
+        </div>
+        <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.7, minWidth: 34 }}>{formatClockTime(duration)}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── New document modal ─────────────────────────────────────────────────
+//
+// Mirrors the extension's Library > + New document flow. Writes to
+// <projectFolder>/documents/<name>.<ext>, then tells the caller to
+// refresh so the new file surfaces on the Documents tab.
+//
+// Formats and templates: only text-based (md/txt/csv) and markdown
+// templates ship in this pass. DOCX/XLSX/PDF need a binary-writer
+// dependency that's not bundled in the IDE today; the extension gets
+// them via vscode-provided libraries. Users who need Word/Excel/PDF
+// can ask Ava to generate them — generate_document uses a writer in
+// core that produces the binary server-side and syncs through cloud.
+const NEW_DOC_BLANK_FORMATS: { id: 'md' | 'txt' | 'csv'; label: string; ext: string; defaultBody: string }[] = [
+  { id: 'md',  label: 'Markdown',  ext: 'md',  defaultBody: '# New document\n\n' },
+  { id: 'txt', label: 'Text file', ext: 'txt', defaultBody: '' },
+  { id: 'csv', label: 'CSV',       ext: 'csv', defaultBody: 'column_a,column_b,column_c\n' },
+];
+
+const NEW_DOC_TEMPLATES: { id: string; label: string; desc: string; filename: string; body: string }[] = [
+  {
+    id: 'proposal', label: 'Project Proposal', desc: 'Executive summary, objectives, timeline',
+    filename: 'proposal.md',
+    body: '# Project Proposal\n\n## Executive Summary\n\n\n## Objectives\n\n\n## Scope\n\n\n## Timeline\n\n| Phase | Deliverable | Date |\n|-------|-------------|------|\n|       |             |      |\n\n## Budget\n\n\n## Team\n\n',
+  },
+  {
+    id: 'report', label: 'Status Report', desc: 'Progress, issues, next steps',
+    filename: 'status-report.md',
+    body: '# Status Report\n\n**Week of:** _\n\n## Progress\n\n- \n\n## Issues & blockers\n\n- \n\n## Next week\n\n- \n\n## Notes\n\n',
+  },
+  {
+    id: 'invoice', label: 'Invoice', desc: 'Items table, payment terms',
+    filename: 'invoice.md',
+    body: '# Invoice\n\n**Invoice #:**\n**Date:**\n**Due:**\n\n**Bill to:**\n\n\n| Item | Qty | Rate | Total |\n|------|-----|------|-------|\n|      |     |      |       |\n\n**Subtotal:**\n**Tax:**\n**Total:**\n\n## Payment terms\n\nNet 30. Please remit within 30 days.\n',
+  },
+  {
+    id: 'letter', label: 'Formal Letter', desc: 'Recipient, body, closing',
+    filename: 'letter.md',
+    body: '[Your name]\n[Your address]\n\n[Date]\n\n[Recipient name]\n[Recipient address]\n\nDear [Recipient],\n\n\n\nSincerely,\n[Your name]\n',
+  },
+  {
+    id: 'meeting_notes', label: 'Meeting Notes', desc: 'Agenda, discussion, action items',
+    filename: 'meeting-notes.md',
+    body: '# Meeting Notes\n\n**Date:**\n**Attendees:**\n\n## Agenda\n\n1. \n\n## Discussion\n\n\n## Decisions\n\n- \n\n## Action items\n\n- [ ] \n',
+  },
+  {
+    id: 'resume', label: 'Resume', desc: 'Contact, experience, education, skills',
+    filename: 'resume.md',
+    body: '# [Your name]\n\n_[Role] — [Location] — [Email] — [Phone]_\n\n## Summary\n\n\n## Experience\n\n### [Role], [Company]\n_[Start] – [End]_\n\n- \n\n## Education\n\n### [Degree], [Institution]\n_[Year]_\n\n## Skills\n\n',
+  },
+];
+
+function NewDocumentModal({
+  projectFolder,
+  onClose,
+  onCreated,
+}: {
+  projectFolder: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createAt = async (relDir: string, filename: string, body: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const [{ join }, { mkdir, writeTextFile, exists }] = await Promise.all([
+        import('@tauri-apps/api/path'),
+        import('@tauri-apps/plugin-fs'),
+      ]);
+      const dirAbs = await join(projectFolder, relDir);
+      await mkdir(dirAbs, { recursive: true } as never).catch(() => { /* already exists */ });
+      // Avoid silent overwrite — auto-suffix if the target exists.
+      let finalName = filename;
+      let i = 1;
+      while (await exists(await join(dirAbs, finalName))) {
+        const dot = filename.lastIndexOf('.');
+        finalName = dot >= 0
+          ? `${filename.slice(0, dot)}-${i}${filename.slice(dot)}`
+          : `${filename}-${i}`;
+        i++;
+      }
+      const abs = await join(dirAbs, finalName);
+      await writeTextFile(abs, body);
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createBlank = (fmt: typeof NEW_DOC_BLANK_FORMATS[number]) => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    void createAt('documents', `untitled-${stamp}.${fmt.ext}`, fmt.defaultBody);
+  };
+
+  const createTemplate = (tmpl: typeof NEW_DOC_TEMPLATES[number]) => {
+    void createAt('documents', tmpl.filename, tmpl.body);
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)', padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
         style={{
-          padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-          background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff',
-          border: 'none', cursor: busy ? 'default' : 'pointer', flexShrink: 0,
-          opacity: busy === 'download' ? 0.6 : 1,
+          position: 'relative', width: '100%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto',
+          borderRadius: 16, border: '1px solid rgba(168, 85, 247, 0.2)',
+          background: '#1a1028', boxShadow: '0 24px 60px rgba(0,0,0,0.6)', padding: 24,
         }}
       >
-        {busy === 'download' ? 'Downloading…' : 'Download'}
-      </button>
-
-      {isCloud && file.url && (
-        <button onClick={handleCopy} style={pillBtn()}>
-          {copied ? 'Copied ✓' : 'Copy URL'}
-        </button>
-      )}
-
-      {isCloud && file.id && (
         <button
-          onClick={handleDelete}
-          disabled={busy !== null}
-          style={pillBtn(confirmDelete
-            ? { borderColor: 'rgba(239, 68, 68, 0.6)', color: '#fca5a5', background: 'rgba(239, 68, 68, 0.1)' }
-            : { color: '#9b8caa' })}
-        >
-          {busy === 'delete' ? 'Deleting…' : (confirmDelete ? 'Confirm delete' : 'Delete')}
-        </button>
-      )}
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            position: 'absolute', top: 12, right: 12,
+            width: 32, height: 32, borderRadius: 16, background: 'rgba(0,0,0,0.2)',
+            color: '#cdd6f4', border: 'none', cursor: 'pointer', fontSize: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >×</button>
 
-      <button onClick={onClose} style={pillBtn({ color: '#6c7086', border: '1px solid #45475a' })}>
-        Close
-      </button>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#cdd6f4', margin: 0 }}>New document</h2>
+        <p style={{ fontSize: 12, color: '#6c7086', marginTop: 4, marginBottom: 20 }}>
+          Saves to <code style={{ fontFamily: 'monospace', fontSize: 11, padding: '1px 5px', borderRadius: 4, background: 'rgba(168,85,247,0.1)' }}>documents/</code> in your project.
+        </p>
 
-      {toast && (
-        <div style={{
-          position: 'absolute', top: -40, right: 32,
-          padding: '8px 16px', borderRadius: 8,
-          background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168,85,247,0.3)',
-          color: '#cdd6f4', fontSize: 12, fontWeight: 500, zIndex: 10,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-        }}>
-          {toast}
+        <h3 style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500, marginBottom: 10 }}>Blank file</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 24 }}>
+          {NEW_DOC_BLANK_FORMATS.map(f => (
+            <button
+              key={f.id}
+              onClick={() => createBlank(f)}
+              disabled={busy}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                padding: '14px 10px', borderRadius: 10,
+                border: '1px solid rgba(168, 85, 247, 0.2)',
+                background: 'rgba(26, 16, 40, 0.6)', cursor: busy ? 'default' : 'pointer',
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              <span style={{ fontSize: 22 }}>📄</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4' }}>{f.label}</span>
+              <span style={{ fontSize: 9, color: '#6c7086' }}>.{f.ext}</span>
+            </button>
+          ))}
         </div>
-      )}
+
+        <h3 style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500, marginBottom: 10 }}>From template</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+          {NEW_DOC_TEMPLATES.map(tmpl => (
+            <button
+              key={tmpl.id}
+              onClick={() => createTemplate(tmpl)}
+              disabled={busy}
+              style={{
+                display: 'flex', flexDirection: 'column', gap: 2, padding: '12px 14px', textAlign: 'left',
+                borderRadius: 10, border: '1px solid rgba(168, 85, 247, 0.2)',
+                background: 'rgba(26, 16, 40, 0.6)', cursor: busy ? 'default' : 'pointer',
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4' }}>{tmpl.label}</span>
+              <span style={{ fontSize: 10, color: '#6c7086', lineHeight: 1.4 }}>{tmpl.desc}</span>
+            </button>
+          ))}
+        </div>
+
+        {error && (
+          <div style={{
+            marginTop: 16, padding: 10, borderRadius: 8,
+            background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+            fontSize: 11, color: '#fca5a5',
+          }}>
+            {error}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
