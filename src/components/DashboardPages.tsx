@@ -23,7 +23,7 @@ import {
 // any pricing change on the website automatically flows through here.
 import {
   PLANS,
-  TOKEN_TOPUPS,
+  CREDIT_TOPUPS,
   STORAGE_ADDONS,
   dashboardBillingUrl,
   type PlanTier as AvaPlanTier,
@@ -1879,8 +1879,8 @@ export function AvaChatPage() {
     if (!key) return;
     try {
       const res = await apiFetch('/account-info');
-      if (res?.usage && res.usage.free_tokens_used !== undefined) {
-        setPlatformBalance({ used: res.usage.free_tokens_used, limit: res.usage.free_tokens_limit || 3000000 });
+      if (res?.usage && res.usage.free_credits_used !== undefined) {
+        setPlatformBalance({ used: res.usage.free_credits_used, limit: res.usage.free_credits_limit || 1500 });
       }
     } catch { /* non-fatal */ }
   }, []);
@@ -5059,10 +5059,10 @@ export function ChatHistoryPage() {
   // Usage analytics
   const period = usage?.period || {};
   const totals = usage?.totals || {};
-  const freeUsed = period.free_tokens_used || 0;
-  const freeLimit = period.free_tokens_limit || 3000000;
-  const subUsed = period.tokens_used || 0;
-  const subLimit = period.tokens_limit || 0;
+  const freeUsed = period.free_credits_used || 0;
+  const freeLimit = period.free_credits_limit || 1500;
+  const subUsed = period.credits_used || 0;
+  const subLimit = period.credits_limit || 0;
   const isUnlimited = usage?.isUnlimited || false;
   const hasSub = subLimit > 0 && (usage?.tier || 'free') !== 'free';
   const balanceUsed = hasSub ? subUsed : freeUsed;
@@ -9133,17 +9133,17 @@ export function UsagePage() {
   const totals = usage?.totals || {};
 
   // Session tab uses live local data; All-Time uses API
-  const totalTokens = activeTab === 'session' ? session.totalTokens : (period.free_tokens_used || 0) + (period.tokens_used || 0);
+  const totalTokens = activeTab === 'session' ? session.totalTokens : (period.free_credits_used || 0) + (period.credits_used || 0);
   const inputTokens = activeTab === 'session' ? session.inputTokens : Math.round(totalTokens * 0.6);
   const outputTokens = activeTab === 'session' ? session.outputTokens : totalTokens - inputTokens;
   const messages = activeTab === 'session' ? session.messages : (period.requests_count || totals.requests || 0);
   const toolCalls = activeTab === 'session' ? session.toolCalls : 0;
 
   // All-time from totals
-  const freeUsed = period.free_tokens_used || 0;
-  const freeLimit = period.free_tokens_limit || 3000000;
-  const subUsed = period.tokens_used || 0;
-  const subLimit = period.tokens_limit || 0;
+  const freeUsed = period.free_credits_used || 0;
+  const freeLimit = period.free_credits_limit || 1500;
+  const subUsed = period.credits_used || 0;
+  const subLimit = period.credits_limit || 0;
   const tokensMonth = totals.tokens || 0;
   const tokensLastMonth = 0; // not in API yet
   const avgPerSession = messages > 0 ? Math.round(tokensMonth / Math.max(messages, 1)) : 0;
@@ -10439,10 +10439,10 @@ export function BillingPage() {
   };
   const tc = tierConfig[tier] || tierConfig.free;
 
-  const freeUsed = usage?.period?.free_tokens_used || 0;
-  const freeLimit = usage?.period?.free_tokens_limit || 3000000;
-  const planUsed = usage?.period?.plan_tokens_used || 0;
-  const planLimit = usage?.period?.plan_tokens_limit || 0;
+  const freeUsed = usage?.period?.free_credits_used || 0;
+  const freeLimit = usage?.period?.free_credits_limit || 1500;
+  const planUsed = usage?.period?.credits_used || 0;
+  const planLimit = usage?.period?.credits_limit || 0;
   const topUpBalance = usage?.period?.topup_tokens_remaining || 0;
 
   // Storage allowance (from /usage/summary). Falls back to tier defaults if
@@ -10594,7 +10594,7 @@ export function BillingPage() {
               "Best value" honest — 20-40% cheaper per token. */}
           <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Top-Up Packages</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            {TOKEN_TOPUPS.map((pkg) => (
+            {CREDIT_TOPUPS.map((pkg) => (
               <IdePurchaseCard
                 key={pkg.id}
                 title={pkg.label}
@@ -11632,10 +11632,10 @@ function CSTokenBar({ refreshKey }: { refreshKey: number }) {
     if (!connected) return;
     apiFetch('/usage/summary').then((res: any) => {
       if (res?.period) {
-        const freeUsed = res.period.free_tokens_used || 0;
-        const freeLimit = res.period.free_tokens_limit || 3000000;
-        const subUsed = res.period.tokens_used || 0;
-        const subLimit = res.period.tokens_limit || 0;
+        const freeUsed = res.period.free_credits_used || 0;
+        const freeLimit = res.period.free_credits_limit || 1500;
+        const subUsed = res.period.credits_used || 0;
+        const subLimit = res.period.credits_limit || 0;
         const isUnlimited = res.isUnlimited || false;
         const hasSub = subLimit > 0 && (res.tier || 'free') !== 'free';
         setBal({ used: hasSub ? subUsed : freeUsed, limit: hasSub ? subLimit : freeLimit, isUnlimited });
