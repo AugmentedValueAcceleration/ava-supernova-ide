@@ -9662,9 +9662,9 @@ export function SettingsPage() {
   const PROVIDERS = [
     { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.6, Sonnet 4.6, Haiku 4.5' },
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V3 and R1 \u2014 best price/performance' },
-    { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.cn', description: 'Kimi K2.5 \u2014 best multi-step tool calling' },
+    { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.5 \u2014 best multi-step tool calling' },
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M2.7 self-evolving, M2.5 best tool calling' },
-    { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://open.bigmodel.cn', description: 'GLM-5, GLM-4.7 \u2014 best tool-call reliability' },
+    { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5, GLM-4.7 \u2014 best tool-call reliability' },
     { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.5 Omni Plus and Omni Flash — multimodal' },
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Codestral, Devstral 2' },
   ];
