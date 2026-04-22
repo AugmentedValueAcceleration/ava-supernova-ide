@@ -1721,7 +1721,8 @@ export function AvaChatPage() {
   const SIDECAR_MODEL_MAP: Record<string, string> = {
     'auto': 'auto',
     'qwen3.6-plus': 'platform:qwen3.6-plus',
-    'kimi-k2.5': 'platform:kimi-k2.5',
+    'kimi-k2.6': 'kimi:kimi-k2.6',
+    'kimi-k2.5': 'kimi:kimi-k2.5',
     'qwen3.5-omni-flash': 'platform:qwen3.5-omni-flash',
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
     'qwen3.5-plus': 'platform:qwen3.5-plus',
@@ -1749,10 +1750,10 @@ export function AvaChatPage() {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
     Qwen: [{ id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3.5-omni-flash', name: 'Qwen 3.5 Omni Flash' }, { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
     MiniMax: [{ id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' }],
-    Moonshot: [{ id: 'kimi-k2.5', name: 'Kimi K2.5' }],
+    Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
     Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'codestral-latest', name: 'Codestral' }],
-    Anthropic: [{ id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-opus-4-6', name: 'Claude Opus 4.6' }],
+    Anthropic: [{ id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-opus-4-6', name: 'Claude Opus 4.6' }],
   };
 
   const [platformModels, setPlatformModels] = useState<Record<string, { id: string; name: string }[]> | null>(null);
@@ -3403,9 +3404,12 @@ export function AvaChatPage() {
                     const total = json.usage.prompt_tokens + json.usage.completion_tokens;
                     // Use model's actual context window for percentage
                     const MODEL_CTX: Record<string, number> = {
-                      'qwen3.6-plus': 1048576, 'kimi-k2.5': 262144, 'MiniMax-M2.7': 204800, 'MiniMax-M2.5': 1048576,
+                      'qwen3.6-plus': 1048576, 'kimi-k2.6': 262144, 'kimi-k2.5': 262144,
+                      'MiniMax-M2.7': 204800, 'MiniMax-M2.5': 1048576,
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
                       'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
+                      'claude-opus-4-7': 200000, 'claude-opus-4-6': 200000, 'claude-sonnet-4-6': 200000,
+                      'claude-haiku-4-5-20251001': 200000, 'glm-5': 200000,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
                     setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
