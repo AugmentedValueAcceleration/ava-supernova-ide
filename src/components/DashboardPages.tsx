@@ -11319,8 +11319,8 @@ const ROADMAP_THEMES = [
   { title: 'Education', icon: '\uD83C\uDF93', color: '#3b82f6', colorBg: 'rgba(59,130,246,0.08)', items: [
     { label: 'Teach mode with curriculums', shipped: true }, { label: 'Spaced repetition', shipped: true },
     { label: 'Fact-checked content', shipped: true }, { label: '20 language support', shipped: true },
-    { label: 'Game dev knowledge pack', shipped: true }, { label: 'AI-era learning paths', shipped: false },
-    { label: 'Community knowledge packs', shipped: false },
+    { label: 'Game dev knowledge pack', shipped: true }, { label: 'AI-era learning paths', shipped: true },
+    { label: 'Community knowledge packs', shipped: true },
   ]},
   { title: 'Privacy & Security', icon: '\uD83D\uDD12', color: '#10b981', colorBg: 'rgba(16,185,129,0.08)', items: [
     { label: 'Local-first architecture', shipped: true }, { label: 'Cloud sync opt-in', shipped: true },
@@ -11332,12 +11332,17 @@ const ROADMAP_THEMES = [
   { title: 'Platform & Business', icon: '\uD83D\uDE80', color: '#ec4899', colorBg: 'rgba(236,72,153,0.08)', items: [
     { label: 'Web platform with auth', shipped: true }, { label: 'Company hub (Tauri admin)', shipped: true },
     { label: 'Qwen partnership (50% pricing)', shipped: true }, { label: 'Qwen 3.6 Plus — primary model', shipped: true },
-    { label: '9 providers, 20+ models (inc. Holo3, MiniMax, Qwen 3.6)', shipped: true },
-    { label: '3M free Qwen tokens for all', shipped: true }, { label: 'Device sessions (1 key, 3 platforms)', shipped: true },
+    { label: '9 providers, 20+ models (inc. MiniMax, Qwen 3.6, Kimi, MiMo)', shipped: true },
+    { label: 'Ava Credits system — unified credit-based pricing', shipped: true },
+    { label: 'Free tier — 300 monthly credits (BYOK unlimited)', shipped: true },
+    { label: 'Paid plans live (Pro $19, Ultra $39, Enterprise $79)', shipped: true },
+    { label: 'Credit top-ups ($3 / $8 / $15 bundles)', shipped: true },
+    { label: 'Credit usage bar with real-time deduction', shipped: true },
+    { label: 'Period rollover for paid plans', shipped: true },
+    { label: 'Device sessions (1 key, 3 platforms)', shipped: true },
     { label: 'Creative studio', shipped: true }, { label: 'Delete all memories (local + platform)', shipped: true },
-    { label: 'Live chat support — Ava first-line triage', shipped: true }, { label: 'Token usage bar with real-time deduction', shipped: true },
-    { label: 'Period rollover for paid plans', shipped: true }, { label: 'Contributor marketplace — users get paid', shipped: false },
-    { label: 'Paid plans (Pro, Ultra, Enterprise)', shipped: false }, { label: 'Token top-ups', shipped: false },
+    { label: 'Live chat support — Ava first-line triage', shipped: true },
+    { label: 'Contributor marketplace — users get paid', shipped: false },
     { label: 'OAuth connections', shipped: false }, { label: 'Ava Foundation (40% of earnings)', shipped: false },
   ]},
 ];
