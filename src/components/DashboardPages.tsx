@@ -9670,6 +9670,7 @@ export function SettingsPage() {
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5, GLM-4.7 \u2014 best tool-call reliability' },
     { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.5 Omni Plus and Omni Flash — multimodal' },
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Codestral, Devstral 2' },
+    { id: 'xiaomi', name: 'Xiaomi (MiMo)', placeholder: '...', signupUrl: 'https://platform.xiaomimimo.com', description: 'MiMo V2.5 and V2.5-Pro — 1M context, native multimodal' },
   ];
 
   const LANGUAGES = [
