@@ -1732,6 +1732,8 @@ export function AvaChatPage() {
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
     'glm-4-plus': 'zhipu:glm-4-plus',
     'mistral-large': 'mistral:mistral-large-latest',
+    'mimo-v2.5-pro': 'xiaomi:mimo-v2.5-pro',
+    'mimo-v2.5': 'xiaomi:mimo-v2.5',
   };
 
   // ── Mode definitions ───────────────────────────────────────────────────────
@@ -1754,6 +1756,7 @@ export function AvaChatPage() {
     Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
     Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'codestral-latest', name: 'Codestral' }],
     Anthropic: [{ id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-opus-4-6', name: 'Claude Opus 4.6' }],
+    Xiaomi: [{ id: 'mimo-v2.5-pro', name: 'MiMo V2.5-Pro' }, { id: 'mimo-v2.5', name: 'MiMo V2.5' }],
   };
 
   const [platformModels, setPlatformModels] = useState<Record<string, { id: string; name: string }[]> | null>(null);
