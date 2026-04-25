@@ -819,7 +819,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     let _tray = TrayIconBuilder::new()
         .menu(&menu)
-        .tooltip("Ava | Supernova IDE")
+        .tooltip("Ava Supernova IDE")
         .on_menu_event(move |app: &tauri::AppHandle, event| {
             match event.id.as_ref() {
                 "show" => {

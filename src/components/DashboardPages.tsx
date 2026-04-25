@@ -1030,7 +1030,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
             </div>
             <div>
               <p style={{ fontSize: 12, fontWeight: 700, color: '#cdd6f4', margin: 0 }}>Ava's Take</p>
-              <p style={{ fontSize: 9, color: '#6c7086', margin: 0 }}>Ava | Supernova Commentary</p>
+              <p style={{ fontSize: 9, color: '#6c7086', margin: 0 }}>Ava Supernova Commentary</p>
             </div>
           </div>
           <p style={{ fontSize: 12, lineHeight: 1.6, color: '#a6adc8', margin: 0 }}>{article.ava_commentary}</p>
@@ -1097,7 +1097,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
       {/* Transparency notice */}
       <div style={{ marginTop: 32, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.2)', padding: '8px 12px', textAlign: 'center', fontSize: 10, color: '#6c7086' }}>
         {article.ai_generated
-          ? 'This article was AI-curated by Ava | Supernova. All credit belongs to the original authors and publications listed above.'
+          ? 'This article was AI-curated by Ava Supernova. All credit belongs to the original authors and publications listed above.'
           : 'All credit belongs to the original authors and publications where applicable.'
         }
       </div>

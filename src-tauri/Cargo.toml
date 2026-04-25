@@ -1,7 +1,7 @@
 [package]
 name = "ava-supernova-ide"
 version = "0.13.0"
-description = "Ava | Supernova IDE — AI-native code editor"
+description = "Ava Supernova IDE — AI-native code editor"
 authors = ["Augmented Value Acceleration"]
 edition = "2021"
 

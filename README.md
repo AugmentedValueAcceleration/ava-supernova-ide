@@ -1,4 +1,4 @@
-# Ava | Supernova IDE
+# Ava Supernova IDE
 
 The standalone AI-native development environment. Built with Tauri v2, React 19, and a Node.js sidecar running `@ava/core` locally. Full 54-tool access, all 6 modes, 24 specialist personas — no VS Code required.
 

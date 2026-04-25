@@ -367,7 +367,7 @@ export function DocumentationPage() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 600, color: HEADING, marginBottom: 6 }}>Ava | Supernova</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 600, color: HEADING, marginBottom: 6 }}>Ava Supernova</h1>
         <p style={{ fontSize: 13, color: MUTED, marginBottom: 32 }}>Everything you need to know — clean, searchable, kept in sync with the agent itself.</p>
 
         {pages.map(page => {

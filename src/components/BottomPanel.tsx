@@ -50,7 +50,7 @@ interface CliLine {
 
 function AvaCliPanel() {
   const [lines, setLines] = useState<CliLine[]>([
-    { type: 'system', text: 'Ava | Supernova CLI — type a message and press Enter' },
+    { type: 'system', text: 'Ava Supernova CLI — type a message and press Enter' },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Ava | Supernova IDE — Node.js Sidecar
+ * Ava Supernova IDE — Node.js Sidecar
  *
  * Runs @ava/core locally, communicating with the Tauri frontend
  * via NDJSON over stdin (commands) / stdout (events).
