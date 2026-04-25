@@ -2,19 +2,19 @@
  * Tick Engine — IDE version
  *
  * Lightweight client-side tick for the Tauri IDE.
- * Checks token balance and support unread from localStorage.
+ * Checks credit balance and support unread from localStorage.
  * Task and journal checks done via API polling in DashboardPages.
  *
  * Same concept, same comment. You know who to thank. 🍻
  */
 
 export interface TickContext {
-  getTokenBalance?: () => { used: number; limit: number } | null;
+  getCreditBalance?: () => { used: number; limit: number } | null;
   getSupportUnread?: () => number;
 }
 
 export interface TickEvent {
-  type: 'token_warning' | 'support_reply';
+  type: 'credit_warning' | 'support_reply';
   message: string;
   severity: 'info' | 'nudge' | 'urgent';
 }
@@ -33,16 +33,16 @@ export class TickEngine {
 
     const events: TickEvent[] = [];
 
-    // Token balance
-    if (ctx.getTokenBalance) {
-      const bal = ctx.getTokenBalance();
+    // Credit balance
+    if (ctx.getCreditBalance) {
+      const bal = ctx.getCreditBalance();
       if (bal && bal.limit > 0 && bal.limit < 999_999_999) {
         const remaining = bal.limit - bal.used;
         const pct = (remaining / bal.limit) * 100;
-        if (pct <= 10 && !this.isDup('token_warning', now)) {
+        if (pct <= 10 && !this.isDup('credit_warning', now)) {
           events.push({
-            type: 'token_warning',
-            message: `Heads up — ${Math.round(100 - pct)}% of your tokens used this month.`,
+            type: 'credit_warning',
+            message: `Heads up — ${Math.round(100 - pct)}% of your credits used this month.`,
             severity: pct <= 5 ? 'urgent' : 'nudge',
           });
         }

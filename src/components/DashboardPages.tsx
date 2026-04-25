@@ -26,6 +26,7 @@ import {
   CREDIT_TOPUPS,
   STORAGE_ADDONS,
   dashboardBillingUrl,
+  creditsForTurn,
   type PlanTier as AvaPlanTier,
 } from '@ava/core/billing';
 import { IdePurchaseCard } from './_IdePurchaseCard';
@@ -1719,7 +1720,12 @@ export function AvaChatPage() {
   ];
 
   const SIDECAR_MODEL_MAP: Record<string, string> = {
+    // Orchestrated modes — the sidecar handles these by id, no provider prefix.
+    // Without this row, the fallback in setModel adds `platform:` (or worse,
+    // `qwen:` on the init path) and the resolver dies trying to find a model
+    // literally called 'supernova', then silently degrades to qwen3.5-flash.
     'auto': 'auto',
+    'supernova': 'supernova',
     'qwen3.6-plus': 'platform:qwen3.6-plus',
     'kimi-k2.6': 'kimi:kimi-k2.6',
     'kimi-k2.5': 'kimi:kimi-k2.5',
@@ -1799,7 +1805,7 @@ export function AvaChatPage() {
       setAuthRefreshChat(n => n + 1);
       if (!checkConnected()) {
         // Clear cloud state — snap back to local-first
-        setPlatformBalance(null);
+        setCreditBalance(null);
         setUsageWarning({ level: 'none', message: '' });
         setChatBackend('local');
         setMessages([{ id: `msg-reset-${Date.now()}`, role: 'ava' as const, text: t('dash.chat.welcome'), timestamp: Date.now() }]);
@@ -1834,6 +1840,14 @@ export function AvaChatPage() {
       localStorage.setItem('ava-ide-chat-model', 'auto');
       return 'auto';
     }
+    // Migration: pre-fix builds wrote `qwen:supernova` / `qwen:auto` because
+    // the init fallback prefixed every bare orchestrator id with `qwen:`.
+    // Resolve to the real orchestrated mode so AutoCoordinator picks up.
+    if (stored === 'qwen:supernova' || stored === 'qwen:auto' || stored.startsWith('qwen:supernova') || stored.startsWith('qwen:auto')) {
+      const fixed = stored.includes('supernova') ? 'supernova' : 'auto';
+      localStorage.setItem('ava-ide-chat-model', fixed);
+      return fixed;
+    }
     return stored;
   });
   const [mode, setMode] = useState<AvaMode>(() => (localStorage.getItem('ava-ide-chat-mode') as AvaMode) || 'work');
@@ -1864,7 +1878,10 @@ export function AvaChatPage() {
     } catch { return new Set<string>(); }
   });
   const [tokenCount, setTokenCount] = useState(0);
-  const [platformBalance, setPlatformBalance] = useState<{ used: number; limit: number } | null>(null);
+  // Platform credit balance — combined free + subscription pool. The shape
+  // {used, limit} survives the rename from the old token-system state for
+  // tick-engine localStorage compatibility, but the values are credits.
+  const [creditBalance, setCreditBalance] = useState<{ used: number; limit: number } | null>(null);
   const [conversationTitle, setConversationTitle] = useState(t('dash.chat.new_chat'));
   const [contextPercent, setContextPercent] = useState(0);
 
@@ -1886,15 +1903,32 @@ export function AvaChatPage() {
     return () => window.removeEventListener('ava-load-conversation', handler);
   }, []);
 
-  // ── Platform balance fetch ──────────────────────────────────────────────
+  // ── Platform credit balance fetch ───────────────────────────────────────
+  // Mirrors the extension's read shim (Usage.tsx in extension/dashboard-ui):
+  // reads credits_* first, falls back to tokens_* for any stale account-info
+  // cache from before the platform's credit-redesign hotfix shipped.
+  // Combines the free pool + subscription pool into one balance bar — same
+  // unified view the extension uses so users don't have to mentally add the
+  // two pools together.
   const fetchBalance = useCallback(async () => {
     const key = getPlatformKey();
     if (!key) return;
     try {
       const res = await apiFetch('/account-info');
-      if (res?.usage && res.usage.free_credits_used !== undefined) {
-        setPlatformBalance({ used: res.usage.free_credits_used, limit: res.usage.free_credits_limit || 1500 });
-      }
+      if (!res?.usage) return;
+      const u = res.usage as Record<string, unknown>;
+      const freeUsed  = Number(u.free_credits_used  ?? u.free_tokens_used  ?? 0);
+      const freeLimit = Number(u.free_credits_limit ?? u.free_tokens_limit ?? 300);
+      const subUsed   = Number(u.credits_used       ?? u.tokens_used       ?? 0);
+      const subLimit  = Number(u.credits_limit      ?? u.tokens_limit      ?? 0);
+      const totalUsed  = freeUsed + subUsed;
+      const totalLimit = freeLimit + subLimit;
+      setCreditBalance({ used: totalUsed, limit: totalLimit });
+      // Mirror to localStorage so the App-level tick engine can fire
+      // low-credit warnings without needing the dashboard mounted.
+      try {
+        localStorage.setItem('ava-platform-balance', JSON.stringify({ used: totalUsed, limit: totalLimit }));
+      } catch { /* quota / disabled — non-fatal */ }
     } catch { /* non-fatal */ }
   }, []);
 
@@ -2352,7 +2386,12 @@ export function AvaChatPage() {
         const config: SidecarConfig = {
           providers,
           platformKey: getPlatformKey() || undefined,
-          activeModel: modelMap[model] || `qwen:${model}`,
+          // Sidecar resolves bare 'auto'/'supernova' via AutoCoordinator; raw
+          // model ids without a known mapping get a `platform:` prefix so the
+          // ProviderRegistry resolver can find them. Never silently coerce
+          // to `qwen:` — that produces nonsense ids like `qwen:supernova` and
+          // makes the resolver fall back to qwen3.5-flash without warning.
+          activeModel: modelMap[model] || (model === 'auto' || model === 'supernova' ? model : `platform:${model}`),
           cwd: localStorage.getItem('ava-ide-project-folder') || '.',
           mode,
           permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
@@ -2433,7 +2472,12 @@ export function AvaChatPage() {
     const sidecar = getSidecar();
     if (model !== prevModelRef.current) {
       prevModelRef.current = model;
-      sidecar.setModel(SIDECAR_MODEL_MAP[model] || `platform:${model}`).catch(() => {});
+      // Same orchestrated-id passthrough as init: 'auto'/'supernova' must
+      // not get a provider prefix or the sidecar's AutoCoordinator handler
+      // misses them.
+      sidecar.setModel(
+        SIDECAR_MODEL_MAP[model] || (model === 'auto' || model === 'supernova' ? model : `platform:${model}`),
+      ).catch(() => {});
     }
     if (mode !== prevModeRef.current) {
       const previousMode = prevModeRef.current;
@@ -2788,8 +2832,17 @@ export function AvaChatPage() {
 
       case 'usage':
         if (event.usage) {
-          const total = event.usage.total_tokens || (event.usage.prompt_tokens || 0) + (event.usage.completion_tokens || 0);
-          setTokenCount((prev) => prev + total);
+          // Convert raw token usage to credits per turn so the session
+          // counter speaks the same unit as the platform billing UI.
+          // creditsForTurn applies bracket scaling + per-model multipliers
+          // identical to the server-side metering, so the local count is a
+          // faithful estimate of what the turn would actually charge.
+          const { credits } = creditsForTurn('chat_turn', {
+            inputTokens: event.usage.prompt_tokens || 0,
+            outputTokens: event.usage.completion_tokens || 0,
+            model,
+          });
+          setTokenCount((prev) => prev + credits);
           trackTokenUsage(event.usage, model);
         }
         break;
@@ -3344,8 +3397,12 @@ export function AvaChatPage() {
         }
 
         if (json.usage) {
-          const total = json.usage.total_tokens || (json.usage.prompt_tokens || 0) + (json.usage.completion_tokens || 0);
-          setTokenCount((prev) => prev + total);
+          const { credits } = creditsForTurn('chat_turn', {
+            inputTokens: json.usage.prompt_tokens || 0,
+            outputTokens: json.usage.completion_tokens || 0,
+            model,
+          });
+          setTokenCount((prev) => prev + credits);
           trackTokenUsage(json.usage, model);
         }
         trackMessage(model);
@@ -3410,7 +3467,12 @@ export function AvaChatPage() {
                 }
 
                 if (json.usage) {
-                  sessionTokens += json.usage.total_tokens || json.usage.completion_tokens || 0;
+                  const { credits } = creditsForTurn('chat_turn', {
+                    inputTokens: json.usage.prompt_tokens || 0,
+                    outputTokens: json.usage.completion_tokens || 0,
+                    model,
+                  });
+                  sessionTokens += credits;
                   setTokenCount(sessionTokens);
                   trackTokenUsage(json.usage, model);
                   if (json.usage.prompt_tokens && json.usage.completion_tokens) {
@@ -3893,21 +3955,23 @@ export function AvaChatPage() {
             </button>
           </div>
 
-          {/* Token display — platform balance or session count */}
-          {platformBalance && connected ? (() => {
-            const isAdmin = platformBalance.limit >= 999_999_999;
-            if (isAdmin) return <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', opacity: 0.5 }} title="Unlimited tokens">∞ tokens</span>;
-            const remaining = Math.max(0, platformBalance.limit - platformBalance.used);
-            const pct = platformBalance.limit > 0 ? (platformBalance.used / platformBalance.limit) * 100 : 0;
+          {/* Credit display — platform balance when signed in, or local
+              session credit estimate (computed via creditsForTurn so the unit
+              matches platform billing) when running standalone. */}
+          {creditBalance && connected ? (() => {
+            const isAdmin = creditBalance.limit >= 999_999_999;
+            if (isAdmin) return <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', opacity: 0.5 }} title="Unlimited credits">∞ credits</span>;
+            const remaining = Math.max(0, creditBalance.limit - creditBalance.used);
+            const pct = creditBalance.limit > 0 ? (creditBalance.used / creditBalance.limit) * 100 : 0;
             const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
             return (
-              <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color }} title={`${remaining.toLocaleString()} of ${platformBalance.limit.toLocaleString()} tokens remaining (${Math.round(pct)}% used)`}>
+              <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color }} title={`${remaining.toLocaleString()} of ${creditBalance.limit.toLocaleString()} credits remaining (${Math.round(pct)}% used)`}>
                 {fmtTokens(remaining)} left
               </span>
             );
           })() : (
-            <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} tokens used this session`}>
-              {tokenCount > 0 ? fmtTokens(tokenCount) + ' tokens' : '0 tokens'}
+            <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} credits used this session`}>
+              {tokenCount > 0 ? fmtTokens(tokenCount) + ' credits' : '0 credits'}
             </span>
           )}
 
@@ -3959,10 +4023,10 @@ export function AvaChatPage() {
         </div>
       </div>
 
-      {/* ── Token usage bar ────────────────────────────────────────────── */}
-      {platformBalance && connected && platformBalance.limit > 0 && platformBalance.limit < 999_999_999 && (() => {
-        const remaining = Math.max(0, platformBalance.limit - platformBalance.used);
-        const pct = Math.max(0, Math.min(100, (remaining / platformBalance.limit) * 100));
+      {/* ── Credit usage bar ───────────────────────────────────────────── */}
+      {creditBalance && connected && creditBalance.limit > 0 && creditBalance.limit < 999_999_999 && (() => {
+        const remaining = Math.max(0, creditBalance.limit - creditBalance.used);
+        const pct = Math.max(0, Math.min(100, (remaining / creditBalance.limit) * 100));
         const color = pct <= 5 ? '#ef4444' : pct <= 20 ? '#eab308' : '#a855f7';
         return (
           <div style={{ padding: '0 16px 6px' }}>
@@ -4990,15 +5054,15 @@ export function AvaChatPage() {
               )}
             </button>
 
-            {/* Token balance in input bar */}
-            {connected && platformBalance && (() => {
-              const isAdmin = platformBalance.limit >= 999_999_999;
-              if (isAdmin) return <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#6c7086', opacity: 0.5, flexShrink: 0 }} title="Unlimited tokens">∞</span>;
-              const remaining = Math.max(0, platformBalance.limit - platformBalance.used);
-              const pct = platformBalance.limit > 0 ? (platformBalance.used / platformBalance.limit) * 100 : 0;
+            {/* Credit balance in input bar */}
+            {connected && creditBalance && (() => {
+              const isAdmin = creditBalance.limit >= 999_999_999;
+              if (isAdmin) return <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#6c7086', opacity: 0.5, flexShrink: 0 }} title="Unlimited credits">∞</span>;
+              const remaining = Math.max(0, creditBalance.limit - creditBalance.used);
+              const pct = creditBalance.limit > 0 ? (creditBalance.used / creditBalance.limit) * 100 : 0;
               const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
               return (
-                <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color, flexShrink: 0 }} title={`${remaining.toLocaleString()} tokens remaining`}>
+                <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color, flexShrink: 0 }} title={`${remaining.toLocaleString()} credits remaining`}>
                   {fmtTokens(remaining)}
                 </span>
               );
@@ -5096,7 +5160,7 @@ export function ChatHistoryPage() {
   const period = usage?.period || {};
   const totals = usage?.totals || {};
   const freeUsed = period.free_credits_used || 0;
-  const freeLimit = period.free_credits_limit || 1500;
+  const freeLimit = period.free_credits_limit || 300;
   const subUsed = period.credits_used || 0;
   const subLimit = period.credits_limit || 0;
   const isUnlimited = usage?.isUnlimited || false;
@@ -5106,10 +5170,20 @@ export function ChatHistoryPage() {
   const balanceRemaining = Math.max(0, balanceLimit - balanceUsed);
   const remainPct = isUnlimited ? 100 : (balanceLimit > 0 ? Math.min((balanceRemaining / balanceLimit) * 100, 100) : 0);
   const daily: any[] = usage?.daily || [];
-  const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || 0)) : 1;
+  // Read shim mirrors extension Usage.tsx: prefer `credits` fields when the
+  // server has rolled out the credit-redesign columns, fall back to legacy
+  // `tokens` for stale account-info caches. One source of truth means we
+  // can keep the bar chart accurate through the rollout window without
+  // double-rendering.
+  const dailyValue = (d: any) => Number(d?.credits ?? d?.tokens ?? 0);
+  const maxDaily = daily.length > 0 ? Math.max(...daily.map(dailyValue)) : 1;
   const today = new Date().toISOString().slice(0, 10);
   const models: any[] = usage?.models || [];
-  const maxModelTokens = models.length > 0 ? Math.max(...models.map((m: any) => m.total_tokens || 0)) : 1;
+  const modelValue = (m: any) => Number(m?.total_credits ?? m?.total_tokens ?? 0);
+  const maxModelTokens = models.length > 0 ? Math.max(...models.map(modelValue)) : 1;
+  const monthValue = Number(totals?.credits ?? totals?.tokens ?? 0);
+  const monthRequests = Number(totals?.requests ?? 0);
+  const monthAvg = monthRequests > 0 ? Math.round(monthValue / monthRequests) : 0;
 
   const tabStyle = (active: boolean) => ({
     padding: '6px 12px', fontSize: 12, fontWeight: 500 as const, cursor: 'pointer' as const,
@@ -5122,7 +5196,7 @@ export function ChatHistoryPage() {
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
         <div style={pageTitle}>History</div>
-        <div style={{ ...pageSubtitle, marginBottom: 16 }}>Tokens, sessions, models</div>
+        <div style={{ ...pageSubtitle, marginBottom: 16 }}>Credits, sessions, models</div>
 
         {/* ── Tabs ───────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
@@ -5133,10 +5207,10 @@ export function ChatHistoryPage() {
         {/* ── Usage Tab ──────────────────────────────────────────────── */}
         {activeTab === 'usage' && (
           <>
-            {/* Token Balance */}
+            {/* Credit Balance */}
             {connected && usage && (
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Token Balance</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Credit Balance</div>
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px' }}>
                   {isUnlimited ? (
                     <>
@@ -5151,7 +5225,7 @@ export function ChatHistoryPage() {
                   ) : (
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                        <span style={{ color: '#a6adc8' }}>Tokens Remaining</span>
+                        <span style={{ color: '#a6adc8' }}>Credits Remaining</span>
                         <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{formatTokens(balanceRemaining)}</span>
                       </div>
                       <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
@@ -5177,10 +5251,10 @@ export function ChatHistoryPage() {
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Overview</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                   {[
-                    { label: 'This Month', value: formatTokens(totals.tokens || 0) },
-                    { label: 'Requests', value: String(totals.requests || 0) },
-                    { label: 'Active Days', value: String(totals.active_days || 0) },
-                    { label: 'Avg / Request', value: formatTokens(totals.requests > 0 ? Math.round((totals.tokens || 0) / totals.requests) : 0) },
+                    { label: 'Credits This Month', value: formatTokens(monthValue) },
+                    { label: 'Requests',           value: String(monthRequests) },
+                    { label: 'Active Days',        value: String(totals.active_days || 0) },
+                    { label: 'Avg / Request',      value: formatTokens(monthAvg) },
                   ].map(s => (
                     <div key={s.label} style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10, padding: '14px 16px' }}>
                       <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{s.label}</div>
@@ -5198,10 +5272,11 @@ export function ChatHistoryPage() {
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80 }}>
                     {daily.map((d: any) => {
-                      const h = maxDaily > 0 ? Math.max(2, (d.tokens / maxDaily) * 80) : 2;
+                      const v = dailyValue(d);
+                      const h = maxDaily > 0 ? Math.max(2, (v / maxDaily) * 80) : 2;
                       const isToday = d.date === today;
                       return (
-                        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} title={`${d.date}: ${formatTokens(d.tokens)}`}>
+                        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} title={`${d.date}: ${formatTokens(v)} credits`}>
                           <div style={{
                             width: '100%', height: h, borderRadius: 3,
                             background: isToday ? '#a855f7' : 'rgba(168, 85, 247, 0.3)',
@@ -5223,17 +5298,20 @@ export function ChatHistoryPage() {
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Most Used Models</div>
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {models.slice(0, 5).map((m: any) => (
-                    <div key={m.model}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                        <span style={{ color: '#cdd6f4', fontWeight: 500 }}>{m.model}</span>
-                        <span style={{ color: '#6c7086' }}>{formatTokens(m.total_tokens)} ({m.request_count} req)</span>
+                  {models.slice(0, 5).map((m: any) => {
+                    const v = modelValue(m);
+                    return (
+                      <div key={m.model}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                          <span style={{ color: '#cdd6f4', fontWeight: 500 }}>{m.model}</span>
+                          <span style={{ color: '#6c7086' }}>{formatTokens(v)} credits ({m.request_count} req)</span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
+                          <div style={{ width: `${(v / maxModelTokens) * 100}%`, height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
+                        </div>
                       </div>
-                      <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
-                        <div style={{ width: `${(m.total_tokens / maxModelTokens) * 100}%`, height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -9176,7 +9254,7 @@ export function UsagePage() {
 
   // All-time from totals
   const freeUsed = period.free_credits_used || 0;
-  const freeLimit = period.free_credits_limit || 1500;
+  const freeLimit = period.free_credits_limit || 300;
   const subUsed = period.credits_used || 0;
   const subLimit = period.credits_limit || 0;
   const tokensMonth = totals.tokens || 0;
@@ -9423,10 +9501,10 @@ export function UsagePage() {
               </>
             ) : (
               <>
-                {/* Token Balance */}
+                {/* Credit Balance */}
                 {usage && (
                   <div style={{ ...card }}>
-                    <div style={sectionTitle}>Token Balance</div>
+                    <div style={sectionTitle}>Credit Balance</div>
                     {isUnlimited ? (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
@@ -9440,7 +9518,7 @@ export function UsagePage() {
                     ) : (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                          <span style={{ color: '#a6adc8' }}>Tokens Remaining</span>
+                          <span style={{ color: '#a6adc8' }}>Credits Remaining</span>
                           <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{formatTokens(balanceRemaining)}</span>
                         </div>
                         <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
@@ -9696,7 +9774,7 @@ export function SettingsPage() {
 
   const PROVIDERS = [
     { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.6, Sonnet 4.6, Haiku 4.5' },
-    { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V3 and R1 \u2014 best price/performance' },
+    { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4 Pro and V4 Flash \u2014 1M context, MIT open-weight' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.5 \u2014 best multi-step tool calling' },
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M2.7 self-evolving, M2.5 best tool calling' },
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5, GLM-4.7 \u2014 best tool-call reliability' },
@@ -10475,7 +10553,7 @@ export function BillingPage() {
   const tc = tierConfig[tier] || tierConfig.free;
 
   const freeUsed = usage?.period?.free_credits_used || 0;
-  const freeLimit = usage?.period?.free_credits_limit || 1500;
+  const freeLimit = usage?.period?.free_credits_limit || 300;
   const planUsed = usage?.period?.credits_used || 0;
   const planLimit = usage?.period?.credits_limit || 0;
   const topUpBalance = usage?.period?.topup_tokens_remaining || 0;
@@ -11673,7 +11751,7 @@ function CSTokenBar({ refreshKey }: { refreshKey: number }) {
     apiFetch('/usage/summary').then((res: any) => {
       if (res?.period) {
         const freeUsed = res.period.free_credits_used || 0;
-        const freeLimit = res.period.free_credits_limit || 1500;
+        const freeLimit = res.period.free_credits_limit || 300;
         const subUsed = res.period.credits_used || 0;
         const subLimit = res.period.credits_limit || 0;
         const isUnlimited = res.isUnlimited || false;
@@ -11702,7 +11780,7 @@ function CSTokenBar({ refreshKey }: { refreshKey: number }) {
   return (
     <div style={{ width: 180, flexShrink: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6c7086', marginBottom: 4 }}>
-        <span>Tokens Remaining</span><span>{fmt(rem)}</span>
+        <span>Credits Remaining</span><span>{fmt(rem)}</span>
       </div>
       <div style={{ height: 6, borderRadius: 3, background: 'rgba(168,85,247,0.08)', overflow: 'hidden' }}>
         <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${pct}%`,

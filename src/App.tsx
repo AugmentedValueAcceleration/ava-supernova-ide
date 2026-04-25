@@ -190,7 +190,7 @@ export default function App() {
     const interval = setInterval(async () => {
       if (!tickRef.current) return;
       const result = await tickRef.current.tick({
-        getTokenBalance: () => {
+        getCreditBalance: () => {
           try {
             const bal = localStorage.getItem('ava-platform-balance');
             if (bal) { const p = JSON.parse(bal); return { used: p.used, limit: p.limit }; }
