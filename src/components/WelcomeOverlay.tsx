@@ -21,7 +21,7 @@ const PROVIDERS = [
 const MODES = [
   { id: 'code',       name: 'Work',       prefix: '>>', tagline: 'Builder. Ships code.',                  example: 'add a cancel button to the upload form' },
   { id: 'plan',       name: 'Plan',       prefix: '::', tagline: 'Architect. Read-only. Thinks first.',   example: 'should I extract this logic into a service?' },
-  { id: 'chat',       name: 'Chat',       prefix: '..', tagline: 'Friend. No tools. Just talk.',           example: 'how do I feel about this launch date?' },
+  { id: 'chat',       name: 'Chat',       prefix: '..', tagline: 'Friend. Off the clock.',                example: 'how do I feel about this launch date?' },
   { id: 'teach',      name: 'Teach',      prefix: '??', tagline: 'Tutor, content writer, fact checker, quiz master.', example: 'teach me Rust async from zero' },
   { id: 'security',   name: 'Security',   prefix: '!!', tagline: 'Auditor. OWASP scan + report.',          example: 'audit this API for injection risks' },
   { id: 'brainstorm', name: 'Brainstorm', prefix: '**', tagline: 'Ideator. Explore, refine, and challenge.', example: 'what should I build with 2 weeks free?' },
