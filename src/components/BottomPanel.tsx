@@ -1,8 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
-import { getPlatformKey, apiStreamUrl } from '../lib/api';
+import { getPlatformKey, apiStreamUrl, fetchPlatformModels, getCachedModels, type PlatformModel } from '../lib/api';
 import { t, useLocale } from '../lib/i18n';
+import ModelDropdown, { type IdeModelOption } from './ModelDropdown';
+
+// Tier readout — drives Supernova admin gating in the dropdown. Mirrors
+// the pattern from the extension's Header / NavSidebar (account?.tier === 'admin').
+function readTier(): string {
+  try { return localStorage.getItem('ava-ide-tier') || 'free'; } catch { return 'free'; }
+}
 
 interface Props {
   activeTab: BottomTab;
@@ -57,6 +64,61 @@ function AvaCliPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const currentResponse = useRef('');
+
+  // Model selector state. Defaults to Maestro (auto) — matches the
+  // extension's default. Persisted to localStorage so the choice survives
+  // panel re-mounts.
+  const [activeModel, setActiveModel] = useState<string>(() => {
+    try { return localStorage.getItem('ava-ide-active-model') || 'auto'; } catch { return 'auto'; }
+  });
+  const [platformModels, setPlatformModels] = useState<PlatformModel[]>(() => getCachedModels() || []);
+  const [tier, setTier] = useState<string>(() => readTier());
+
+  // Refresh tier on mount + on cross-window tier-change events (the IDE
+  // dispatches these from refreshTier in lib/api.ts).
+  useEffect(() => {
+    const onTierChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ tier?: string }>).detail;
+      if (detail?.tier) setTier(detail.tier);
+    };
+    window.addEventListener('ava-tier-changed', onTierChange);
+    return () => window.removeEventListener('ava-tier-changed', onTierChange);
+  }, []);
+
+  // Lazy-load the platform model list (1-hour cache inside fetchPlatformModels).
+  // Falls back silently when offline / unauthenticated — orchestrated modes
+  // still appear because they're injected client-side below.
+  useEffect(() => {
+    let cancelled = false;
+    fetchPlatformModels().then((m) => {
+      if (!cancelled && m) setPlatformModels(m);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Build the dropdown's model list: orchestrated entries (Maestro always
+  // available, Supernova admin-gated to match v0.50.0 release notes — admin
+  // gets it active, everyone else sees "In development") + raw platform
+  // models (BYOK + managed) sourced from /api/models.
+  const dropdownModels: IdeModelOption[] = useMemo(() => {
+    const isAdmin = tier === 'admin';
+    const orchestrated: IdeModelOption[] = [
+      { id: 'supernova', name: 'Supernova', provider: 'platform', available: isAdmin },
+      { id: 'auto',      name: 'Maestro',   provider: 'platform', available: true },
+    ];
+    const raw: IdeModelOption[] = platformModels.map((m) => ({
+      id: m.id,
+      name: m.name,
+      provider: m.provider,
+      available: true,
+    }));
+    return [...orchestrated, ...raw];
+  }, [platformModels, tier]);
+
+  const handleSwitchModel = useCallback((modelId: string) => {
+    setActiveModel(modelId);
+    try { localStorage.setItem('ava-ide-active-model', modelId); } catch { /* ignore */ }
+  }, []);
 
   // Auto-scroll
   useEffect(() => {
@@ -178,7 +240,12 @@ function AvaCliPanel() {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'qwen3.5-flash',
+            // Orchestrated modes ('auto' = Maestro, 'supernova') resolve
+            // server-side to the right coordinator. Raw model ids pass
+            // through untouched. Falls back to qwen3.5-flash only if no
+            // model has been picked yet (shouldn't happen — default is
+            // 'auto' from initial state).
+            model: activeModel || 'qwen3.5-flash',
             messages: [{ role: 'user', content: trimmed }],
           }),
         });
@@ -254,6 +321,20 @@ function AvaCliPanel() {
             {line.type === 'ava' && busy && i === lines.length - 1 && <BlinkingCursor />}
           </div>
         ))}
+      </div>
+
+      {/* Model selector row — sits above the prompt so the active model
+          is visible while typing. Same Maestro/Supernova/raw-model split
+          the extension uses. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', padding: '6px 14px 0 14px',
+        background: 'rgba(15, 10, 26, 0.95)',
+      }}>
+        <ModelDropdown
+          models={dropdownModels}
+          activeModel={activeModel}
+          onSwitch={handleSwitchModel}
+        />
       </div>
 
       {/* Input */}

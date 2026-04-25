@@ -1,0 +1,265 @@
+// IDE model dropdown — parity with the extension's ModelSelector.
+//
+// Behaviour:
+//   - Orchestrated section at the top: Supernova (polyglot, V4 Pro coordinator)
+//     and Maestro (single conductor on Qwen 3.6 Plus). Both highlighted as
+//     Ava-orchestrated modes vs raw model picks.
+//   - Supernova is admin-only at preview while the DeepSeek partnership is
+//     pending. Non-admin users see it in the dropdown with an "In development"
+//     label and a disabled state (tooltip explains the gate).
+//   - Maestro (auto) is always available — has been operational for months.
+//   - Below that: raw model picks, sorted alphabetically by provider.
+//
+// Source of truth for model availability is the platform `/models` endpoint
+// (admin-gated server-side via validateAuth — admins get the full list with
+// admin_only models, non-admins get the filtered list). This component just
+// renders whatever is passed in.
+
+import { useState, useRef, useEffect } from 'react';
+
+export interface IdeModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  /** True if this model can actually be selected by the current user.
+   *  False = visible but disabled (e.g. Supernova for non-admin). */
+  available: boolean;
+}
+
+interface ModelDropdownProps {
+  models: IdeModelOption[];
+  activeModel: string | null;
+  onSwitch: (modelId: string) => void;
+}
+
+const ORCHESTRATED: { id: string; label: string; subtitle: string; title: string }[] = [
+  {
+    id: 'supernova',
+    label: '✦ Supernova',
+    subtitle: 'Polyglot ensemble',
+    title: 'Multi-model orchestration — coordinator picks the best specialist for each task',
+  },
+  {
+    id: 'auto',
+    label: '✦ Maestro',
+    subtitle: 'Single conductor',
+    title: 'One coordinator handles everything — proven, production-tuned',
+  },
+];
+
+export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const isAuto = activeModel === 'auto';
+  const isSupernova = activeModel === 'supernova';
+  const activeName = isAuto
+    ? 'Maestro'
+    : isSupernova
+      ? 'Supernova'
+      : models.find((m) => m.id === activeModel)?.name ?? 'Select model';
+
+  // Orchestrated entries first, then raw models alphabetically.
+  const rawModels = [...models]
+    .filter((m) => m.id !== 'auto' && m.id !== 'supernova')
+    .sort((a, b) => {
+      if (a.available !== b.available) return a.available ? -1 : 1;
+      return a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name);
+    });
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '3px 8px',
+          background: 'rgba(168, 85, 247, 0.05)',
+          border: '1px solid rgba(168, 85, 247, 0.2)',
+          borderRadius: 4,
+          color: '#cdd6f4',
+          fontSize: 11,
+          fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: isAuto || isSupernova ? '#A855F7' : '#10b981',
+            display: 'inline-block',
+          }}
+        />
+        {isAuto ? '✦ Maestro' : isSupernova ? '✦ Supernova' : activeName}
+        <span style={{ fontSize: 8, opacity: 0.5, marginLeft: 2 }}>▼</span>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 4px)',
+            left: 0,
+            minWidth: 240,
+            maxHeight: 360,
+            overflowY: 'auto',
+            background: '#1e1b2e',
+            border: '1px solid rgba(168, 85, 247, 0.25)',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            zIndex: 1000,
+          }}
+        >
+          {ORCHESTRATED.map((o) => {
+            const m = models.find((x) => x.id === o.id);
+            if (!m) return null;
+            const enabled = m.available;
+            const subtitle = enabled ? o.subtitle : 'In development';
+            const isActive = activeModel === o.id;
+            return (
+              <button
+                key={o.id}
+                type="button"
+                disabled={!enabled}
+                onClick={() => {
+                  if (!enabled) return;
+                  onSwitch(o.id);
+                  setOpen(false);
+                }}
+                title={
+                  enabled
+                    ? o.title
+                    : `${o.label.replace('✦ ', '')} — admin-gated while DeepSeek partnership is finalised.`
+                }
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  padding: '8px 10px',
+                  background: enabled && isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                  border: 'none',
+                  textAlign: 'left',
+                  fontSize: 12,
+                  color: '#cdd6f4',
+                  cursor: enabled ? 'pointer' : 'default',
+                  opacity: enabled ? 1 : 0.4,
+                }}
+                onMouseEnter={(e) => {
+                  if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168, 85, 247, 0.08)';
+                }}
+                onMouseLeave={(e) => {
+                  if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                }}
+              >
+                <span
+                  style={{
+                    width: 5,
+                    height: 5,
+                    borderRadius: '50%',
+                    background: enabled && isActive ? '#A855F7' : 'rgba(255,255,255,0.15)',
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontWeight: enabled && isActive ? 600 : 400 }}>{o.label}</span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    marginLeft: 'auto',
+                    opacity: enabled ? 0.5 : 0.7,
+                    color: enabled ? '#cdd6f4' : '#facc15',
+                  }}
+                >
+                  {subtitle}
+                </span>
+              </button>
+            );
+          })}
+
+          {rawModels.length > 0 && (
+            <>
+              <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.15)', margin: '4px 0' }} />
+              <div
+                style={{
+                  padding: '6px 10px',
+                  fontSize: 10,
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  opacity: 0.4,
+                  color: '#cdd6f4',
+                }}
+              >
+                Models
+              </div>
+            </>
+          )}
+
+          {rawModels.map((m) => {
+            const isActive = m.id === activeModel;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={!m.available}
+                onClick={() => {
+                  if (!m.available) return;
+                  onSwitch(m.id);
+                  setOpen(false);
+                }}
+                title={m.available ? m.name : `Add ${m.provider} API key to use ${m.name}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  padding: '6px 10px',
+                  background: m.available && isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                  border: 'none',
+                  textAlign: 'left',
+                  fontSize: 12,
+                  color: '#cdd6f4',
+                  cursor: m.available ? 'pointer' : 'default',
+                  opacity: m.available ? 1 : 0.35,
+                }}
+                onMouseEnter={(e) => {
+                  if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168, 85, 247, 0.08)';
+                }}
+                onMouseLeave={(e) => {
+                  if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                }}
+              >
+                <span
+                  style={{
+                    width: 5,
+                    height: 5,
+                    borderRadius: '50%',
+                    background: isActive && m.available ? '#A855F7' : m.available ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontWeight: isActive && m.available ? 600 : 400 }}>{m.name}</span>
+                <span style={{ fontSize: 10, opacity: 0.35, marginLeft: 'auto' }}>{m.provider}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
