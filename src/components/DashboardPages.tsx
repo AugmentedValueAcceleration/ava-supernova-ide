@@ -1844,6 +1844,19 @@ export function AvaChatPage() {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [packsMenuOpen, setPacksMenuOpen] = useState(false);
+  // Tier read for Supernova admin gating in the model dropdown. Mirrors
+  // the extension's account?.tier === 'admin' check. Listens to the
+  // 'ava-tier-changed' event so the gate flips when the user signs in
+  // or refreshes their account info without a panel re-mount.
+  const [chatTier, setChatTier] = useState<string>(() => localStorage.getItem('ava-ide-tier') || 'free');
+  useEffect(() => {
+    const onTierChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ tier?: string }>).detail;
+      if (detail?.tier) setChatTier(detail.tier);
+    };
+    window.addEventListener('ava-tier-changed', onTierChange);
+    return () => window.removeEventListener('ava-tier-changed', onTierChange);
+  }, []);
   const [enabledPacks, setEnabledPacks] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('ava-knowledge-packs');
@@ -3592,7 +3605,8 @@ export function AvaChatPage() {
   // ── Active mode info ──────────────────────────────────────────────────────
   const currentMode = MODES.find((m) => m.id === mode) || MODES[0];
   const activeModelName = useMemo(() => {
-    if (model === 'auto') return '✦ Auto';
+    if (model === 'supernova') return '✦ Supernova';
+    if (model === 'auto') return '✦ Maestro';
     if (model === 'qwen3.6-plus') return 'Qwen 3.6 Plus';
     if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
     if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
@@ -3652,27 +3666,49 @@ export function AvaChatPage() {
                 background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
                 padding: 6, minWidth: 240, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               }}>
-                {/* Platform models header */}
+                {/* Orchestrated section — Supernova (polyglot ensemble) on top,
+                    Maestro (single conductor) below. Both highlighted as
+                    Ava-orchestrated modes vs raw model picks. Supernova is
+                    admin-gated at preview while the DeepSeek partnership
+                    finalises — non-admin users see "In development" with a
+                    disabled button. Mirrors the extension's ModelSelector. */}
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                  Auto
+                  Orchestrated
                 </div>
-                <button
-                  onClick={() => { setModel('auto'); setModelMenuOpen(false); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                    padding: '8px 10px', background: model === 'auto' ? 'rgba(168,85,247,0.15)' : 'transparent',
-                    border: 'none', borderRadius: 6, color: model === 'auto' ? '#e0b0ff' : '#cdd6f4',
-                    fontSize: 12, cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseEnter={(e) => { if (model !== 'auto') e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
-                  onMouseLeave={(e) => { if (model !== 'auto') e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {model === 'auto' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }} />}
-                    ✦ Auto
-                  </span>
-                  <span style={{ fontSize: 10, color: '#a855f7' }}>Best model per task</span>
-                </button>
+                {(() => {
+                  const isAdmin = chatTier === 'admin';
+                  const orchestrated = [
+                    { id: 'supernova', label: '✦ Supernova', subtitle: isAdmin ? 'Polyglot ensemble' : 'In development', enabled: isAdmin, title: 'Multi-model orchestration — coordinator picks the best specialist for each task' },
+                    { id: 'auto',      label: '✦ Maestro',   subtitle: 'Best model per task',                              enabled: true,    title: 'One coordinator handles everything — proven, production-tuned' },
+                  ];
+                  return orchestrated.map((o) => {
+                    const active = model === o.id;
+                    return (
+                      <button
+                        key={o.id}
+                        disabled={!o.enabled}
+                        onClick={() => { if (!o.enabled) return; setModel(o.id); setModelMenuOpen(false); }}
+                        title={o.enabled ? o.title : `${o.label.replace('✦ ', '')} — admin-gated while DeepSeek partnership is finalised.`}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                          padding: '8px 10px', background: o.enabled && active ? 'rgba(168,85,247,0.15)' : 'transparent',
+                          border: 'none', borderRadius: 6,
+                          color: !o.enabled ? '#6c7086' : active ? '#e0b0ff' : '#cdd6f4',
+                          fontSize: 12, cursor: o.enabled ? 'pointer' : 'default', textAlign: 'left',
+                          opacity: o.enabled ? 1 : 0.55,
+                        }}
+                        onMouseEnter={(e) => { if (o.enabled && !active) e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
+                        onMouseLeave={(e) => { if (o.enabled && !active) e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {o.enabled && active && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }} />}
+                          {o.label}
+                        </span>
+                        <span style={{ fontSize: 10, color: o.enabled ? '#a855f7' : '#facc15' }}>{o.subtitle}</span>
+                      </button>
+                    );
+                  });
+                })()}
                 <div style={{ height: 1, background: 'rgba(49, 34, 68, 0.5)', margin: '6px 0' }} />
                 {/* Qwen family */}
                 <div style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>Qwen</div>
