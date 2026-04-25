@@ -118,6 +118,14 @@ function AvaCliPanel() {
   const handleSwitchModel = useCallback((modelId: string) => {
     setActiveModel(modelId);
     try { localStorage.setItem('ava-ide-active-model', modelId); } catch { /* ignore */ }
+    // If the sidecar is up, hot-swap the model in the running agent so
+    // 'auto' / 'supernova' actually reach AutoCoordinator. Without this,
+    // the dropdown changed UI state only and the sidecar kept whatever
+    // model it was initialised with — Supernova would be a no-op.
+    const sidecar = getSidecar();
+    if (sidecar.isReady) {
+      sidecar.setModel(modelId).catch(() => { /* surfaced via sidecar event stream */ });
+    }
   }, []);
 
   // Auto-scroll

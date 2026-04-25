@@ -1420,8 +1420,12 @@ async function handleSetModel(data) {
     const cwd = globalThis._cwd || process.cwd();
     const sharedState = globalThis._sharedState || {};
 
-    // Auto mode — use AutoCoordinator with correct coordinator model
-    if (data.model === 'auto') {
+    // Maestro / Supernova orchestrated modes — both go through AutoCoordinator.
+    // Supernova pins coordinator to DeepSeek V4 Pro and runs Builder spawns
+    // on Qwen 3.6 Plus per the polyglot routing map; Maestro uses the
+    // default coordinator priority ladder. Mirrors AvaViewProvider.setActiveModel
+    // in the extension.
+    if (data.model === 'auto' || data.model === 'supernova') {
       const availableProviders = new Set();
       if (sharedState.platformKey) availableProviders.add('platform');
       if (sharedState.qwenApiKey) availableProviders.add('qwen');
@@ -1436,12 +1440,15 @@ async function handleSetModel(data) {
         sharedState,
         availableProviders,
         platformKey: sharedState.platformKey,
+        mode: data.model === 'supernova' ? 'supernova' : 'auto',
       });
 
       if (autoCoordinator) {
-        emit({ event: 'model_changed', model: 'auto', provider: 'auto' });
+        const label = data.model === 'supernova' ? 'Supernova' : 'Maestro';
+        emit({ event: 'model_changed', model: data.model, provider: label });
       } else {
-        emitError('Auto mode unavailable — no providers found');
+        const label = data.model === 'supernova' ? 'Supernova' : 'Maestro';
+        emitError(`${label} unavailable — no providers found`);
       }
       return;
     }
