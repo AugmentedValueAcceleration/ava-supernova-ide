@@ -66,6 +66,7 @@ const {
   ResilientProvider,
   Conductor,
   AutoCoordinator,
+  IntentClassifier,
   MemoryAgent,
   ProjectIndexer,
   BriefingEngine,
@@ -832,6 +833,12 @@ async function handleInit(data) {
       sharedState.memoryAgent = memoryAgentInstance;
       emit({ event: 'info', message: 'Memory Agent initialized on ' + qwenFlash.model.id });
     }
+
+    // Intent Classifier — heuristic gate that nudges Ava toward worded
+    // replies on conversational/ambiguous turns. Synchronous (no network
+    // hop), so wiring it here costs nothing per turn and brings the IDE
+    // to feature-parity with the extension's intent-shaped style notes.
+    sharedState.intentClassifier = new IntentClassifier();
 
     // Build resilient provider with fallback
     const healthTracker = new ProviderHealthTracker();
