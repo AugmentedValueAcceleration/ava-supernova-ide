@@ -95,6 +95,12 @@ let conversation = null;
 let toolRegistry = null;
 let memoryManager = null;
 let journalManager = null;
+// Init lifecycle — flips true at the start of handleInit, false on
+// completion or failure. handleMessage uses this to distinguish "init
+// in flight, please wait" from "no init was ever attempted, real
+// error" so a fast user click after spawn doesn't hit a misleading
+// "Not initialized" error.
+let initInFlight = false;
 let taskManager = null;
 let memoryAgentInstance = null;
 let currentAbort = null;
@@ -422,6 +428,7 @@ process.on('unhandledRejection', (err) => {
 // ─── Command Handlers ───────────────────────────────────────────────────────
 
 async function handleInit(data) {
+  initInFlight = true;
   try {
     const config = data.config || {};
     // SECURITY: cwd must be a specific project folder, never fallback to home directory.
@@ -605,13 +612,26 @@ async function handleInit(data) {
     // mechanism that makes `secret_request` useful end-to-end in the IDE.
     toolRegistry.setArgsPreprocessor((_toolName, args) => substituteSecretHandles(args));
 
-    // Audit callback — log all tool executions
+    // Audit callback — log every tool execution to BOTH the in-memory
+    // recent buffer (fast first-paint) AND the persistent JSONL log
+    // at ~/.ava/audit-log.jsonl via @ava/core/audit. Same pattern the
+    // extension uses, same on-disk file — sign-in agnostic, BYOK
+    // friendly, never leaves the user's machine.
     const auditLog = [];
+    let appendAuditEntry = null;
+    try {
+      const audit = await import('@ava/core/audit');
+      appendAuditEntry = audit.appendEntry;
+    } catch {
+      // Optional dep — sidecar still works without persistence.
+    }
     toolRegistry.setAuditCallback((entry) => {
       auditLog.push(entry);
       if (auditLog.length > 500) auditLog.shift();
+      if (appendAuditEntry) {
+        try { appendAuditEntry(entry); } catch { /* never break a tool call on audit failure */ }
+      }
     });
-    // Expose audit log for IDE retrieval
     globalThis.__avaAuditLog = auditLog;
 
     // Memory
@@ -880,10 +900,23 @@ async function handleInit(data) {
     emit({ event: 'ready', model: resolved.model.id, provider: resolved.provider.name });
   } catch (err) {
     emitError(`Init failed: ${err.message}`);
+  } finally {
+    initInFlight = false;
   }
 }
 
 async function handleMessage(data) {
+  // If a fresh sidecar process is still mid-init when the user fires
+  // their first message, wait briefly for init to complete instead of
+  // bailing with a misleading "Not initialized" error. Caps at 3s so
+  // a genuinely-broken sidecar still surfaces the error rather than
+  // hanging forever.
+  if ((!agent || !conversation) && initInFlight) {
+    const start = Date.now();
+    while (initInFlight && (Date.now() - start) < 3000) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
   if (!agent || !conversation) {
     emitError('Not initialized. Send "init" first.');
     return;
@@ -1562,9 +1595,36 @@ rl.on('line', async (line) => {
         emit({ event: 'category_permissions', permissions: toolRegistry.getCategoryPermissions(), mode: toolRegistry.getPermissionMode() });
       }
       break;
-    case 'get_audit_log':
-      emit({ event: 'audit_log', entries: globalThis.__avaAuditLog || [] });
+    case 'get_audit_log': {
+      // Read from the persistent JSONL store first — entries from
+      // prior sessions surface in this view. Fall back to the live
+      // in-memory buffer if the persistent read errors or is empty
+      // (first run, fs error, etc.).
+      let entries = [];
+      try {
+        const audit = await import('@ava/core/audit');
+        entries = audit.readEntries({ limit: 1000 });
+      } catch { /* fall through */ }
+      if (!entries || entries.length === 0) {
+        entries = globalThis.__avaAuditLog || [];
+      }
+      emit({ event: 'audit_log', entries });
       break;
+    }
+    case 'export_audit_log': {
+      // Build the export bundle and send it back to the frontend; the
+      // Tauri save dialog runs IDE-side (so the user sees a native
+      // chooser) — sidecar's job is just to format the bytes.
+      try {
+        const audit = await import('@ava/core/audit');
+        const entries = audit.readEntries({});
+        const bundle = audit.buildExport(entries, data?.format === 'json' ? 'json' : 'markdown');
+        emit({ event: 'audit_export_ready', bundle });
+      } catch (err) {
+        emitError(`Audit export failed: ${err && err.message ? err.message : err}`);
+      }
+      break;
+    }
     case 'inject':
       handleInject(data);
       break;

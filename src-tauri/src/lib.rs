@@ -954,6 +954,275 @@ fn keychain_delete(key: String) -> Result<(), String> {
     }
 }
 
+// ── Git ──────────────────────────────────────────────────────────────────
+//
+// Powers the Sidebar Source Control panel. Shells out to system `git`
+// rather than embedding libgit2 because (a) git is universally
+// installed on dev machines, (b) the porcelain output is stable and
+// well-tested, and (c) embedding libgit2 doubles the Rust binary
+// size for marginal gain. If git isn't on PATH, every command returns
+// a structured "git not installed" error so the UI can render a
+// clear empty state rather than crashing.
+
+#[derive(serde::Serialize)]
+struct GitFileEntry {
+    /// 'staged' / 'unstaged' / 'untracked' — drives section grouping in UI.
+    section: String,
+    /// File path relative to repo root.
+    path: String,
+    /// Two-character porcelain code (e.g. 'M ', 'A ', '??', ' M').
+    /// First column = staged status, second = unstaged status.
+    code: String,
+}
+
+#[derive(serde::Serialize)]
+struct GitStatusReport {
+    branch: String,
+    /// Number of commits ahead of upstream (None if no upstream set).
+    ahead: Option<u32>,
+    behind: Option<u32>,
+    files: Vec<GitFileEntry>,
+}
+
+fn run_git(repo: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    use std::process::Command;
+    Command::new("git")
+        .arg("-C").arg(repo)
+        .args(args)
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                "git is not installed or not on PATH. Install Git from git-scm.com to use Source Control.".to_string()
+            } else {
+                format!("Failed to run git: {e}")
+            }
+        })
+}
+
+#[tauri::command]
+fn git_status(repo: String) -> Result<GitStatusReport, String> {
+    // Branch + ahead/behind via the porcelain v2 branch header.
+    let branch_out = run_git(&repo, &["status", "--porcelain=v2", "--branch"])?;
+    if !branch_out.status.success() {
+        return Err(String::from_utf8_lossy(&branch_out.stderr).trim().to_string());
+    }
+    let body = String::from_utf8_lossy(&branch_out.stdout);
+    let mut branch = String::from("(detached)");
+    let mut ahead: Option<u32> = None;
+    let mut behind: Option<u32> = None;
+    let mut files: Vec<GitFileEntry> = Vec::new();
+    for line in body.lines() {
+        if let Some(rest) = line.strip_prefix("# branch.head ") {
+            branch = rest.to_string();
+        } else if let Some(rest) = line.strip_prefix("# branch.ab ") {
+            // Format: "+N -M" → ahead N commits, behind M.
+            let mut parts = rest.split_whitespace();
+            if let Some(a) = parts.next() { ahead = a.trim_start_matches('+').parse().ok(); }
+            if let Some(b) = parts.next() { behind = b.trim_start_matches('-').parse().ok(); }
+        } else if let Some(rest) = line.strip_prefix("1 ") {
+            // Changed (modified/added/deleted) tracked file. Format:
+            // "1 XY <sub> <mH> <mI> <mW> <hH> <hI> <path>"
+            let mut parts = rest.splitn(8, ' ');
+            let xy = parts.next().unwrap_or("..").to_string();
+            for _ in 0..6 { parts.next(); }
+            let path = parts.next().unwrap_or("").to_string();
+            if !path.is_empty() { files.push(classify(xy, path)); }
+        } else if let Some(rest) = line.strip_prefix("2 ") {
+            // Renamed / copied. Format includes original-path after a tab.
+            let mut parts = rest.splitn(9, ' ');
+            let xy = parts.next().unwrap_or("..").to_string();
+            for _ in 0..7 { parts.next(); }
+            let pair = parts.next().unwrap_or("");
+            let path = pair.split('\t').next().unwrap_or("").to_string();
+            if !path.is_empty() { files.push(classify(xy, path)); }
+        } else if let Some(rest) = line.strip_prefix("? ") {
+            files.push(GitFileEntry {
+                section: "untracked".to_string(),
+                path: rest.to_string(),
+                code: "??".to_string(),
+            });
+        }
+    }
+    Ok(GitStatusReport { branch, ahead, behind, files })
+}
+
+fn classify(xy: String, path: String) -> GitFileEntry {
+    let chars: Vec<char> = xy.chars().collect();
+    let staged = chars.first().copied().unwrap_or('.');
+    let unstaged = chars.get(1).copied().unwrap_or('.');
+    // Files can have BOTH staged + unstaged changes simultaneously
+    // (e.g. partial stage). The porcelain report lists each file once;
+    // we surface it under 'staged' if there are staged changes since
+    // that's the section the user acts on first when committing.
+    let section = if staged != '.' && staged != '?' { "staged" } else { "unstaged" };
+    GitFileEntry {
+        section: section.to_string(),
+        path,
+        code: format!("{}{}", staged, unstaged),
+    }
+}
+
+#[tauri::command]
+fn git_stage(repo: String, paths: Vec<String>) -> Result<(), String> {
+    let mut args = vec!["add", "--"];
+    for p in &paths { args.push(p); }
+    let out = run_git(&repo, &args)?;
+    if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).trim().to_string()); }
+    Ok(())
+}
+
+#[tauri::command]
+fn git_unstage(repo: String, paths: Vec<String>) -> Result<(), String> {
+    let mut args = vec!["restore", "--staged", "--"];
+    for p in &paths { args.push(p); }
+    let out = run_git(&repo, &args)?;
+    if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).trim().to_string()); }
+    Ok(())
+}
+
+#[tauri::command]
+fn git_commit(repo: String, message: String) -> Result<String, String> {
+    if message.trim().is_empty() {
+        return Err("Commit message cannot be empty.".to_string());
+    }
+    let out = run_git(&repo, &["commit", "-m", &message])?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+#[tauri::command]
+fn git_diff(repo: String, path: String, staged: bool) -> Result<String, String> {
+    let args: Vec<&str> = if staged {
+        vec!["diff", "--cached", "--no-color", "--", &path]
+    } else {
+        vec!["diff", "--no-color", "--", &path]
+    };
+    let out = run_git(&repo, &args)?;
+    if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).trim().to_string()); }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+#[tauri::command]
+fn git_discard(repo: String, paths: Vec<String>) -> Result<(), String> {
+    // Untracked files need rm; tracked changed files need restore.
+    // Caller filters into appropriate buckets by inspecting the
+    // porcelain code first.
+    let mut args = vec!["restore", "--source=HEAD", "--worktree", "--"];
+    for p in &paths { args.push(p); }
+    let out = run_git(&repo, &args)?;
+    if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).trim().to_string()); }
+    Ok(())
+}
+
+// ── Workspace search ─────────────────────────────────────────────────────
+//
+// Powers the Sidebar Search panel. Walks the workspace via the `ignore`
+// crate (same engine ripgrep uses — respects .gitignore, .ignore,
+// global gitignore, hidden files) and matches each line against a
+// `regex` pattern. Returns up to MAX_RESULTS matches grouped at the
+// frontend by file. Skips binary files via a UTF-8 readability check.
+
+#[derive(serde::Serialize)]
+struct SearchHit {
+    path: String,
+    line: u32,
+    column: u32,
+    text: String,
+}
+
+#[derive(serde::Deserialize)]
+struct SearchOptions {
+    case_sensitive: Option<bool>,
+    is_regex: Option<bool>,
+    whole_word: Option<bool>,
+    /// Optional comma-separated globs (e.g. "*.ts,*.tsx") restricting
+    /// which files are searched. Empty / None = all files.
+    file_glob: Option<String>,
+}
+
+const MAX_SEARCH_RESULTS: usize = 1000;
+const MAX_FILE_SIZE_BYTES: u64 = 5 * 1024 * 1024; // skip files > 5 MB
+
+#[tauri::command]
+fn search_workspace(root: String, query: String, options: SearchOptions) -> Result<Vec<SearchHit>, String> {
+    use ignore::WalkBuilder;
+    use std::io::{BufRead, BufReader};
+
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Build regex pattern. When `is_regex` is false we escape so the
+    // user's literal string matches verbatim (otherwise typing `[` in
+    // a normal search would error out as an unclosed bracket class).
+    let case_sensitive = options.case_sensitive.unwrap_or(false);
+    let is_regex = options.is_regex.unwrap_or(false);
+    let whole_word = options.whole_word.unwrap_or(false);
+    let mut pattern = if is_regex { query.clone() } else { regex::escape(&query) };
+    if whole_word {
+        pattern = format!(r"\b{pattern}\b");
+    }
+    let re = regex::RegexBuilder::new(&pattern)
+        .case_insensitive(!case_sensitive)
+        .build()
+        .map_err(|e| format!("Invalid pattern: {e}"))?;
+
+    // Optional file-glob filter. Comma-separated → multiple OverrideBuilder
+    // entries. Glob errors fall back to "no filter" so a typo doesn't
+    // break search entirely.
+    let mut overrides_builder = ignore::overrides::OverrideBuilder::new(&root);
+    if let Some(globs) = options.file_glob.as_deref().filter(|s| !s.trim().is_empty()) {
+        for glob in globs.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            let _ = overrides_builder.add(glob);
+        }
+    }
+    let overrides = overrides_builder.build().unwrap_or_else(|_| {
+        ignore::overrides::OverrideBuilder::new(&root).build().unwrap()
+    });
+
+    let walker = WalkBuilder::new(&root)
+        .hidden(true)            // skip hidden by default — same as ripgrep
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .overrides(overrides)
+        .build();
+
+    let mut hits: Vec<SearchHit> = Vec::new();
+
+    for entry in walker.flatten() {
+        if hits.len() >= MAX_SEARCH_RESULTS { break; }
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let metadata = match path.metadata() { Ok(m) => m, Err(_) => continue };
+        if metadata.len() > MAX_FILE_SIZE_BYTES { continue; }
+
+        let file = match std::fs::File::open(path) { Ok(f) => f, Err(_) => continue };
+        let reader = BufReader::new(file);
+        let path_str = path.to_string_lossy().into_owned();
+
+        for (i, line_result) in reader.lines().enumerate() {
+            if hits.len() >= MAX_SEARCH_RESULTS { break; }
+            let line = match line_result { Ok(l) => l, Err(_) => break };
+            // Skip apparent binary lines — null byte presence is the cheap
+            // heuristic ripgrep uses too.
+            if line.contains('\0') { break; }
+            if let Some(m) = re.find(&line) {
+                hits.push(SearchHit {
+                    path: path_str.clone(),
+                    line: (i + 1) as u32,
+                    column: (m.start() + 1) as u32,
+                    text: if line.len() > 500 { format!("{}…", &line[..500]) } else { line },
+                });
+            }
+        }
+    }
+
+    Ok(hits)
+}
+
 fn generate_hex_key() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     // Simple CSPRNG-like: mix timestamp + pid + tight-loop nano jitter.
@@ -1339,6 +1608,30 @@ fn browser_close() -> Result<serde_json::Value, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Single-instance MUST be registered first. When the OS dispatches an
+        // ava-ide:// URL it would otherwise launch a duplicate process; this
+        // plugin intercepts the secondary launch, hands its argv (including
+        // the deep-link URL) to the original instance, and exits the duplicate.
+        // The deep-link plugin's on_open_url then fires in the original
+        // instance and the React listener resolves the OAuth state correctly.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            use tauri::Emitter;
+            // Bring the existing window to the foreground so the user sees
+            // the sign-in completing instead of clicking back manually.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+            // The OS appends the deep-link URL as an argv entry; forward
+            // anything that looks like our scheme to the React side via the
+            // same event the deep-link plugin emits, so a single listener
+            // handles both code paths.
+            for arg in argv {
+                if arg.starts_with("ava-ide://") {
+                    let _ = app.emit("ava-deep-link", arg);
+                }
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -1406,6 +1699,13 @@ pub fn run() {
             keychain_set,
             keychain_get,
             keychain_delete,
+            search_workspace,
+            git_status,
+            git_stage,
+            git_unstage,
+            git_commit,
+            git_diff,
+            git_discard,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

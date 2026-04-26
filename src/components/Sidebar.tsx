@@ -1,9 +1,23 @@
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { readDir } from '@tauri-apps/plugin-fs';
+import {
+  Lightning as PhCommand,
+  ChatCircleDots as PhChat,
+  ClipboardText as PhPlanner,
+  BookOpen as PhLibrary,
+  Palette as PhCreative,
+  Brain as PhMemory,
+  ChartLineUp as PhHistory,
+  Cpu as PhModels,
+  GearSix as PhAccount,
+  Question as PhHelp,
+} from '@phosphor-icons/react';
 import type { ActivityItem, SidebarPosition } from '../App';
 import { getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
 import { t, useLocale } from '../lib/i18n';
 import { SignInPanel } from './SignInPanel';
+
+type PhIconType = React.ComponentType<{ size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone' }>;
 
 interface Props {
   activePanel: ActivityItem;
@@ -12,6 +26,14 @@ interface Props {
   onDashboardSelect?: (page: string) => void;
   activeDashboardPage?: string | null;
   onFileOpen?: (path: string) => void;
+  /** Render the icons-only narrow rail instead of the full panel.
+   *  Mirrors the extension NavSidebar's collapsed mode — clicking the
+   *  same activity icon hides the labels but keeps the page nav
+   *  reachable. Only the Dashboard panel has a sensible collapsed
+   *  representation; other activity panels (Explorer / Search etc.)
+   *  hide entirely when collapsed since their content has no icon
+   *  shorthand. */
+  collapsed?: boolean;
 }
 
 function getPanelTitle(item: ActivityItem): string {
@@ -211,81 +233,432 @@ function ExplorerPanel({ onFileOpen }: { onFileOpen?: (path: string) => void }) 
   );
 }
 
-function SearchPanel() {
+// Real workspace search panel — invokes the Tauri `search_workspace`
+// command which uses the same `ignore` engine ripgrep is built on
+// (respects .gitignore, hidden files, etc.). Replaces the previous
+// stub-input panel that didn't actually search anything.
+function SearchPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) {
+  const [query, setQuery] = useState('');
+  const [glob, setGlob] = useState('');
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [isRegex, setIsRegex] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
+  const [results, setResults] = useState<{ path: string; line: number; column: number; text: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Run search debounced 250ms after the user stops typing — keeps the
+  // panel responsive without firing a directory walk on every keystroke.
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); setError(null); setTouched(false); return; }
+    setTouched(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setBusy(true); setError(null);
+      try {
+        const root = localStorage.getItem('ava-ide-project-folder');
+        if (!root) {
+          setError('Open a folder first — search needs a workspace to walk.');
+          setResults([]);
+          return;
+        }
+        const { invoke } = await import('@tauri-apps/api/core');
+        const hits = await invoke<typeof results>('search_workspace', {
+          root,
+          query,
+          options: { caseSensitive, isRegex, wholeWord, fileGlob: glob || null },
+        });
+        setResults(hits);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setResults([]);
+      } finally {
+        setBusy(false);
+      }
+    }, 250);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, glob, caseSensitive, isRegex, wholeWord]);
+
+  // Group hits by file so the user sees "12 matches in 3 files" rather
+  // than an unstructured wall of lines.
+  const grouped = useMemo(() => {
+    const groups = new Map<string, typeof results>();
+    for (const r of results) {
+      const list = groups.get(r.path) ?? [];
+      list.push(r);
+      groups.set(r.path, list);
+    }
+    return [...groups.entries()];
+  }, [results]);
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', height: 28,
+    background: 'rgba(49, 34, 68, 0.5)',
+    border: '1px solid rgba(168, 85, 247, 0.12)',
+    borderRadius: 4, padding: '0 8px',
+    fontSize: 13, color: '#cdd6f4', outline: 'none',
+  };
+  const toggleStyle = (on: boolean): React.CSSProperties => ({
+    width: 24, height: 24, borderRadius: 4, border: 'none',
+    background: on ? 'rgba(168,85,247,0.25)' : 'transparent',
+    color: on ? '#cba6f7' : '#6c7086',
+    cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
+  });
+
   return (
-    <div style={{ padding: 12 }}>
-      <div style={{ position: 'relative' }}>
+    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
         <input
           type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="Search"
-          style={{
-            width: '100%',
-            height: 28,
-            background: 'rgba(49, 34, 68, 0.5)',
-            border: '1px solid rgba(168, 85, 247, 0.12)',
-            borderRadius: 4,
-            padding: '0 8px',
-            fontSize: 13,
-            color: '#cdd6f4',
-            outline: 'none',
-          }}
+          style={{ ...inputStyle, flex: 1 }}
           onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
           onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
         />
       </div>
-      <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center' }}>
+        <button title="Match case" onClick={() => setCaseSensitive(v => !v)} style={toggleStyle(caseSensitive)}>Aa</button>
+        <button title="Whole word" onClick={() => setWholeWord(v => !v)} style={toggleStyle(wholeWord)}>ab</button>
+        <button title="Use regular expression" onClick={() => setIsRegex(v => !v)} style={toggleStyle(isRegex)}>.*</button>
         <input
           type="text"
-          placeholder="Replace"
-          style={{
-            flex: 1,
-            height: 28,
-            background: 'rgba(49, 34, 68, 0.5)',
-            border: '1px solid rgba(168, 85, 247, 0.12)',
-            borderRadius: 4,
-            padding: '0 8px',
-            fontSize: 13,
-            color: '#cdd6f4',
-            outline: 'none',
-          }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+          value={glob}
+          onChange={(e) => setGlob(e.target.value)}
+          placeholder="files to include (e.g. *.ts,src/**)"
+          style={{ ...inputStyle, flex: 1, fontSize: 11, height: 24 }}
         />
       </div>
-      <div style={{ marginTop: 16, fontSize: 12, color: '#6c7086', textAlign: 'center' }}>
-        Search to find results across your workspace.
+
+      <div style={{ marginTop: 12, flex: 1, overflowY: 'auto' }}>
+        {error && (
+          <div style={{ padding: '10px 12px', borderRadius: 6, background: 'rgba(243,139,168,0.08)', color: '#f9b3c4', fontSize: 11, lineHeight: 1.5 }}>
+            {error}
+          </div>
+        )}
+        {!error && busy && results.length === 0 && (
+          <div style={{ padding: 16, textAlign: 'center', color: '#6c7086', fontSize: 12 }}>Searching…</div>
+        )}
+        {!error && !busy && touched && results.length === 0 && (
+          <div style={{ padding: 16, textAlign: 'center', color: '#6c7086', fontSize: 12 }}>No matches.</div>
+        )}
+        {!error && !touched && results.length === 0 && (
+          <div style={{ padding: 16, textAlign: 'center', color: '#6c7086', fontSize: 12 }}>
+            Type to search across your workspace.<br />
+            <span style={{ fontSize: 10, opacity: 0.7 }}>Respects .gitignore. Skips binary + large files.</span>
+          </div>
+        )}
+        {results.length > 0 && (
+          <div style={{ fontSize: 10, color: '#6c7086', padding: '4px 4px 8px' }}>
+            {results.length} match{results.length === 1 ? '' : 'es'} in {grouped.length} file{grouped.length === 1 ? '' : 's'}
+            {results.length >= 1000 && ' (capped at 1000 — refine the query)'}
+          </div>
+        )}
+        {grouped.map(([path, hits]: [string, typeof results]) => {
+          const fileName = path.split(/[/\\]/).pop() || path;
+          const folder = path.replace(/[/\\][^/\\]+$/, '');
+          return (
+            <div key={path} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: '#a6adc8', padding: '4px 4px', display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                <span style={{ fontWeight: 500, color: '#cdd6f4' }}>{fileName}</span>
+                <span style={{ fontSize: 9, color: '#585b70', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 9, color: '#6c7086' }}>{hits.length}</span>
+              </div>
+              {hits.map((h: typeof results[number], i: number) => (
+                <button
+                  key={i}
+                  onClick={() => onFileOpen?.(path)}
+                  title={`${path}:${h.line}:${h.column}`}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '3px 8px 3px 16px', border: 'none',
+                    background: 'transparent', color: '#a6adc8', cursor: 'pointer',
+                    fontSize: 11, fontFamily: 'monospace', borderRadius: 4,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span style={{ color: '#6c7086', marginRight: 6 }}>{h.line}:</span>
+                  {h.text.trim()}
+                </button>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function GitPanel() {
+// Real Source Control panel — shells out to system `git` via the
+// Tauri Rust commands. Replaces the previous stub which had a commit
+// input but never actually ran git. Surfaces the same workflow VS
+// Code's git panel does: branch + ahead/behind, three sections
+// (Staged / Changes / Untracked), per-file stage / unstage / discard,
+// commit message + button, expandable diff per row.
+interface GitFileEntry {
+  section: 'staged' | 'unstaged' | 'untracked';
+  path: string;
+  code: string;
+}
+interface GitStatusReport {
+  branch: string;
+  ahead: number | null;
+  behind: number | null;
+  files: GitFileEntry[];
+}
+function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) {
+  const [status, setStatus] = useState<GitStatusReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [diff, setDiff] = useState<{ path: string; staged: boolean; text: string } | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+
+  const projectFolder = useMemo(() => {
+    try { return localStorage.getItem('ava-ide-project-folder'); } catch { return null; }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (!projectFolder) { setStatus(null); setError(null); return; }
+    setBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const report = await invoke<GitStatusReport>('git_status', { repo: projectFolder });
+      setStatus(report);
+      setError(null);
+    } catch (err) {
+      setStatus(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [projectFolder]);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  // Re-poll every 5s while panel is open so external git operations
+  // (terminal commits, branch switches) reflect without manual refresh.
+  // Cheap because git status is a sub-100ms call on most repos.
+  useEffect(() => {
+    if (!projectFolder) return;
+    const interval = setInterval(() => { void refresh(); }, 5000);
+    return () => clearInterval(interval);
+  }, [projectFolder, refresh]);
+
+  const stage = async (paths: string[]) => {
+    setBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('git_stage', { repo: projectFolder, paths });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally { setBusy(false); }
+  };
+  const unstage = async (paths: string[]) => {
+    setBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('git_unstage', { repo: projectFolder, paths });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally { setBusy(false); }
+  };
+  const discard = async (paths: string[]) => {
+    if (!confirm(`Discard local changes to ${paths.length === 1 ? paths[0] : `${paths.length} files`}? This cannot be undone.`)) return;
+    setBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('git_discard', { repo: projectFolder, paths });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally { setBusy(false); }
+  };
+  const commit = async () => {
+    if (!commitMessage.trim()) return;
+    setBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('git_commit', { repo: projectFolder, message: commitMessage });
+      setCommitMessage('');
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally { setBusy(false); }
+  };
+  const showDiff = async (path: string, staged: boolean) => {
+    if (diff?.path === path && diff.staged === staged) { setDiff(null); return; }
+    setDiffLoading(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const text = await invoke<string>('git_diff', { repo: projectFolder, path, staged });
+      setDiff({ path, staged, text: text || '(no diff)' });
+    } catch (err) {
+      setDiff({ path, staged, text: `Error loading diff: ${err instanceof Error ? err.message : String(err)}` });
+    } finally { setDiffLoading(false); }
+  };
+
+  if (!projectFolder) {
+    return (
+      <div style={{ padding: 16, fontSize: 12, color: '#6c7086', textAlign: 'center' }}>
+        Open a folder to use Source Control.
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ padding: 16 }}>
+        <div style={{ padding: '12px 14px', borderRadius: 6, background: 'rgba(243,139,168,0.08)', color: '#f9b3c4', fontSize: 11, lineHeight: 1.6 }}>
+          {error}
+        </div>
+        <button onClick={() => void refresh()} style={{ marginTop: 12, width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.18)', background: 'rgba(49,34,68,0.5)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer' }}>Retry</button>
+      </div>
+    );
+  }
+  if (!status) {
+    return <div style={{ padding: 16, fontSize: 12, color: '#6c7086', textAlign: 'center' }}>Loading…</div>;
+  }
+
+  const staged = status.files.filter(f => f.section === 'staged');
+  const unstaged = status.files.filter(f => f.section === 'unstaged');
+  const untracked = status.files.filter(f => f.section === 'untracked');
+  const hasChanges = status.files.length > 0;
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', minHeight: 60, resize: 'vertical' as const,
+    background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
+    borderRadius: 4, padding: 8, fontSize: 12, color: '#cdd6f4', outline: 'none',
+    fontFamily: 'inherit',
+  };
+  const sectionHeader: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, color: '#6c7086', letterSpacing: 0.5, textTransform: 'uppercase' as const,
+    marginTop: 12, marginBottom: 6, display: 'flex', justifyContent: 'space-between',
+  };
+  const codeColors: Record<string, string> = { M: '#f9e2af', A: '#a6e3a1', D: '#f38ba8', R: '#89dceb', '?': '#6c7086', '!': '#f38ba8' };
+  const fileRow = (f: GitFileEntry, actions: React.ReactNode) => {
+    const fileName = f.path.split(/[/\\]/).pop() || f.path;
+    const folder = f.path.replace(/[/\\][^/\\]+$/, '');
+    const indicator = f.section === 'staged' ? f.code[0] : f.section === 'untracked' ? 'U' : f.code[1];
+    const isDiffOpen = diff?.path === f.path && diff.staged === (f.section === 'staged');
+    return (
+      <div key={`${f.section}-${f.path}`} style={{ borderRadius: 4, marginBottom: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px', cursor: 'pointer' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(49,34,68,0.5)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <span style={{ width: 14, textAlign: 'center', fontSize: 10, fontFamily: 'monospace', color: codeColors[indicator] || '#a6adc8', flexShrink: 0 }}>{indicator}</span>
+          <button onClick={() => onFileOpen?.(`${projectFolder}/${f.path}`)}
+            title={f.path}
+            style={{ flex: 1, textAlign: 'left', background: 'transparent', border: 'none', color: '#cdd6f4', cursor: 'pointer', padding: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {fileName}{folder && <span style={{ fontSize: 10, color: '#585b70', marginLeft: 6 }}>{folder}</span>}
+          </button>
+          {f.section !== 'untracked' && (
+            <button onClick={() => void showDiff(f.path, f.section === 'staged')} title={isDiffOpen ? 'Hide diff' : 'Show diff'}
+              style={{ width: 22, height: 20, padding: 0, border: 'none', background: 'transparent', color: isDiffOpen ? '#cba6f7' : '#6c7086', cursor: 'pointer', fontSize: 11 }}>±</button>
+          )}
+          {actions}
+        </div>
+        {isDiffOpen && (
+          <pre style={{ margin: '4px 8px 8px 22px', padding: 8, background: 'rgba(15,10,26,0.7)', borderRadius: 4, fontSize: 10, fontFamily: 'monospace', color: '#a6adc8', maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {diffLoading && diff?.path !== f.path ? '…' : (diff?.text || '')}
+          </pre>
+        )}
+      </div>
+    );
+  };
+  const actionBtn = (label: string, onClick: () => void, color = '#a6adc8'): React.ReactNode => (
+    <button onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={label}
+      style={{ width: 22, height: 20, padding: 0, border: 'none', background: 'transparent', color, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>
+      {label === 'stage' ? '+' : label === 'unstage' ? '−' : '×'}
+    </button>
+  );
+
   return (
-    <div style={{ padding: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <input
-          type="text"
-          placeholder="Message (Ctrl+Enter to commit)"
-          style={{
-            flex: 1,
-            height: 28,
-            background: 'rgba(49, 34, 68, 0.5)',
-            border: '1px solid rgba(168, 85, 247, 0.12)',
-            borderRadius: 4,
-            padding: '0 8px',
-            fontSize: 13,
-            color: '#cdd6f4',
-            outline: 'none',
-          }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
-        />
+    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Branch + status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#cdd6f4', marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: 'monospace', color: '#cba6f7', fontWeight: 600 }}>⎇ {status.branch}</span>
+        {status.ahead != null && status.ahead > 0 && <span style={{ color: '#a6e3a1' }} title="Commits ahead of upstream">↑{status.ahead}</span>}
+        {status.behind != null && status.behind > 0 && <span style={{ color: '#f9e2af' }} title="Commits behind upstream">↓{status.behind}</span>}
+        <button onClick={() => void refresh()} disabled={busy}
+          style={{ marginLeft: 'auto', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(168,85,247,0.18)', background: 'rgba(49,34,68,0.5)', color: '#a6adc8', fontSize: 10, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>
+          ↻
+        </button>
       </div>
-      <div style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-        Changes
-      </div>
-      <div style={{ fontSize: 12, color: '#6c7086', textAlign: 'center', padding: '16px 0' }}>
-        No changes detected.
+
+      {/* Commit composer */}
+      <textarea value={commitMessage}
+        onChange={(e) => setCommitMessage(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void commit(); } }}
+        placeholder="Message (Ctrl+Enter to commit)"
+        style={inputStyle}
+        onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+      />
+      <button
+        onClick={() => void commit()}
+        disabled={busy || staged.length === 0 || !commitMessage.trim()}
+        style={{
+          marginTop: 6, width: '100%', padding: '6px 10px', borderRadius: 4,
+          border: 'none', background: staged.length > 0 && commitMessage.trim() ? '#a855f7' : 'rgba(49,34,68,0.5)',
+          color: staged.length > 0 && commitMessage.trim() ? '#fff' : '#6c7086', fontSize: 12,
+          cursor: staged.length > 0 && commitMessage.trim() ? 'pointer' : 'default', fontWeight: 500,
+        }}>
+        Commit{staged.length > 0 ? ` (${staged.length})` : ''}
+      </button>
+
+      {/* File sections */}
+      <div style={{ flex: 1, overflowY: 'auto', marginTop: 4 }}>
+        {!hasChanges && (
+          <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: '#6c7086' }}>
+            Nothing to commit. Working tree clean.
+          </div>
+        )}
+        {staged.length > 0 && (
+          <>
+            <div style={sectionHeader}>
+              <span>Staged ({staged.length})</span>
+              <button onClick={() => void unstage(staged.map(f => f.path))} title="Unstage all"
+                style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 11 }}>−</button>
+            </div>
+            {staged.map(f => fileRow(f, actionBtn('unstage', () => void unstage([f.path]))))}
+          </>
+        )}
+        {unstaged.length > 0 && (
+          <>
+            <div style={sectionHeader}>
+              <span>Changes ({unstaged.length})</span>
+              <span style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => void discard(unstaged.map(f => f.path))} title="Discard all"
+                  style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13 }}>×</button>
+                <button onClick={() => void stage(unstaged.map(f => f.path))} title="Stage all"
+                  style={{ background: 'transparent', border: 'none', color: '#a6e3a1', cursor: 'pointer', fontSize: 13 }}>+</button>
+              </span>
+            </div>
+            {unstaged.map(f => fileRow(f, <>
+              {actionBtn('discard', () => void discard([f.path]), '#f38ba8')}
+              {actionBtn('stage', () => void stage([f.path]), '#a6e3a1')}
+            </>))}
+          </>
+        )}
+        {untracked.length > 0 && (
+          <>
+            <div style={sectionHeader}>
+              <span>Untracked ({untracked.length})</span>
+              <button onClick={() => void stage(untracked.map(f => f.path))} title="Stage all"
+                style={{ background: 'transparent', border: 'none', color: '#a6e3a1', cursor: 'pointer', fontSize: 13 }}>+</button>
+            </div>
+            {untracked.map(f => fileRow(f, actionBtn('stage', () => void stage([f.path]), '#a6e3a1')))}
+          </>
+        )}
       </div>
     </div>
   );
@@ -525,7 +898,7 @@ function DebugPanel() {
 }
 
 /* ---------- Auth + BYOK Section ---------- */
-function AuthSection() {
+function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
   const [platformKey, setPlatformKey] = useState(() => {
     try { return localStorage.getItem('ava-ide-platform-key') || ''; } catch { return ''; }
   });
@@ -536,6 +909,28 @@ function AuthSection() {
   const [usePlatform, setUsePlatform] = useState(true);
 
   const isConnected = platformKey.startsWith('sk-ava-');
+
+  // Collapsed rail: just the avatar (or initial) at the bottom of the
+  // narrow nav. Mirrors the extension NavSidebar's collapsed footer.
+  if (collapsed) {
+    const initial = (email || 'A')[0].toUpperCase();
+    return (
+      <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid rgba(168,85,247,0.12)', width: '100%', display: 'flex', justifyContent: 'center' }}>
+        <div
+          title={isConnected ? `${email} (${tier})` : 'Not connected — expand sidebar to sign in'}
+          style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: isConnected ? 'rgba(168,85,247,0.25)' : 'rgba(49,34,68,0.5)',
+            color: isConnected ? '#cba6f7' : '#6c7086',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 600, userSelect: 'none',
+          }}
+        >
+          {initial}
+        </div>
+      </div>
+    );
+  }
 
   const providers = ['DeepSeek', 'Moonshot', 'Qwen', 'Zhipu', 'Mistral'];
   const [keys, setKeys] = useState<Record<string, string>>(() => {
@@ -704,20 +1099,22 @@ function AuthSection() {
 
 /* ---------- Dashboard Panel ---------- */
 
-// Flat nav — matches extension sidebar exactly
-const NAV_ITEMS = [
-  { id: 'command-centre', icon: '\u26A1', label: 'Command Centre', desc: 'Your daily overview' },
-  { id: 'ava-chat',    icon: '\uD83D\uDCAC', label: 'Chat',    desc: 'Talk, build, create' },
-  { id: 'planner',     icon: '\uD83D\uDCCB', label: 'Planner', desc: 'Tasks, journal, learning' },
-  { id: 'library', icon: '\uD83D\uDCDA', label: 'Library', desc: 'Courses, assets, documents' },
-  { id: 'creative-studio', icon: '\uD83C\uDFA8', label: 'Creative Studio', desc: 'Images, music, video, voice' },
-  { id: 'memory',      icon: '\uD83E\uDDE0', label: 'Memory',  desc: 'Patterns, preferences, decisions' },
-  { id: 'chat-history', icon: '\uD83D\uDCCA', label: 'History', desc: 'Tokens, sessions, models' },
-  { id: 'account',     icon: '\u2699\uFE0F', label: 'Account', desc: 'Settings, billing, personalisation' },
-  { id: 'help',        icon: '\u2753',        label: 'Help',    desc: 'Support, releases, roadmap' },
+// Flat nav — Phosphor duotone icons replacing the previous emoji glyphs.
+// Same lineup the extension sidebar uses; identity-mapped one-to-one.
+const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string }[] = [
+  { id: 'command-centre',  Icon: PhCommand,  label: 'Command Centre', desc: 'Your daily overview' },
+  { id: 'ava-chat',        Icon: PhChat,     label: 'Chat',           desc: 'Talk, build, create' },
+  { id: 'planner',         Icon: PhPlanner,  label: 'Planner',        desc: 'Tasks, journal, learning' },
+  { id: 'library',         Icon: PhLibrary,  label: 'Library',        desc: 'Courses, assets, documents' },
+  { id: 'creative-studio', Icon: PhCreative, label: 'Creative Studio', desc: 'Images, music, video, voice' },
+  { id: 'memory',          Icon: PhMemory,   label: 'Memory',         desc: 'Patterns, preferences, decisions' },
+  { id: 'chat-history',    Icon: PhHistory,  label: 'History',        desc: 'Credits, sessions, models' },
+  { id: 'models',          Icon: PhModels,   label: 'Models',         desc: 'Public benchmark · auditable receipts' },
+  { id: 'account',         Icon: PhAccount,  label: 'Account',        desc: 'Settings, billing, personalisation' },
+  { id: 'help',            Icon: PhHelp,     label: 'Help',           desc: 'Support, releases, roadmap' },
 ];
 
-function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?: (page: string) => void; activePage?: string | null }) {
+function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { onDashboardSelect?: (page: string) => void; activePage?: string | null; collapsed?: boolean }) {
   useLocale();
   const [, setAuthVersion] = useState(0);
   useEffect(() => {
@@ -725,6 +1122,54 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
     window.addEventListener('ava-auth-changed', handler);
     return () => window.removeEventListener('ava-auth-changed', handler);
   }, []);
+
+  // ── Collapsed icons-only rail ─────────────────────────────────────
+  // Mirrors the extension NavSidebar's collapsed mode: 9 stacked icon
+  // buttons centered in a narrow column with the label as a tooltip.
+  // Active page gets a brighter colour + left accent so the user can
+  // still see where they are without the label text.
+  if (collapsed) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', padding: '8px 0', gap: 2 }}>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', width: '100%' }}>
+          {NAV_ITEMS.map((item) => {
+            const isActive = activePage === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onDashboardSelect?.(item.id)}
+                title={`${item.label} — ${item.desc}`}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 36, height: 36, borderRadius: 8, border: 'none',
+                  background: isActive ? 'rgba(168,85,247,0.18)' : 'transparent',
+                  color: isActive ? '#cba6f7' : '#a6adc8',
+                  cursor: 'pointer', position: 'relative',
+                  transition: 'background 0.15s, color 0.15s',
+                }}
+                onMouseOver={(e) => { if (!isActive) { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; e.currentTarget.style.color = '#cdd6f4'; } }}
+                onMouseOut={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#a6adc8'; } }}
+              >
+                <item.Icon size={20} weight="duotone" />
+                {item.id === 'help' && (() => {
+                  try {
+                    const count = Number(localStorage.getItem('ava-support-unread') || 0);
+                    if (count > 0) return (
+                      <span style={{ position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, borderRadius: '50%', background: '#a855f7', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
+                    );
+                  } catch { /* */ }
+                  return null;
+                })()}
+              </button>
+            );
+          })}
+        </div>
+        {/* Auth shows as a single avatar at the bottom of the rail */}
+        <AuthSection collapsed />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -746,8 +1191,8 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
               onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
               onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
             >
-              <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0, position: 'relative' }}>
-                {item.icon}
+              <span style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative', color: isActive ? '#cba6f7' : '#a6adc8' }}>
+                <item.Icon size={20} weight="duotone" />
                 {item.id === 'help' && (() => {
                   try {
                     const count = Number(localStorage.getItem('ava-support-unread') || 0);
@@ -767,17 +1212,37 @@ function DashboardPanel({ onDashboardSelect, activePage }: { onDashboardSelect?:
         })}
       </div>
 
-      {/* Auth + BYOK section at the bottom */}
-      <AuthSection />
+      {/* Auth section moved out of this panel — now renders below the
+          SidebarCalendar in the main Sidebar return so the calendar sits
+          directly under the nav items and the account / billing footer
+          anchors the very bottom of the rail. */}
     </div>
   );
 }
 
-export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onDashboardSelect, activeDashboardPage, onFileOpen }: Props) {
+export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onDashboardSelect, activeDashboardPage, onFileOpen, collapsed = false }: Props) {
+  // Collapsed mode: render the icons-only dashboard rail and skip the
+  // header/resizer entirely. Other panels (Explorer / Search / Git etc.)
+  // have no icon shorthand so they render nothing in collapsed mode —
+  // the user re-clicks the activity icon to expand.
+  if (collapsed) {
+    if (activePanel !== 'dashboard') return null;
+    const RAIL_WIDTH = 56;
+    return (
+      <div style={{
+        width: RAIL_WIDTH, height: '100%', flexShrink: 0,
+        background: '#181028', borderRight: '1px solid rgba(168,85,247,0.12)',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <DashboardPanel collapsed onDashboardSelect={onDashboardSelect} activePage={activeDashboardPage} />
+      </div>
+    );
+  }
+
   const panels: Record<ActivityItem, (props?: { onDashboardSelect?: (page: string) => void }) => ReactNode> = {
     explorer: () => <ExplorerPanel onFileOpen={onFileOpen} />,
-    search: SearchPanel,
-    git: GitPanel,
+    search: () => <SearchPanel onFileOpen={onFileOpen} />,
+    git: () => <GitPanel onFileOpen={onFileOpen} />,
     ava: AvaPanel,
     extensions: ExtensionsPanel,
     debug: DebugPanel,
@@ -914,6 +1379,12 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
 
       {/* Mini Calendar — always visible */}
       <SidebarCalendar onDashboardSelect={onDashboardSelect} />
+
+      {/* Auth + BYOK section — anchored at the very bottom of the rail,
+          below the calendar. Only shown when the dashboard panel is the
+          active surface; the file-tree / search / git panels don't need
+          the account footer. */}
+      {activePanel === 'dashboard' && <AuthSection />}
     </div>
   );
 }

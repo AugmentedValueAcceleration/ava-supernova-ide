@@ -1,6 +1,33 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+// Phosphor icons (duotone weight) — distinctive layered fill that reads
+// as a crafted product instead of a generic SaaS dashboard. Same author
+// quality as Lucide but with 6 weights; duotone is the one that wins
+// design reviews.
+import {
+  Image as PhImage,
+  MusicNotes as PhMusic,
+  Microphone as PhVoice,
+  FilmReel as PhVideo,
+  FileText as PhDocument,
+  GridFour as PhSpreadsheet,
+  PresentationChart as PhPresentation,
+  FolderOpen as PhFolder,
+  Confetti as PhConfetti,
+  NotePencil as PhNote,
+  BookOpen as PhBook,
+  Key as PhKey,
+  Lock as PhLock,
+  Brain as PhBrain,
+  Lightbulb as PhLightbulb,
+  TestTube as PhTestTube,
+  CreditCard as PhCreditCard,
+  Link as PhLink,
+  CloudSun as PhWeather,
+  Clock as PhClock,
+  Rocket as PhRocket,
+} from '@phosphor-icons/react';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
@@ -29,6 +56,12 @@ import {
   creditsForTurn,
   type PlanTier as AvaPlanTier,
 } from '@ava/core/billing';
+import {
+  fetchPublicLeaderboard as fetchPublicBenchLeaderboard,
+  getCachedLeaderboard as getCachedBenchLeaderboard,
+  isCacheStale as isCachedBenchLeaderboardStale,
+  BENCH_CATEGORY_LABELS,
+} from '@ava/core/benchmarks';
 import { IdePurchaseCard } from './_IdePurchaseCard';
 // Data Mode gate — every cloud write must check includesCloud() before
 // calling apiFetch. The toggle UI lives in this file too (mode switcher
@@ -1237,7 +1270,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_tasks')}</div>
       ) : todayTasks.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', textAlign: 'center' }}>
-          <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83C\uDF89'}</span>
+          <span style={{ marginBottom: 8, color: '#a855f7', opacity: 0.5 }}><PhConfetti size={32} weight="duotone" /></span>
           <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_tasks')}</p>
         </div>
       ) : (
@@ -1305,7 +1338,7 @@ function CCJournalWidget({ journalDay, loading }: { journalDay: JournalDay | nul
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_journal')}</div>
       ) : !hasContent ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', textAlign: 'center' }}>
-          <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83D\uDCDD'}</span>
+          <span style={{ marginBottom: 8, color: '#a855f7', opacity: 0.5 }}><PhNote size={32} weight="duotone" /></span>
           <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_journal')}</p>
         </div>
       ) : (
@@ -1356,7 +1389,7 @@ function CCLearningWidget({ curriculums, loading }: { curriculums: LearningCurri
         <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_learning')}</div>
       ) : active.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', textAlign: 'center' }}>
-          <span style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>{'\uD83D\uDCDA'}</span>
+          <span style={{ marginBottom: 8, color: '#a855f7', opacity: 0.5 }}><PhBook size={32} weight="duotone" /></span>
           <p style={{ fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_learning')}</p>
         </div>
       ) : (
@@ -1479,10 +1512,29 @@ function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
 
 // ── Main Command Centre Page ────────────────────────────────────────────────
 
+type CcTab = 'daily' | 'briefing' | 'reflect';
+
 export function CommandCentrePage() {
   useLocale();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t('dash.cc.greeting_morning') : hour < 18 ? t('dash.cc.greeting_afternoon') : t('dash.cc.greeting_evening');
+
+  // Inner tab state — persists so the user lands back on whichever lens
+  // they last had open instead of always hitting Daily.
+  const [tab, setTab] = useState<CcTab>(() => {
+    try { const stored = localStorage.getItem('ava-ide-cc-tab'); return (stored === 'briefing' || stored === 'reflect') ? stored : 'daily'; }
+    catch { return 'daily'; }
+  });
+  const switchTab = (next: CcTab) => {
+    setTab(next);
+    try { localStorage.setItem('ava-ide-cc-tab', next); } catch { /* quota / disabled */ }
+  };
+
+  // Working-hours readout for the hero pill — same localStorage keys
+  // WorkingHoursClock writes to so the pill and the full widget stay
+  // in sync without prop threading.
+  const workStart = Number(typeof localStorage !== 'undefined' ? localStorage.getItem('ava-ide-work-start') : null) || 9;
+  const workEnd = Number(typeof localStorage !== 'undefined' ? localStorage.getItem('ava-ide-work-end') : null) || 17;
 
   // Re-render on auth changes (login/logout)
   const [authRefresh, setAuthRefresh] = useState(0);
@@ -1589,18 +1641,79 @@ export function CommandCentrePage() {
     );
   }
 
+  // ── Hero strip pill ────────────────────────────────────────────────
+  const HeroPill = ({ icon, text, title }: { icon: React.ReactNode; text: string; title?: string }) => (
+    <div title={title} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '4px 10px', borderRadius: 999,
+      background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.18)',
+      color: '#cdd6f4', fontSize: 11, fontWeight: 500,
+    }}>
+      <span style={{ display: 'inline-flex', color: '#cba6f7' }}>{icon}</span>
+      {text}
+    </div>
+  );
+
+  // ── Inner-tab button ──────────────────────────────────────────────
+  const TabBtn = ({ id, label }: { id: CcTab; label: string }) => {
+    const active = tab === id;
+    return (
+      <button
+        type="button"
+        onClick={() => switchTab(id)}
+        style={{
+          padding: '8px 16px', borderRadius: 0, border: 'none', cursor: 'pointer',
+          fontSize: 13, fontWeight: active ? 600 : 500,
+          background: 'transparent',
+          color: active ? '#cba6f7' : '#6c7086',
+          borderBottom: active ? '2px solid #a855f7' : '2px solid transparent',
+          marginBottom: -1,
+          transition: 'color 0.15s, border-color 0.15s',
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
+
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
         {/* Spin animation */}
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-        {/* ── Greeting Header ───────────────────────────────────────────── */}
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 28, fontWeight: 300, color: '#cdd6f4', marginBottom: 4 }}>
-            {greeting}{email ? `, ${email.split('@')[0]}` : ''}
+        {/* ── Hero strip — always visible across tabs ─────────────────── */}
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between',
+          gap: 16, marginBottom: 20,
+        }}>
+          <div>
+            <div style={{ fontSize: 28, fontWeight: 300, color: '#cdd6f4', marginBottom: 4 }}>
+              {greeting}{email ? `, ${email.split('@')[0]}` : ''}
+            </div>
+            <div style={{ fontSize: 13, color: '#6c7086' }}>{dateStr}</div>
           </div>
-          <div style={{ fontSize: 13, color: '#6c7086' }}>{dateStr}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {weather && !weatherLoading && (
+              <HeroPill
+                icon={<PhWeather size={14} weight="duotone" />}
+                text={`${Math.round((weather as { temp?: number }).temp ?? 0)}° ${(weather as { condition?: string }).condition ?? ''}`.trim()}
+                title="Weather — see Daily for details"
+              />
+            )}
+            <HeroPill
+              icon={<PhClock size={14} weight="duotone" />}
+              text={`${workStart}:00 - ${workEnd}:00`}
+              title="Working hours — change on Daily tab"
+            />
+            {latestRelease && (
+              <HeroPill
+                icon={<PhRocket size={14} weight="duotone" />}
+                text={`v${(latestRelease as { version?: string }).version ?? ''}`}
+                title="Latest release — full notes on Briefing tab"
+              />
+            )}
+          </div>
         </div>
 
         {!connected && (
@@ -1610,7 +1723,7 @@ export function CommandCentrePage() {
             border: '1px solid rgba(168,85,247,0.2)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 24 }}>{'\uD83D\uDD11'}</div>
+              <div style={{ color: '#f9e2af' }}><PhKey size={26} weight="duotone" /></div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.cc.byok_mode')}</div>
                 <div style={{ fontSize: 11, color: '#6c7086' }}>
@@ -1621,64 +1734,78 @@ export function CommandCentrePage() {
           </div>
         )}
 
-        {/* ── Weather (full width) ──────────────────────────────────────── */}
-        <div style={{ marginBottom: 16 }}>
-          <CCWeatherWidget weather={weather} loading={weatherLoading} onRefresh={loadWeather} />
+        {/* ── Tab nav ───────────────────────────────────────────────── */}
+        <div style={{
+          display: 'flex', gap: 4, marginBottom: 20,
+          borderBottom: '1px solid rgba(168,85,247,0.12)',
+        }}>
+          <TabBtn id="daily" label="Daily" />
+          <TabBtn id="briefing" label="Briefing" />
+          <TabBtn id="reflect" label="Reflect" />
         </div>
 
-        {/* ── Working Hours Clock ───────────────────────────────────────── */}
-        <div style={{ marginBottom: 16 }}>
-          <WorkingHoursClock />
-        </div>
+        {/* ── Daily tab ─────────────────────────────────────────────── */}
+        {tab === 'daily' && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
+              {connected ? (
+                <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
+              ) : (
+                <WidgetCard title={t('dash.cc.todays_tasks')} icon={'✅'}>
+                  <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_tasks')} />
+                </WidgetCard>
+              )}
+              {connected ? (
+                <CCJournalWidget journalDay={journalDay} loading={journalLoading} />
+              ) : (
+                <WidgetCard title={t('dash.cc.todays_journal')} icon={'📓'}>
+                  <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_journal')} />
+                </WidgetCard>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <WorkingHoursClock />
+              <CCWeatherWidget weather={weather} loading={weatherLoading} onRefresh={loadWeather} />
+            </div>
+          </>
+        )}
 
-        {/* ── News + Tasks (40/60 split, tasks gets more space) ─────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '40% 1fr', gap: 16, marginBottom: 16 }}>
-          <CCNewsWidget
-            articles={newsArticles}
-            loading={newsLoading}
-            onCategoryChange={handleNewsCategory}
-            selectedCategory={newsCategory}
-            onRefresh={() => loadNews(newsCategory)}
-            onOpenArticle={openArticle}
-          />
-          {connected ? (
-            <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
-          ) : (
-            <WidgetCard title={t('dash.cc.todays_tasks')} icon={'\u2705'}>
-              <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_tasks')} />
-            </WidgetCard>
-          )}
-        </div>
+        {/* ── Briefing tab ──────────────────────────────────────────── */}
+        {tab === 'briefing' && (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <CCNewsWidget
+                articles={newsArticles}
+                loading={newsLoading}
+                onCategoryChange={handleNewsCategory}
+                selectedCategory={newsCategory}
+                onRefresh={() => loadNews(newsCategory)}
+                onOpenArticle={openArticle}
+              />
+            </div>
+            <CCReleaseWidget release={latestRelease} loading={releaseLoading} onRefresh={refetchRelease} />
+          </>
+        )}
 
-        {/* ── Journal + Learning (2 column) ─────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          {connected ? (
-            <CCJournalWidget journalDay={journalDay} loading={journalLoading} />
-          ) : (
-            <WidgetCard title={t('dash.cc.todays_journal')} icon={'\uD83D\uDCD3'}>
-              <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_journal')} />
-            </WidgetCard>
-          )}
-          {connected ? (
-            <CCLearningWidget curriculums={curriculums} loading={learningLoading} />
-          ) : (
-            <WidgetCard title={t('dash.cc.learning')} icon={'\uD83C\uDF93'}>
-              <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_learning')} />
-            </WidgetCard>
-          )}
-        </div>
-
-        {/* ── Memory + Release (2 column) ───────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          {connected ? (
-            <CCMemoryWidget memories={memories} loading={memoriesLoading} />
-          ) : (
-            <WidgetCard title={t('dash.cc.memory')} icon={'\uD83E\uDDE0'}>
-              <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_memories')} />
-            </WidgetCard>
-          )}
-          <CCReleaseWidget release={latestRelease} loading={releaseLoading} onRefresh={refetchRelease} />
-        </div>
+        {/* ── Reflect tab ───────────────────────────────────────────── */}
+        {tab === 'reflect' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {connected ? (
+              <CCMemoryWidget memories={memories} loading={memoriesLoading} />
+            ) : (
+              <WidgetCard title={t('dash.cc.memory')} icon={'🧠'}>
+                <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_memories')} />
+              </WidgetCard>
+            )}
+            {connected ? (
+              <CCLearningWidget curriculums={curriculums} loading={learningLoading} />
+            ) : (
+              <WidgetCard title={t('dash.cc.learning')} icon={'🎓'}>
+                <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_learning')} />
+              </WidgetCard>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1795,7 +1922,6 @@ export function AvaChatPage() {
     const ampm = h >= 12 ? 'PM' : 'AM';
     return `${h % 12 || 12}:${m} ${ampm}`;
   };
-  const fmtTokens = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
 
   // ── State ──────────────────────────────────────────────────────────────────
   // Re-render on auth changes — reset to local-first state on logout
@@ -3966,12 +4092,12 @@ export function AvaChatPage() {
             const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
             return (
               <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color }} title={`${remaining.toLocaleString()} of ${creditBalance.limit.toLocaleString()} credits remaining (${Math.round(pct)}% used)`}>
-                {fmtTokens(remaining)} left
+                {remaining.toLocaleString()} left
               </span>
             );
           })() : (
             <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} credits used this session`}>
-              {tokenCount > 0 ? fmtTokens(tokenCount) + ' credits' : '0 credits'}
+              {tokenCount > 0 ? `${tokenCount.toLocaleString()} credits` : '0 credits'}
             </span>
           )}
 
@@ -4035,7 +4161,7 @@ export function AvaChatPage() {
                 <div style={{ width: `${pct}%`, height: '100%', borderRadius: 4, background: color, transition: 'width 0.5s' }} />
               </div>
               <span style={{ fontSize: 9, fontFamily: 'monospace', color, opacity: pct <= 20 ? 0.9 : 0.4, flexShrink: 0 }}>
-                {fmtTokens(remaining)} left
+                {remaining.toLocaleString()} left
               </span>
             </div>
           </div>
@@ -4134,7 +4260,7 @@ export function AvaChatPage() {
                   <span style={{ fontSize: 10, color: '#45475a' }}>{fmtTime(msg.timestamp)}</span>
                   {/* Secret lock indicator */}
                   {secretMsgIds.current.has(msg.id) && (
-                    <span style={{ fontSize: 11, lineHeight: 1 }} title={t('dash.chat.secret_used')}>{'\uD83D\uDD12'}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', color: '#a6adc8' }} title={t('dash.chat.secret_used')}><PhLock size={12} weight="duotone" /></span>
                   )}
                 </div>
 
@@ -5063,7 +5189,7 @@ export function AvaChatPage() {
               const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
               return (
                 <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color, flexShrink: 0 }} title={`${remaining.toLocaleString()} credits remaining`}>
-                  {fmtTokens(remaining)}
+                  {remaining.toLocaleString()}
                 </span>
               );
             })()}
@@ -5136,8 +5262,58 @@ export function ChatHistoryPage() {
   const connected = checkConnected();
   const [conversations, setConversations] = useState<any[]>([]);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'conversations' | 'usage'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'usage' | 'audit'>('conversations');
   const { data: usage } = useApiData<any>('/usage/summary', null);
+
+  // ── Audit tab state — hoisted to History page so the Audit tab is
+  // a top-level entry alongside Conversations + Usage instead of being
+  // buried inside the Usage page's own sub-tabs. Owns its own search /
+  // filter / expand state because UsagePage's audit state lives in a
+  // different component tree.
+  const [historyAuditEntries, setHistoryAuditEntries] = useState<any[]>([]);
+  const [historyAuditExpanded, setHistoryAuditExpanded] = useState<number | null>(null);
+  const [historyAuditSearch, setHistoryAuditSearch] = useState('');
+  const [historyAuditRiskFilter, setHistoryAuditRiskFilter] = useState<string>('all');
+  const [historyAuditStatusFilter, setHistoryAuditStatusFilter] = useState<string>('all');
+
+  // Listen for audit events forwarded from the sidecar handler. Also
+  // handles audit_export_ready by opening the Tauri save dialog.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.event === 'audit_log' && Array.isArray(detail.entries)) {
+        setHistoryAuditEntries(detail.entries);
+      }
+      if (detail?.event === 'audit_entry' && detail.entry) {
+        setHistoryAuditEntries(prev => [...prev, detail.entry].slice(-1000));
+      }
+      if (detail?.event === 'audit_export_ready' && detail.bundle) {
+        const b = detail.bundle as { filename: string; content: string; format: 'markdown' | 'json' };
+        Promise.all([
+          import('@tauri-apps/plugin-dialog'),
+          import('@tauri-apps/plugin-fs'),
+        ]).then(async ([dialog, fs]) => {
+          const target = await dialog.save({
+            defaultPath: b.filename,
+            filters: [{ name: b.format === 'json' ? 'JSON' : 'Markdown', extensions: [b.format === 'json' ? 'json' : 'md'] }],
+          });
+          if (!target) return;
+          await fs.writeTextFile(target, b.content);
+        }).catch(() => { /* non-fatal */ });
+      }
+    };
+    window.addEventListener('ava-audit-event', handler);
+    return () => window.removeEventListener('ava-audit-event', handler);
+  }, []);
+
+  // Pull persistent log when entering the audit tab.
+  useEffect(() => {
+    if (activeTab !== 'audit') return;
+    const sidecar = getSidecar();
+    if (sidecar.isReady) {
+      sidecar.getAuditLog().catch(() => { /* offline / not ready */ });
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     try {
@@ -5202,7 +5378,29 @@ export function ChatHistoryPage() {
         <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
           <button style={tabStyle(activeTab === 'conversations')} onClick={() => setActiveTab('conversations')}>Conversations</button>
           <button style={tabStyle(activeTab === 'usage')} onClick={() => setActiveTab('usage')}>Usage</button>
+          <button style={tabStyle(activeTab === 'audit')} onClick={() => setActiveTab('audit')}>Audit</button>
         </div>
+
+        {/* ── Audit Tab — every tool call Ava made on this machine.
+            Persistent across sessions via @ava/core/audit; never leaves
+            the user's disk; works for BYOK no-account users. ────────── */}
+        {activeTab === 'audit' && (
+          <IdeAuditView
+            entries={historyAuditEntries}
+            expandedIdx={historyAuditExpanded}
+            onToggleExpand={(i) => setHistoryAuditExpanded(historyAuditExpanded === i ? null : i)}
+            search={historyAuditSearch}
+            onSearchChange={setHistoryAuditSearch}
+            riskFilter={historyAuditRiskFilter}
+            onRiskFilterChange={setHistoryAuditRiskFilter}
+            statusFilter={historyAuditStatusFilter}
+            onStatusFilterChange={setHistoryAuditStatusFilter}
+            onExport={(format) => {
+              const sidecar = getSidecar();
+              if (sidecar.isReady) sidecar.exportAuditLog(format).catch(() => {});
+            }}
+          />
+        )}
 
         {/* ── Usage Tab ──────────────────────────────────────────────── */}
         {activeTab === 'usage' && (
@@ -5226,7 +5424,7 @@ export function ChatHistoryPage() {
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
                         <span style={{ color: '#a6adc8' }}>Credits Remaining</span>
-                        <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{formatTokens(balanceRemaining)}</span>
+                        <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{balanceRemaining.toLocaleString()}</span>
                       </div>
                       <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
                         <div style={{
@@ -5236,8 +5434,8 @@ export function ChatHistoryPage() {
                         }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#585b70', marginTop: 4 }}>
-                        <span>{formatTokens(balanceUsed)} used</span>
-                        <span>{formatTokens(balanceLimit)} limit</span>
+                        <span>{balanceUsed.toLocaleString()} used</span>
+                        <span>{balanceLimit.toLocaleString()} limit</span>
                       </div>
                     </>
                   )}
@@ -5251,10 +5449,10 @@ export function ChatHistoryPage() {
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Overview</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                   {[
-                    { label: 'Credits This Month', value: formatTokens(monthValue) },
+                    { label: 'Credits This Month', value: monthValue.toLocaleString() },
                     { label: 'Requests',           value: String(monthRequests) },
                     { label: 'Active Days',        value: String(totals.active_days || 0) },
-                    { label: 'Avg / Request',      value: formatTokens(monthAvg) },
+                    { label: 'Avg / Request',      value: monthAvg.toLocaleString() },
                   ].map(s => (
                     <div key={s.label} style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10, padding: '14px 16px' }}>
                       <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{s.label}</div>
@@ -7197,6 +7395,7 @@ export function LearningPage() {
 
 /* ===== 7. Library ===== */
 type LibraryFileType = 'image' | 'document' | 'spreadsheet' | 'presentation';
+type LibraryMediaKind = 'image' | 'music' | 'video' | 'voice' | 'document' | 'spreadsheet' | 'presentation';
 interface LibraryFile {
   /** creative_assets.id — present on cloud rows, absent on locally-scanned files.
    *  Required for the cloud delete path; absence flags the item as local. */
@@ -7205,6 +7404,12 @@ interface LibraryFile {
   path: string;
   folder: string;
   type: LibraryFileType;
+  /** Original asset_type from the cloud row (or extension-derived for local
+   *  files). LibraryFileType is a single-axis filter that coalesces every
+   *  media kind to 'image'; mediaKind preserves the actual kind so the
+   *  thumbnail can render the right element (img / audio icon / video poster)
+   *  without falling back to a broken <img src="...mp3"> for music tracks. */
+  mediaKind?: LibraryMediaKind;
   size: number;
   modified: string;
   url?: string;          // platform storage URL (cloud) or local-resolved path
@@ -7212,21 +7417,54 @@ interface LibraryFile {
   source?: 'cloud' | 'local';
 }
 
-const FILE_TYPE_ICONS: Record<LibraryFileType, string> = {
-  image: '\uD83D\uDDBC\uFE0F',
-  document: '\uD83D\uDCC4',
-  spreadsheet: '\uD83D\uDCCA',
-  presentation: '\uD83D\uDCBB',
+// Per-mediaKind icon — Phosphor duotone weight. Layered fill gives each
+// icon a primary + secondary tone so they read as crafted product elements
+// instead of generic SaaS strokes.
+type PhIconComponent = React.ComponentType<{ size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone'; color?: string }>;
+const MEDIA_KIND_PH: Record<LibraryMediaKind, PhIconComponent> = {
+  image:        PhImage,
+  music:        PhMusic,
+  voice:        PhVoice,
+  video:        PhVideo,
+  document:     PhDocument,
+  spreadsheet:  PhSpreadsheet,
+  presentation: PhPresentation,
 };
 
-const FILE_TYPE_COLORS: Record<LibraryFileType, { bg: string; text: string; border: string }> = {
-  image: { bg: 'rgba(168,85,247,0.10)', text: '#c084fc', border: 'rgba(168,85,247,0.25)' },
-  document: { bg: 'rgba(59,130,246,0.10)', text: '#60a5fa', border: 'rgba(59,130,246,0.25)' },
-  spreadsheet: { bg: 'rgba(34,197,94,0.10)', text: '#4ade80', border: 'rgba(34,197,94,0.25)' },
-  presentation: { bg: 'rgba(249,115,22,0.10)', text: '#fb923c', border: 'rgba(249,115,22,0.25)' },
+// Wrapper: defaults to duotone so call sites stay terse and consistent.
+// Picks up `currentColor` from the parent for the primary stroke; the
+// duotone fill is auto-derived by Phosphor at a lower opacity.
+function MediaKindIcon({ kind, size = 24, weight = 'duotone' }: { kind: LibraryMediaKind; size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone' }) {
+  const Icon = MEDIA_KIND_PH[kind];
+  return <Icon size={size} weight={weight} />;
+}
+
+// File-type variant for the empty state and previews — same lookup, scoped
+// to the LibraryFileType union (image/document/spreadsheet/presentation).
+const FILE_TYPE_PH: Record<LibraryFileType, PhIconComponent> = {
+  image:        PhImage,
+  document:     PhDocument,
+  spreadsheet:  PhSpreadsheet,
+  presentation: PhPresentation,
+};
+
+// Per-mediaKind colour palette so the badge + tile chrome reflect the real
+// kind (a music track now reads MUSIC in pink instead of IMAGE in purple).
+const MEDIA_KIND_COLORS: Record<LibraryMediaKind, { bg: string; text: string; border: string }> = {
+  image:        { bg: 'rgba(168,85,247,0.10)', text: '#c084fc', border: 'rgba(168,85,247,0.25)' }, // purple — same as image
+  music:        { bg: 'rgba(236,72,153,0.10)', text: '#f472b6', border: 'rgba(236,72,153,0.25)' }, // pink
+  voice:        { bg: 'rgba(244,114,182,0.10)', text: '#f9a8d4', border: 'rgba(244,114,182,0.25)' }, // light pink
+  video:        { bg: 'rgba(239,68,68,0.10)', text: '#f87171', border: 'rgba(239,68,68,0.25)' },   // red
+  document:     { bg: 'rgba(59,130,246,0.10)', text: '#60a5fa', border: 'rgba(59,130,246,0.25)' }, // blue
+  spreadsheet:  { bg: 'rgba(34,197,94,0.10)', text: '#4ade80', border: 'rgba(34,197,94,0.25)' },   // green
+  presentation: { bg: 'rgba(249,115,22,0.10)', text: '#fb923c', border: 'rgba(249,115,22,0.25)' }, // orange
 };
 
 function formatFileSize(bytes: number): string {
+  // Cloud-only assets carry size: 0 because creative_assets doesn't store
+  // file size. Render that as a dash rather than a literal "0 B" — every
+  // cloud row was previously displaying "0 B" which read as broken/empty.
+  if (!bytes || bytes <= 0) return '—';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -7253,7 +7491,12 @@ const LIBRARY_FILE_EXT: Record<string, LibraryFileType> = {
  *  Keeping it as a derived helper (not a column on LibraryFile) so cloud
  *  rows coming back with asset_type='music'/'video'/'voice' keep working
  *  without a schema change here. */
-function classifyMediaKind(file: LibraryFile): 'image' | 'music' | 'video' | 'voice' | 'document' | 'spreadsheet' | 'presentation' {
+function classifyMediaKind(file: LibraryFile): LibraryMediaKind {
+  // Explicit hint from cloud rows wins — cloud titles often have no file
+  // extension (e.g. "Cinematic ambient electronic soundtrack..."), so the
+  // extension heuristic below would mis-classify them as 'image' and the
+  // thumbnail would render a broken <img>.
+  if (file.mediaKind) return file.mediaKind;
   if (file.type === 'document' || file.type === 'spreadsheet' || file.type === 'presentation') return file.type;
   const name = (file.path || file.name || '').toLowerCase();
   const ext = name.includes('.') ? name.split('.').pop()! : '';
@@ -7275,6 +7518,7 @@ async function scanLocalLibrary(projectFolder: string): Promise<LibraryFile[]> {
   try {
     const { readDir, stat } = await import('@tauri-apps/plugin-fs');
     const { join } = await import('@tauri-apps/api/path');
+    const { convertFileSrc } = await import('@tauri-apps/api/core');
     const results: LibraryFile[] = [];
     const rootsToScan = [
       '.ava/creative',
@@ -7298,8 +7542,14 @@ async function scanLocalLibrary(projectFolder: string): Promise<LibraryFile[]> {
         let size = 0; let modified = '';
         try {
           const s = await stat(absPath);
-          size = Number(s.size || 0);
-          modified = s.mtime ? new Date(s.mtime as unknown as string).toISOString() : '';
+          // Tauri v2 plugin-fs returns size as BigInt on some platforms
+          // (Windows in particular). Number() handles both bigint and number;
+          // the fallback for null/undefined avoids NaN.
+          size = s.size != null ? Number(s.size) : 0;
+          // mtime is Date | null in v2 — handle both Date instances and the
+          // legacy string/number shape from older bundled versions.
+          if (s.mtime instanceof Date) modified = s.mtime.toISOString();
+          else if (s.mtime) modified = new Date(s.mtime as unknown as string | number).toISOString();
         } catch { /* stat may fail on some platforms — keep entry without metadata */ }
         results.push({
           name: ent.name,
@@ -7308,7 +7558,12 @@ async function scanLocalLibrary(projectFolder: string): Promise<LibraryFile[]> {
           type,
           size,
           modified,
-          url: `file://${absPath}`,
+          // convertFileSrc maps an absolute path to the Tauri asset protocol
+          // URL the webview can actually load (https://asset.localhost/...
+          // on Windows, asset://... on macOS/Linux). Plain `file://` URLs
+          // are rejected by WebView2 + WKWebView, which is why every Library
+          // thumbnail and "open" link was broken before.
+          url: convertFileSrc(absPath),
           source: 'local',
         });
       }
@@ -7501,7 +7756,7 @@ export function LearningLibraryPage() {
         <div style={{ textAlign: 'center', padding: 40, color: '#6c7086' }}>Loading...</div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: '#6c7086' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCDA'}</div>
+          <div style={{ marginBottom: 8, color: '#a855f7' }}><PhBook size={36} weight="duotone" /></div>
           <div style={{ fontSize: 13 }}>No paths found.</div>
           <div style={{ fontSize: 11, marginTop: 4 }}>Try a different search or ask Ava to create a custom path.</div>
         </div>
@@ -7620,7 +7875,10 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   const [localFiles, setLocalFiles] = useState<LibraryFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [sourceFilter, setSourceFilter] = useState<'all' | 'cloud' | 'local'>('all');
-  const [filter, setFilter] = useState<LibraryFileType | 'all'>('all');
+  // Filter axis is the real media kind, not the coalesced LibraryFileType,
+  // so the user can isolate just music / video / voice within the Assets
+  // tab — previously they all collapsed under Images.
+  const [filter, setFilter] = useState<LibraryMediaKind | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
 
@@ -7650,17 +7908,31 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         const d = data as { assets?: unknown[] } | undefined;
         const items = Array.isArray(d?.assets) ? d!.assets : [];
         setCloudFiles(items.map((f: any) => {
-          const mediaKind = String(f.asset_type || f.type || 'image').toLowerCase();
+          const rawKind = String(f.asset_type || f.type || 'image').toLowerCase();
+          // Filter axis (LibraryFileType) collapses every media kind to
+          // 'image' so the existing All / Images / Documents tab split
+          // keeps working unchanged.
           const libraryType: LibraryFileType =
-            mediaKind === 'spreadsheet' ? 'spreadsheet' :
-            mediaKind === 'document' ? 'document' :
+            rawKind === 'spreadsheet' ? 'spreadsheet' :
+            rawKind === 'document' ? 'document' :
             'image';
+          // mediaKind preserves the real asset_type so the thumbnail can
+          // pick the right element. Without this, music / voice / video
+          // rows all rendered as <img src="mp3 URL"> which the webview
+          // shows as a broken-image glyph.
+          const mediaKind: LibraryMediaKind =
+            rawKind === 'music' || rawKind === 'voice' || rawKind === 'video' ||
+            rawKind === 'image' || rawKind === 'document' ||
+            rawKind === 'spreadsheet' || rawKind === 'presentation'
+              ? (rawKind as LibraryMediaKind)
+              : 'image';
           return {
             id: f.id,
             name: f.title || 'Untitled',
             path: f.url || '',
             folder: f.source || 'Creative Studio',
             type: libraryType,
+            mediaKind,
             size: 0,  // creative_assets schema doesn't carry size
             modified: f.created_at || '',
             url: f.url || f.thumbnail_url || '',
@@ -7707,15 +7979,21 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         : (f.type === 'document' || f.type === 'spreadsheet')
     );
   }, [cloudFiles, localFiles, sourceFilter, kind]);
-  const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => f.type === filter);
+  const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => classifyMediaKind(f) === filter);
 
-  const typeCounts = useMemo(() => ({
-    all: kindFiles.length,
-    image: kindFiles.filter((f) => f.type === 'image').length,
-    document: kindFiles.filter((f) => f.type === 'document').length,
-    spreadsheet: kindFiles.filter((f) => f.type === 'spreadsheet').length,
-    presentation: kindFiles.filter((f) => f.type === 'presentation').length,
-  }), [kindFiles]);
+  const typeCounts = useMemo(() => {
+    const byKind = (k: LibraryMediaKind) => kindFiles.filter((f) => classifyMediaKind(f) === k).length;
+    return {
+      all: kindFiles.length,
+      image:        byKind('image'),
+      music:        byKind('music'),
+      voice:        byKind('voice'),
+      video:        byKind('video'),
+      document:     byKind('document'),
+      spreadsheet:  byKind('spreadsheet'),
+      presentation: byKind('presentation'),
+    };
+  }, [kindFiles]);
 
   // Source filter counts use the kind-filtered, NOT source-filtered view
   // so the numbers stay honest when the user is on one source and wants
@@ -7735,37 +8013,46 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     local: kindAll.filter((f) => f.source === 'local').length,
   }), [kindAll]);
 
-  // Kind-scoped filter tabs. Assets shows image + presentation;
-  // Documents shows document + spreadsheet. "All" is kept in both so
-  // users can clear any sub-filter without swapping tabs.
+  // Kind-scoped filter tabs. Assets shows every media kind we actually
+  // store (image / music / voice / video / slides). Documents shows the
+  // office kinds. "All" stays in both so users can clear any sub-filter
+  // without swapping tabs. Empty tabs are deliberately KEPT visible so
+  // operators always see what categories exist — a "Voice 0" tab tells
+  // you the kind is supported and just hasn't been used yet, vs a
+  // missing tab which reads as "this kind isn't a thing here."
+  // Falls back to a literal label when the i18n string is missing — this
+  // is what was rendering raw `dash.library.slides` before.
+  const localised = (key: string, fallback: string) => {
+    const out = t(key);
+    return !out || out === key ? fallback : out;
+  };
   const filterOptions = useMemo(() => {
-    const base: { id: LibraryFileType | 'all'; label: string; count: number }[] = [
-      { id: 'all', label: t('dash.library.all'), count: typeCounts.all },
+    const base: { id: LibraryMediaKind | 'all'; label: string; count: number }[] = [
+      { id: 'all', label: localised('dash.library.all', 'All'), count: typeCounts.all },
     ];
     if (kind === 'assets') {
       base.push(
-        { id: 'image', label: t('dash.library.images'), count: typeCounts.image },
-        { id: 'presentation', label: t('dash.library.slides'), count: typeCounts.presentation },
+        { id: 'image',        label: localised('dash.library.images', 'Images'),       count: typeCounts.image },
+        { id: 'music',        label: localised('dash.library.music',  'Music'),        count: typeCounts.music },
+        { id: 'voice',        label: localised('dash.library.voice',  'Voice'),        count: typeCounts.voice },
+        { id: 'video',        label: localised('dash.library.video',  'Video'),        count: typeCounts.video },
+        { id: 'presentation', label: localised('dash.library.slides', 'Slides'),       count: typeCounts.presentation },
       );
     } else {
       base.push(
-        { id: 'document', label: t('dash.library.docs'), count: typeCounts.document },
-        { id: 'spreadsheet', label: t('dash.library.sheets'), count: typeCounts.spreadsheet },
+        { id: 'document',     label: localised('dash.library.docs',   'Documents'),    count: typeCounts.document },
+        { id: 'spreadsheet',  label: localised('dash.library.sheets', 'Spreadsheets'), count: typeCounts.spreadsheet },
       );
     }
     return base;
   }, [kind, typeCounts]);
 
   const [newDocOpen, setNewDocOpen] = useState(false);
-  const handleNewDocument = () => {
-    if (!projectFolder) {
-      // Without a project root we have nowhere to write; fall back to
-      // Creative Studio which prompts for a folder at its own pace.
-      window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'creative-studio' }));
-      return;
-    }
-    setNewDocOpen(true);
-  };
+  // Always open the inline modal — matches the extension's Library +
+  // New document flow. The modal handles missing project folder by
+  // prompting for a save location via Tauri's save dialog, instead of
+  // bouncing the user out to Creative Studio.
+  const handleNewDocument = () => setNewDocOpen(true);
 
   const refreshLocalFiles = () => {
     if (!projectFolder) return;
@@ -7893,7 +8180,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>{filter === 'all' ? '\uD83D\uDCC1' : FILE_TYPE_ICONS[filter as LibraryFileType]}</div>
+            <div style={{ marginBottom: 12, color: '#a855f7', display: 'flex', justifyContent: 'center' }}>{filter === 'all' ? <PhFolder size={48} weight="duotone" /> : <MediaKindIcon kind={filter} size={48} weight="duotone" />}</div>
             <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
               {t('dash.library.no_files')}
             </div>
@@ -7905,7 +8192,8 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           /* Grid view */
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
             {filtered.map((file, i) => {
-              const colors = FILE_TYPE_COLORS[file.type];
+              const kind = classifyMediaKind(file);
+              const colors = MEDIA_KIND_COLORS[kind];
               const isSelected = selectedFile?.path === file.path;
               return (
                 <div
@@ -7917,22 +8205,30 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                     transition: 'border-color 0.2s, transform 0.15s',
                   }}
                 >
-                  {/* Thumbnail area */}
+                  {/* Thumbnail area — pick the right element per real
+                      media kind. Music / voice / video have no <img>
+                      representation, so they get an icon instead of the
+                      broken-image glyph the row was rendering before. */}
                   <div style={{
                     height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: colors.bg, position: 'relative',
                   }}>
-                    {file.type === 'image' && file.url ? (
-                      <img src={file.url} alt={file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <span style={{ fontSize: 36 }}>{FILE_TYPE_ICONS[file.type]}</span>
-                    )}
-                    {/* Type badge */}
+                    {(() => {
+                      if (kind === 'image' && file.url) {
+                        return <img src={file.url} alt={file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+                      }
+                      if (kind === 'video' && file.url) {
+                        return <video src={file.url} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+                      }
+                      return <span style={{ color: colors.text, opacity: 0.95 }}><MediaKindIcon kind={kind} size={52} weight="duotone" /></span>;
+                    })()}
+                    {/* Type badge — labelled and coloured by real media kind
+                        so MP3 rows read MUSIC, not IMAGE. */}
                     <span style={{
                       position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 600,
                       padding: '2px 8px', borderRadius: 6, background: 'rgba(0,0,0,0.6)',
                       color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5,
-                    }}>{file.type}</span>
+                    }}>{kind}</span>
                   </div>
                   {/* File info */}
                   <div style={{ padding: '10px 12px' }}>
@@ -7953,7 +8249,8 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           /* List view */
           <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10, overflow: 'hidden' }}>
             {filtered.map((file, i) => {
-              const colors = FILE_TYPE_COLORS[file.type];
+              const kind = classifyMediaKind(file);
+              const colors = MEDIA_KIND_COLORS[kind];
               const isSelected = selectedFile?.path === file.path;
               return (
                 <div
@@ -7966,12 +8263,14 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                     cursor: 'pointer', transition: 'background 0.15s',
                   }}
                 >
-                  {/* Icon */}
+                  {/* Icon — kind-specific so music/voice/video each get their
+                      own glyph instead of every row showing the image icon. */}
                   <div style={{
                     width: 36, height: 36, borderRadius: 8, flexShrink: 0,
                     background: colors.bg, border: `1px solid ${colors.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
-                  }}>{FILE_TYPE_ICONS[file.type]}</div>
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: colors.text,
+                  }}><MediaKindIcon kind={kind} size={20} weight="duotone" /></div>
                   {/* Name + folder */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
@@ -7989,7 +8288,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                     fontSize: 10, fontWeight: 500, padding: '3px 8px', borderRadius: 6,
                     background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`,
                     textTransform: 'capitalize', flexShrink: 0,
-                  }}>{file.type}</span>
+                  }}>{kind}</span>
                   {/* Size */}
                   <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', flexShrink: 0, width: 60, textAlign: 'right' }}>
                     {formatFileSize(file.size)}
@@ -8025,7 +8324,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         />
       )}
 
-      {newDocOpen && projectFolder && (
+      {newDocOpen && (
         <NewDocumentModal
           projectFolder={projectFolder}
           onClose={() => setNewDocOpen(false)}
@@ -8264,7 +8563,10 @@ function LibraryPreviewModal({
             gap: 10, padding: '56px 20px', background: 'rgba(0,0,0,0.25)',
             borderTopLeftRadius: 16, borderTopRightRadius: 16,
           }}>
-            <span style={{ fontSize: 56, opacity: 0.4 }}>{FILE_TYPE_ICONS[file.type]}</span>
+            {(() => {
+              const Icon = FILE_TYPE_PH[file.type];
+              return <span style={{ color: '#a855f7' }}><Icon size={72} weight="duotone" /></span>;
+            })()}
             {!isCloud && (
               <p style={{ fontSize: 11, color: '#6c7086', margin: 0 }}>
                 Inline preview unavailable for local files — use Open to view in your default app.
@@ -8460,19 +8762,25 @@ function LibraryMediaPlayer({ src, kind }: { src: string; kind: 'audio' | 'video
 // ── New document modal ─────────────────────────────────────────────────
 //
 // Mirrors the extension's Library > + New document flow. Writes to
-// <projectFolder>/documents/<name>.<ext>, then tells the caller to
-// refresh so the new file surfaces on the Documents tab.
+// <projectFolder>/documents/<name>.<ext> when a project is open, or
+// prompts via the Tauri save dialog when none is. After the write the
+// file is launched via plugin-opener which hands off to the OS default
+// app (LibreOffice / Word / Excel / Preview / etc.) — same end-state
+// as opening a Library row.
 //
-// Formats and templates: only text-based (md/txt/csv) and markdown
-// templates ship in this pass. DOCX/XLSX/PDF need a binary-writer
-// dependency that's not bundled in the IDE today; the extension gets
-// them via vscode-provided libraries. Users who need Word/Excel/PDF
-// can ask Ava to generate them — generate_document uses a writer in
-// core that produces the binary server-side and syncs through cloud.
-const NEW_DOC_BLANK_FORMATS: { id: 'md' | 'txt' | 'csv'; label: string; ext: string; defaultBody: string }[] = [
-  { id: 'md',  label: 'Markdown',  ext: 'md',  defaultBody: '# New document\n\n' },
-  { id: 'txt', label: 'Text file', ext: 'txt', defaultBody: '' },
-  { id: 'csv', label: 'CSV',       ext: 'csv', defaultBody: 'column_a,column_b,column_c\n' },
+// All five extension formats are supported now:
+//   - md / txt / csv  : plain text written via writeTextFile
+//   - docx           : built with the docx package (browser-friendly)
+//   - xlsx           : built with exceljs
+//   - pdf            : built with pdf-lib (replaces pdfkit which is Node-only)
+type NewDocFormat = 'md' | 'txt' | 'csv' | 'docx' | 'xlsx' | 'pdf';
+const NEW_DOC_BLANK_FORMATS: { id: NewDocFormat; label: string; ext: string }[] = [
+  { id: 'docx', label: 'Word Document', ext: 'docx' },
+  { id: 'xlsx', label: 'Spreadsheet',   ext: 'xlsx' },
+  { id: 'pdf',  label: 'PDF',           ext: 'pdf'  },
+  { id: 'md',   label: 'Markdown',      ext: 'md'   },
+  { id: 'txt',  label: 'Text file',     ext: 'txt'  },
+  { id: 'csv',  label: 'CSV',           ext: 'csv'  },
 ];
 
 const NEW_DOC_TEMPLATES: { id: string; label: string; desc: string; filename: string; body: string }[] = [
@@ -8513,35 +8821,121 @@ function NewDocumentModal({
   onClose,
   onCreated,
 }: {
-  projectFolder: string;
+  projectFolder: string | null;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createAt = async (relDir: string, filename: string, body: string) => {
+  // Build the file bytes for the requested format. md / txt / csv are
+  // plain text; docx / xlsx / pdf are binary, built in the webview using
+  // the same packages the extension uses (with pdf-lib subbed in for
+  // pdfkit since pdfkit is Node-only).
+  const buildFileBytes = async (
+    fmt: NewDocFormat,
+    body: string,
+    titleHint: string,
+  ): Promise<Uint8Array> => {
+    if (fmt === 'md' || fmt === 'txt') {
+      return new TextEncoder().encode(body);
+    }
+    if (fmt === 'csv') {
+      return new TextEncoder().encode(body || 'column_a,column_b,column_c\n');
+    }
+    if (fmt === 'docx') {
+      const { Document, Packer, Paragraph } = await import('docx');
+      const paragraphs = (body || '').split(/\r?\n/).map(line => new Paragraph({ text: line }));
+      const doc = new Document({
+        sections: [{ children: paragraphs.length ? paragraphs : [new Paragraph({ text: '' })] }],
+      });
+      const blob = await Packer.toBlob(doc);
+      return new Uint8Array(await blob.arrayBuffer());
+    }
+    if (fmt === 'xlsx') {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Sheet1');
+      // CSV body seeds the sheet so a "From template → invoice" path on
+      // xlsx isn't a blank grid. Falls back to a single empty row.
+      const rows = (body || '').split(/\r?\n/).filter(Boolean).map(r => r.split(','));
+      if (rows.length) rows.forEach(r => ws.addRow(r));
+      const buf = await wb.xlsx.writeBuffer();
+      return new Uint8Array(buf as ArrayBuffer);
+    }
+    if (fmt === 'pdf') {
+      const { PDFDocument, StandardFonts } = await import('pdf-lib');
+      const pdf = await PDFDocument.create();
+      const page = pdf.addPage();
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      const { height } = page.getSize();
+      let y = height - 50;
+      page.drawText(titleHint || 'New document', { x: 50, y, font, size: 18 });
+      y -= 28;
+      for (const line of (body || '').split(/\r?\n/)) {
+        if (y < 50) { y = height - 50; pdf.addPage(); }
+        page.drawText(line.slice(0, 100), { x: 50, y, font, size: 11 });
+        y -= 16;
+      }
+      return await pdf.save();
+    }
+    return new TextEncoder().encode(body);
+  };
+
+  const createAt = async (filename: string, fmt: NewDocFormat, body: string, titleHint: string) => {
     setBusy(true);
     setError(null);
     try {
-      const [{ join }, { mkdir, writeTextFile, exists }] = await Promise.all([
+      const [{ join }, fsPlugin, opener] = await Promise.all([
         import('@tauri-apps/api/path'),
         import('@tauri-apps/plugin-fs'),
+        import('@tauri-apps/plugin-opener'),
       ]);
-      const dirAbs = await join(projectFolder, relDir);
-      await mkdir(dirAbs, { recursive: true } as never).catch(() => { /* already exists */ });
-      // Avoid silent overwrite — auto-suffix if the target exists.
-      let finalName = filename;
-      let i = 1;
-      while (await exists(await join(dirAbs, finalName))) {
-        const dot = filename.lastIndexOf('.');
-        finalName = dot >= 0
-          ? `${filename.slice(0, dot)}-${i}${filename.slice(dot)}`
-          : `${filename}-${i}`;
-        i++;
+      const { mkdir, writeFile, writeTextFile, exists } = fsPlugin;
+
+      // Resolve target directory: use <project>/documents when a project
+      // is open, otherwise prompt via the save dialog so the user picks
+      // a location instead of getting bounced out to Creative Studio.
+      let targetAbs: string;
+      if (projectFolder) {
+        const dirAbs = await join(projectFolder, 'documents');
+        await mkdir(dirAbs, { recursive: true } as never).catch(() => { /* exists */ });
+        // Auto-suffix if the file exists so we never overwrite silently.
+        let finalName = filename;
+        let i = 1;
+        while (await exists(await join(dirAbs, finalName))) {
+          const dot = filename.lastIndexOf('.');
+          finalName = dot >= 0
+            ? `${filename.slice(0, dot)}-${i}${filename.slice(dot)}`
+            : `${filename}-${i}`;
+          i++;
+        }
+        targetAbs = await join(dirAbs, finalName);
+      } else {
+        const { save } = await import('@tauri-apps/plugin-dialog');
+        const chosen = await save({
+          defaultPath: filename,
+          filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }],
+        });
+        if (!chosen) { setBusy(false); return; }
+        targetAbs = chosen;
       }
-      const abs = await join(dirAbs, finalName);
-      await writeTextFile(abs, body);
+
+      const bytes = await buildFileBytes(fmt, body, titleHint);
+      // Plain text via writeTextFile keeps line endings intact for the
+      // user's platform; binary kinds go through writeFile which takes
+      // a Uint8Array directly.
+      if (fmt === 'md' || fmt === 'txt' || fmt === 'csv') {
+        await writeTextFile(targetAbs, new TextDecoder().decode(bytes));
+      } else {
+        await writeFile(targetAbs, bytes);
+      }
+
+      // Hand the file to the OS — opens in LibreOffice / Word / Excel /
+      // Preview / Reader / whatever the user has registered as default.
+      // Mirrors the Library row "open" action at line 8198.
+      try { await opener.openPath(targetAbs); } catch { /* file written, just couldn't auto-open */ }
+
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -8552,11 +8946,15 @@ function NewDocumentModal({
 
   const createBlank = (fmt: typeof NEW_DOC_BLANK_FORMATS[number]) => {
     const stamp = new Date().toISOString().slice(0, 10);
-    void createAt('documents', `untitled-${stamp}.${fmt.ext}`, fmt.defaultBody);
+    const body = fmt.id === 'csv' ? 'column_a,column_b,column_c\n' :
+                 fmt.id === 'md'  ? '# New document\n\n' : '';
+    void createAt(`untitled-${stamp}.${fmt.ext}`, fmt.id, body, `Untitled — ${stamp}`);
   };
 
   const createTemplate = (tmpl: typeof NEW_DOC_TEMPLATES[number]) => {
-    void createAt('documents', tmpl.filename, tmpl.body);
+    // Templates are markdown-prose; written as .md regardless of the
+    // blank-format selection.
+    void createAt(tmpl.filename, 'md', tmpl.body, tmpl.label);
   };
 
   return (
@@ -8589,7 +8987,11 @@ function NewDocumentModal({
 
         <h2 style={{ fontSize: 16, fontWeight: 600, color: '#cdd6f4', margin: 0 }}>New document</h2>
         <p style={{ fontSize: 12, color: '#6c7086', marginTop: 4, marginBottom: 20 }}>
-          Saves to <code style={{ fontFamily: 'monospace', fontSize: 11, padding: '1px 5px', borderRadius: 4, background: 'rgba(168,85,247,0.1)' }}>documents/</code> in your project.
+          {projectFolder ? (
+            <>Saves to <code style={{ fontFamily: 'monospace', fontSize: 11, padding: '1px 5px', borderRadius: 4, background: 'rgba(168,85,247,0.1)' }}>documents/</code> in your project, then opens in your default app.</>
+          ) : (
+            <>You'll be asked where to save the file, then it opens in your default app.</>
+          )}
         </p>
 
         <h3 style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500, marginBottom: 10 }}>Blank file</h3>
@@ -9026,6 +9428,43 @@ export function CloudSyncPage() {
     }
   };
 
+  // GDPR Article 20 — full cloud-stored data export. Hits the platform
+  // /api/export-my-data endpoint directly (Tauri can fetch + write to
+  // disk without a host proxy). Pairs with the local audit-log export
+  // in the History → Audit tab — together the two give the user a
+  // complete picture of every byte the system holds about them.
+  const exportFullAccountData = async () => {
+    try {
+      const platformKey = localStorage.getItem('ava-platform-key');
+      if (!platformKey) {
+        alert('Connect a platform account first to export your cloud-stored data.');
+        return;
+      }
+      const res = await fetch('https://ava-supernova.com/api/export-my-data', {
+        headers: { Authorization: `Bearer ${platformKey}` },
+      });
+      if (!res.ok) {
+        alert(`Export failed: ${res.status} ${res.statusText}`);
+        return;
+      }
+      const content = await res.text();
+      const datePart = new Date().toISOString().slice(0, 10);
+      const filename = `ava-supernova-data-export-${datePart}.json`;
+      const [{ save }, fs] = await Promise.all([
+        import('@tauri-apps/plugin-dialog'),
+        import('@tauri-apps/plugin-fs'),
+      ]);
+      const target = await save({
+        defaultPath: filename,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (!target) return;
+      await fs.writeTextFile(target, content);
+    } catch (err) {
+      alert(`Export failed: ${err instanceof Error ? err.message : err}`);
+    }
+  };
+
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
@@ -9035,6 +9474,31 @@ export function CloudSyncPage() {
             {t('dash.sync.subtitle')}
           </div>
         </div>
+
+        {/* GDPR full-account export — top of page so users see "everything
+            in one file" before the per-type sync rows underneath. */}
+        {connected && (
+          <div style={{ ...card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ flexShrink: 0, color: '#a855f7', fontSize: 22 }}>📦</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>Download all my cloud data</div>
+              <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5 }}>
+                Everything the platform holds about you — memories, tasks, journal, learning paths, conversations, billing, settings, and more. GDPR Article 20 right of portability.
+              </div>
+            </div>
+            <button
+              onClick={exportFullAccountData}
+              style={{
+                flexShrink: 0,
+                padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.3)',
+                background: 'rgba(168,85,247,0.12)', color: '#cdd6f4', fontSize: 12, fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Download (.json)
+            </button>
+          </div>
+        )}
 
         {!connected && (
           <div style={{
@@ -9218,7 +9682,16 @@ export function UsagePage() {
   const [auditEntries, setAuditEntries] = useState<any[]>([]);
   const [auditExpanded, setAuditExpanded] = useState<number | null>(null);
 
-  // Listen for audit events forwarded from sidecar event handler
+  // Audit-tab UI state — search + filter live next to the entries
+  // they apply to. Same axes the extension uses so muscle memory ports.
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditRiskFilter, setAuditRiskFilter] = useState<string>('all');
+  const [auditStatusFilter, setAuditStatusFilter] = useState<string>('all');
+
+  // Listen for audit events forwarded from sidecar event handler.
+  // Also handles `audit_export_ready` — sidecar formats the bundle and
+  // we open the Tauri save dialog from here so the user gets a native
+  // file picker.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -9228,10 +9701,38 @@ export function UsagePage() {
       if (detail?.event === 'audit_entry' && detail.entry) {
         setAuditEntries(prev => [...prev, detail.entry].slice(-500));
       }
+      if (detail?.event === 'audit_export_ready' && detail.bundle) {
+        const b = detail.bundle as { filename: string; content: string; format: 'markdown' | 'json' };
+        // Lazy-import the Tauri dialog + fs plugins so they don't
+        // bloat the audit-tab first-paint when the export button
+        // is never used.
+        Promise.all([
+          import('@tauri-apps/plugin-dialog'),
+          import('@tauri-apps/plugin-fs'),
+        ]).then(async ([dialog, fs]) => {
+          const target = await dialog.save({
+            defaultPath: b.filename,
+            filters: [{ name: b.format === 'json' ? 'JSON' : 'Markdown', extensions: [b.format === 'json' ? 'json' : 'md'] }],
+          });
+          if (!target) return;
+          await fs.writeTextFile(target, b.content);
+        }).catch(() => { /* user cancelled or fs error — non-fatal */ });
+      }
     };
     window.addEventListener('ava-audit-event', handler);
     return () => window.removeEventListener('ava-audit-event', handler);
   }, []);
+
+  // Pull the persistent audit log when the audit tab opens so prior
+  // sessions are visible. Without this, the tab only shows entries
+  // captured in the current process's lifetime.
+  useEffect(() => {
+    if (activeTab !== 'audit') return;
+    const sidecar = getSidecar();
+    if (sidecar.isReady) {
+      sidecar.getAuditLog().catch(() => { /* offline / not ready */ });
+    }
+  }, [activeTab]);
 
   // Live session stats from shared store
   const [session, setSession] = useState<SessionStats>(getSessionStats);
@@ -9429,76 +9930,21 @@ export function UsagePage() {
                 )}
               </>
             ) : activeTab === 'audit' ? (
-              <>
-                {/* Audit Trail */}
-                {auditEntries.length === 0 ? (
-                  <div style={{
-                    background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12,
-                    padding: '32px 20px', textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>📋</div>
-                    <div style={{ fontSize: 13, color: '#6c7086' }}>No tool calls recorded this session.</div>
-                  </div>
-                ) : (
-                  <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-                    {/* Header row */}
-                    <div style={{
-                      display: 'grid', gridTemplateColumns: '60px 1fr 80px 60px 90px 60px',
-                      gap: 8, padding: '8px 12px',
-                      borderBottom: '1px solid rgba(168,85,247,0.12)',
-                      fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' as const, color: '#6c7086',
-                    }}>
-                      <span>Time</span><span>Tool</span><span>Category</span><span>Risk</span><span>Approval</span><span>Status</span>
-                    </div>
-                    {/* Entries — newest first */}
-                    {[...auditEntries].reverse().map((entry: any, i: number) => {
-                      const time = new Date(entry.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                      const isExp = auditExpanded === i;
-                      const approvalColors: Record<string, string> = { 'auto': '#34d399', 'first-time': '#60a5fa', 'user-approved': '#fbbf24', 'denied': '#f87171' };
-                      const statusColors: Record<string, string> = { 'success': '#34d399', 'failed': '#f87171', 'denied': '#f87171' };
-                      const riskColors: Record<string, string> = { 'safe': '#34d399', 'write': '#fbbf24', 'dangerous': '#f87171' };
-                      const catLabels: Record<string, string> = { file_ops: 'File Ops', shell: 'Shell', git: 'Git', web: 'Web', media: 'Media', database: 'Database', system: 'System', documents: 'Docs', memory: 'Memory', learning: 'Learning' };
-                      return (
-                        <div key={i}>
-                          <button
-                            onClick={() => setAuditExpanded(isExp ? null : i)}
-                            style={{
-                              display: 'grid', gridTemplateColumns: '60px 1fr 80px 60px 90px 60px',
-                              gap: 8, width: '100%', padding: '8px 12px', textAlign: 'left',
-                              fontSize: 11, border: 'none', background: 'transparent', cursor: 'pointer',
-                            }}
-                          >
-                            <span style={{ color: '#6c7086', fontFamily: 'monospace' }}>{time}</span>
-                            <span style={{ color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.toolName}</span>
-                            <span style={{ color: '#a6adc8' }}>{catLabels[entry.category] || entry.category}</span>
-                            <span style={{ color: riskColors[entry.riskLevel] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.riskLevel}</span>
-                            <span style={{ color: approvalColors[entry.approvalMethod] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.approvalMethod}</span>
-                            <span style={{ color: statusColors[entry.status] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.status}</span>
-                          </button>
-                          {isExp && (
-                            <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <div style={{ background: 'rgba(49,34,68,0.3)', borderRadius: 8, padding: 10 }}>
-                                <div style={{ fontSize: 9, fontWeight: 700, color: '#6c7086', marginBottom: 4 }}>Arguments</div>
-                                <pre style={{ fontSize: 10, color: '#a6adc8', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 160, overflowY: 'auto', margin: 0 }}>
-                                  {entry.fullArgs ? JSON.stringify(entry.fullArgs, null, 2) : entry.argsSummary}
-                                </pre>
-                              </div>
-                              {entry.result && (
-                                <div style={{ background: 'rgba(49,34,68,0.3)', borderRadius: 8, padding: 10 }}>
-                                  <div style={{ fontSize: 9, fontWeight: 700, color: '#6c7086', marginBottom: 4 }}>Result</div>
-                                  <pre style={{ fontSize: 10, color: '#a6adc8', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 160, overflowY: 'auto', margin: 0 }}>
-                                    {entry.result}
-                                  </pre>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
+              <IdeAuditView
+                entries={auditEntries}
+                expandedIdx={auditExpanded}
+                onToggleExpand={(i) => setAuditExpanded(auditExpanded === i ? null : i)}
+                search={auditSearch}
+                onSearchChange={setAuditSearch}
+                riskFilter={auditRiskFilter}
+                onRiskFilterChange={setAuditRiskFilter}
+                statusFilter={auditStatusFilter}
+                onStatusFilterChange={setAuditStatusFilter}
+                onExport={(format) => {
+                  const sidecar = getSidecar();
+                  if (sidecar.isReady) sidecar.exportAuditLog(format).catch(() => {});
+                }}
+              />
             ) : (
               <>
                 {/* Credit Balance */}
@@ -9519,7 +9965,7 @@ export function UsagePage() {
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
                           <span style={{ color: '#a6adc8' }}>Credits Remaining</span>
-                          <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{formatTokens(balanceRemaining)}</span>
+                          <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{balanceRemaining.toLocaleString()}</span>
                         </div>
                         <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
                           <div style={{
@@ -9529,8 +9975,8 @@ export function UsagePage() {
                           }} />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#585b70', marginTop: 4 }}>
-                          <span>{formatTokens(balanceUsed)} used</span>
-                          <span>{formatTokens(balanceLimit)} limit</span>
+                          <span>{balanceUsed.toLocaleString()} used</span>
+                          <span>{balanceLimit.toLocaleString()} limit</span>
                         </div>
                       </>
                     )}
@@ -10021,7 +10467,7 @@ export function SettingsPage() {
           {/* Auto Memory */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 16 }}>{'\uD83E\uDDE0'}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', color: '#cba6f7' }}><PhBrain size={18} weight="duotone" /></span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.auto_memory')}</div>
                 <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.settings.auto_memory_desc')}</div>
@@ -10033,7 +10479,7 @@ export function SettingsPage() {
           {/* Local Only */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 16 }}>{'\uD83D\uDD12'}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', color: '#a6adc8' }}><PhLock size={18} weight="duotone" /></span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.local_only')}</div>
                 <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.settings.local_only_desc')}</div>
@@ -10046,7 +10492,7 @@ export function SettingsPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', color: '#f9e2af' }}><PhLightbulb size={18} weight="duotone" /></span>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.shared_learning')}</div>
                   <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.settings.shared_learning_desc')}</div>
@@ -10072,7 +10518,7 @@ export function SettingsPage() {
           {/* Master toggle */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 16 }}>{'\uD83E\uDDEA'}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', color: '#a6e3a1' }}><PhTestTube size={18} weight="duotone" /></span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Capture Ava&apos;s actions as training data</div>
                 <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>
@@ -10569,7 +11015,6 @@ export function BillingPage() {
     percent_used: 0,
   };
 
-  const fmtTokens = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
   const fmtStorage = (gb: number) => gb >= 1000 ? `${(gb / 1024).toFixed(2)} TB` : gb >= 10 ? `${Math.round(gb)} GB` : gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(gb * 1024)} MB`;
   const pct = (used: number, limit: number) => limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
@@ -10580,7 +11025,7 @@ export function BillingPage() {
 
       {!connected ? (
         <div style={{ ...card, textAlign: 'center', padding: 60 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCB3'}</div>
+          <div style={{ marginBottom: 12, color: '#a855f7' }}><PhCreditCard size={44} weight="duotone" /></div>
           <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>Connect to view billing</div>
           <div style={{ fontSize: 12, color: '#6c7086' }}>Sign in with your platform key in the sidebar</div>
         </div>
@@ -10603,15 +11048,16 @@ export function BillingPage() {
             }}>Manage Plan</a>
           </div>
 
-          {/* Token Pools — Plan Tokens hidden on Free. Free users only have
-              the free 3M pool; showing a second bar against a non-existent
-              plan pool was meaningless and confused users. */}
+          {/* Credit Pools — Plan Credits hidden on Free. Free users only
+              have the free pool; showing a second bar against a non-existent
+              plan pool was meaningless and confused users. Exact counts
+              throughout — match the chat header + Usage tab. */}
           <div style={{ display: 'grid', gridTemplateColumns: tier === 'free' ? '1fr' : '1fr 1fr', gap: 16, marginTop: 16 }}>
             {/* Free Pool */}
             <div style={card}>
-              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Free Tokens</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#a6e3a1', marginBottom: 4 }}>{fmtTokens(freeLimit - freeUsed)}</div>
-              <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>of {fmtTokens(freeLimit)} remaining</div>
+              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Free Credits</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#a6e3a1', marginBottom: 4 }}>{(freeLimit - freeUsed).toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>of {freeLimit.toLocaleString()} remaining</div>
               <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pct(freeUsed, freeLimit)}%`, background: 'linear-gradient(90deg, #a6e3a1, #94e2d5)', borderRadius: 3, transition: 'width 0.5s' }} />
               </div>
@@ -10619,9 +11065,9 @@ export function BillingPage() {
             {/* Plan Pool — paid tiers only */}
             {tier !== 'free' && (
               <div style={card}>
-                <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Plan Tokens</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#89b4fa', marginBottom: 4 }}>{planLimit > 0 ? fmtTokens(planLimit - planUsed) : '—'}</div>
-                <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>{planLimit > 0 ? `of ${fmtTokens(planLimit)} remaining` : 'Upgrade for plan tokens'}</div>
+                <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Plan Credits</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#89b4fa', marginBottom: 4 }}>{planLimit > 0 ? (planLimit - planUsed).toLocaleString() : '—'}</div>
+                <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>{planLimit > 0 ? `of ${planLimit.toLocaleString()} remaining` : 'Upgrade for plan credits'}</div>
                 <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${pct(planUsed, planLimit)}%`, background: 'linear-gradient(90deg, #89b4fa, #74c7ec)', borderRadius: 3, transition: 'width 0.5s' }} />
                 </div>
@@ -10695,7 +11141,7 @@ export function BillingPage() {
             <div style={{ ...card, marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>Top-Up Balance</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#f9e2af' }}>{fmtTokens(topUpBalance)}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#f9e2af' }}>{topUpBalance.toLocaleString()}</div>
               </div>
               <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 10, color: '#f9e2af', background: 'rgba(249,226,175,0.10)' }}>Active</span>
             </div>
@@ -10798,7 +11244,7 @@ export function ConnectionsPage() {
       <p style={pageSubtitle}>{t('dash.connections.subtitle')}</p>
 
       <div style={{ ...card, textAlign: 'center', padding: '32px 20px', marginBottom: 24 }}>
-        <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDD17'}</div>
+        <div style={{ marginBottom: 8, color: '#a855f7' }}><PhLink size={36} weight="duotone" /></div>
         <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.connections.coming_soon')}</div>
         <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.connections.coming_soon_desc')}</div>
       </div>
@@ -12741,3 +13187,368 @@ export function _CreativeLibraryTab() {
   );
 }
 
+
+
+/* ===== Models — public benchmark leaderboard ============================
+   Reads ava-supernova-bench/leaderboard.json from raw GitHub. Renders the
+   heatmap + plain-language summaries any user can audit themselves by
+   visiting the public bench repo. No platform middleman: the bytes
+   shown here are the bytes anyone visiting raw.githubusercontent.com
+   sees. That equivalence is the trust claim.
+   ====================================================================== */
+export function ModelsPage() {
+  useLocale();
+  const [leaderboard, setLeaderboard] = useState(() => {
+    try { return getCachedBenchLeaderboard(); } catch { return null; }
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const fresh = await fetchPublicBenchLeaderboard();
+      if (fresh) setLeaderboard(fresh);
+      else setError("The public benchmark repo isn't live yet — the leaderboard publishes the moment Ava's first run batch is pushed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!leaderboard || isCachedBenchLeaderboardStale()) void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const cellColor = (score: number | undefined): string => {
+    if (score == null) return 'rgba(49,34,68,0.4)';
+    if (score >= 90) return 'rgba(34,197,94,0.55)';
+    if (score >= 75) return 'rgba(34,197,94,0.35)';
+    if (score >= 60) return 'rgba(249,226,175,0.45)';
+    if (score >= 40) return 'rgba(251,146,60,0.45)';
+    return 'rgba(239,68,68,0.45)';
+  };
+
+  return (
+    <div style={pageWrapper}>
+      <div style={{ width: '100%' }}>
+        <div style={{ marginBottom: 20 }}>
+          <div style={pageTitle}>Models</div>
+          <div style={pageSubtitle}>Real coding tasks. Real model outputs. Real receipts. Auditable in the public bench repo.</div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 11, color: '#6c7086' }}>
+            {leaderboard ? `Generated ${leaderboard.generated_at} · ${leaderboard.total_runs} total runs · ${leaderboard.models.length} models` : 'No leaderboard data yet'}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {/* GitHub link only shows once data has actually published —
+                before that the URL would 404 and we'd be teasing a repo
+                that doesn't exist yet. */}
+            {leaderboard && (
+              <button
+                onClick={() => {
+                  import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl('https://github.com/AugmentedValueAcceleration/ava-supernova-bench')).catch(() => {});
+                }}
+                style={{
+                  padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.25)',
+                  background: 'rgba(168,85,247,0.08)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer',
+                }}
+              >
+                View on GitHub
+              </button>
+            )}
+            <button
+              onClick={() => void refresh()}
+              disabled={loading}
+              style={{
+                padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.25)',
+                background: 'rgba(26, 16, 40, 0.6)', color: '#cdd6f4', fontSize: 11,
+                cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.5 : 1,
+              }}
+            >
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {error && !leaderboard && (
+          <div style={{ ...card, padding: 24, textAlign: 'center' }}>
+            <div style={{ marginBottom: 12, color: '#a855f7', display: 'flex', justifyContent: 'center' }}>
+              <PhRocket size={40} weight="duotone" />
+            </div>
+            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>Leaderboard launching soon</div>
+            <div style={{ fontSize: 12, color: '#6c7086', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>{error}</div>
+          </div>
+        )}
+
+        {leaderboard && (
+          <>
+            <div style={{ ...card, padding: 16, marginBottom: 16, overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 4 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', fontSize: 11, color: '#6c7086', fontWeight: 500, padding: '6px 10px' }}>Model</th>
+                    {leaderboard.categories.map(cat => (
+                      <th key={cat} style={{ textAlign: 'center', fontSize: 10, color: '#6c7086', fontWeight: 500, padding: '6px 8px', minWidth: 110 }}>
+                        {BENCH_CATEGORY_LABELS[cat]}
+                      </th>
+                    ))}
+                    <th style={{ textAlign: 'center', fontSize: 10, color: '#6c7086', fontWeight: 500, padding: '6px 8px' }}>Overall</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.models.map(m => (
+                    <tr key={m.model_id}>
+                      <td style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', padding: '8px 10px' }}>{m.display_name}</td>
+                      {leaderboard.categories.map(cat => {
+                        const cell = m.scores[cat];
+                        const lowConfidence = cell && cell.sample_size < 10;
+                        return (
+                          <td key={cat}
+                            title={cell ? `${cell.score.toFixed(1)}% over ${cell.sample_size} runs${lowConfidence ? ' (low confidence)' : ''}` : 'no runs in this category yet'}
+                            style={{
+                              textAlign: 'center', fontSize: 11, fontFamily: 'monospace', color: '#cdd6f4',
+                              background: cellColor(cell?.score), borderRadius: 6, padding: '10px 8px',
+                              opacity: lowConfidence ? 0.5 : 1,
+                            }}>
+                            {cell ? `${cell.score.toFixed(0)}%` : '—'}
+                          </td>
+                        );
+                      })}
+                      <td style={{ textAlign: 'center', fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: '#cdd6f4', background: cellColor(m.overall_pass_rate), borderRadius: 6, padding: '10px 8px' }}>
+                        {m.overall_pass_rate.toFixed(0)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              {leaderboard.models.map(m => (
+                <div key={m.model_id} style={{ ...card, padding: '12px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{m.display_name}</span>
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: m.overall_pass_rate >= 80 ? '#a6e3a1' : m.overall_pass_rate >= 60 ? '#f9e2af' : '#f38ba8' }}>
+                      {m.overall_pass_rate.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6c7086', marginTop: 4 }}>{m.summary}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div style={{ ...card, padding: 16, fontSize: 11, color: '#6c7086', lineHeight: 1.7 }}>
+          <strong style={{ color: '#cdd6f4' }}>How this works.</strong> Ava runs a hand-curated suite of real coding tasks against every supported model on a weekly cadence. Every score links to the exact prompt sent and the exact response received — open the public repo to read any transcript, propose a tighter scoring rubric, or reproduce a score on your own machine with one command. No user data ever enters this repo.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ===== IDE Audit View ===================================================
+   Inline-style component for the IDE History → Audit tab. Mirrors the
+   extension's AuditView feature-for-feature: pattern findings strip,
+   search, risk + status filters, cost column, export buttons. Lives
+   here as a small component (rather than a separate file) so it's
+   colocated with UsagePage that owns the audit state.
+   ====================================================================== */
+interface IdeAuditEntry {
+  timestamp: string;
+  toolName: string;
+  category: string;
+  riskLevel: string;
+  approvalMethod: string;
+  status: string;
+  argsSummary: string;
+  fullArgs?: Record<string, unknown>;
+  result?: string;
+  cost?: { mode: 'platform' | 'byok'; credits?: number; usd?: number; tokens?: { input: number; output: number }; provider?: string; model?: string };
+}
+interface IdeAuditFinding {
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  suggestion?: string;
+}
+function ideFormatAuditCost(cost: IdeAuditEntry['cost']): string {
+  if (!cost) return '—';
+  if (cost.mode === 'platform' && cost.credits != null) return `${cost.credits} cr`;
+  if (cost.mode === 'byok' && cost.usd != null) return `$${cost.usd.toFixed(cost.usd >= 0.01 ? 4 : 6)}`;
+  return '—';
+}
+function ideDetectAuditPatterns(entries: IdeAuditEntry[]): IdeAuditFinding[] {
+  const findings: IdeAuditFinding[] = [];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const recent = entries.filter(e => e.timestamp >= sevenDaysAgo);
+  if (recent.length === 0) return [];
+  const byTool = new Map<string, { auto: number; autoFailed: number }>();
+  for (const e of recent) {
+    if (e.approvalMethod !== 'auto') continue;
+    const t = byTool.get(e.toolName) ?? { auto: 0, autoFailed: 0 };
+    t.auto++;
+    if (e.status === 'failed' || e.status === 'denied') t.autoFailed++;
+    byTool.set(e.toolName, t);
+  }
+  for (const [tool, s] of byTool) {
+    if (s.auto >= 5 && s.autoFailed / s.auto > 0.2) {
+      findings.push({
+        severity: 'warning',
+        message: `You auto-approve ${tool} but ${Math.round((s.autoFailed / s.auto) * 100)}% of those calls fail (${s.autoFailed} of ${s.auto} this week).`,
+        suggestion: 'Consider tightening the approval rule to first-time, so failures get a second look.',
+      });
+    }
+  }
+  const dangerousSucceeded = recent.filter(e => e.riskLevel === 'dangerous' && e.status === 'success');
+  if (dangerousSucceeded.length > 0) {
+    findings.push({
+      severity: 'critical',
+      message: `${dangerousSucceeded.length} dangerous tool call${dangerousSucceeded.length === 1 ? '' : 's'} succeeded this week.`,
+      suggestion: 'Review these in the audit table to confirm they touched only what you expected.',
+    });
+  }
+  return findings;
+}
+function IdeAuditView({
+  entries, expandedIdx, onToggleExpand,
+  search, onSearchChange, riskFilter, onRiskFilterChange, statusFilter, onStatusFilterChange,
+  onExport,
+}: {
+  entries: IdeAuditEntry[];
+  expandedIdx: number | null;
+  onToggleExpand: (i: number) => void;
+  search: string;
+  onSearchChange: (v: string) => void;
+  riskFilter: string;
+  onRiskFilterChange: (v: string) => void;
+  statusFilter: string;
+  onStatusFilterChange: (v: string) => void;
+  onExport: (format: 'markdown' | 'json') => void;
+}) {
+  const findings = useMemo(() => ideDetectAuditPatterns(entries), [entries]);
+  const filtered = useMemo(() => entries.filter(e => {
+    if (search && !e.toolName.toLowerCase().includes(search.toLowerCase()) && !e.argsSummary.toLowerCase().includes(search.toLowerCase())) return false;
+    if (riskFilter !== 'all' && e.riskLevel !== riskFilter) return false;
+    if (statusFilter !== 'all' && e.status !== statusFilter) return false;
+    return true;
+  }), [entries, search, riskFilter, statusFilter]);
+  const totals = useMemo(() => {
+    let credits = 0, usd = 0;
+    for (const e of filtered) {
+      if (e.cost?.credits) credits += e.cost.credits;
+      if (e.cost?.usd) usd += e.cost.usd;
+    }
+    return { credits, usd };
+  }, [filtered]);
+
+  const inputStyle: React.CSSProperties = {
+    background: 'rgba(49,34,68,0.5)', border: '1px solid rgba(168,85,247,0.18)',
+    borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#cdd6f4', outline: 'none',
+  };
+  const btnStyle: React.CSSProperties = {
+    padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.18)',
+    background: 'rgba(49,34,68,0.5)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer',
+  };
+  const sevColors: Record<IdeAuditFinding['severity'], { bg: string; border: string; text: string }> = {
+    info:     { bg: 'rgba(49,34,68,0.5)',    border: 'rgba(168,85,247,0.18)', text: '#a6adc8' },
+    warning:  { bg: 'rgba(249,226,175,0.06)', border: 'rgba(249,226,175,0.35)', text: '#f9e2af' },
+    critical: { bg: 'rgba(243,139,168,0.06)', border: 'rgba(243,139,168,0.4)',  text: '#f9b3c4' },
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {findings.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {findings.map((f, i) => {
+            const c = sevColors[f.severity];
+            return (
+              <div key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, padding: '10px 14px', color: c.text, fontSize: 11, lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 600 }}>{f.message}</div>
+                {f.suggestion && <div style={{ marginTop: 4, opacity: 0.85, fontSize: 10 }}>{f.suggestion}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', background: 'rgba(26,16,40,0.6)', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 12, padding: 10 }}>
+        <input type="text" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Filter by tool name or argument..." style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+        <select value={riskFilter} onChange={(e) => onRiskFilterChange(e.target.value)} style={inputStyle}>
+          <option value="all">All risk</option>
+          <option value="safe">Safe</option>
+          <option value="write">Write</option>
+          <option value="dangerous">Dangerous</option>
+        </select>
+        <select value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value)} style={inputStyle}>
+          <option value="all">All status</option>
+          <option value="success">Success</option>
+          <option value="failed">Failed</option>
+          <option value="denied">Denied</option>
+        </select>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <button onClick={() => onExport('markdown')} style={btnStyle} title="Export as Markdown — human-readable, never leaves your machine">Export .md</button>
+          <button onClick={() => onExport('json')} style={btnStyle} title="Export as JSON — for SIEM ingest or programmatic analysis">Export .json</button>
+        </div>
+      </div>
+      {(totals.credits > 0 || totals.usd > 0) && (
+        <div style={{ display: 'flex', gap: 16, background: 'rgba(26,16,40,0.6)', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 12, padding: '8px 14px', fontSize: 11 }}>
+          {totals.credits > 0 && <span><span style={{ color: '#6c7086' }}>Credits:</span> <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{totals.credits.toLocaleString()}</span></span>}
+          {totals.usd > 0 && <span><span style={{ color: '#6c7086' }}>BYOK estimate:</span> <span style={{ color: '#cdd6f4', fontWeight: 600 }}>${totals.usd.toFixed(4)}</span></span>}
+          <span style={{ marginLeft: 'auto', color: '#6c7086' }}>{filtered.length} of {entries.length} entries shown</span>
+        </div>
+      )}
+      {filtered.length === 0 ? (
+        <div style={{ background: 'rgba(26,16,40,0.6)', border: '1px dashed rgba(168,85,247,0.12)', borderRadius: 12, padding: '32px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>📋</div>
+          <div style={{ fontSize: 13, color: '#6c7086' }}>{entries.length === 0 ? 'No tool calls recorded yet.' : 'No entries match your filters.'}</div>
+        </div>
+      ) : (
+        <div style={{ background: 'rgba(26,16,40,0.6)', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 60px 90px 80px 60px', gap: 8, padding: '8px 12px', borderBottom: '1px solid rgba(168,85,247,0.12)', fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' as const, color: '#6c7086' }}>
+            <span>Time</span><span>Tool</span><span>Category</span><span>Risk</span><span>Approval</span><span style={{ textAlign: 'right' }}>Cost</span><span>Status</span>
+          </div>
+          {filtered.map((entry, i) => {
+            const time = new Date(entry.timestamp).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const isExp = expandedIdx === i;
+            const approvalColors: Record<string, string> = { 'auto': '#34d399', 'first-time': '#60a5fa', 'user-approved': '#fbbf24', 'denied': '#f87171' };
+            const statusColors: Record<string, string> = { 'success': '#34d399', 'failed': '#f87171', 'denied': '#f87171' };
+            const riskColors: Record<string, string> = { 'safe': '#34d399', 'write': '#fbbf24', 'dangerous': '#f87171' };
+            const catLabels: Record<string, string> = { file_ops: 'File Ops', shell: 'Shell', git: 'Git', web: 'Web', media: 'Media', database: 'Database', system: 'System', documents: 'Docs', memory: 'Memory', learning: 'Learning' };
+            return (
+              <div key={i}>
+                <button onClick={() => onToggleExpand(i)} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 60px 90px 80px 60px', gap: 8, width: '100%', padding: '8px 12px', textAlign: 'left', fontSize: 11, border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                  <span style={{ color: '#6c7086', fontFamily: 'monospace', fontSize: 10 }}>{time}</span>
+                  <span style={{ color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.toolName}</span>
+                  <span style={{ color: '#a6adc8' }}>{catLabels[entry.category] || entry.category}</span>
+                  <span style={{ color: riskColors[entry.riskLevel] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.riskLevel}</span>
+                  <span style={{ color: approvalColors[entry.approvalMethod] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.approvalMethod}</span>
+                  <span style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 10, color: '#a6adc8' }}>{ideFormatAuditCost(entry.cost)}</span>
+                  <span style={{ color: statusColors[entry.status] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.status}</span>
+                </button>
+                {isExp && (
+                  <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ background: 'rgba(49,34,68,0.3)', borderRadius: 8, padding: 10 }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#6c7086', marginBottom: 4 }}>Arguments</div>
+                      <pre style={{ fontSize: 10, color: '#a6adc8', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 160, overflowY: 'auto', margin: 0 }}>
+                        {entry.fullArgs ? JSON.stringify(entry.fullArgs, null, 2) : entry.argsSummary}
+                      </pre>
+                    </div>
+                    {entry.result && (
+                      <div style={{ background: 'rgba(49,34,68,0.3)', borderRadius: 8, padding: 10 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: '#6c7086', marginBottom: 4 }}>Result</div>
+                        <pre style={{ fontSize: 10, color: '#a6adc8', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 160, overflowY: 'auto', margin: 0 }}>{entry.result}</pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

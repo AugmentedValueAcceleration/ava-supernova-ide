@@ -137,6 +137,15 @@ export class SidecarManager {
   private ready = false;
   private sidecarPath: string = '';
   private isDev: boolean;
+  // Resilience state — captures the last config passed to start() so
+  // we can re-run init verbatim when the child dies unexpectedly.
+  // intentionalStop flips true around stop() calls so the close handler
+  // knows the user asked for it (don't respawn) vs a crash (respawn).
+  private lastConfig: SidecarConfig | null = null;
+  private intentionalStop = false;
+  private respawnAttempts = 0;
+  private static MAX_RESPAWN_ATTEMPTS = 3;
+  private static RESPAWN_DELAY_MS = 600;
 
   constructor(sidecarPath?: string) {
     // Detect dev vs production: dev uses localhost URL, production uses tauri://
@@ -172,6 +181,10 @@ export class SidecarManager {
       await this.stop();
     }
 
+    // Cache the config for auto-respawn after an unexpected close. Stored
+    // on every start() so a model swap or workspace change updates what
+    // we'd re-init with.
+    this.lastConfig = config;
     this.ready = false;
 
     // Resolve the sidecar script path
@@ -192,6 +205,10 @@ export class SidecarManager {
         const event: SidecarEvent = JSON.parse(line);
         if (event.event === 'ready') {
           this.ready = true;
+          // Reset the respawn budget — a successful re-init means
+          // we got back to a healthy state, so the NEXT crash gets a
+          // fresh 3-attempt allowance instead of starting partway used.
+          this.respawnAttempts = 0;
         }
         // Handle computer use requests from sidecar — invoke Tauri commands
         if (event.event === 'computer_use_request' && event.requestId && event.action) {
@@ -210,11 +227,33 @@ export class SidecarManager {
       this.emitEvent('stderr', { event: 'stderr', message: redacted });
     });
 
-    // Listen for process close
+    // Listen for process close. Distinguishes intentional (user clicked
+    // stop / called stop() / start() called us during a deliberate
+    // restart) from unexpected death (crash, OOM, OS sleep/wake) and
+    // auto-respawns the latter using the cached lastConfig. Without
+    // this, a sidecar crash silently leaves the IDE talking to nothing
+    // until the next "Not initialized" surfaces — which is exactly the
+    // failure mode the user reported.
     command.on('close', (data) => {
       this.child = null;
       this.ready = false;
+      const intentional = this.intentionalStop;
       this.emitEvent('close', { event: 'close', message: `Sidecar exited (code ${data.code ?? 'unknown'})` });
+      if (intentional || !this.lastConfig) return;
+      if (this.respawnAttempts >= SidecarManager.MAX_RESPAWN_ATTEMPTS) {
+        this.emitEvent('error', { event: 'error', message: 'Sidecar crashed and exceeded auto-respawn budget. Reload the IDE to restart it.' });
+        return;
+      }
+      this.respawnAttempts++;
+      const delay = SidecarManager.RESPAWN_DELAY_MS * Math.pow(2, this.respawnAttempts - 1);
+      this.emitEvent('info', { event: 'info', message: `Sidecar died unexpectedly — auto-respawning (attempt ${this.respawnAttempts}/${SidecarManager.MAX_RESPAWN_ATTEMPTS}, in ${delay}ms)…` });
+      setTimeout(() => {
+        const cfg = this.lastConfig;
+        if (!cfg) return;
+        this.start(cfg).catch((err) => {
+          this.emitEvent('error', { event: 'error', message: `Auto-respawn failed: ${err instanceof Error ? err.message : String(err)}` });
+        });
+      }, delay);
     });
 
     command.on('error', (err: string) => {
@@ -350,6 +389,16 @@ export class SidecarManager {
    */
   async setModel(model: string): Promise<void> {
     await this.send({ cmd: 'set_model', model });
+  }
+
+  /**
+   * Ask the sidecar to format the audit log as a Markdown or JSON
+   * bundle. The bundle comes back as an `audit_export_ready` event
+   * carrying `{ filename, content, format, mimeType }` so the caller
+   * can open a save dialog.
+   */
+  async exportAuditLog(format: 'markdown' | 'json'): Promise<void> {
+    await this.send({ cmd: 'export_audit_log', format });
   }
 
   /**
@@ -496,11 +545,16 @@ export class SidecarManager {
    */
   async stop(): Promise<void> {
     if (this.child) {
+      // Tell the close handler this was deliberate so it doesn't trigger
+      // the auto-respawn loop. Cleared in the close handler after read.
+      this.intentionalStop = true;
       try {
         await this.child.kill();
       } catch { /* already dead */ }
       this.child = null;
       this.ready = false;
+      // Reset the flag in case the close event lagged or never fires.
+      setTimeout(() => { this.intentionalStop = false; }, 100);
     }
   }
 

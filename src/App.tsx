@@ -172,7 +172,11 @@ export default function App() {
     <ActivityBar active={activeActivity} onSelect={toggleActivity} sidebarOpen={sidebarOpen} />
   );
 
-  const sidebar = sidebarOpen ? (
+  // Sidebar always mounts so Dashboard's icons-only rail is reachable
+  // when collapsed. The Sidebar component handles the collapsed branch
+  // internally — for non-Dashboard panels (Explorer / Search / Git etc.)
+  // it returns null because their content has no icon shorthand.
+  const sidebar = (
     <Sidebar
       activePanel={activeActivity}
       position={sidebarPosition}
@@ -180,8 +184,9 @@ export default function App() {
       onDashboardSelect={handleDashboardSelect}
       activeDashboardPage={dashboardPage}
       onFileOpen={handleFileOpen}
+      collapsed={!sidebarOpen}
     />
-  ) : null;
+  );
 
   // ── Tick Engine — background awareness ──────────────────────────────
   const tickRef = useRef<TickEngine | null>(null);
