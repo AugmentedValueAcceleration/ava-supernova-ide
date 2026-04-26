@@ -53,6 +53,7 @@ const {
   ToolRegistry,
   ProviderRegistry,
   PlatformProvider,
+  GenericProvider,
   MemoryManager,
   TaskManager,
   JournalManager,
@@ -459,6 +460,33 @@ async function handleInit(data) {
       }
     }
 
+    // Register local / custom OpenAI-compatible provider — Ollama, LM Studio,
+    // vLLM, or anything else speaking the OpenAI Chat Completions API. The
+    // user supplies baseUrl + modelName via the IDE Settings page, persisted
+    // to localStorage and passed through here on init.
+    if (config.local?.baseUrl && config.local?.modelName) {
+      try {
+        const localModel = {
+          id: config.local.modelName,
+          name: config.local.modelLabel || config.local.modelName,
+          provider: 'generic',
+          contextWindow: 32000,
+          maxOutputTokens: 4096,
+          supportsToolCalls: true,
+          supportsStreaming: true,
+        };
+        const localProvider = new GenericProvider({
+          apiKey: config.local.apiKey || 'local',
+          baseUrl: config.local.baseUrl,
+          models: [localModel],
+        });
+        providerRegistry.registerCustom('generic', localProvider);
+        emit({ event: 'info', message: `Local provider registered: ${config.local.modelName} @ ${config.local.baseUrl}` });
+      } catch (err) {
+        emit({ event: 'info', message: `Local provider error: ${err.message}` });
+      }
+    }
+
     // Register platform provider when user has a platform key
     if (config.platformKey) {
       try {
@@ -501,7 +529,13 @@ async function handleInit(data) {
     // toolRegistry.registerBuiltins() above. They call into the Tauri
     // layer via the providers on sharedState (uiaProvider, inputProvider,
     // browserProvider, windowProvider). Nothing is registered inline here.
-    // MODE_ALLOWED_TOOLS keeps them off outside of `desktop` mode.
+    //
+    // Schema visibility per mode is enforced inside agent.ts: when the
+    // user message has a [Desktop Automation Mode] prefix, the agent
+    // applies MODE_ALLOWED_TOOLS.desktop; when no prefix is present
+    // (default work / code turns), the agent applies DESKTOP_ONLY_TOOLS
+    // as a deny-list so desktop_* / browser_* never leak into a coding
+    // turn the operator never asked to spread to the desktop.
     //
     // DELETED (replaced by core tools): browser_navigate, browser_snapshot,
     // browser_click, browser_type, browser_close, desktop_list_elements,
@@ -697,25 +731,40 @@ async function handleInit(data) {
       }
     } catch { /* non-fatal */ }
 
+    // Stash args for rebuild on mode switch. The system prompt now varies
+    // with currentMode (desktop mode injects an additional rules block
+    // that doesn't apply in code mode), and the operator can toggle modes
+    // mid-session via set_mode — when that happens we need to rebuild.
+    const systemPromptArgs = {
+      cwd,
+      platform: platform(),
+      shell: process.env.SHELL ?? (process.platform === 'win32' ? 'bash' : '/bin/bash'),
+      supportsVision: resolved.model.supportsVision,
+      projectInstructions: projectInstructions ?? undefined,
+      memory: memory || undefined,
+      autoMemory: config.autoMemory ?? true,
+      personality: personalityPrefix || undefined,
+      language,
+      knowledgeContext,
+      excludeTools: ['computer_use'],
+      desktopMode: currentMode === 'desktop',
+      // desktopPermissionLevel intentionally omitted at init — currentMode
+      // at init is always 'work' so the desktop block isn't rendered yet,
+      // and once the operator enters desktop mode the IDE pushes the level
+      // via set_desktop_permission_level which triggers a rebuild with the
+      // correct value. Avoids the temporal-dead-zone read of sharedState
+      // (which is constructed further down in init).
+    };
+    globalThis._systemPromptArgs = systemPromptArgs;
+
     // Conversation + system prompt
     conversation = new Conversation();
-    conversation.setSystemPrompt(
-      buildSystemPrompt({
-        cwd,
-        platform: platform(),
-        shell: process.env.SHELL ?? (process.platform === 'win32' ? 'bash' : '/bin/bash'),
-        supportsVision: resolved.model.supportsVision,
-        projectInstructions: projectInstructions ?? undefined,
-        memory: memory || undefined,
-        autoMemory: config.autoMemory ?? true,
-        personality: personalityPrefix || undefined,
-        language,
-        knowledgeContext,
-        excludeTools: ['computer_use'],
-      })
-    );
+    conversation.setSystemPrompt(buildSystemPrompt(systemPromptArgs));
 
-    // Inject user identity so Ava knows who she's talking to
+    // Inject user identity so Ava knows who she's talking to. Stored as a
+    // suffix on globalThis so rebuilds on mode switch can re-append it
+    // without losing it.
+    let userInfoSuffix = '';
     if (config.userName || config.userEmail) {
       const msgs = conversation.getMessages();
       const sysMsgContent = msgs[0]?.role === 'system' ? msgs[0].content : '';
@@ -724,9 +773,9 @@ async function handleInit(data) {
         config.userEmail ? `Email: ${config.userEmail}` : null,
         config.userTier ? `Plan: ${config.userTier}` : null,
       ].filter(Boolean).join(' | ');
-      conversation.setSystemPrompt(
-        sysMsgContent + `\n\n[User: ${userInfo}]\nAddress the user by their name when appropriate.`
-      );
+      userInfoSuffix = `\n\n[User: ${userInfo}]\nAddress the user by their name when appropriate.`;
+      globalThis._systemPromptUserInfoSuffix = userInfoSuffix;
+      conversation.setSystemPrompt(sysMsgContent + userInfoSuffix);
     }
 
     // Inject working hours into the system prompt so Ava respects the user's schedule
@@ -1445,9 +1494,58 @@ function handleInject(data) {
   emitError('Cannot inject — no active run.');
 }
 
+function handleSetDesktopPermissionLevel(data) {
+  const VALID = new Set(['watch', 'ask', 'drive']);
+  const level = VALID.has(data?.level) ? data.level : 'ask';
+  const sharedState = globalThis._sharedState || {};
+  const previousLevel = sharedState.desktopPermissionLevel ?? 'ask';
+  sharedState.desktopPermissionLevel = level;
+  emit({ event: 'desktop_permission_level_changed', level });
+
+  // Rebuild the system prompt so the level description Ava reads matches
+  // the level the operator just set. Without this, the prompt's
+  // permission-level line would lag the actual gate behaviour by a turn,
+  // which is exactly the kind of trust-boundary slip we're closing.
+  if (
+    conversation &&
+    globalThis._systemPromptArgs &&
+    currentMode === 'desktop' &&
+    previousLevel !== level
+  ) {
+    const newArgs = {
+      ...globalThis._systemPromptArgs,
+      desktopPermissionLevel: level,
+    };
+    globalThis._systemPromptArgs = newArgs;
+    const suffix = globalThis._systemPromptUserInfoSuffix || '';
+    conversation.setSystemPrompt(buildSystemPrompt(newArgs) + suffix);
+    emit({ event: 'info', message: `Desktop permission level → ${level}; system prompt rebuilt` });
+  }
+}
+
 function handleSetMode(data) {
+  const previousMode = currentMode;
   currentMode = data.mode || 'work';
   emit({ event: 'mode_changed', mode: currentMode });
+
+  // Rebuild the system prompt when crossing the desktop boundary so the
+  // desktop-mode rules block is added on entry and removed on exit. Code
+  // mode treating desktop tools as just-another-tool is exactly the
+  // failure mode we're avoiding — Ava must know what mode she's in.
+  const crossedDesktopBoundary =
+    (previousMode === 'desktop') !== (currentMode === 'desktop');
+  if (crossedDesktopBoundary && conversation && globalThis._systemPromptArgs) {
+    const sharedState = globalThis._sharedState || {};
+    const newArgs = {
+      ...globalThis._systemPromptArgs,
+      desktopMode: currentMode === 'desktop',
+      desktopPermissionLevel: sharedState.desktopPermissionLevel,
+    };
+    globalThis._systemPromptArgs = newArgs;
+    const suffix = globalThis._systemPromptUserInfoSuffix || '';
+    conversation.setSystemPrompt(buildSystemPrompt(newArgs) + suffix);
+    emit({ event: 'info', message: `System prompt rebuilt for ${currentMode} mode` });
+  }
 }
 
 async function handleSetModel(data) {
@@ -1640,6 +1738,9 @@ rl.on('line', async (line) => {
       break;
     case 'set_model':
       handleSetModel(data).catch((err) => emitError(err.message));
+      break;
+    case 'set_desktop_permission_level':
+      handleSetDesktopPermissionLevel(data);
       break;
     case 'clear_memory':
       if (memoryManager) {

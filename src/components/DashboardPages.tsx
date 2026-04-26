@@ -31,6 +31,8 @@ import {
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
+import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
+import { Tooltip } from './Tooltip';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
 import { DocumentationPage } from './DocumentationPage';
 import { ContextBar } from './ContextBar';
@@ -1878,6 +1880,37 @@ export function AvaChatPage() {
     { id: 'desktop', label: 'Desktop Automation', icon: '@@', prefix: '[Desktop Automation Mode] ', placeholder: 'Open Notepad, launch Chrome, control your screen...' },
   ];
 
+  // ── Desktop-capable model IDs ─────────────────────────────────────────────
+  // Mirrors the `desktopCapable: true` flag set in @ava/core's model
+  // definitions. Models clicking, typing, and launching apps need (a)
+  // reliable native tool-call argument formatting, (b) fast enough latency
+  // for a 6-step plan to feel responsive. Flash-class models drop tool-call
+  // args under sequential pressure; media models (MiniMax) aren't agentic
+  // coordinators. Both are excluded.
+  //
+  // 'auto' (Maestro) and 'supernova' resolve to known coordinators server-
+  // side (Qwen 3.6 Plus / DeepSeek V4 Pro), both desktop-capable, so they
+  // count.
+  const DESKTOP_CAPABLE_MODEL_IDS = new Set<string>([
+    'auto', 'supernova',
+    // Platform / Qwen direct
+    'qwen3.6-plus', 'qwen3.5-plus', 'qwen3.5-omni-plus',
+    // Platform DeepSeek (admin-gated)
+    'deepseek-v4-pro-platform', 'deepseek-v4-pro',
+    // Anthropic
+    'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+    // Kimi
+    'kimi-k2.6', 'kimi-k2.5',
+    // Mistral
+    'mistral-large-latest', 'codestral-latest', 'devstral-latest',
+    // Zhipu / GLM
+    'glm-5',
+    // Xiaomi MiMo
+    'mimo-v2.5-pro', 'mimo-v2.5',
+  ]);
+  const isDesktopCapable = (modelId: string | undefined): boolean =>
+    !!modelId && DESKTOP_CAPABLE_MODEL_IDS.has(modelId);
+
   // ── BYOK model map — fetched from platform, fallback to hardcoded ──────────
   const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
@@ -1977,6 +2010,16 @@ export function AvaChatPage() {
     return stored;
   });
   const [mode, setMode] = useState<AvaMode>(() => (localStorage.getItem('ava-ide-chat-mode') as AvaMode) || 'work');
+  // Desktop permission level — shared with the Settings page via a hook
+  // backed by localStorage + a window event. Either picker (chat-bar pill
+  // or Settings page) updates both. 'watch' = narrate only, 'ask' = confirm
+  // each mutative tool (default), 'drive' = run reversible plan steps
+  // silently after one approval; irreversibles always re-prompt regardless.
+  const [desktopPermLevel, setDesktopPermLevel] = useDesktopPermLevel();
+  // Desktop-mode model-capability warning — set on entering desktop mode
+  // while the active coordinator isn't desktop-capable. The modal offers
+  // one-click switch to a recommended coordinator; no silent autoswitch.
+  const [desktopModelWarn, setDesktopModelWarn] = useState<{ currentName: string } | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [statusText, setStatusText] = useState('');
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
@@ -2509,6 +2552,18 @@ export function AvaChatPage() {
         const generationLocalOnly = idesSyncPrefs.generations === false || !idesCloudAllowed;
         const learningLocalOnly = idesSyncPrefs.learning === false || !idesCloudAllowed;
 
+        // Local / custom OpenAI-compatible provider (Ollama, LM Studio, vLLM).
+        // Operator configures via Settings → Models → Local. Both fields
+        // required to register; if either is missing we just don't pass it
+        // and the sidecar skips registration cleanly.
+        const localBaseUrl = localStorage.getItem('ava-ide-local-baseurl') || '';
+        const localModelName = localStorage.getItem('ava-ide-local-model') || '';
+        const localApiKey = localStorage.getItem('ava-ide-local-apikey') || '';
+        const localModelLabel = localStorage.getItem('ava-ide-local-label') || '';
+        const localBlock = (localBaseUrl && localModelName)
+          ? { baseUrl: localBaseUrl, modelName: localModelName, apiKey: localApiKey || undefined, modelLabel: localModelLabel || undefined }
+          : undefined;
+
         const config: SidecarConfig = {
           providers,
           platformKey: getPlatformKey() || undefined,
@@ -2531,6 +2586,7 @@ export function AvaChatPage() {
           holoApiKey: localStorage.getItem('ava-ide-holo-key') || undefined,
           generationLocalOnly,
           learningLocalOnly,
+          local: localBlock,
         } as SidecarConfig;
 
         await sidecar.start(config);
@@ -2614,11 +2670,26 @@ export function AvaChatPage() {
       // shortcut when DESKTOP_MODE_ACTIVE is true.
       if (mode === 'desktop' && previousMode !== 'desktop') {
         invoke('desktop_mode_start').catch(() => {});
+        // Push the operator's saved permission level on entry so the
+        // sidecar's sharedState matches the IDE's saved choice instead
+        // of falling back to whatever was set at sidecar init.
+        sidecar.setDesktopPermissionLevel(desktopPermLevel).catch(() => {});
+        // Capability check — if the active coordinator isn't on the
+        // desktop-capable list, warn before the operator fires off a
+        // click on a model that drops tool-call args under load.
+        if (!isDesktopCapable(model)) {
+          setDesktopModelWarn({ currentName: activeModelName || model });
+        }
       } else if (previousMode === 'desktop' && mode !== 'desktop') {
         invoke('desktop_mode_stop').catch(() => {});
       }
     }
-  }, [model, mode, sidecarReady]);
+  }, [model, mode, sidecarReady, desktopPermLevel]);
+
+  // Permission-level sync — handled inside the useDesktopPermLevel hook
+  // (localStorage + window event + sidecar push). The on-entry push above
+  // covers the case where the operator changed the level while not in
+  // desktop mode and then switched in.
 
   // ── Desktop kill-switch listener ──────────────────────────────────────
   // Ctrl+Alt+K global hotkey, tray "Stop Desktop Mode", or manual
@@ -4630,8 +4701,12 @@ export function AvaChatPage() {
         // puts the "what is this?" decision in one place.
         const isPlanCard = pendingConfirm.toolName === 'desktop_plan_approve';
         const planSummary = isPlanCard ? (pendingConfirm.args?.summary as string | undefined) : undefined;
+        // Steps now optionally carry per-step risk classification (computed
+        // server-side in desktop-plan-approve.ts via classifyPlanStep). When
+        // present, render a badge per step so the operator can spot a
+        // destructive verb in step 4 without reading every line.
         const planSteps = isPlanCard
-          ? ((pendingConfirm.args?.steps as Array<{ description?: string }> | undefined) || [])
+          ? ((pendingConfirm.args?.steps as Array<{ description?: string; riskClass?: string; reasons?: string[] }> | undefined) || [])
           : [];
         const cls = pendingConfirm.desktopClassification;
         const isDesktopTool = !!cls;
@@ -4732,9 +4807,50 @@ export function AvaChatPage() {
                 margin: 0, paddingLeft: 22,
                 fontSize: 13, color: '#cdd6f4', lineHeight: '1.7',
               }}>
-                {planSteps.map((s, i) => (
-                  <li key={i} style={{ marginBottom: 2 }}>{s.description || '(unnamed step)'}</li>
-                ))}
+                {planSteps.map((s, i) => {
+                  // Per-step badge colour mirrors the card-level riskColour
+                  // map so the visual language is identical between "this
+                  // whole action is risky" and "this one step in the plan
+                  // is risky."
+                  const stepRisk = (() => {
+                    switch (s.riskClass) {
+                      case 'mutative-irreversible': return { label: 'IRREVERSIBLE', bg: 'rgba(239,68,68,0.14)', fg: '#f87171', border: 'rgba(239,68,68,0.45)' };
+                      case 'privileged':            return { label: 'PRIVILEGED', bg: 'rgba(239,68,68,0.20)', fg: '#ef4444', border: 'rgba(239,68,68,0.6)' };
+                      case 'mutative-reversible':   return { label: 'REVERSIBLE', bg: 'rgba(168,85,247,0.10)', fg: '#a855f7', border: 'rgba(168,85,247,0.28)' };
+                      default:                      return null;
+                    }
+                  })();
+                  // Only flag the operator's eye on irreversible / privileged.
+                  // Tagging every reversible step with a green "REVERSIBLE"
+                  // badge would be visual noise — they're already the default.
+                  const showBadge = stepRisk && (s.riskClass === 'mutative-irreversible' || s.riskClass === 'privileged');
+                  const reasonHint = s.reasons && s.reasons.length > 0 ? s.reasons[0] : undefined;
+                  return (
+                    <li
+                      key={i}
+                      title={reasonHint}
+                      style={{
+                        marginBottom: 4,
+                        // Subtle red tint on the row for irreversible / privileged
+                        // so the eye lands on it even before reading the badge.
+                        color: showBadge ? '#f5d0d0' : '#cdd6f4',
+                      }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span>{s.description || '(unnamed step)'}</span>
+                        {showBadge && stepRisk && (
+                          <span style={{
+                            padding: '1px 7px', borderRadius: 8, fontSize: 9, fontWeight: 700,
+                            background: stepRisk.bg, color: stepRisk.fg, border: `1px solid ${stepRisk.border}`,
+                            letterSpacing: 0.4, lineHeight: 1.4, whiteSpace: 'nowrap',
+                          }}>
+                            {stepRisk.label}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ol>
               <div style={{ fontSize: 11, color: '#6c7086', marginTop: 10, lineHeight: 1.4 }}>
                 Approving this plan covers all the reversible steps above. Dangerous actions
@@ -5030,6 +5146,58 @@ export function AvaChatPage() {
               )}
             </div>
 
+            {/* Desktop permission-level picker — visible only in desktop mode.
+               Three-state pill (Watch · Ask · Drive). Drives sharedState on
+               the sidecar, which in turn drives the safety gate's approval
+               decision and the system-prompt block Ava reads. The operator
+               always sees what level they're in; switching is one click. */}
+            {mode === 'desktop' && (() => {
+              const LEVELS: Array<{ id: 'watch' | 'ask' | 'drive'; label: string; tip: string }> = [
+                { id: 'watch', label: 'Watch', tip: 'Ava describes what she would do. You stay in control of the mouse and keyboard. Safest mode.' },
+                { id: 'ask',   label: 'Ask',   tip: 'Ava acts. You approve every click, keystroke, and app launch before it fires. Default.' },
+                { id: 'drive', label: 'Drive', tip: 'Reversible plan steps run silently after one approval. Irreversibles (Send, Pay, Delete, destructive combos) still ask each time.' },
+              ];
+              return (
+                <div
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0, alignSelf: 'center',
+                    padding: 2, borderRadius: 8, background: 'rgba(168,85,247,0.06)',
+                    border: '1px solid rgba(168,85,247,0.18)',
+                  }}
+                >
+                  {LEVELS.map(l => {
+                    const active = desktopPermLevel === l.id;
+                    return (
+                      <Tooltip key={l.id} content={l.tip}>
+                        <button
+                          onClick={() => setDesktopPermLevel(l.id)}
+                          style={{
+                            padding: '3px 10px',
+                            background: active
+                              ? (l.id === 'drive'
+                                  ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                                  : 'linear-gradient(135deg, #a855f7, #7c3aed)')
+                              : 'transparent',
+                            border: 'none',
+                            borderRadius: 6,
+                            color: active ? '#fff' : '#9399b2',
+                            fontSize: 10,
+                            fontWeight: active ? 700 : 500,
+                            cursor: 'pointer',
+                            letterSpacing: 0.3,
+                            textTransform: 'uppercase',
+                            transition: 'background 0.15s, color 0.15s',
+                          }}
+                        >
+                          {l.label}
+                        </button>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
@@ -5251,6 +5419,97 @@ export function AvaChatPage() {
         width={tasksPanelWidth}
         onWidthChange={setTasksPanelWidth}
       />
+    )}
+
+    {/* ── Desktop-mode model-capability warning ──────────────────────────
+         Fires when the operator switches into desktop mode while the
+         active coordinator isn't on the desktop-capable list. The model
+         can still tool-call in code mode just fine — it just isn't
+         reliable enough at the high-frequency, high-stakes tool cadence
+         that desktop_* tools demand. Offers one-click switch to a
+         recommended coordinator. No silent autoswitch. */}
+    {desktopModelWarn && (
+      <>
+        <div
+          onClick={() => setDesktopModelWarn(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 1100 }}
+        />
+        <div style={{
+          position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+          width: 'min(560px, 94vw)',
+          background: '#0f0a1a', border: '1px solid rgba(168,85,247,0.35)', borderRadius: 14,
+          padding: '20px 22px', zIndex: 1101,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 18 }}>⚠️</span>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>
+              Desktop mode wants a more reliable model
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: '#9399b2', lineHeight: 1.55, marginBottom: 14 }}>
+            <strong style={{ color: '#cdd6f4' }}>{desktopModelWarn.currentName}</strong> is great for chat and code, but
+            desktop automation fires many short tool calls in fast succession — clicks, keystrokes, app launches with
+            real consequences. Smaller / faster models drop tool-call arguments under that kind of load.
+            <br /><br />
+            Pick a coordinator that's been verified for desktop reliability:
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+            {([
+              { id: 'auto', label: 'Maestro', note: 'One coordinator handles everything — production-tuned.' },
+              { id: 'qwen3.6-plus', label: 'Qwen 3.6 Plus', note: 'Flagship Qwen. 1M context.' },
+              { id: 'kimi-k2.6', label: 'Kimi K2.6', note: 'Top BYOK coordinator.' },
+            ]).map(opt => {
+              const isByokOnly = opt.id === 'kimi-k2.6';
+              const hasKey = byokModels.some(m => m.id === opt.id);
+              const enabled = !isByokOnly || hasKey;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => {
+                    if (!enabled) return;
+                    setModel(opt.id);
+                    setDesktopModelWarn(null);
+                  }}
+                  disabled={!enabled}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%',
+                    padding: '10px 12px', background: enabled ? 'rgba(168,85,247,0.10)' : 'rgba(168,85,247,0.04)',
+                    border: enabled ? '1px solid rgba(168,85,247,0.25)' : '1px solid rgba(168,85,247,0.10)',
+                    borderRadius: 8, color: enabled ? '#cdd6f4' : '#6c7086',
+                    fontSize: 12, cursor: enabled ? 'pointer' : 'not-allowed', textAlign: 'left',
+                    fontFamily: 'inherit',
+                    opacity: enabled ? 1 : 0.5,
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 600 }}>{opt.label}</span>
+                    <span style={{ fontSize: 10, color: '#6c7086' }}>{opt.note}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: enabled ? '#a855f7' : '#6c7086', flexShrink: 0, marginLeft: 12 }}>
+                    {enabled ? 'Switch →' : (isByokOnly ? 'BYOK key needed' : '')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => setDesktopModelWarn(null)}
+              style={{
+                padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.20)',
+                background: 'transparent', color: '#9399b2', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+              }}
+              title="Stay on the current model — desktop tools may behave unreliably."
+            >
+              Keep current model
+            </button>
+            <span style={{ fontSize: 10, color: '#6c7086', flex: 1, textAlign: 'right' }}>
+              You can change this anytime from the model picker.
+            </span>
+          </div>
+        </div>
+      </>
     )}
     </div>
   );
@@ -10085,6 +10344,183 @@ export function UsagePage() {
   );
 }
 
+/* ===== Local Model card — Ollama / LM Studio / vLLM =====
+ *
+ * Lets the operator point Ava at any locally-hosted model that speaks
+ * the OpenAI Chat Completions API. Stores config in localStorage; the
+ * IDE init path reads it and forwards to the sidecar's GenericProvider
+ * registration. Restart of the sidecar (close + reopen the chat panel
+ * or the window) is required for changes to take effect — the sidecar
+ * registers providers at init only.
+ */
+function LocalModelSettings() {
+  const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('ava-ide-local-baseurl') || '');
+  const [modelName, setModelName] = useState(() => localStorage.getItem('ava-ide-local-model') || '');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('ava-ide-local-apikey') || '');
+  const [modelLabel, setModelLabel] = useState(() => localStorage.getItem('ava-ide-local-label') || '');
+  const [savedTick, setSavedTick] = useState(0);
+
+  const save = () => {
+    if (baseUrl.trim()) localStorage.setItem('ava-ide-local-baseurl', baseUrl.trim());
+    else localStorage.removeItem('ava-ide-local-baseurl');
+    if (modelName.trim()) localStorage.setItem('ava-ide-local-model', modelName.trim());
+    else localStorage.removeItem('ava-ide-local-model');
+    if (apiKey.trim()) localStorage.setItem('ava-ide-local-apikey', apiKey.trim());
+    else localStorage.removeItem('ava-ide-local-apikey');
+    if (modelLabel.trim()) localStorage.setItem('ava-ide-local-label', modelLabel.trim());
+    else localStorage.removeItem('ava-ide-local-label');
+    setSavedTick(t => t + 1);
+    // Flash success indicator briefly
+    setTimeout(() => setSavedTick(t => t + 1), 1800);
+  };
+
+  const clear = () => {
+    setBaseUrl('');
+    setModelName('');
+    setApiKey('');
+    setModelLabel('');
+    localStorage.removeItem('ava-ide-local-baseurl');
+    localStorage.removeItem('ava-ide-local-model');
+    localStorage.removeItem('ava-ide-local-apikey');
+    localStorage.removeItem('ava-ide-local-label');
+    setSavedTick(t => t + 1);
+  };
+
+  const isConfigured = !!(baseUrl.trim() && modelName.trim());
+  const justSaved = savedTick % 2 === 1;
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '7px 10px', borderRadius: 6,
+    border: '1px solid rgba(168, 85, 247, 0.18)',
+    background: 'rgba(10, 6, 18, 0.8)', color: '#cdd6f4',
+    fontSize: 12, fontFamily: 'monospace', outline: 'none',
+  };
+
+  return (
+    <div style={{
+      background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
+      padding: '18px 20px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 14,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <span style={{ fontSize: 22 }}>🦙</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Custom model — Ollama, LM Studio, vLLM, or any OpenAI-compatible endpoint</div>
+            {isConfigured && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
+                background: 'rgba(166, 227, 161, 0.10)', color: '#a6e3a1',
+                border: '1px solid rgba(166, 227, 161, 0.30)', letterSpacing: 0.4,
+              }}>CONFIGURED</span>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2, lineHeight: 1.5 }}>
+            Point Ava at any model — local (Ollama, LM Studio, vLLM on your machine) or remote (private vLLM cluster,
+            self-hosted finetune, OpenRouter, Together, anything that speaks the OpenAI Chat Completions API).
+            Local servers stay on your machine; remote endpoints get whatever security your endpoint exposes.
+            Restart the chat panel after saving for changes to take effect.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ gridColumn: '1 / span 2' }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Base URL</div>
+          <input
+            value={baseUrl}
+            onChange={e => setBaseUrl(e.target.value)}
+            placeholder="http://localhost:11434/v1"
+            style={inputStyle}
+            spellCheck={false}
+          />
+          <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
+            Ollama: <code style={{ color: '#cdd6f4' }}>http://localhost:11434/v1</code>. LM Studio: <code style={{ color: '#cdd6f4' }}>http://localhost:1234/v1</code>.
+            Remote endpoints: <code style={{ color: '#cdd6f4' }}>https://your-host/v1</code>.
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Model name</div>
+          <input
+            value={modelName}
+            onChange={e => setModelName(e.target.value)}
+            placeholder="qwen2.5-coder:7b"
+            style={inputStyle}
+            spellCheck={false}
+          />
+          <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
+            The exact id your server reports (e.g. <code style={{ color: '#cdd6f4' }}>ollama list</code>).
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Display name <span style={{ color: '#6c7086', fontWeight: 400 }}>(optional)</span></div>
+          <input
+            value={modelLabel}
+            onChange={e => setModelLabel(e.target.value)}
+            placeholder="Defaults to the model name"
+            style={inputStyle}
+            spellCheck={false}
+          />
+          <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
+            What you'll see in the chat model picker.
+          </div>
+        </div>
+
+        <div style={{ gridColumn: '1 / span 2' }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>API key <span style={{ color: '#6c7086', fontWeight: 400 }}>(optional — leave empty for local servers)</span></div>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder="Most local servers don't require one"
+            style={inputStyle}
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+        <button
+          onClick={save}
+          style={{
+            padding: '7px 16px', borderRadius: 6, border: 'none',
+            background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+            color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          {justSaved ? 'Saved ✓' : 'Save'}
+        </button>
+        {(baseUrl || modelName || apiKey || modelLabel) && (
+          <button
+            onClick={clear}
+            style={{
+              padding: '7px 14px', borderRadius: 6,
+              border: '1px solid rgba(248,113,113,0.30)',
+              background: 'transparent', color: '#f87171',
+              fontSize: 11, fontWeight: 500, cursor: 'pointer',
+            }}
+          >
+            Remove
+          </button>
+        )}
+        <span style={{ flex: 1 }} />
+        <a
+          href="https://ollama.com/download"
+          target="_blank"
+          rel="noreferrer"
+          style={{ fontSize: 10, color: '#6c7086', textDecoration: 'none' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#9399b2')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#6c7086')}
+        >
+          Get Ollama →
+        </a>
+      </div>
+    </div>
+  );
+}
+
 /* ===== 10. Settings ===== */
 export function SettingsPage() {
   useLocale();
@@ -10117,6 +10553,22 @@ export function SettingsPage() {
   void authKey;
   const connected = checkConnected();
   const [settings, setSettings] = useState<any>(defaultSettings);
+  // Desktop permission level — same hook as the chat-bar pill, so changes
+  // here propagate there and vice versa. Hook handles localStorage + sidecar
+  // push internally.
+  const [desktopPermLevel, setDesktopPermLevel] = useDesktopPermLevel();
+  // Inner-tab grouping for the Settings page. Sections render in source
+  // order, filtered by tab membership — so the file's top-to-bottom flow
+  // is preserved within each tab and we don't have to physically reorder.
+  type SettingsTab = 'general' | 'models' | 'behavior' | 'desktop' | 'privacy';
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => {
+    const saved = localStorage.getItem('ava-ide-settings-tab');
+    return (saved === 'models' || saved === 'behavior' || saved === 'desktop' || saved === 'privacy') ? saved : 'general';
+  });
+  const setTab = (t: SettingsTab) => {
+    setSettingsTab(t);
+    try { localStorage.setItem('ava-ide-settings-tab', t); } catch { /* */ }
+  };
   const [personality, setPersonality] = useState<any>(null);
   // Dataset capture config — separate from `settings` because it lives in
   // its own file (~/.ava/datasets/config.json) with its own granular schema
@@ -10335,13 +10787,51 @@ export function SettingsPage() {
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%', paddingBottom: 48 }}>
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.title')}</div>
           <div style={{ fontSize: 13, color: '#6c7086', marginTop: 4 }}>
             {t('dash.settings.subtitle')}
           </div>
         </div>
 
+        {/* ── Inner tab bar — underline-tab pattern matching Library / Models pages */}
+        <div style={{
+          display: 'flex', gap: 4, marginBottom: 20,
+          borderBottom: '1px solid rgba(168, 85, 247, 0.18)',
+        }}>
+          {([
+            { id: 'general',  label: 'General' },
+            { id: 'models',   label: 'Models' },
+            { id: 'behavior', label: 'Behavior' },
+            { id: 'desktop',  label: 'Desktop Automation' },
+            { id: 'privacy',  label: 'Privacy' },
+          ] as const).map(tab => {
+            const active = settingsTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setTab(tab.id)}
+                style={{
+                  padding: '8px 14px',
+                  background: 'transparent', border: 'none',
+                  borderBottom: active ? '2px solid #a855f7' : '2px solid transparent',
+                  marginBottom: -1,
+                  color: active ? '#cdd6f4' : '#6c7086',
+                  fontSize: 12, fontWeight: active ? 600 : 500,
+                  cursor: 'pointer',
+                  transition: 'color 0.15s, border-color 0.15s',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.color = '#9399b2'; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#6c7086'; }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Group: General (sec 1+2) ──────────────────────────── */}
+        <div style={{ display: settingsTab === 'general' ? 'contents' : 'none' }}>
         {/* 1. Your AI */}
         <div style={sLabel}>{t('dash.settings.section.your_ai')}</div>
         <div style={{
@@ -10458,6 +10948,10 @@ export function SettingsPage() {
         </div>
 
 
+        </div>{/* /General-1 */}
+
+        {/* ── Group: Privacy (sec 3+4) ──────────────────────────── */}
+        <div style={{ display: settingsTab === 'privacy' ? 'contents' : 'none' }}>
         {/* 3. Privacy & Data */}
         <div style={sLabel}>{t('dash.settings.section.privacy')}</div>
         <div style={{
@@ -10591,6 +11085,10 @@ export function SettingsPage() {
           )}
         </div>
 
+        </div>{/* /Privacy-1 */}
+
+        {/* ── Group: Behavior (sec 4) ──────────────────────────── */}
+        <div style={{ display: settingsTab === 'behavior' ? 'contents' : 'none' }}>
         {/* 4. Behavior */}
         <div style={sLabel}>{t('dash.settings.section.behavior')}</div>
         <div style={{
@@ -10699,6 +11197,10 @@ export function SettingsPage() {
           </div>
         </div>
 
+        </div>{/* /Behavior */}
+
+        {/* ── Group: General (sec 5 — Language) ──────────────────── */}
+        <div style={{ display: settingsTab === 'general' ? 'contents' : 'none' }}>
         {/* 5. Language */}
         <div style={sLabel}>{t('dash.settings.language')}</div>
         <div style={{
@@ -10713,6 +11215,19 @@ export function SettingsPage() {
             options={LANGUAGES}
           />
         </div>
+
+        </div>{/* /General-2 */}
+
+        {/* ── Group: Models (sec 6+7) ──────────────────────────── */}
+        <div style={{ display: settingsTab === 'models' ? 'contents' : 'none' }}>
+
+        {/* Custom OpenAI-compatible model — Ollama / LM Studio / vLLM /
+            any local or remote endpoint that speaks the OpenAI Chat
+            Completions API. Covers BYOM (private vLLM, self-finetuned
+            on your own server, OpenRouter / Together / etc) as well as
+            on-machine local servers. */}
+        <div style={sLabel}>CUSTOM MODEL</div>
+        <LocalModelSettings />
 
         {/* 6. API Keys (collapsible) */}
         <div style={sLabel}>{t('dash.settings.section.api_keys')}</div>
@@ -10906,24 +11421,120 @@ export function SettingsPage() {
           )}
         </div>
 
-        {/* 8. Computer Use — Coming Soon */}
-        <div style={sLabel}>COMPUTER USE</div>
+        </div>{/* /Models */}
+
+        {/* ── Group: Desktop (sec 8) ──────────────────────────── */}
+        <div style={{ display: settingsTab === 'desktop' ? 'contents' : 'none' }}>
+        {/* 8. Desktop Automation */}
+        <div style={sLabel}>DESKTOP AUTOMATION</div>
         <div style={{
           background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
-          padding: '18px 20px', marginBottom: 16,
+          padding: '18px 20px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 16,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Header — what this section is for */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <span style={{ fontSize: 24 }}>🖥️</span>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Desktop Automation</div>
-              <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>
-                Let Ava see your screen and interact with desktop apps. Currently being rebuilt with improved vision and accuracy.
+              <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2, lineHeight: 1.5 }}>
+                Lets Ava reach out of the IDE into the rest of your OS — launch apps, click UI elements, type into forms,
+                drive a visible browser. Same memory, mission, and audit log as code mode; additional safety gates apply.
               </div>
             </div>
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', padding: '3px 10px', borderRadius: 6 }}>Coming Soon</span>
+          </div>
+
+          {/* Permission level — three-state pill, same value as the chat-bar pill */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Permission level</div>
+            <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 8, lineHeight: 1.5 }}>
+              How aggressively Ava is allowed to act on your screen. Irreversible actions (Send, Pay, Delete, destructive
+              key combos) always re-prompt regardless of level.
+            </div>
+            <div
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 0,
+                padding: 3, borderRadius: 8, background: 'rgba(168,85,247,0.06)',
+                border: '1px solid rgba(168,85,247,0.18)',
+              }}
+            >
+              {([
+                { id: 'watch' as const, label: 'Watch',  desc: 'Ava describes; you stay on the mouse + keyboard. Safest.' },
+                { id: 'ask'   as const, label: 'Ask',    desc: 'You approve every click / keystroke / launch. Default.' },
+                { id: 'drive' as const, label: 'Drive',  desc: 'Reversible plan steps run silently after one approval.' },
+              ]).map(l => {
+                const active = desktopPermLevel === l.id;
+                return (
+                  <Tooltip key={l.id} content={l.desc}>
+                    <button
+                      onClick={() => setDesktopPermLevel(l.id)}
+                      style={{
+                        padding: '5px 14px',
+                        background: active
+                          ? (l.id === 'drive'
+                              ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                              : 'linear-gradient(135deg, #a855f7, #7c3aed)')
+                          : 'transparent',
+                        border: 'none',
+                        borderRadius: 6,
+                        color: active ? '#fff' : '#9399b2',
+                        fontSize: 11,
+                        fontWeight: active ? 700 : 500,
+                        cursor: 'pointer',
+                        letterSpacing: 0.3,
+                        textTransform: 'uppercase',
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                    >
+                      {l.label}
+                    </button>
+                  </Tooltip>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: '#9399b2', marginTop: 8, lineHeight: 1.5 }}>
+              {desktopPermLevel === 'watch' && 'Ava describes what she would do — you stay in control of the mouse and keyboard. She never clicks, types, or launches anything.'}
+              {desktopPermLevel === 'ask'   && 'Ava acts on your screen; every click, keystroke, and app launch waits for your confirmation.'}
+              {desktopPermLevel === 'drive' && 'Reversible plan steps run silently after one approval. Irreversible actions still ask each time.'}
+            </div>
+          </div>
+
+          {/* Audit log — purely informational, no toggle */}
+          <div style={{
+            padding: '10px 12px', background: 'rgba(10, 6, 18, 0.6)',
+            border: '1px solid rgba(168,85,247,0.12)', borderRadius: 8,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#cdd6f4', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: '#a6e3a1' }}>●</span>
+              Audit log
+            </div>
+            <div style={{ fontSize: 11, color: '#9399b2', lineHeight: 1.5 }}>
+              Every desktop tool call (click, keystroke, launch) is appended to{' '}
+              <code style={{ color: '#cdd6f4', fontFamily: 'monospace', fontSize: 10 }}>~/.ava/audit-log.jsonl</code>{' '}
+              on this machine. Survives restarts, never syncs anywhere, works fully without an account.
+            </div>
+          </div>
+
+          {/* Kill-switch reminder */}
+          <div style={{
+            padding: '10px 12px', background: 'rgba(239, 68, 68, 0.06)',
+            border: '1px solid rgba(239, 68, 68, 0.20)', borderRadius: 8,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#f5d0d0', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: '#f87171' }}>⏻</span>
+              Emergency stop
+            </div>
+            <div style={{ fontSize: 11, color: '#cba8a8', lineHeight: 1.5 }}>
+              Press{' '}
+              <kbd style={{ padding: '1px 6px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(248,113,113,0.4)', borderRadius: 4, fontFamily: 'monospace', fontSize: 10, color: '#fff' }}>Ctrl+Alt+K</kbd>{' '}
+              anytime to immediately stop Ava and exit desktop mode. Also available via the system tray.
+            </div>
           </div>
         </div>
 
+        </div>{/* /Desktop */}
+
+        {/* ── Group: Privacy (sec 9 — Danger Zone) ─────────────── */}
+        <div style={{ display: settingsTab === 'privacy' ? 'contents' : 'none' }}>
         {/* 9. Danger Zone */}
         {connected && (
           <>
@@ -10955,6 +11566,7 @@ export function SettingsPage() {
             </div>
           </>
         )}
+        </div>{/* /Privacy-2 */}
       </div>
     </div>
   );

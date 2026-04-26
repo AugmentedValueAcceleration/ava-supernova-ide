@@ -44,6 +44,19 @@ export interface SidecarConfig {
   /** Same pattern for the learning_* sync path — Data Mode local or
    *  per-category pref off means no cloud push from the tools. */
   learningLocalOnly?: boolean;
+  /**
+   * Local / custom OpenAI-compatible provider — Ollama, LM Studio, vLLM,
+   * or any other server that speaks the OpenAI Chat Completions API. The
+   * IDE Settings UI writes baseUrl + modelName into localStorage and
+   * forwards them here so the sidecar can register a 'generic' provider
+   * with a model definition matching what the user has running locally.
+   */
+  local?: {
+    baseUrl: string;
+    modelName: string;
+    apiKey?: string;
+    modelLabel?: string;
+  };
 }
 
 export interface SidecarToolCall {
@@ -389,6 +402,17 @@ export class SidecarManager {
    */
   async setModel(model: string): Promise<void> {
     await this.send({ cmd: 'set_model', model });
+  }
+
+  /**
+   * Update the desktop permission level mid-session. Triggers a system
+   * prompt rebuild on the sidecar so the level Ava reads matches the one
+   * the operator set. 'watch' = narrate only, 'ask' = confirm each
+   * mutative action, 'drive' = run reversible plan steps silently after
+   * one approval; irreversibles always re-prompt regardless.
+   */
+  async setDesktopPermissionLevel(level: 'watch' | 'ask' | 'drive'): Promise<void> {
+    await this.send({ cmd: 'set_desktop_permission_level', level });
   }
 
   /**
