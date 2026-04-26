@@ -70,7 +70,7 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 // in the chat header); setDataMode() writes to localStorage and the
 // helpers below read from there so a single localStorage value is the
 // source of truth across the IDE.
-import { includesCloud as dataModeIncludesCloud } from '../lib/data-mode';
+import { includesCloud as dataModeIncludesCloud, setDataMode, getDataMode } from '../lib/data-mode';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -2052,11 +2052,33 @@ export function AvaChatPage() {
   // tick-engine localStorage compatibility, but the values are credits.
   const [creditBalance, setCreditBalance] = useState<{ used: number; limit: number } | null>(null);
   const [conversationTitle, setConversationTitle] = useState(t('dash.chat.new_chat'));
+  // Tracks which saved conversation (by id) is currently rendered in the
+  // chat panel. null = fresh / unsaved chat. Used by the history-delete
+  // listener so we can reset when the operator deletes the conv they're
+  // currently looking at, in addition to the all-cleared case.
+  const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [contextPercent, setContextPercent] = useState(0);
 
   // ── Load conversation from history ──────────────────────────────────────
+  // Race-condition note: AvaChatPage and ChatHistoryPage are sibling routes
+  // — only one is mounted at a time. When the operator clicks a conversation
+  // from history, the click writes to localStorage, dispatches
+  // 'ava-load-conversation', AND fires the navigate event. The dispatch is
+  // synchronous, so the listener (registered in this useEffect) hasn't been
+  // attached yet at that moment — AvaChatPage is mid-mount. The event is
+  // lost, the conv sits in localStorage indefinitely, and the chat never
+  // updates. Symptoms: clicking conversations from history appears to do
+  // nothing on first click after a navigate, and subsequent clicks render
+  // stale content because each click overwrites localStorage but only the
+  // event-listener path consumes it.
+  //
+  // Fix: on every mount, drain localStorage immediately. The live event
+  // listener still handles the case where the chat tab is already mounted
+  // when the operator clicks a conv (no remount, listener catches the
+  // event). This way both paths land the same outcome — conversation loads
+  // — regardless of mount timing.
   useEffect(() => {
-    const handler = () => {
+    const drainPending = () => {
       try {
         const raw = localStorage.getItem('ava-ide-load-conversation');
         if (!raw) return;
@@ -2065,12 +2087,36 @@ export function AvaChatPage() {
         if (conv.messages && Array.isArray(conv.messages)) {
           setMessages(conv.messages);
           setConversationTitle(conv.title || t('dash.chat.new_chat'));
+          setCurrentConvId(typeof conv.id === 'string' ? conv.id : null);
         }
       } catch { /* ignore */ }
     };
-    window.addEventListener('ava-load-conversation', handler);
-    return () => window.removeEventListener('ava-load-conversation', handler);
+    drainPending();
+    window.addEventListener('ava-load-conversation', drainPending);
+    return () => window.removeEventListener('ava-load-conversation', drainPending);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Reset chat when the operator deletes the conversation currently shown,
+  // OR when the History page becomes empty. Without this, deleting from
+  // History leaves the chat panel rendering a conversation that no longer
+  // exists in storage.
+  useEffect(() => {
+    const onDeleted = (e: Event) => {
+      const detail = (e as CustomEvent<{ deletedId: string; remaining: number }>).detail;
+      if (!detail) return;
+      const isCurrent = currentConvId !== null && currentConvId === detail.deletedId;
+      const allCleared = detail.remaining === 0;
+      if (isCurrent || allCleared) {
+        setMessages([{ id: mkId(), role: 'ava', text: t('dash.chat.fresh'), timestamp: Date.now() }]);
+        setConversationTitle(t('dash.chat.new_chat'));
+        setCurrentConvId(null);
+      }
+    };
+    window.addEventListener('ava-history-conv-deleted', onDeleted);
+    return () => window.removeEventListener('ava-history-conv-deleted', onDeleted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentConvId]);
 
   // ── Platform credit balance fetch ───────────────────────────────────────
   // Mirrors the extension's read shim (Usage.tsx in extension/dashboard-ui):
@@ -2492,11 +2538,16 @@ export function AvaChatPage() {
   }, []);
 
   // ── Persist chat backend ─────────────────────────────────────────────────
+  // Two writes intentionally: 'ava-ide-chat-backend' is IDE-internal, used
+  // for sidecar-vs-cloud routing on this surface; 'ava-data-mode' is the
+  // shared key the data-mode helper reads (and the extension mirrors).
+  // setDataMode() broadcasts 'ava-data-mode-changed' so Library / Sync /
+  // anywhere else can re-filter without polling localStorage.
   useEffect(() => {
     try {
       localStorage.setItem('ava-ide-chat-backend', chatBackend);
-      localStorage.setItem('ava-data-mode', chatBackend);
     } catch { /* */ }
+    setDataMode(chatBackend);
   }, [chatBackend]);
 
   // Ref to hold the latest event handler — set synchronously, never null after mount
@@ -3173,6 +3224,7 @@ export function AvaChatPage() {
       { id: mkId(), role: 'ava', text: t('dash.chat.fresh'), timestamp: Date.now() },
     ]);
     setConversationTitle(t('dash.chat.new_chat'));
+    setCurrentConvId(null);
     setTokenCount(0);
     setContextPercent(0);
     resetSessionStats();
@@ -4177,6 +4229,7 @@ export function AvaChatPage() {
               v0.39.0 UX). The old circular ring lived here and is gone. */}
 
           {/* Tasks toggle */}
+          <Tooltip content={t('dash.chat.toggle_tasks')} placement="bottom">
           <button
             onClick={() => setTasksPanelOpen(!tasksPanelOpen)}
             style={{
@@ -4186,7 +4239,6 @@ export function AvaChatPage() {
               borderRadius: 8, color: tasksPanelOpen ? '#a855f7' : '#6c7086',
               fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
             }}
-            title={t('dash.chat.toggle_tasks')}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
               <path d="M3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 3.5h8v1H6v-1Zm-2.25 5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 7.5h8v1H6v-1Zm-2.25 5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 11.5h8v1H6v-1Z"/>
@@ -4199,8 +4251,10 @@ export function AvaChatPage() {
               }}>{sessionTasks.length}</span>
             )}
           </button>
+          </Tooltip>
 
           {/* New Chat button */}
+          <Tooltip content={t('dash.chat.new_chat')} placement="bottom">
           <button
             onClick={newChat}
             style={{
@@ -4210,13 +4264,13 @@ export function AvaChatPage() {
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.2)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
-            title={t('dash.chat.new_chat')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             {t('dash.chat.new_chat')}
           </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -4926,125 +4980,223 @@ export function AvaChatPage() {
         background: 'rgba(26, 16, 40, 0.6)', flexShrink: 0,
       }}>
         <div style={{ width: '100%', position: 'relative' }}>
-          {/* ── Secret Vault Panel (slides up from input) ─────────────────── */}
+          {/* ── Secret Vault Panel (slides up from input) ─────────────────────
+              Security-critical surface — solid background, confident border,
+              clear hierarchy. Trust signal in the header, monospace columns
+              for labels + values. */}
           <div
             ref={vaultPanelRef}
             style={{
               position: 'absolute', bottom: '100%', left: 0, right: 0,
-              background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderBottom: 'none',
-              borderRadius: '12px 12px 0 0',
-              boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
-              maxHeight: showVault ? 340 : 0,
+              // Solid background — no chat bleed-through. The vault is a
+              // place; it shouldn't feel like floating gauze over the chat.
+              background: '#0f0a1a',
+              border: '1px solid rgba(168, 85, 247, 0.30)',
+              borderBottom: 'none',
+              borderRadius: '14px 14px 0 0',
+              boxShadow: '0 -16px 48px rgba(0, 0, 0, 0.5), 0 -2px 0 rgba(168, 85, 247, 0.15) inset',
+              maxHeight: showVault ? 380 : 0,
               overflow: 'hidden',
-              transition: 'max-height 0.3s ease-in-out',
+              transition: 'max-height 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
               zIndex: 100,
             }}
           >
             {showVault && (
-              <div style={{ padding: '16px 20px' }}>
-                {/* Vault header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0110 0v4" />
-                    </svg>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.chat.secret_vault')}</span>
-                    <span style={{ fontSize: 10, color: '#6c7086' }}>Use @secret:Label in messages</span>
-                  </div>
-                  <button
-                    onClick={() => setShowVault(false)}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer', color: '#6c7086',
+              <div>
+                {/* Top accent stripe — thin gradient that signals "secured area" */}
+                <div style={{
+                  height: 2,
+                  background: 'linear-gradient(90deg, transparent 0%, #a855f7 30%, #a855f7 70%, transparent 100%)',
+                  opacity: 0.7,
+                }} />
+                <div style={{ padding: '16px 20px 18px' }}>
+                {/* Vault header — lock badge + title + trust signal + close */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 8,
+                      background: 'rgba(168, 85, 247, 0.12)',
+                      border: '1px solid rgba(168, 85, 247, 0.30)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      width: 24, height: 24, borderRadius: 6,
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.color = '#cdd6f4'}
-                    onMouseLeave={e => e.currentTarget.style.color = '#6c7086'}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
+                      flexShrink: 0,
+                    }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0110 0v4" />
+                      </svg>
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', lineHeight: 1.2 }}>{t('dash.chat.secret_vault')}</div>
+                      <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#a6e3a1' }} />
+                          Local only · Never synced
+                        </span>
+                        <span style={{ color: '#45475a' }}>·</span>
+                        <span>Reference with <code style={{ fontFamily: 'monospace', color: '#cba6f7', background: 'rgba(168,85,247,0.10)', padding: '0 4px', borderRadius: 3 }}>@secret:Label</code></span>
+                      </div>
+                    </div>
+                  </div>
+                  <Tooltip content="Close vault">
+                    <button
+                      onClick={() => setShowVault(false)}
+                      style={{
+                        background: 'transparent', border: '1px solid rgba(168, 85, 247, 0.18)',
+                        cursor: 'pointer', color: '#9399b2',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.color = '#cdd6f4';
+                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.10)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.color = '#9399b2';
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </Tooltip>
                 </div>
 
                 {/* Secrets list */}
                 <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12 }}>
                   {secrets.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '16px 0', color: '#585b70', fontSize: 12 }}>
-                      No secrets stored yet. Add one below.
+                    <div style={{
+                      textAlign: 'center', padding: '20px 0',
+                      color: '#6c7086', fontSize: 12,
+                      border: '1px dashed rgba(168, 85, 247, 0.18)', borderRadius: 8,
+                    }}>
+                      <div style={{ fontSize: 20, marginBottom: 6 }}>{'\ud83d\udd10'}</div>
+                      <div style={{ fontWeight: 500, color: '#9399b2' }}>No secrets stored yet</div>
+                      <div style={{ marginTop: 2, fontSize: 11 }}>Add an API key, password, or token below.</div>
                     </div>
                   )}
-                  {secrets.map(s => (
-                    <div key={s.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                      background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
-                      marginBottom: 6,
-                    }}>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: '#cba6f7', minWidth: 80 }}>{s.label}</span>
-                      <span style={{
-                        flex: 1, fontSize: 12, fontFamily: 'monospace', color: '#6c7086',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {vaultRevealIds.has(s.id) ? s.value : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}
-                      </span>
-                      <button
-                        onClick={() => toggleVaultReveal(s.id)}
+                  {secrets.map(s => {
+                    const revealed = vaultRevealIds.has(s.id);
+                    return (
+                      <div
+                        key={s.id}
                         style={{
-                          background: 'none', border: 'none', cursor: 'pointer', color: '#6c7086',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4,
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '9px 12px', marginBottom: 6,
+                          background: 'rgba(10, 6, 18, 0.95)',
+                          border: '1px solid rgba(168, 85, 247, 0.18)',
+                          borderRadius: 8,
+                          transition: 'border-color 0.15s, background 0.15s',
                         }}
-                        title={vaultRevealIds.has(s.id) ? 'Hide value' : 'Reveal value'}
-                      >
-                        {vaultRevealIds.has(s.id) ? (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
-                            <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                          </svg>
-                        ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => deleteSecret(s.id)}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer', color: '#585b70',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4,
+                        onMouseEnter={e => {
+                          e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.32)';
+                          e.currentTarget.style.background = 'rgba(15, 10, 26, 1)';
                         }}
-                        onMouseEnter={e => e.currentTarget.style.color = '#f38ba8'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#585b70'}
-                        title={t('dash.chat.delete_secret')}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.18)';
+                          e.currentTarget.style.background = 'rgba(10, 6, 18, 0.95)';
+                        }}
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
+                        <span
+                          style={{
+                            fontSize: 11, fontWeight: 600, color: '#cba6f7',
+                            fontFamily: 'monospace', minWidth: 90,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}
+                          title={s.label}
+                        >{s.label}</span>
+                        <span style={{ width: 1, alignSelf: 'stretch', background: 'rgba(168, 85, 247, 0.12)' }} />
+                        <span style={{
+                          flex: 1, fontSize: 12, fontFamily: 'monospace',
+                          color: revealed ? '#cdd6f4' : '#585b70',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          letterSpacing: revealed ? 'normal' : 1.5,
+                        }}>
+                          {revealed ? s.value : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}
+                        </span>
+                        <Tooltip content={revealed ? 'Hide value' : 'Reveal value'}>
+                          <button
+                            onClick={() => toggleVaultReveal(s.id)}
+                            style={{
+                              background: 'transparent', border: 'none', cursor: 'pointer',
+                              color: revealed ? '#a855f7' : '#6c7086',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              padding: 5, borderRadius: 5,
+                              transition: 'color 0.15s, background 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168, 85, 247, 0.10)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                          >
+                            {revealed ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                                <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                                <line x1="1" y1="1" x2="23" y2="23" />
+                              </svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            )}
+                          </button>
+                        </Tooltip>
+                        <Tooltip content={t('dash.chat.delete_secret')}>
+                          <button
+                            onClick={() => deleteSecret(s.id)}
+                            style={{
+                              background: 'transparent', border: 'none', cursor: 'pointer',
+                              color: '#6c7086',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              padding: 5, borderRadius: 5,
+                              transition: 'color 0.15s, background 0.15s',
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.color = '#f87171';
+                              e.currentTarget.style.background = 'rgba(248, 113, 113, 0.10)';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.color = '#6c7086';
+                              e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                            </svg>
+                          </button>
+                        </Tooltip>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* Add secret row */}
+                {/* Add secret row — clearly delineated as a "new entry" zone */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '10px 12px', background: 'rgba(10, 6, 18, 0.8)', border: '1px solid rgba(168,85,247,0.2)',
+                  padding: '10px 12px',
+                  background: 'rgba(168, 85, 247, 0.04)',
+                  border: '1px solid rgba(168, 85, 247, 0.22)',
                   borderRadius: 8,
                 }}>
+                  <span style={{ fontSize: 14, color: '#9399b2', fontWeight: 500, marginRight: 2, lineHeight: 1 }}>+</span>
                   <input
                     type="text"
                     value={vaultNewLabel}
                     onChange={e => setVaultNewLabel(e.target.value)}
                     placeholder={t('dash.chat.secret_label')}
                     style={{
-                      width: 100, height: 30, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
-                      borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
+                      width: 110, height: 32,
+                      background: 'rgba(10, 6, 18, 0.85)',
+                      border: '1px solid rgba(168, 85, 247, 0.18)',
+                      borderRadius: 6, padding: '0 10px',
+                      fontSize: 12, fontFamily: 'monospace', color: '#cdd6f4',
+                      outline: 'none',
+                      transition: 'border-color 0.15s',
                     }}
                     onFocus={e => e.currentTarget.style.borderColor = '#a855f7'}
-                    onBlur={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.18)'}
                     onKeyDown={e => { if (e.key === 'Enter') addSecret(); }}
                   />
                   <input
@@ -5053,27 +5205,38 @@ export function AvaChatPage() {
                     onChange={e => setVaultNewValue(e.target.value)}
                     placeholder={t('dash.chat.secret_value')}
                     style={{
-                      flex: 1, height: 30, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
-                      borderRadius: 6, padding: '0 10px', fontSize: 12, color: '#cdd6f4', outline: 'none',
+                      flex: 1, height: 32,
+                      background: 'rgba(10, 6, 18, 0.85)',
+                      border: '1px solid rgba(168, 85, 247, 0.18)',
+                      borderRadius: 6, padding: '0 10px',
+                      fontSize: 12, fontFamily: 'monospace', color: '#cdd6f4',
+                      outline: 'none',
+                      transition: 'border-color 0.15s',
                     }}
                     onFocus={e => e.currentTarget.style.borderColor = '#a855f7'}
-                    onBlur={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.18)'}
                     onKeyDown={e => { if (e.key === 'Enter') addSecret(); }}
                   />
                   <button
                     onClick={addSecret}
                     disabled={!vaultNewLabel.trim() || !vaultNewValue.trim()}
                     style={{
-                      height: 30, padding: '0 14px', borderRadius: 6, border: 'none',
-                      background: vaultNewLabel.trim() && vaultNewValue.trim() ? '#a855f7' : 'rgba(49, 34, 68, 0.5)',
+                      height: 32, padding: '0 16px', borderRadius: 6, border: 'none',
+                      background: vaultNewLabel.trim() && vaultNewValue.trim()
+                        ? 'linear-gradient(135deg, #a855f7, #7c3aed)'
+                        : 'rgba(49, 34, 68, 0.4)',
                       color: vaultNewLabel.trim() && vaultNewValue.trim() ? '#fff' : '#585b70',
-                      fontSize: 12, fontWeight: 600, cursor: vaultNewLabel.trim() && vaultNewValue.trim() ? 'pointer' : 'not-allowed',
+                      fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
+                      cursor: vaultNewLabel.trim() && vaultNewValue.trim() ? 'pointer' : 'not-allowed',
                       flexShrink: 0,
+                      boxShadow: vaultNewLabel.trim() && vaultNewValue.trim() ? '0 2px 8px rgba(168, 85, 247, 0.30)' : 'none',
+                      transition: 'box-shadow 0.15s',
                     }}
                   >
                     Save
                   </button>
                 </div>
+                </div>{/* /padding wrapper */}
               </div>
             )}
           </div>
@@ -5101,23 +5264,24 @@ export function AvaChatPage() {
           >
             {/* Mode selector (left of input) */}
             <div ref={modeMenuRef} style={{ position: 'relative', flexShrink: 0, alignSelf: 'center' }}>
-              <button
-                onClick={() => setModeMenuOpen(!modeMenuOpen)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px',
-                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)', border: 'none',
-                  borderRadius: 8, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-                title={t('dash.chat.switch_mode')}
-              >
-                <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.7 }}>{currentMode.icon}</span>
-                {currentMode.label}
-                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
-                  style={{ transform: modeMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                </svg>
-              </button>
+              <Tooltip content={t('dash.chat.switch_mode')} placement="top">
+                <button
+                  onClick={() => setModeMenuOpen(!modeMenuOpen)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px',
+                    background: 'linear-gradient(135deg, #a855f7, #7c3aed)', border: 'none',
+                    borderRadius: 8, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.7 }}>{currentMode.icon}</span>
+                  {currentMode.label}
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+                    style={{ transform: modeMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+              </Tooltip>
               {modeMenuOpen && (
                 <div style={{
                   position: 'absolute', bottom: '100%', left: 0, marginBottom: 8, zIndex: 999,
@@ -5284,6 +5448,7 @@ export function AvaChatPage() {
             </div>
 
             {/* Attach file button */}
+            <Tooltip content={t('dash.chat.attach_file')} placement="top">
             <button
               onClick={() => {
                 const input = document.createElement('input');
@@ -5311,14 +5476,15 @@ export function AvaChatPage() {
                 background: 'rgba(168,85,247,0.05)', color: '#6c7086', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}
-              title={t('dash.chat.attach_file')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
               </svg>
             </button>
+            </Tooltip>
 
             {/* Secret Vault button */}
+            <Tooltip content={t('dash.chat.secret_vault')} placement="top">
             <button
               ref={vaultBtnRef}
               onClick={() => setShowVault(!showVault)}
@@ -5331,7 +5497,6 @@ export function AvaChatPage() {
                 transition: 'all 0.2s',
                 position: 'relative',
               }}
-              title={t('dash.chat.secret_vault')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -5347,6 +5512,7 @@ export function AvaChatPage() {
                 </span>
               )}
             </button>
+            </Tooltip>
 
             {/* Credit balance in input bar */}
             {connected && creditBalance && (() => {
@@ -5589,6 +5755,17 @@ export function ChatHistoryPage() {
     const updated = conversations.filter(c => c.id !== id);
     setConversations(updated);
     try { localStorage.setItem('ava-ide-chat-history', JSON.stringify(updated)); } catch {}
+    // When the operator deletes the conversation currently loaded in the
+    // chat panel, OR clears history entirely (last conv deleted), the chat
+    // panel needs to reset to a fresh state — otherwise the chat shows a
+    // conversation that no longer exists in storage. Fire one event,
+    // include the deleted id and the new total so the chat panel can
+    // decide whether to reset.
+    try {
+      window.dispatchEvent(new CustomEvent('ava-history-conv-deleted', {
+        detail: { deletedId: id, remaining: updated.length },
+      }));
+    } catch { /* */ }
   };
 
   // Usage analytics
@@ -8133,7 +8310,25 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   const [cloudFiles, setCloudFiles] = useState<LibraryFile[]>([]);
   const [localFiles, setLocalFiles] = useState<LibraryFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'cloud' | 'local'>('all');
+  // Source filter — drives off the global Data Mode toggle (the
+  // Local/Cloud/Both pill in the chat header) so the two surfaces stay
+  // in sync. Mode='local' → show local files only. Mode='cloud' → cloud
+  // only. Mode='both' → show All (the merged view). Operator can still
+  // override per session by clicking the source tabs; the listener below
+  // only re-syncs when the global mode actually changes.
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'cloud' | 'local'>(() => {
+    const m = getDataMode();
+    return m === 'local' ? 'local' : m === 'cloud' ? 'cloud' : 'all';
+  });
+  useEffect(() => {
+    const onModeChange = (e: Event) => {
+      const next = (e as CustomEvent<{ mode: 'local' | 'cloud' | 'both' }>).detail?.mode;
+      if (!next) return;
+      setSourceFilter(next === 'local' ? 'local' : next === 'cloud' ? 'cloud' : 'all');
+    };
+    window.addEventListener('ava-data-mode-changed', onModeChange);
+    return () => window.removeEventListener('ava-data-mode-changed', onModeChange);
+  }, []);
   // Filter axis is the real media kind, not the coalesced LibraryFileType,
   // so the user can isolate just music / video / voice within the Assets
   // tab — previously they all collapsed under Images.
@@ -9694,7 +9889,9 @@ export function CloudSyncPage() {
   // complete picture of every byte the system holds about them.
   const exportFullAccountData = async () => {
     try {
-      const platformKey = localStorage.getItem('ava-platform-key');
+      // Was reading 'ava-platform-key' — wrong key. Canonical storage is
+      // 'ava-ide-platform-key' via getPlatformKey() / lib/api.
+      const platformKey = getPlatformKey();
       if (!platformKey) {
         alert('Connect a platform account first to export your cloud-stored data.');
         return;
@@ -11630,6 +11827,60 @@ export function BillingPage() {
   const fmtStorage = (gb: number) => gb >= 1000 ? `${(gb / 1024).toFixed(2)} TB` : gb >= 10 ? `${Math.round(gb)} GB` : gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(gb * 1024)} MB`;
   const pct = (used: number, limit: number) => limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
+  // ── Live checkout handlers — plans, top-ups, storage add-ons ────────────
+  // Hits the platform's /api/billing/checkout (or /topup) endpoint with the
+  // operator's platform key (apiFetch attaches it), receives a Stripe URL,
+  // opens it in the system browser via the Tauri opener plugin. Mirrors the
+  // extension's openCheckout / openTopup / openStorageAddon in DashboardPanel.ts.
+  // [pending] state is per-card so the operator sees an accurate "Opening..."
+  // label and can't double-click the same card while the round-trip is in flight.
+  const [checkoutPending, setCheckoutPending] = useState<string | null>(null);
+
+  const openExternalUrl = async (url: string) => {
+    try {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(url);
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
+
+  const startPlanCheckout = async (plan: 'pro' | 'ultra' | 'enterprise') => {
+    if (checkoutPending) return;
+    setCheckoutPending(`plan:${plan}`);
+    try {
+      const res: { url?: string } = await apiFetch('/billing/checkout', {
+        method: 'POST', body: JSON.stringify({ plan }),
+      });
+      if (res?.url) await openExternalUrl(res.url);
+    } catch { /* network/auth — silent, restored CTA tells the operator nothing happened */ }
+    setCheckoutPending(null);
+  };
+
+  const startTopupCheckout = async (pkgId: string) => {
+    if (checkoutPending) return;
+    setCheckoutPending(`topup:${pkgId}`);
+    try {
+      const res: { url?: string } = await apiFetch('/billing/topup', {
+        method: 'POST', body: JSON.stringify({ package: pkgId }),
+      });
+      if (res?.url) await openExternalUrl(res.url);
+    } catch { /* */ }
+    setCheckoutPending(null);
+  };
+
+  const startStorageCheckout = async (size: string) => {
+    if (checkoutPending) return;
+    setCheckoutPending(`storage:${size}`);
+    try {
+      const res: { url?: string } = await apiFetch('/billing/checkout', {
+        method: 'POST', body: JSON.stringify({ storage_addon: size }),
+      });
+      if (res?.url) await openExternalUrl(res.url);
+    } catch { /* */ }
+    setCheckoutPending(null);
+  };
+
   return (
     <div style={pageWrapper}>
       <h1 style={pageTitle}>{t('dash.billing.title')}</h1>
@@ -11660,32 +11911,51 @@ export function BillingPage() {
             }}>Manage Plan</a>
           </div>
 
-          {/* Credit Pools — Plan Credits hidden on Free. Free users only
-              have the free pool; showing a second bar against a non-existent
-              plan pool was meaningless and confused users. Exact counts
-              throughout — match the chat header + Usage tab. */}
-          <div style={{ display: 'grid', gridTemplateColumns: tier === 'free' ? '1fr' : '1fr 1fr', gap: 16, marginTop: 16 }}>
-            {/* Free Pool */}
-            <div style={card}>
-              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Free Credits</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#a6e3a1', marginBottom: 4 }}>{(freeLimit - freeUsed).toLocaleString()}</div>
-              <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>of {freeLimit.toLocaleString()} remaining</div>
-              <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct(freeUsed, freeLimit)}%`, background: 'linear-gradient(90deg, #a6e3a1, #94e2d5)', borderRadius: 3, transition: 'width 0.5s' }} />
-              </div>
-            </div>
-            {/* Plan Pool — paid tiers only */}
-            {tier !== 'free' && (
-              <div style={card}>
-                <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>Plan Credits</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#89b4fa', marginBottom: 4 }}>{planLimit > 0 ? (planLimit - planUsed).toLocaleString() : '—'}</div>
-                <div style={{ fontSize: 11, color: '#45475a', marginBottom: 10 }}>{planLimit > 0 ? `of ${planLimit.toLocaleString()} remaining` : 'Upgrade for plan credits'}</div>
+          {/* Credit Balance — single card. Free tier shows the free pool;
+              paid tiers show the plan pool (which already includes any
+              top-ups, per project_billing_architecture). We don't sum the
+              two — on paid plans the legacy 300 free credits aren't an
+              additive bonus, they're just the pool that's bypassed. */}
+          {(() => {
+            const isFree = tier === 'free';
+            const used = isFree ? freeUsed : planUsed;
+            const limit = isFree ? freeLimit : planLimit;
+            const remaining = Math.max(0, limit - used);
+            const usedPct = pct(used, limit);
+            return (
+              <div style={{ ...card, marginTop: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: '#6c7086' }}>Credits Remaining</div>
+                  <div style={{ fontSize: 11, color: '#45475a' }}>
+                    {limit > 0
+                      ? `${remaining.toLocaleString()} of ${limit.toLocaleString()}`
+                      : 'No credits this period'}
+                  </div>
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4', marginBottom: 10, fontVariantNumeric: 'tabular-nums' }}>
+                  {remaining.toLocaleString()}
+                </div>
                 <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct(planUsed, planLimit)}%`, background: 'linear-gradient(90deg, #89b4fa, #74c7ec)', borderRadius: 3, transition: 'width 0.5s' }} />
+                  <div style={{
+                    height: '100%',
+                    width: `${usedPct}%`,
+                    background: usedPct >= 95
+                      ? 'linear-gradient(90deg, #f87171, #ef4444)'
+                      : usedPct >= 80
+                        ? 'linear-gradient(90deg, #f59e0b, #eab308)'
+                        : 'linear-gradient(90deg, #a855f7, #7c3aed)',
+                    borderRadius: 3,
+                    transition: 'width 0.5s',
+                  }} />
+                </div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 8 }}>
+                  {tier === 'free'
+                    ? 'Resets monthly. Upgrade for more.'
+                    : 'Includes your monthly plan allowance + any top-ups.'}
                 </div>
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Cloud Storage */}
           <div style={{ ...card, marginTop: 16 }}>
@@ -11731,19 +12001,23 @@ export function BillingPage() {
             <>
               <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Storage Add-ons</h2>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                {STORAGE_ADDONS.map((addon) => (
-                  <IdePurchaseCard
-                    key={addon.id}
-                    title={addon.label}
-                    subtitle={addon.subtitle}
-                    price={`$${addon.price}`}
-                    priceSuffix="/mo"
-                    effectiveRate={addon.effectiveRate}
-                    popular={addon.popular}
-                    state="coming_soon"
-                    ctaLabel="Coming soon"
-                  />
-                ))}
+                {STORAGE_ADDONS.map((addon) => {
+                  const isPending = checkoutPending === `storage:${addon.id}`;
+                  return (
+                    <IdePurchaseCard
+                      key={addon.id}
+                      title={addon.label}
+                      subtitle={addon.subtitle}
+                      price={`$${addon.price}`}
+                      priceSuffix="/mo"
+                      effectiveRate={addon.effectiveRate}
+                      popular={addon.popular}
+                      state="live"
+                      ctaLabel={isPending ? 'Opening checkout…' : 'Add storage'}
+                      onClick={() => startStorageCheckout(addon.id)}
+                    />
+                  );
+                })}
               </div>
             </>
           )}
@@ -11765,18 +12039,22 @@ export function BillingPage() {
               "Best value" honest — 20-40% cheaper per token. */}
           <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Top-Up Packages</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            {CREDIT_TOPUPS.map((pkg) => (
-              <IdePurchaseCard
-                key={pkg.id}
-                title={pkg.label}
-                subtitle={pkg.subtitle}
-                price={`$${pkg.price}`}
-                effectiveRate={pkg.effectiveRate}
-                popular={pkg.popular}
-                state="coming_soon"
-                ctaLabel="Coming soon"
-              />
-            ))}
+            {CREDIT_TOPUPS.map((pkg) => {
+              const isPending = checkoutPending === `topup:${pkg.id}`;
+              return (
+                <IdePurchaseCard
+                  key={pkg.id}
+                  title={pkg.label}
+                  subtitle={pkg.subtitle}
+                  price={`$${pkg.price}`}
+                  effectiveRate={pkg.effectiveRate}
+                  popular={pkg.popular}
+                  state="live"
+                  ctaLabel={isPending ? 'Opening checkout…' : 'Buy credits'}
+                  onClick={() => startTopupCheckout(pkg.id)}
+                />
+              );
+            })}
           </div>
 
           {/* Plans — all four tiers shown for full transparency. Current tier
@@ -11819,15 +12097,63 @@ export function BillingPage() {
                           </li>
                         ))}
                       </ul>
-                      <div style={{
-                        display: 'block', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        background: 'rgba(49, 34, 68, 0.3)',
-                        color: isCurrent ? '#a6e3a1' : '#6c7086',
-                        border: '1px solid rgba(49, 34, 68, 0.5)',
-                        textAlign: 'center',
-                      }}>
-                        {isCurrent ? 'Current plan' : 'Coming soon'}
-                      </div>
+                      {(() => {
+                        // Plans are live (Pro / Ultra / Enterprise). Free is
+                        // not a checkout target — operators land there by
+                        // default or via cancel-and-downgrade through the
+                        // billing portal. So: current plan reads "Current
+                        // plan", free shows nothing actionable here, and
+                        // the rest open Stripe checkout.
+                        if (isCurrent) {
+                          return (
+                            <div style={{
+                              display: 'block', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                              background: 'rgba(166,227,161,0.10)', color: '#a6e3a1',
+                              border: '1px solid rgba(166,227,161,0.25)', textAlign: 'center',
+                            }}>Current plan</div>
+                          );
+                        }
+                        if (target === 'free') {
+                          // Downgrade-to-free goes through the billing portal,
+                          // not a checkout. Surface that affordance only when
+                          // useful (currently on a paid plan).
+                          return (
+                            <a
+                              href={dashboardBillingUrl()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: 'block', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                                background: 'transparent', color: '#9399b2',
+                                border: '1px solid rgba(168,85,247,0.18)', textAlign: 'center',
+                                textDecoration: 'none',
+                              }}
+                            >Manage in portal</a>
+                          );
+                        }
+                        const isPending = checkoutPending === `plan:${target}`;
+                        return (
+                          <button
+                            onClick={() => startPlanCheckout(target as 'pro' | 'ultra' | 'enterprise')}
+                            disabled={isPending}
+                            style={{
+                              display: 'block', width: '100%', padding: '8px 16px', borderRadius: 8,
+                              fontSize: 12, fontWeight: 600,
+                              background: highlight
+                                ? 'linear-gradient(90deg, #a855f7, #7c3aed)'
+                                : 'rgba(168,85,247,0.10)',
+                              color: highlight ? '#fff' : '#cba6f7',
+                              border: highlight ? 'none' : '1px solid rgba(168,85,247,0.30)',
+                              cursor: isPending ? 'wait' : 'pointer',
+                              opacity: isPending ? 0.65 : 1,
+                              boxShadow: highlight ? '0 2px 12px rgba(168,85,247,0.30)' : 'none',
+                              textAlign: 'center', transition: 'opacity 0.15s',
+                            }}
+                          >
+                            {isPending ? 'Opening checkout…' : `Upgrade to ${plan.name}`}
+                          </button>
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -12555,7 +12881,19 @@ function LearningPageInner() { return <LearningPage />; }
 
 export function AccountPage() {
   const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality' | 'sync'>('settings');
-  const connected = typeof window !== 'undefined' && !!localStorage.getItem('ava-platform-key');
+  // Was reading 'ava-platform-key' — wrong storage key. The canonical
+  // location is 'ava-ide-platform-key' (per getPlatformKey() in lib/api).
+  // The mismatch meant the Billing tab was hidden even for signed-in
+  // operators, because `connected` was always false. Use the helper so
+  // we also pick up the sk-ava- prefix validation.
+  const [connected, setConnected] = useState<boolean>(() => checkConnected());
+  // Re-check on auth changes (sign-in / disconnect) so the Billing tab
+  // shows / hides without a manual refresh.
+  useEffect(() => {
+    const onChange = () => setConnected(checkConnected());
+    window.addEventListener('ava-auth-changed', onChange);
+    return () => window.removeEventListener('ava-auth-changed', onChange);
+  }, []);
   const tabs = [
     { key: 'settings' as const, label: 'Settings' },
     ...(connected ? [{ key: 'billing' as const, label: 'Billing' }] : []),
