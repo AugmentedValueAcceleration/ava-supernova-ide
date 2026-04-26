@@ -1,5 +1,6 @@
 import { APP_VERSION } from './UpdateChecker';
 import { t, useLocale } from '../lib/i18n';
+import { Tooltip } from './Tooltip';
 
 interface Props {
   onToggleTerminal: () => void;
@@ -29,15 +30,16 @@ export default function StatusBar({ onToggleTerminal, mode, onCycleMode }: Props
       {/* Left section */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         {/* Version */}
-        <span
-          onClick={() => window.dispatchEvent(new CustomEvent('ava-check-updates'))}
-          style={{ fontSize: 11, color: '#fff', cursor: 'pointer', fontWeight: 500, opacity: 0.9 }}
-          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
-          title={t('dash.status.check_updates')}
-        >
-          v{APP_VERSION}
-        </span>
+        <Tooltip content={t('dash.status.check_updates')} placement="top">
+          <span
+            onClick={() => window.dispatchEvent(new CustomEvent('ava-check-updates'))}
+            style={{ fontSize: 11, color: '#fff', cursor: 'pointer', fontWeight: 500, opacity: 0.9 }}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+          >
+            v{APP_VERSION}
+          </span>
+        </Tooltip>
 
         {/* Git branch */}
         <div
@@ -86,28 +88,29 @@ export default function StatusBar({ onToggleTerminal, mode, onCycleMode }: Props
       {/* Right section */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         {/* Ava mode — click to cycle */}
-        <div
-          onClick={onCycleMode}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            cursor: 'pointer',
-            background: 'rgba(255,255,255,0.15)',
-            padding: '1px 8px',
-            borderRadius: 3,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.25)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}
-          title={t('dash.status.cycle_mode', { mode })}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
-          <span style={{ fontSize: 11, color: '#fff', fontWeight: 600 }}>
-            {MODE_SYMBOLS[mode] || '>>'} {mode}
-          </span>
-        </div>
+        <Tooltip content={t('dash.status.cycle_mode', { mode })} placement="top">
+          <div
+            onClick={onCycleMode}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              cursor: 'pointer',
+              background: 'rgba(255,255,255,0.15)',
+              padding: '1px 8px',
+              borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.25)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            <span style={{ fontSize: 11, color: '#fff', fontWeight: 600 }}>
+              {MODE_SYMBOLS[mode] || '>>'} {mode}
+            </span>
+          </div>
+        </Tooltip>
 
         {/* Language */}
         <span

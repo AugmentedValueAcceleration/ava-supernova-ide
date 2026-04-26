@@ -17,6 +17,12 @@ export function getDataMode(): DataMode {
 
 export function setDataMode(mode: DataMode): void {
   if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, mode);
+  // Broadcast so other surfaces (Library Source filter, Sync tab, etc.)
+  // can react in real time without polling localStorage. Same pattern as
+  // 'ava-auth-changed' / 'ava-tier-changed' used elsewhere in the IDE.
+  try {
+    window.dispatchEvent(new CustomEvent('ava-data-mode-changed', { detail: { mode } }));
+  } catch { /* SSR / no window — ignore */ }
 }
 
 export function includesLocal(): boolean {

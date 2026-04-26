@@ -12,6 +12,7 @@
  */
 
 import { useLocale } from '../lib/i18n';
+import { Tooltip } from './Tooltip';
 
 interface ContextBarProps {
   contextPercent: number;
@@ -50,8 +51,8 @@ export function ContextBar({ contextPercent, contextUsed, contextLimit, isCompre
       : `Context: ${pct}% — auto-compresses at 70%`;
 
   return (
+    <Tooltip content={tooltip} placement="bottom">
     <div
-      title={tooltip}
       style={{
         width: '100%',
         borderBottom: '1px solid rgba(168, 85, 247, 0.15)',
@@ -111,6 +112,7 @@ export function ContextBar({ contextPercent, contextUsed, contextLimit, isCompre
         </div>
       )}
     </div>
+    </Tooltip>
   );
 }
 

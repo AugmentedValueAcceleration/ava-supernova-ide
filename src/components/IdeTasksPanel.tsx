@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Tooltip } from './Tooltip';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -334,13 +335,14 @@ export default function IdeTasksPanel({
         <span style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
           Tasks
         </span>
-        <button
-          onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#585b70', cursor: 'pointer', fontSize: 14, padding: 2, lineHeight: 1 }}
-          title="Close (Esc)"
-        >
-          ✕
-        </button>
+        <Tooltip content="Close (Esc)">
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', color: '#585b70', cursor: 'pointer', fontSize: 14, padding: 2, lineHeight: 1 }}
+          >
+            ✕
+          </button>
+        </Tooltip>
       </div>
 
       {/* Tabs */}

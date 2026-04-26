@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ActivityItem } from '../App';
+import { Tooltip } from './Tooltip';
 
 interface Props {
   active: ActivityItem;
@@ -144,47 +145,47 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
             ? `${icons[item]?.label} — ${gitChangeCount} uncommitted change${gitChangeCount === 1 ? '' : 's'}`
             : icons[item]?.label;
           return (
-            <button
-              key={item}
-              title={titleText}
-              onClick={() => onSelect(item)}
-              style={{
-                position: 'relative',
-                width: 48,
-                height: 48,
-                background: 'transparent',
-                border: 'none',
-                borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
-                color: isActive ? '#cdd6f4' : '#6c7086',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.color = '#cdd6f4';
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) e.currentTarget.style.color = '#6c7086';
-              }}
-            >
-              {icons[item]?.svg}
-              {showGitBadge && (
-                <span style={{
-                  position: 'absolute',
-                  top: 6, right: 6,
-                  minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8,
-                  background: '#a855f7', color: '#fff',
-                  fontSize: 9, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  lineHeight: 1, fontFamily: 'system-ui, sans-serif',
-                  pointerEvents: 'none',
-                }}>
-                  {badgeText}
-                </span>
-              )}
-            </button>
+            <Tooltip key={item} content={titleText || ''} placement="bottom">
+              <button
+                onClick={() => onSelect(item)}
+                style={{
+                  position: 'relative',
+                  width: 48,
+                  height: 48,
+                  background: 'transparent',
+                  border: 'none',
+                  borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
+                  color: isActive ? '#cdd6f4' : '#6c7086',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) e.currentTarget.style.color = '#cdd6f4';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) e.currentTarget.style.color = '#6c7086';
+                }}
+              >
+                {icons[item]?.svg}
+                {showGitBadge && (
+                  <span style={{
+                    position: 'absolute',
+                    top: 6, right: 6,
+                    minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8,
+                    background: '#a855f7', color: '#fff',
+                    fontSize: 9, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1, fontFamily: 'system-ui, sans-serif',
+                    pointerEvents: 'none',
+                  }}>
+                    {badgeText}
+                  </span>
+                )}
+              </button>
+            </Tooltip>
           );
         })}
       </div>

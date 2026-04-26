@@ -11799,11 +11799,11 @@ export function BillingPage() {
   }, [connected, refetch]);
 
   const tierConfig: Record<string, { label: string; color: string; bg: string; limit: string }> = {
-    free:       { label: t('dash.billing.plan.free'), color: '#a6e3a1', bg: 'rgba(166,227,161,0.10)', limit: t('dash.billing.tokens.free') },
-    pro:        { label: t('dash.billing.plan.pro'), color: '#89b4fa', bg: 'rgba(137,180,250,0.10)', limit: t('dash.billing.tokens.pro') },
-    ultra:      { label: t('dash.billing.plan.ultra'), color: '#cba6f7', bg: 'rgba(203,166,247,0.10)', limit: t('dash.billing.tokens.ultra') },
-    enterprise: { label: t('dash.billing.plan.enterprise'), color: '#f9e2af', bg: 'rgba(249,226,175,0.10)', limit: t('dash.billing.tokens.enterprise') },
-    admin:      { label: t('dash.billing.plan.admin'), color: '#f38ba8', bg: 'rgba(243,139,168,0.10)', limit: t('dash.billing.tokens.admin') },
+    free:       { label: t('dash.billing.plan.free'), color: '#a6e3a1', bg: 'rgba(166,227,161,0.10)', limit: '300 credits' },
+    pro:        { label: t('dash.billing.plan.pro'), color: '#89b4fa', bg: 'rgba(137,180,250,0.10)', limit: '5,000 credits' },
+    ultra:      { label: t('dash.billing.plan.ultra'), color: '#cba6f7', bg: 'rgba(203,166,247,0.10)', limit: '10,000 credits' },
+    enterprise: { label: t('dash.billing.plan.enterprise'), color: '#f9e2af', bg: 'rgba(249,226,175,0.10)', limit: '20,000 credits' },
+    admin:      { label: t('dash.billing.plan.admin'), color: '#f38ba8', bg: 'rgba(243,139,168,0.10)', limit: 'Unlimited' },
   };
   const tc = tierConfig[tier] || tierConfig.free;
 
@@ -12820,7 +12820,7 @@ const ROADMAP_THEMES = [
     { label: 'BYOK fully private', shipped: true }, { label: 'Secret vault', shipped: true },
     { label: 'Security audit mode (OWASP)', shipped: true }, { label: 'Atomic token enforcement', shipped: true },
     { label: '3-layer hub auth', shipped: true }, { label: 'Independent security audit', shipped: false },
-    { label: 'E2E encryption for cloud sync', shipped: false },
+    { label: 'E2E encryption for cloud sync', shipped: true },
   ]},
   { title: 'Platform & Business', icon: '\uD83D\uDE80', color: '#ec4899', colorBg: 'rgba(236,72,153,0.08)', items: [
     { label: 'Web platform with auth', shipped: true }, { label: 'Company hub (Tauri admin)', shipped: true },

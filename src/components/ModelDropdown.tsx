@@ -16,6 +16,7 @@
 // renders whatever is passed in.
 
 import { useState, useRef, useEffect } from 'react';
+import { Tooltip } from './Tooltip';
 
 export interface IdeModelOption {
   id: string;
@@ -131,63 +132,62 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
             const enabled = m.available;
             const subtitle = enabled ? o.subtitle : 'In development';
             const isActive = activeModel === o.id;
+            const tooltipContent = enabled
+              ? o.title
+              : `${o.label.replace('✦ ', '')} — admin-gated while DeepSeek partnership is finalised.`;
             return (
-              <button
-                key={o.id}
-                type="button"
-                disabled={!enabled}
-                onClick={() => {
-                  if (!enabled) return;
-                  onSwitch(o.id);
-                  setOpen(false);
-                }}
-                title={
-                  enabled
-                    ? o.title
-                    : `${o.label.replace('✦ ', '')} — admin-gated while DeepSeek partnership is finalised.`
-                }
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  width: '100%',
-                  padding: '8px 10px',
-                  background: enabled && isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                  border: 'none',
-                  textAlign: 'left',
-                  fontSize: 12,
-                  color: '#cdd6f4',
-                  cursor: enabled ? 'pointer' : 'default',
-                  opacity: enabled ? 1 : 0.4,
-                }}
-                onMouseEnter={(e) => {
-                  if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168, 85, 247, 0.08)';
-                }}
-                onMouseLeave={(e) => {
-                  if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                }}
-              >
-                <span
-                  style={{
-                    width: 5,
-                    height: 5,
-                    borderRadius: '50%',
-                    background: enabled && isActive ? '#A855F7' : 'rgba(255,255,255,0.15)',
-                    flexShrink: 0,
+              <Tooltip key={o.id} content={tooltipContent} placement="top">
+                <button
+                  type="button"
+                  disabled={!enabled}
+                  onClick={() => {
+                    if (!enabled) return;
+                    onSwitch(o.id);
+                    setOpen(false);
                   }}
-                />
-                <span style={{ fontWeight: enabled && isActive ? 600 : 400 }}>{o.label}</span>
-                <span
                   style={{
-                    fontSize: 10,
-                    marginLeft: 'auto',
-                    opacity: enabled ? 0.5 : 0.7,
-                    color: enabled ? '#cdd6f4' : '#facc15',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '8px 10px',
+                    background: enabled && isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                    border: 'none',
+                    textAlign: 'left',
+                    fontSize: 12,
+                    color: '#cdd6f4',
+                    cursor: enabled ? 'pointer' : 'default',
+                    opacity: enabled ? 1 : 0.4,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168, 85, 247, 0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                   }}
                 >
-                  {subtitle}
-                </span>
-              </button>
+                  <span
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: '50%',
+                      background: enabled && isActive ? '#A855F7' : 'rgba(255,255,255,0.15)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontWeight: enabled && isActive ? 600 : 400 }}>{o.label}</span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      marginLeft: 'auto',
+                      opacity: enabled ? 0.5 : 0.7,
+                      color: enabled ? '#cdd6f4' : '#facc15',
+                    }}
+                  >
+                    {subtitle}
+                  </span>
+                </button>
+              </Tooltip>
             );
           })}
 
@@ -213,49 +213,53 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
           {rawModels.map((m) => {
             const isActive = m.id === activeModel;
             return (
-              <button
+              <Tooltip
                 key={m.id}
-                type="button"
-                disabled={!m.available}
-                onClick={() => {
-                  if (!m.available) return;
-                  onSwitch(m.id);
-                  setOpen(false);
-                }}
-                title={m.available ? m.name : `Add ${m.provider} API key to use ${m.name}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  width: '100%',
-                  padding: '6px 10px',
-                  background: m.available && isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                  border: 'none',
-                  textAlign: 'left',
-                  fontSize: 12,
-                  color: '#cdd6f4',
-                  cursor: m.available ? 'pointer' : 'default',
-                  opacity: m.available ? 1 : 0.35,
-                }}
-                onMouseEnter={(e) => {
-                  if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168, 85, 247, 0.08)';
-                }}
-                onMouseLeave={(e) => {
-                  if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                }}
+                content={m.available ? m.name : `Add ${m.provider} API key to use ${m.name}`}
+                placement="top"
               >
-                <span
-                  style={{
-                    width: 5,
-                    height: 5,
-                    borderRadius: '50%',
-                    background: isActive && m.available ? '#A855F7' : m.available ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
-                    flexShrink: 0,
+                <button
+                  type="button"
+                  disabled={!m.available}
+                  onClick={() => {
+                    if (!m.available) return;
+                    onSwitch(m.id);
+                    setOpen(false);
                   }}
-                />
-                <span style={{ fontWeight: isActive && m.available ? 600 : 400 }}>{m.name}</span>
-                <span style={{ fontSize: 10, opacity: 0.35, marginLeft: 'auto' }}>{m.provider}</span>
-              </button>
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '6px 10px',
+                    background: m.available && isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                    border: 'none',
+                    textAlign: 'left',
+                    fontSize: 12,
+                    color: '#cdd6f4',
+                    cursor: m.available ? 'pointer' : 'default',
+                    opacity: m.available ? 1 : 0.35,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168, 85, 247, 0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: '50%',
+                      background: isActive && m.available ? '#A855F7' : m.available ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontWeight: isActive && m.available ? 600 : 400 }}>{m.name}</span>
+                  <span style={{ fontSize: 10, opacity: 0.35, marginLeft: 'auto' }}>{m.provider}</span>
+                </button>
+              </Tooltip>
             );
           })}
         </div>

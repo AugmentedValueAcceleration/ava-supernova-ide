@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { readDir } from '@tauri-apps/plugin-fs';
+import { Tooltip } from './Tooltip';
 import {
   Lightning as PhCommand,
   ChatCircleDots as PhChat,
@@ -321,9 +322,9 @@ function SearchPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {
         />
       </div>
       <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center' }}>
-        <button title="Match case" onClick={() => setCaseSensitive(v => !v)} style={toggleStyle(caseSensitive)}>Aa</button>
-        <button title="Whole word" onClick={() => setWholeWord(v => !v)} style={toggleStyle(wholeWord)}>ab</button>
-        <button title="Use regular expression" onClick={() => setIsRegex(v => !v)} style={toggleStyle(isRegex)}>.*</button>
+        <Tooltip content="Match case"><button onClick={() => setCaseSensitive(v => !v)} style={toggleStyle(caseSensitive)}>Aa</button></Tooltip>
+        <Tooltip content="Whole word"><button onClick={() => setWholeWord(v => !v)} style={toggleStyle(wholeWord)}>ab</button></Tooltip>
+        <Tooltip content="Use regular expression"><button onClick={() => setIsRegex(v => !v)} style={toggleStyle(isRegex)}>.*</button></Tooltip>
         <input
           type="text"
           value={glob}
@@ -560,8 +561,10 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
             {fileName}{folder && <span style={{ fontSize: 10, color: '#585b70', marginLeft: 6 }}>{folder}</span>}
           </button>
           {f.section !== 'untracked' && (
-            <button onClick={() => void showDiff(f.path, f.section === 'staged')} title={isDiffOpen ? 'Hide diff' : 'Show diff'}
-              style={{ width: 22, height: 20, padding: 0, border: 'none', background: 'transparent', color: isDiffOpen ? '#cba6f7' : '#6c7086', cursor: 'pointer', fontSize: 11 }}>±</button>
+            <Tooltip content={isDiffOpen ? 'Hide diff' : 'Show diff'}>
+              <button onClick={() => void showDiff(f.path, f.section === 'staged')}
+                style={{ width: 22, height: 20, padding: 0, border: 'none', background: 'transparent', color: isDiffOpen ? '#cba6f7' : '#6c7086', cursor: 'pointer', fontSize: 11 }}>±</button>
+            </Tooltip>
           )}
           {actions}
         </div>
@@ -574,11 +577,12 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
     );
   };
   const actionBtn = (label: string, onClick: () => void, color = '#a6adc8'): React.ReactNode => (
-    <button onClick={(e) => { e.stopPropagation(); onClick(); }}
-      title={label}
-      style={{ width: 22, height: 20, padding: 0, border: 'none', background: 'transparent', color, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>
-      {label === 'stage' ? '+' : label === 'unstage' ? '−' : '×'}
-    </button>
+    <Tooltip content={label}>
+      <button onClick={(e) => { e.stopPropagation(); onClick(); }}
+        style={{ width: 22, height: 20, padding: 0, border: 'none', background: 'transparent', color, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>
+        {label === 'stage' ? '+' : label === 'unstage' ? '−' : '×'}
+      </button>
+    </Tooltip>
   );
 
   return (
@@ -586,8 +590,8 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
       {/* Branch + status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#cdd6f4', marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'monospace', color: '#cba6f7', fontWeight: 600 }}>⎇ {status.branch}</span>
-        {status.ahead != null && status.ahead > 0 && <span style={{ color: '#a6e3a1' }} title="Commits ahead of upstream">↑{status.ahead}</span>}
-        {status.behind != null && status.behind > 0 && <span style={{ color: '#f9e2af' }} title="Commits behind upstream">↓{status.behind}</span>}
+        {status.ahead != null && status.ahead > 0 && <Tooltip content="Commits ahead of upstream"><span style={{ color: '#a6e3a1' }}>↑{status.ahead}</span></Tooltip>}
+        {status.behind != null && status.behind > 0 && <Tooltip content="Commits behind upstream"><span style={{ color: '#f9e2af' }}>↓{status.behind}</span></Tooltip>}
         <button onClick={() => void refresh()} disabled={busy}
           style={{ marginLeft: 'auto', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(168,85,247,0.18)', background: 'rgba(49,34,68,0.5)', color: '#a6adc8', fontSize: 10, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>
           ↻
@@ -626,8 +630,8 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
           <>
             <div style={sectionHeader}>
               <span>Staged ({staged.length})</span>
-              <button onClick={() => void unstage(staged.map(f => f.path))} title="Unstage all"
-                style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 11 }}>−</button>
+              <Tooltip content="Unstage all"><button onClick={() => void unstage(staged.map(f => f.path))}
+                style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 11 }}>−</button></Tooltip>
             </div>
             {staged.map(f => fileRow(f, actionBtn('unstage', () => void unstage([f.path]))))}
           </>
@@ -637,10 +641,10 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
             <div style={sectionHeader}>
               <span>Changes ({unstaged.length})</span>
               <span style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => void discard(unstaged.map(f => f.path))} title="Discard all"
-                  style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13 }}>×</button>
-                <button onClick={() => void stage(unstaged.map(f => f.path))} title="Stage all"
-                  style={{ background: 'transparent', border: 'none', color: '#a6e3a1', cursor: 'pointer', fontSize: 13 }}>+</button>
+                <Tooltip content="Discard all"><button onClick={() => void discard(unstaged.map(f => f.path))}
+                  style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13 }}>×</button></Tooltip>
+                <Tooltip content="Stage all"><button onClick={() => void stage(unstaged.map(f => f.path))}
+                  style={{ background: 'transparent', border: 'none', color: '#a6e3a1', cursor: 'pointer', fontSize: 13 }}>+</button></Tooltip>
               </span>
             </div>
             {unstaged.map(f => fileRow(f, <>
@@ -653,8 +657,8 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
           <>
             <div style={sectionHeader}>
               <span>Untracked ({untracked.length})</span>
-              <button onClick={() => void stage(untracked.map(f => f.path))} title="Stage all"
-                style={{ background: 'transparent', border: 'none', color: '#a6e3a1', cursor: 'pointer', fontSize: 13 }}>+</button>
+              <Tooltip content="Stage all"><button onClick={() => void stage(untracked.map(f => f.path))}
+                style={{ background: 'transparent', border: 'none', color: '#a6e3a1', cursor: 'pointer', fontSize: 13 }}>+</button></Tooltip>
             </div>
             {untracked.map(f => fileRow(f, actionBtn('stage', () => void stage([f.path]), '#a6e3a1')))}
           </>
@@ -916,18 +920,19 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
     const initial = (email || 'A')[0].toUpperCase();
     return (
       <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid rgba(168,85,247,0.12)', width: '100%', display: 'flex', justifyContent: 'center' }}>
-        <div
-          title={isConnected ? `${email} (${tier})` : 'Not connected — expand sidebar to sign in'}
-          style={{
-            width: 32, height: 32, borderRadius: '50%',
-            background: isConnected ? 'rgba(168,85,247,0.25)' : 'rgba(49,34,68,0.5)',
-            color: isConnected ? '#cba6f7' : '#6c7086',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 600, userSelect: 'none',
-          }}
-        >
-          {initial}
-        </div>
+        <Tooltip content={isConnected ? `${email} (${tier})` : 'Not connected — expand sidebar to sign in'} placement="top">
+          <div
+            style={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: isConnected ? 'rgba(168,85,247,0.25)' : 'rgba(49,34,68,0.5)',
+              color: isConnected ? '#cba6f7' : '#6c7086',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 600, userSelect: 'none',
+            }}
+          >
+            {initial}
+          </div>
+        </Tooltip>
       </div>
     );
   }
@@ -1135,11 +1140,10 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
           {NAV_ITEMS.map((item) => {
             const isActive = activePage === item.id;
             return (
+              <Tooltip key={item.id} content={`${item.label} — ${item.desc}`} placement="top">
               <button
-                key={item.id}
                 type="button"
                 onClick={() => onDashboardSelect?.(item.id)}
-                title={`${item.label} — ${item.desc}`}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   width: 36, height: 36, borderRadius: 8, border: 'none',
@@ -1162,6 +1166,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
                   return null;
                 })()}
               </button>
+              </Tooltip>
             );
           })}
         </div>
@@ -1331,23 +1336,24 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
         </span>
         <div style={{ display: 'flex', gap: 2 }}>
           {onTogglePosition && (
-            <button
-              onClick={onTogglePosition}
-              title={`Move sidebar to ${position === 'left' ? 'right' : 'left'}`}
-              style={{
-                width: 22, height: 22, background: 'transparent', border: 'none',
-                color: '#6c7086', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                borderRadius: 4, padding: 0,
-              }}
-              onMouseOver={(e) => e.currentTarget.style.color = '#cdd6f4'}
-              onMouseOut={(e) => e.currentTarget.style.color = '#6c7086'}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                style={{ transform: position === 'left' ? 'none' : 'scaleX(-1)' }}>
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <line x1="9" y1="3" x2="9" y2="21" />
-              </svg>
-            </button>
+            <Tooltip content={`Move sidebar to ${position === 'left' ? 'right' : 'left'}`} placement="bottom">
+              <button
+                onClick={onTogglePosition}
+                style={{
+                  width: 22, height: 22, background: 'transparent', border: 'none',
+                  color: '#6c7086', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 4, padding: 0,
+                }}
+                onMouseOver={(e) => e.currentTarget.style.color = '#cdd6f4'}
+                onMouseOut={(e) => e.currentTarget.style.color = '#6c7086'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transform: position === 'left' ? 'none' : 'scaleX(-1)' }}>
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="9" y1="3" x2="9" y2="21" />
+                </svg>
+              </button>
+            </Tooltip>
           )}
         <button
           style={{
