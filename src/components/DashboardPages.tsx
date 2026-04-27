@@ -13229,11 +13229,19 @@ export function CreativeStudioPage() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Save asset to local ~/.ava/creative/ and update metadata.json
+  // Save asset to local ~/.ava/creative/ and update metadata.json.
+  //
+  // Persists the *disk path* (resolved through convertFileSrc to the Tauri
+  // asset-protocol URL) rather than the data URI. Earlier versions stored
+  // the raw data URI as the playback URL — tens of MB per video — which
+  // bloated metadata.json beyond reason and slowed every Library open.
+  // The asset-protocol URL streams from disk like a real <video src>, so
+  // playback works on reload without any of the inline-bytes overhead.
   const saveToLocal = async (type: 'images' | 'audio' | 'video' | 'voice' | 'sfx', url: string, title: string, prompt: string) => {
     try {
       const { writeTextFile, writeFile, readTextFile, mkdir, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-      await import('@tauri-apps/api/path');
+      const { homeDir, join } = await import('@tauri-apps/api/path');
+      const { convertFileSrc } = await import('@tauri-apps/api/core');
       const dir = `.ava/creative/${type}`;
       await mkdir(dir, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
 
@@ -13244,17 +13252,21 @@ export function CreativeStudioPage() {
 
       let savedUrl = url;
 
-      // If data URI, write binary to disk but keep data URI for playback
+      // If data URI: write binary to disk, then store the asset-protocol
+      // URL for playback. WebView can't load file:// directly, but
+      // convertFileSrc maps the absolute path to https://asset.localhost
+      // (Windows) or asset:// (macOS/Linux) which the webview accepts.
       if (url.startsWith('data:')) {
         try {
           const base64 = url.split(',')[1];
           const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
           await writeFile(filePath, bytes, { baseDir: BaseDirectory.Home });
-          // Keep the data URI for playback — Tauri WebView can't load file:// URLs
-          // but data URIs work fine for audio/video elements
-          savedUrl = url;
+          const home = await homeDir();
+          const absPath = await join(home, filePath);
+          savedUrl = convertFileSrc(absPath);
         } catch (e) {
           console.warn('[creative] Failed to write binary file:', e);
+          // Fall back to the data URI so the in-session preview still works.
           savedUrl = url;
         }
       }
