@@ -5,6 +5,31 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
+// Windows: spawn child processes WITHOUT a console window. Without this,
+// every `Command::new("git")` flashes a black cmd-style window briefly —
+// noticeable when the Source Control panel polls every 15s while the IDE
+// is idle. CREATE_NO_WINDOW (0x08000000) tells CreateProcess to skip the
+// console allocation. No effect on non-Windows targets — the helper falls
+// through to a plain `Command`.
+//
+// Use for: background-only spawns (git status polling, node sidecar boot,
+// taskkill cleanup). Do NOT use for `launch_app` — that one's job is
+// literally to open a window.
+#[allow(dead_code)] // unused on non-Windows targets
+fn silent_command(program: &str) -> std::process::Command {
+    let cmd = std::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let mut cmd = cmd;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        return cmd;
+    }
+    #[allow(unreachable_code)]
+    cmd
+}
+
 // Tracks the last window Ava successfully targeted (via focus_window or the
 // post-launch re-focus in launch_app). type_text / key_press restore this
 // window to foreground before sending keystrokes so the input lands in the
@@ -985,8 +1010,7 @@ struct GitStatusReport {
 }
 
 fn run_git(repo: &str, args: &[&str]) -> Result<std::process::Output, String> {
-    use std::process::Command;
-    Command::new("git")
+    silent_command("git")
         .arg("-C").arg(repo)
         .args(args)
         .output()
@@ -1434,7 +1458,7 @@ fn record_process_main_window(target_pid: u32, timeout: std::time::Duration) {
 // we use std::process directly and manage the pipes ourselves. The Node
 // binary path comes from the bundled sidecar (binaries/node).
 
-use std::process::{Command, Stdio, Child, ChildStdin, ChildStdout};
+use std::process::{Stdio, Child, ChildStdin, ChildStdout};
 use std::io::{BufRead, BufReader, Write};
 
 struct BrowserProcess {
@@ -1496,7 +1520,7 @@ fn browser_launch(app: AppHandle) -> Result<serde_json::Value, String> {
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-    let mut child = Command::new(node_cmd)
+    let mut child = silent_command(node_cmd)
         .arg(&worker_path)
         .current_dir(&package_root)
         .stdin(Stdio::piped())
@@ -1582,7 +1606,7 @@ fn browser_close() -> Result<serde_json::Value, String> {
                         #[cfg(target_os = "windows")]
                         {
                             if let Some(pid) = proc.child.id().into() {
-                                let _ = Command::new("taskkill")
+                                let _ = silent_command("taskkill")
                                     .args(["/PID", &pid.to_string(), "/T", "/F"])
                                     .output();
                             }
