@@ -1699,7 +1699,7 @@ export function CommandCentrePage() {
             {weather && !weatherLoading && (
               <HeroPill
                 icon={<PhWeather size={14} weight="duotone" />}
-                text={`${Math.round((weather as { temp?: number }).temp ?? 0)}° ${(weather as { condition?: string }).condition ?? ''}`.trim()}
+                text={`${Math.round((weather as { temp_c?: number }).temp_c ?? 0)}° ${(weather as { condition?: string }).condition ?? ''}`.trim()}
                 title="Weather — see Daily for details"
               />
             )}
