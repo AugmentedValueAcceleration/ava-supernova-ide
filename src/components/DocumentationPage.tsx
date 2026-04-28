@@ -2,11 +2,10 @@
 // through a RendererAdapter<React.ReactNode> using the IDE's Catppuccin-ish inline-style palette.
 // Sidebar is scroll-anchored (matches the extension). Audience toggle collapses power-only pages.
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   type RendererAdapter,
   type DocBlock,
-  type DocPage,
   type FactsData,
   TOOLS,
   CATEGORY_LABELS,
@@ -17,7 +16,6 @@ import {
   PERMISSION_LABELS,
   SHORTCUTS,
   filterBySurface,
-  filterByAudience,
   buildSidebar,
   anchorFor,
   getPages,
@@ -80,6 +78,20 @@ function makeAdapter(): RendererAdapter<React.ReactNode> {
       <a key={k()} href={href} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined} style={{ color: ACCENT, textDecoration: 'none' }}>
         {text}
       </a>
+    ),
+
+    table: (headers, rows) => (
+      <FactsTable
+        key={k()}
+        headers={headers}
+        rows={rows.map((r, ri) =>
+          r.map((cell, ci) =>
+            ci === 0
+              ? <span key={ri + '-' + ci} style={{ color: ACCENT, fontWeight: 500, whiteSpace: 'nowrap' }}>{cell}</span>
+              : <span key={ri + '-' + ci}>{cell}</span>,
+          ),
+        )}
+      />
     ),
 
     tools: (items) => {
@@ -249,6 +261,7 @@ function renderBlock(block: DocBlock, adapter: RendererAdapter<React.ReactNode>,
     case 'code':      return adapter.code(block.text, block.language);
     case 'callout':   return adapter.callout(block.text, block.variant);
     case 'link':      return adapter.link(block.text, block.href, block.external ?? false);
+    case 'table':     return adapter.table(block.headers, block.rows);
     case 'facts': {
       switch (block.kind) {
         case 'tools': {
@@ -281,18 +294,13 @@ function renderBlock(block: DocBlock, adapter: RendererAdapter<React.ReactNode>,
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function DocumentationPage() {
-  const [showPower, setShowPower] = useState(true);
-  const [query, setQuery] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
   const { pages, sidebar } = useMemo(() => {
+    // Static — no audience filter, no search, no collapse toggle. Show
+    // every page available on this surface, every time. Operator wanted
+    // the docs sidebar fixed.
     const all = filterBySurface(getPages(), 'ide');
-    const audienceFiltered = filterByAudience(all, showPower ? 'everything' : 'newcomer');
-    const searched = query.trim()
-      ? audienceFiltered.filter(p => matchesSearch(p, query.toLowerCase()))
-      : audienceFiltered;
-    return { pages: searched, sidebar: buildSidebar(searched) };
-  }, [showPower, query]);
+    return { pages: all, sidebar: buildSidebar(all) };
+  }, []);
 
   const data: FactsData = {
     tools: TOOLS, providers: PROVIDERS, modes: MODES, personas: PERSONAS,
@@ -303,34 +311,8 @@ export function DocumentationPage() {
 
   return (
     <div style={{ flex: 1, display: 'flex', background: 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)', overflow: 'hidden' }}>
-      {/* Sidebar (collapsible) */}
-      {sidebarOpen ? (
-        <aside style={{ width: 240, minWidth: 240, borderRight: `1px solid ${BORDER}`, background: 'rgba(15, 10, 26, 0.5)', padding: 16, overflowY: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: HEADING }}>Documentation</div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              aria-label="Collapse sidebar"
-              style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', padding: 4, borderRadius: 4, display: 'flex' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = HEADING; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = MUTED; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-          </div>
-
-          <input
-          type="text"
-          placeholder="Search…"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          style={{ width: '100%', height: 30, background: 'rgba(49, 34, 68, 0.5)', border: `1px solid ${BORDER}`, borderRadius: 6, padding: '0 10px', color: HEADING, fontSize: 12, outline: 'none', marginBottom: 10 }}
-        />
-
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: MUTED, marginBottom: 14, cursor: 'pointer' }}>
-          <input type="checkbox" checked={showPower} onChange={e => setShowPower(e.target.checked)} />
-          Show reference / power-user pages
-        </label>
+      <aside style={{ width: 240, minWidth: 240, borderRight: `1px solid ${BORDER}`, background: 'rgba(15, 10, 26, 0.5)', padding: 16, overflowY: 'auto', height: '100%' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: HEADING, marginBottom: 14 }}>Documentation</div>
 
         {sidebar.map(section => (
           <div key={section.id} style={{ marginBottom: 14 }}>
@@ -351,43 +333,17 @@ export function DocumentationPage() {
           </div>
         ))}
         </aside>
-      ) : (
-        <div style={{ padding: 12, borderRight: `1px solid ${BORDER}`, background: 'rgba(15, 10, 26, 0.5)' }}>
-          <button
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Expand sidebar"
-            style={{ background: CARD, border: `1px solid ${BORDER}`, color: MUTED, cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = HEADING; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(168,85,247,0.5)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = MUTED; (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-          </button>
-        </div>
-      )}
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px' }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, color: HEADING, marginBottom: 6 }}>Ava Supernova</h1>
-        <p style={{ fontSize: 13, color: MUTED, marginBottom: 32 }}>Everything you need to know — clean, searchable, kept in sync with the agent itself.</p>
+        <p style={{ fontSize: 13, color: MUTED, marginBottom: 32 }}>Everything you need to know — clean, kept in sync with the agent itself.</p>
 
         {pages.map(page => {
           const blocks = page.body.map(b => renderBlock(b, adapter, data));
           return adapter.page(page.title, blocks, anchorFor(page.id));
         })}
-
-        {pages.length === 0 && (
-          <p style={{ color: MUTED, fontSize: 13 }}>No pages match your search.</p>
-        )}
       </div>
     </div>
   );
-}
-
-function matchesSearch(page: DocPage, q: string): boolean {
-  if (page.title.toLowerCase().includes(q)) return true;
-  for (const block of page.body) {
-    if ('text' in block && typeof block.text === 'string' && block.text.toLowerCase().includes(q)) return true;
-    if (block.type === 'list' && block.items.some(i => i.toLowerCase().includes(q))) return true;
-  }
-  return false;
 }
