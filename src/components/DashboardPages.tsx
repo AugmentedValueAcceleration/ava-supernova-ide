@@ -2642,6 +2642,12 @@ export function AvaChatPage() {
           generationLocalOnly,
           learningLocalOnly,
           local: localBlock,
+          // Knowledge packs the user toggled on. Sidecar joins the
+          // matching BUILTIN_PACKS content into the system prompt's
+          // knowledgeContext block. Without this, the Packs dropdown
+          // is decorative — toggling a pack updates UI state but the
+          // agent never sees the extra context.
+          enabledPackIds: [...enabledPacks],
         } as SidecarConfig;
 
         await sidecar.start(config);
@@ -3263,6 +3269,12 @@ export function AvaChatPage() {
       if (next.has(id)) next.delete(id);
       else next.add(id);
       localStorage.setItem('ava-knowledge-packs', JSON.stringify([...next]));
+      // Push to sidecar so the change takes effect immediately — without
+      // this, toggling a pack would only land at next IDE restart.
+      // Mirrors the set_mode / set_desktop_permission_level live-rebuild
+      // pattern. Silent on failure: sidecar may not be running yet.
+      const sidecar = getSidecar();
+      sidecar.setKnowledgePacks([...next]).catch(() => {});
       return next;
     });
   }, []);

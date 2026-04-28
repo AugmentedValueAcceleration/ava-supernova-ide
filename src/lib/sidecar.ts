@@ -45,6 +45,15 @@ export interface SidecarConfig {
    *  per-category pref off means no cloud push from the tools. */
   learningLocalOnly?: boolean;
   /**
+   * Manually enabled knowledge pack IDs. The sidecar looks each up in
+   * @ava/core's BUILTIN_PACKS and joins the content into the system
+   * prompt's `knowledgeContext` block. Without this, the IDE's pack
+   * dropdown is decorative — toggling a pack updates UI state but the
+   * agent never sees the extra context. Live updates land via the
+   * separate `set_knowledge_packs` command.
+   */
+  enabledPackIds?: string[];
+  /**
    * Local / custom OpenAI-compatible provider — Ollama, LM Studio, vLLM,
    * or any other server that speaks the OpenAI Chat Completions API. The
    * IDE Settings UI writes baseUrl + modelName into localStorage and
@@ -413,6 +422,16 @@ export class SidecarManager {
    */
   async setDesktopPermissionLevel(level: 'watch' | 'ask' | 'drive'): Promise<void> {
     await this.send({ cmd: 'set_desktop_permission_level', level });
+  }
+
+  /**
+   * Update the enabled knowledge pack list mid-session. Triggers a
+   * system prompt rebuild on the sidecar so Ava picks up newly-enabled
+   * packs (or drops disabled ones) without a restart. Mirrors the
+   * set_mode / set_desktop_permission_level pattern.
+   */
+  async setKnowledgePacks(packIds: string[]): Promise<void> {
+    await this.send({ cmd: 'set_knowledge_packs', packIds });
   }
 
   /**

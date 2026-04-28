@@ -701,10 +701,12 @@ async function handleInit(data) {
     await setLocale(language);
     emit({ event: 'info', message: 'Locale set' });
 
-    // Load knowledge packs — auto-detected project context only
+    // Load knowledge packs — auto-detected + manually-enabled by the IDE.
     // Self-knowledge is NOT injected into context (147KB = ~37K tokens).
     // Ava accesses her own code via the self_inspect tool instead.
     let knowledgeContext;
+    // Track which packs have been added so manual + auto don't duplicate.
+    const _loadedPackIds = new Set();
     try {
       const packSections = [];
 
@@ -723,6 +725,21 @@ async function handleInit(data) {
             : files.some(f => f.endsWith('.csproj')) ? 'Unity (C#)'
             : 'game engine';
           packSections.push(`## Active Knowledge Pack: Game Development\nDetected: ${engine}\n\n${gamePack.context}`);
+          _loadedPackIds.add(gamePack.id);
+        }
+      }
+
+      // Manually-enabled packs — IDE sends the list in config.enabledPackIds.
+      // Without this branch the IDE's Packs dropdown was decorative; toggling
+      // a pack updated UI state but the agent never saw the extra context.
+      if (Array.isArray(config.enabledPackIds) && config.enabledPackIds.length > 0) {
+        for (const id of config.enabledPackIds) {
+          if (_loadedPackIds.has(id)) continue;
+          const pack = core.BUILTIN_PACKS?.find(p => p.id === id);
+          if (pack) {
+            packSections.push(`## Active Knowledge Pack: ${pack.name}\n\n${pack.context}`);
+            _loadedPackIds.add(id);
+          }
         }
       }
 
@@ -730,6 +747,8 @@ async function handleInit(data) {
         knowledgeContext = packSections.join('\n\n');
       }
     } catch { /* non-fatal */ }
+    // Stash for live rebuild on set_knowledge_packs.
+    globalThis._loadedPackIds = _loadedPackIds;
 
     // Stash args for rebuild on mode switch. The system prompt now varies
     // with currentMode (desktop mode injects an additional rules block
@@ -1523,6 +1542,64 @@ function handleSetDesktopPermissionLevel(data) {
   }
 }
 
+async function handleSetKnowledgePacks(data) {
+  // Live update of the manually-enabled pack list. IDE sends the new
+  // full set on every toggle; we rebuild knowledgeContext from scratch
+  // (auto-detected packs + the newly-enabled list) and rebuild the
+  // system prompt. Same shape as handleSetMode's rebuild.
+  if (!conversation || !globalThis._systemPromptArgs) return;
+
+  const packIds = Array.isArray(data?.packIds) ? data.packIds : [];
+  const packSections = [];
+  const newLoadedIds = new Set();
+
+  // Re-run auto-detection so game-project packs (or any future
+  // file-detection-driven packs) survive the rebuild. Cheap — readdir
+  // on the project root is fast. Uses dynamic import (ESM-safe) since
+  // this file is .mjs and `require` is not available.
+  try {
+    const cwd = globalThis._cwd || process.cwd();
+    const { readdirSync } = await import('node:fs');
+    const files = readdirSync(cwd).map(f => f.toLowerCase());
+    const isGameProject = files.some(f =>
+      f.endsWith('.uproject') || f === 'project.godot' ||
+      (files.includes('content') && files.includes('source'))
+    );
+    if (isGameProject) {
+      const gamePack = core.BUILTIN_PACKS?.find(p => p.id === 'game-development');
+      if (gamePack) {
+        const engine = files.some(f => f.endsWith('.uproject')) ? 'Unreal Engine (C++)'
+          : files.includes('project.godot') ? 'Godot (GDScript)'
+          : files.some(f => f.endsWith('.csproj')) ? 'Unity (C#)'
+          : 'game engine';
+        packSections.push(`## Active Knowledge Pack: Game Development\nDetected: ${engine}\n\n${gamePack.context}`);
+        newLoadedIds.add(gamePack.id);
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  for (const id of packIds) {
+    if (newLoadedIds.has(id)) continue;
+    const pack = core.BUILTIN_PACKS?.find(p => p.id === id);
+    if (pack) {
+      packSections.push(`## Active Knowledge Pack: ${pack.name}\n\n${pack.context}`);
+      newLoadedIds.add(id);
+    }
+  }
+
+  const knowledgeContext = packSections.length > 0 ? packSections.join('\n\n') : undefined;
+  const newArgs = { ...globalThis._systemPromptArgs, knowledgeContext };
+  globalThis._systemPromptArgs = newArgs;
+  globalThis._loadedPackIds = newLoadedIds;
+
+  const suffix = globalThis._systemPromptUserInfoSuffix || '';
+  conversation.setSystemPrompt(buildSystemPrompt(newArgs) + suffix);
+  emit({
+    event: 'info',
+    message: `Knowledge packs updated → ${packSections.length} active; system prompt rebuilt`,
+  });
+}
+
 function handleSetMode(data) {
   const previousMode = currentMode;
   currentMode = data.mode || 'work';
@@ -1741,6 +1818,9 @@ rl.on('line', async (line) => {
       break;
     case 'set_desktop_permission_level':
       handleSetDesktopPermissionLevel(data);
+      break;
+    case 'set_knowledge_packs':
+      handleSetKnowledgePacks(data).catch((err) => emitError(err.message));
       break;
     case 'clear_memory':
       if (memoryManager) {
