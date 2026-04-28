@@ -2,7 +2,7 @@
 // through a RendererAdapter<React.ReactNode> using the IDE's Catppuccin-ish inline-style palette.
 // Sidebar is scroll-anchored (matches the extension). Audience toggle collapses power-only pages.
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   type RendererAdapter,
   type DocBlock,
@@ -310,40 +310,101 @@ export function DocumentationPage() {
   const adapter = makeAdapter();
 
   return (
-    <div style={{ flex: 1, display: 'flex', background: 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)', overflow: 'hidden' }}>
-      <aside style={{ width: 240, minWidth: 240, borderRight: `1px solid ${BORDER}`, background: 'rgba(15, 10, 26, 0.5)', padding: 16, overflowY: 'auto', height: '100%' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: HEADING, marginBottom: 14 }}>Documentation</div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)', overflow: 'hidden' }}>
+      {/* Top bar with title + section dropdown. Replaces the sidebar so the
+          docs body gets the full window width. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 32px', borderBottom: `1px solid ${BORDER}`, background: 'rgba(15, 10, 26, 0.5)', flexShrink: 0 }}>
+        <div>
+          <h1 style={{ fontSize: 18, fontWeight: 600, color: HEADING, margin: 0 }}>Ava Supernova</h1>
+          <p style={{ fontSize: 11, color: MUTED, margin: '2px 0 0' }}>Documentation</p>
+        </div>
+        <DocsDropdown sections={sidebar} />
+      </div>
 
-        {sidebar.map(section => (
-          <div key={section.id} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.1, marginBottom: 4, padding: '0 6px' }}>{section.title}</div>
-            {section.pages.map(p => (
-              <a
-                key={p.id}
-                href={`#doc-${p.anchor}`}
-                style={{ display: 'block', padding: '4px 6px', fontSize: 12, color: TEXT, textDecoration: 'none', borderRadius: 4 }}
-                onClick={() => {
-                  const el = document.getElementById(`doc-${p.anchor}`);
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              >
-                {p.title}
-              </a>
-            ))}
-          </div>
-        ))}
-        </aside>
-
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 600, color: HEADING, marginBottom: 6 }}>Ava Supernova</h1>
-        <p style={{ fontSize: 13, color: MUTED, marginBottom: 32 }}>Everything you need to know — clean, kept in sync with the agent itself.</p>
-
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 40px 40px' }}>
         {pages.map(page => {
           const blocks = page.body.map(b => renderBlock(b, adapter, data));
           return adapter.page(page.title, blocks, anchorFor(page.id));
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Top-right section dropdown — replaces the sidebar nav. Click opens a
+ * sectioned menu of pages, click a page → anchor jump + close. Click
+ * outside closes. Lets the docs body use full window width.
+ */
+function DocsDropdown({ sections }: { sections: ReturnType<typeof buildSidebar> }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 10px',
+          background: CARD,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 6,
+          color: TEXT,
+          fontSize: 12,
+          cursor: 'pointer',
+        }}
+      >
+        Sections
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+            width: 280, maxHeight: '60vh', overflowY: 'auto',
+            background: 'rgba(15, 10, 26, 0.97)',
+            border: `1px solid ${BORDER}`,
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            zIndex: 50,
+            padding: 8,
+          }}
+        >
+          {sections.map(section => (
+            <div key={section.id} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, padding: '4px 8px' }}>{section.title}</div>
+              {section.pages.map(p => (
+                <a
+                  key={p.id}
+                  href={`#doc-${p.anchor}`}
+                  style={{ display: 'block', padding: '5px 8px', fontSize: 12, color: TEXT, textDecoration: 'none', borderRadius: 4 }}
+                  onClick={() => {
+                    const el = document.getElementById(`doc-${p.anchor}`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    setOpen(false);
+                  }}
+                >
+                  {p.title}
+                </a>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1973,7 +1973,7 @@ export function AvaChatPage() {
         setCreditBalance(null);
         setUsageWarning({ level: 'none', message: '' });
         setChatBackend('local');
-        setMessages([{ id: `msg-reset-${Date.now()}`, role: 'ava' as const, text: t('dash.chat.welcome'), timestamp: Date.now() }]);
+        setMessages([{ id: `msg-reset-${Date.now()}`, role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now() }]);
         setConversationTitle(t('dash.chat.new_chat'));
         setEnabledPacks(new Set());
         setSecrets([]);
@@ -1987,13 +1987,30 @@ export function AvaChatPage() {
   void authRefreshChat;
   const connected = checkConnected();
 
+  // Build the dynamic welcome at first-mount so the seeded message
+  // reflects the operator's actual time-of-day and name. Mirrors the
+  // extension chat panel's buildSeededWelcome — first-person from Ava,
+  // partner-voice rather than generic-chatbot. localStorage `ava-ide-user-name`
+  // is the same key used by the dataset trajectory event (line 2671).
+  const buildIdeWelcome = (): string => {
+    const userName = (localStorage.getItem('ava-ide-user-name') ?? localStorage.getItem('ava-ide-email')?.split('@')[0] ?? '').trim() || null;
+    const now = new Date();
+    const h = now.getHours();
+    const day = now.toLocaleDateString('en-GB', { weekday: 'long' });
+    const namePart = userName ? `, ${userName}` : '';
+    if (h >= 5 && h < 12) return `Morning${namePart}. It's ${day} — what are we tackling today?`;
+    if (h >= 12 && h < 18) return `Afternoon${namePart}. ${day} — what can I get into for you?`;
+    if (h >= 18 && h < 23) return `Evening${namePart}. Pull up a chair — what are we working on?`;
+    return `Late one${namePart ? '' : ' here'}${namePart}. I'm awake if you are — what's on your mind?`;
+  };
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const saved = localStorage.getItem('ava-ide-chat-current');
       if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed) && parsed.length > 0) return parsed; }
     } catch { /* */ }
     return [
-      { id: mkId(), role: 'ava' as const, text: t('dash.chat.welcome'), timestamp: Date.now() },
+      { id: mkId(), role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now() },
     ];
   });
   const [input, setInput] = useState('');
@@ -2057,6 +2074,15 @@ export function AvaChatPage() {
   // {used, limit} survives the rename from the old token-system state for
   // tick-engine localStorage compatibility, but the values are credits.
   const [creditBalance, setCreditBalance] = useState<{ used: number; limit: number } | null>(null);
+  // First-load gates. Mirror the extension's chat panel — locks the chat
+  // surface while the account fetch is still in flight on a connected
+  // session so users don't see a half-populated state (Free → Pro flash,
+  // empty conversations list that reads as "no chats" before localStorage
+  // is drained). Both flip false in one sweep when their respective
+  // signals resolve. Local-only / no-account paths skip both gates by
+  // initialising false (see effect below).
+  const [accountLoading, setAccountLoading] = useState<boolean>(() => !!getPlatformKey());
+  const [historyLoading, setHistoryLoading] = useState<boolean>(true);
   const [conversationTitle, setConversationTitle] = useState(t('dash.chat.new_chat'));
   // Tracks which saved conversation (by id) is currently rendered in the
   // chat panel. null = fresh / unsaved chat. Used by the history-delete
@@ -2098,6 +2124,12 @@ export function AvaChatPage() {
       } catch { /* ignore */ }
     };
     drainPending();
+    // History is drained synchronously from localStorage on mount, so the
+    // gate flips false immediately. Kept as a state flag (rather than a
+    // constant false) so the loading banner has a consistent shape with
+    // the extension chat panel and the field is available to gate other
+    // components that may wait on async history sync in future.
+    setHistoryLoading(false);
     window.addEventListener('ava-load-conversation', drainPending);
     return () => window.removeEventListener('ava-load-conversation', drainPending);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2114,7 +2146,7 @@ export function AvaChatPage() {
       const isCurrent = currentConvId !== null && currentConvId === detail.deletedId;
       const allCleared = detail.remaining === 0;
       if (isCurrent || allCleared) {
-        setMessages([{ id: mkId(), role: 'ava', text: t('dash.chat.fresh'), timestamp: Date.now() }]);
+        setMessages([{ id: mkId(), role: 'ava', text: buildIdeWelcome(), timestamp: Date.now() }]);
         setConversationTitle(t('dash.chat.new_chat'));
         setCurrentConvId(null);
       }
@@ -2133,10 +2165,18 @@ export function AvaChatPage() {
   // two pools together.
   const fetchBalance = useCallback(async () => {
     const key = getPlatformKey();
-    if (!key) return;
+    if (!key) {
+      // No platform key — there's nothing to wait on. Drop the gate so
+      // BYOK / local-only users aren't stuck at the loading banner.
+      setAccountLoading(false);
+      return;
+    }
     try {
       const res = await apiFetch('/account-info');
-      if (!res?.usage) return;
+      if (!res?.usage) {
+        setAccountLoading(false);
+        return;
+      }
       const u = res.usage as Record<string, unknown>;
       const freeUsed  = Number(u.free_credits_used  ?? u.free_tokens_used  ?? 0);
       const freeLimit = Number(u.free_credits_limit ?? u.free_tokens_limit ?? 300);
@@ -2151,6 +2191,7 @@ export function AvaChatPage() {
         localStorage.setItem('ava-platform-balance', JSON.stringify({ used: totalUsed, limit: totalLimit }));
       } catch { /* quota / disabled — non-fatal */ }
     } catch { /* non-fatal */ }
+    finally { setAccountLoading(false); }
   }, []);
 
   useEffect(() => { fetchBalance(); }, [fetchBalance]);
@@ -2352,14 +2393,23 @@ export function AvaChatPage() {
 
   // ── Derived: can the user actually chat? ────────────────────────────────
   const hasByokKeys = byokModels.length > 0;
-  const canChat = chatBackend === 'local' ? (hasByokKeys || connected) : connected;
-  const chatInactiveReason = !canChat
-    ? (!connected && !hasByokKeys
-      ? t('dash.chat.inactive_no_keys')
-      : chatBackend === 'cloud' && !connected
-        ? t('dash.chat.inactive_no_cloud')
-        : '')
-    : '';
+  // First-load gate — locks the chat input while account or history are
+  // still loading. Mirrors the extension chat panel.
+  const dataLoading = accountLoading || historyLoading;
+  const canChat = !dataLoading && (chatBackend === 'local' ? (hasByokKeys || connected) : connected);
+  const chatInactiveReason = dataLoading
+    ? (accountLoading && historyLoading
+        ? 'Loading your account and chat history…'
+        : accountLoading
+          ? 'Loading your account…'
+          : 'Loading your chat history…')
+    : !canChat
+      ? (!connected && !hasByokKeys
+        ? t('dash.chat.inactive_no_keys')
+        : chatBackend === 'cloud' && !connected
+          ? t('dash.chat.inactive_no_cloud')
+          : '')
+      : '';
 
   // ── Persist model & mode ──────────────────────────────────────────────────
   useEffect(() => {
@@ -3233,7 +3283,7 @@ export function AvaChatPage() {
       } catch { /* */ }
     }
     setMessages([
-      { id: mkId(), role: 'ava', text: t('dash.chat.fresh'), timestamp: Date.now() },
+      { id: mkId(), role: 'ava', text: buildIdeWelcome(), timestamp: Date.now() },
     ]);
     setConversationTitle(t('dash.chat.new_chat'));
     setCurrentConvId(null);
@@ -4317,6 +4367,42 @@ export function AvaChatPage() {
         );
       })()}
 
+      {/* First-load banner — visible while account or history are still
+          being fetched. Drops in one sweep when both arrive so users
+          don't see a half-populated state (Free → Pro flash, empty
+          conversation list reading as "no chats" before localStorage
+          drains). Mirrors the extension chat panel banner. */}
+      {dataLoading && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 24px',
+            background: 'rgba(168, 85, 247, 0.08)',
+            borderBottom: '1px solid rgba(168, 85, 247, 0.2)',
+            color: '#cdd6f4', fontSize: 11,
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: '#a855f7',
+              animation: 'avaPulse 1.5s ease-in-out infinite',
+              flexShrink: 0,
+            }}
+          />
+          <span>
+            {accountLoading && historyLoading
+              ? 'Loading your account and chat history…'
+              : accountLoading
+                ? 'Loading your account…'
+                : 'Loading your chat history…'}
+          </span>
+        </div>
+      )}
+
       {/* ── Context Bar (top of chat) ───────────────────────────────────
            Mirrors the v0.39.0 extension UX — horizontal token-usage bar
            always visible above the messages area. Escalates colour at
@@ -4330,6 +4416,94 @@ export function AvaChatPage() {
         flex: 1, overflowY: 'auto', padding: '20px 24px',
         display: 'flex', flexDirection: 'column', gap: 4,
       }}>
+        {/* Empty-state helper — six starter chips covering each mode,
+            shown until the user sends their first message. Click prefills
+            the input rather than auto-sending so the user can edit
+            before firing. Per-mode colour tokens, gradient bg, animated
+            entrance — aim is "warm partner" not "onboarding tooltip". */}
+        {!messages.some(m => m.role === 'user') && !streaming && !dataLoading && (
+          <div
+            className="ava-ide-starter-card"
+            style={{
+              borderRadius: 16,
+              padding: 18,
+              margin: '4px 0 16px',
+              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.10) 0%, rgba(96, 165, 250, 0.05) 100%)',
+              border: '1px solid rgba(168, 85, 247, 0.25)',
+              boxShadow: '0 4px 24px rgba(168, 85, 247, 0.10)',
+            }}
+          >
+            <style>{`
+              .ava-ide-starter-card { animation: avaIdeStarterFade 0.4s ease-out; }
+              @keyframes avaIdeStarterFade {
+                from { opacity: 0; transform: translateY(8px); }
+                to   { opacity: 1; transform: translateY(0); }
+              }
+            `}</style>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ color: '#a855f7', fontSize: 14 }}>✦</span>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>Where do we start?</div>
+            </div>
+            <p style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.5, margin: '0 0 14px' }}>
+              I can read your code, plan a feature, teach you something, audit security, brainstorm, or just chat.
+              Pick one — you can edit before sending.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {[
+                { label: 'Explain a file',  prefix: '>>', prompt: 'Explain what this file does: ',           color: '#a855f7' },
+                { label: 'Plan a feature',  prefix: '::', prompt: ':: How should I approach adding ',         color: '#60a5fa' },
+                { label: 'Teach me',        prefix: '??', prompt: '?? Teach me about ',                       color: '#f9e2af' },
+                { label: 'Audit security',  prefix: '!!', prompt: '!! Audit this project for security issues', color: '#f38ba8' },
+                { label: 'Brainstorm',      prefix: '**', prompt: '** Help me think through ',                color: '#94e2d5' },
+                { label: 'Just chat',       prefix: '..', prompt: '.. ',                                      color: '#a6adc8' },
+              ].map(c => (
+                <button
+                  key={c.label}
+                  onClick={() => {
+                    setInput(c.prompt);
+                    requestAnimationFrame(() => {
+                      const el = textareaRef.current;
+                      if (el) {
+                        el.focus();
+                        el.selectionStart = el.selectionEnd = el.value.length;
+                      }
+                    });
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 12,
+                    padding: '6px 12px',
+                    background: 'rgba(26, 16, 40, 0.5)',
+                    border: `1px solid ${c.color}33`,
+                    borderRadius: 8,
+                    color: '#cdd6f4',
+                    cursor: 'pointer',
+                    transition: 'transform 0.12s ease, background 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    const el = e.currentTarget as HTMLButtonElement;
+                    el.style.background = `${c.color}1c`;
+                    el.style.borderColor = `${c.color}66`;
+                    el.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={e => {
+                    const el = e.currentTarget as HTMLButtonElement;
+                    el.style.background = 'rgba(26, 16, 40, 0.5)';
+                    el.style.borderColor = `${c.color}33`;
+                    el.style.transform = 'translateY(0)';
+                  }}
+                >
+                  <span style={{ color: c.color, fontFamily: 'monospace', fontSize: 10, fontWeight: 700 }}>{c.prefix}</span>
+                  <span>{c.label}</span>
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: 10, color: '#6c7086', marginTop: 14, marginBottom: 0 }}>
+              Tip: type <code style={{ color: '#a855f7' }}>{'>>'}</code> <code style={{ color: '#60a5fa' }}>::</code> <code style={{ color: '#a6adc8' }}>..</code> <code style={{ color: '#f9e2af' }}>??</code> <code style={{ color: '#f38ba8' }}>!!</code> <code style={{ color: '#94e2d5' }}>**</code> to switch modes any time.
+            </p>
+          </div>
+        )}
+
         {messages.map((msg) => {
           const isUser = msg.role === 'user';
           const isAva = msg.role === 'ava';
