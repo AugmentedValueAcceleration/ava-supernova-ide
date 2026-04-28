@@ -71,6 +71,8 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 // helpers below read from there so a single localStorage value is the
 // source of truth across the IDE.
 import { includesCloud as dataModeIncludesCloud, setDataMode, getDataMode } from '../lib/data-mode';
+import { useCreativeGallery, type GalleryItem } from '../lib/creative-gallery';
+import { CreativeGalleryStrip } from './CreativeOutputCard';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -4017,7 +4019,11 @@ export function AvaChatPage() {
                         key={o.id}
                         disabled={!o.enabled}
                         onClick={() => { if (!o.enabled) return; setModel(o.id); setModelMenuOpen(false); }}
-                        title={o.enabled ? o.title : `${o.label.replace('✦ ', '')} — admin-gated while DeepSeek partnership is finalised.`}
+                        title={o.enabled
+                          ? o.title
+                          : o.id === 'aurora'
+                            ? `${o.label.replace('✦ ', '')} — admin-gated while Mistral enterprise pricing is finalised.`
+                            : `${o.label.replace('✦ ', '')} — admin-gated while DeepSeek partnership is finalised.`}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
                           padding: '8px 10px', background: o.enabled && active ? 'rgba(168,85,247,0.15)' : 'transparent',
@@ -13219,98 +13225,44 @@ export function CreativeStudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Per-medium gallery hooks — replace the old single-slot lastX state.
+  // Each hook handles persistence (disk + cloud per data-mode) and
+  // exposes saveGenerated/deleteItem operations the form handlers call.
+  // gallery.items[0] is the most recent generation, used by the strip.
+  const imageGallery = useCreativeGallery('image');
+  const musicGallery = useCreativeGallery('music');
+  const voiceGallery = useCreativeGallery('voice');
+  const sfxGallery   = useCreativeGallery('sfx');
+  const videoGallery = useCreativeGallery('video');
+
   // Images state
   const [imagePrompt, setImagePrompt] = useState('');
   const [imageSize, setImageSize] = useState<'1:1' | '3:4' | '4:3'>('1:1');
-  const [lastImage, setLastImage] = useState<string | null>(null);
 
   // Audio state
   const [musicPrompt, setMusicPrompt] = useState('');
   const [musicLyrics, setMusicLyrics] = useState('');
-  const [lastAudio, setLastAudio] = useState<string | null>(null);
 
   // Voice state
   const [voiceText, setVoiceText] = useState('');
   const [voiceId, setVoiceId] = useState('Calm_Woman');
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
-  const [lastVoice, setLastVoice] = useState<string | null>(null);
 
   // SFX state
   const [sfxPrompt, setSfxPrompt] = useState('');
-  const [lastSfx, setLastSfx] = useState<string | null>(null);
 
   // Video state
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoDuration, setVideoDuration] = useState<6 | 10>(6);
-  const [lastVideo, setLastVideo] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Save asset to local ~/.ava/creative/ and update metadata.json.
-  //
-  // Persists the *disk path* (resolved through convertFileSrc to the Tauri
-  // asset-protocol URL) rather than the data URI. Earlier versions stored
-  // the raw data URI as the playback URL — tens of MB per video — which
-  // bloated metadata.json beyond reason and slowed every Library open.
-  // The asset-protocol URL streams from disk like a real <video src>, so
-  // playback works on reload without any of the inline-bytes overhead.
-  const saveToLocal = async (type: 'images' | 'audio' | 'video' | 'voice' | 'sfx', url: string, title: string, prompt: string) => {
-    try {
-      const { writeTextFile, writeFile, readTextFile, mkdir, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-      const { homeDir, join } = await import('@tauri-apps/api/path');
-      const { convertFileSrc } = await import('@tauri-apps/api/core');
-      const dir = `.ava/creative/${type}`;
-      await mkdir(dir, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
-
-      const id = `${type}_${Date.now()}`;
-      const ext = type === 'images' ? 'jpg' : type === 'video' ? 'mp4' : 'mp3';
-      const filename = `${id}.${ext}`;
-      const filePath = `${dir}/${filename}`;
-
-      let savedUrl = url;
-
-      // If data URI: write binary to disk, then store the asset-protocol
-      // URL for playback. WebView can't load file:// directly, but
-      // convertFileSrc maps the absolute path to https://asset.localhost
-      // (Windows) or asset:// (macOS/Linux) which the webview accepts.
-      if (url.startsWith('data:')) {
-        try {
-          const base64 = url.split(',')[1];
-          const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-          await writeFile(filePath, bytes, { baseDir: BaseDirectory.Home });
-          const home = await homeDir();
-          const absPath = await join(home, filePath);
-          savedUrl = convertFileSrc(absPath);
-        } catch (e) {
-          console.warn('[creative] Failed to write binary file:', e);
-          // Fall back to the data URI so the in-session preview still works.
-          savedUrl = url;
-        }
-      }
-
-      // Read existing metadata
-      const raw = await readTextFile('.ava/creative/metadata.json', { baseDir: BaseDirectory.Home }).catch(() => '[]');
-      const metadata: any[] = JSON.parse(raw || '[]');
-
-      metadata.unshift({
-        id,
-        type: type === 'images' ? 'image' : type === 'audio' ? 'music' : type,
-        asset_type: type === 'images' ? 'image' : type === 'audio' ? 'music' : type,
-        filename,
-        title,
-        prompt,
-        url: savedUrl,
-        created_at: new Date().toISOString(),
-      });
-
-      // Save metadata
-      await mkdir('.ava/creative', { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
-      await writeTextFile('.ava/creative/metadata.json', JSON.stringify(metadata, null, 2), { baseDir: BaseDirectory.Home });
-    } catch (e) {
-      console.warn('[creative] Failed to save locally:', e);
-    }
-  };
+  // Persistence — formerly saveToLocal — moved into the
+  // useCreativeGallery hook (lib/creative-gallery.ts). The hook honours
+  // the operator's Data Mode (local / cloud / both) and writes to disk +
+  // ~/.ava/creative/metadata.json + Supabase as appropriate. Each handler
+  // calls gallery.saveGenerated({ prompt, title, url }) with the result.
 
   // Clear error when switching tabs
   useEffect(() => { setError(null); }, [tab]);
@@ -13360,8 +13312,11 @@ export function CreativeStudioPage() {
       if (!res.ok) throw new Error(`Image generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        setLastImage(data.url);
-        await saveToLocal('images', data.url, imagePrompt.slice(0, 60), imagePrompt);
+        await imageGallery.saveGenerated({
+          prompt: imagePrompt,
+          title: imagePrompt.slice(0, 60),
+          url: data.url,
+        });
       } else throw new Error(data.error || 'No image URL returned');
     } catch (e: any) {
       setError(e.message || 'Image generation failed');
@@ -13384,8 +13339,11 @@ export function CreativeStudioPage() {
       if (!res.ok) throw new Error(`Music generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        setLastAudio(data.url);
-        await saveToLocal('audio', data.url, musicPrompt.slice(0, 60), musicPrompt);
+        await musicGallery.saveGenerated({
+          prompt: musicPrompt,
+          title: musicPrompt.slice(0, 60),
+          url: data.url,
+        });
       } else throw new Error(data.error || 'No audio URL returned');
     } catch (e: any) {
       setError(e.message || 'Music generation failed');
@@ -13407,8 +13365,11 @@ export function CreativeStudioPage() {
       if (!res.ok) throw new Error(`Voice generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        setLastVoice(data.url);
-        await saveToLocal('voice', data.url, voiceText.slice(0, 60), voiceText);
+        await voiceGallery.saveGenerated({
+          prompt: voiceText,
+          title: voiceText.slice(0, 60),
+          url: data.url,
+        });
       } else throw new Error(data.error || 'No voice URL returned');
     } catch (e: any) {
       setError(e.message || 'Voice generation failed');
@@ -13430,8 +13391,11 @@ export function CreativeStudioPage() {
       if (!res.ok) throw new Error(`SFX generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        setLastSfx(data.url);
-        await saveToLocal('sfx', data.url, sfxPrompt.slice(0, 60), sfxPrompt);
+        await sfxGallery.saveGenerated({
+          prompt: sfxPrompt,
+          title: sfxPrompt.slice(0, 60),
+          url: data.url,
+        });
       } else throw new Error(data.error || 'No SFX URL returned');
     } catch (e: any) {
       setError(e.message || 'SFX generation failed');
@@ -13454,8 +13418,11 @@ export function CreativeStudioPage() {
       if (!res.ok) throw new Error(`Video generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        setLastVideo(data.url);
-        await saveToLocal('video', data.url, videoPrompt.slice(0, 60), videoPrompt);
+        await videoGallery.saveGenerated({
+          prompt: videoPrompt,
+          title: videoPrompt.slice(0, 60),
+          url: data.url,
+        });
       } else throw new Error(data.error || 'No video URL returned');
     } catch (e: any) {
       setError(e.message || 'Video generation failed');
@@ -13533,38 +13500,22 @@ export function CreativeStudioPage() {
     </div>
   );
 
+  // Regenerate handlers — drop the previous gallery item's prompt back
+  // into the form and trigger the generation handler. Operator can edit
+  // first if they want a variation; one click + Generate is the fast path.
+  const onRegenerateImage = (item: GalleryItem) => { setImagePrompt(item.prompt); };
+  const onRegenerateMusic = (item: GalleryItem) => { setMusicPrompt(item.prompt); };
+  const onRegenerateVoice = (item: GalleryItem) => { setVoiceText(item.prompt); };
+  const onRegenerateSfx   = (item: GalleryItem) => { setSfxPrompt(item.prompt); };
+  const onRegenerateVideo = (item: GalleryItem) => { setVideoPrompt(item.prompt); };
+
   const renderImagesResults = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {lastImage ? (
-        <div style={csCard}>
-          <img
-            src={lastImage}
-            alt="Generated image"
-            style={{ width: '100%', borderRadius: 10, display: 'block' }}
-          />
-          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated image</div>
-          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{imagePrompt}</div>
-          <a
-            href={lastImage}
-            download
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'inline-block', marginTop: 10, padding: '6px 14px',
-              borderRadius: 6, fontSize: 11, fontWeight: 500,
-              background: 'rgba(49,34,68,0.5)', color: '#cdd6f4',
-              textDecoration: 'none', border: '1px solid rgba(168,85,247,0.12)',
-            }}
-          >
-            Download
-          </a>
-        </div>
-      ) : (
-        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
-          Generated images will appear here
-        </div>
-      )}
-    </div>
+    <CreativeGalleryStrip
+      items={imageGallery.items}
+      onRegenerate={onRegenerateImage}
+      onDelete={imageGallery.deleteItem}
+      emptyHint="Your image generations will appear here. Make one — they stack up newest first."
+    />
   );
 
   /* ---------- Audio tab ---------- */
@@ -13602,33 +13553,12 @@ export function CreativeStudioPage() {
   );
 
   const renderAudioResults = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {lastAudio ? (
-        <div style={csCard}>
-          <AvaAudioPlayer src={lastAudio} />
-          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated audio</div>
-          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{musicPrompt}</div>
-          <a
-            href={lastAudio}
-            download
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'inline-block', marginTop: 10, padding: '6px 14px',
-              borderRadius: 6, fontSize: 11, fontWeight: 500,
-              background: 'rgba(49,34,68,0.5)', color: '#cdd6f4',
-              textDecoration: 'none', border: '1px solid rgba(168,85,247,0.12)',
-            }}
-          >
-            Download
-          </a>
-        </div>
-      ) : (
-        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
-          Generated audio will appear here
-        </div>
-      )}
-    </div>
+    <CreativeGalleryStrip
+      items={musicGallery.items}
+      onRegenerate={onRegenerateMusic}
+      onDelete={musicGallery.deleteItem}
+      emptyHint="Your music generations will appear here."
+    />
   );
 
   /* ---------- Voice tab ---------- */
@@ -13690,19 +13620,12 @@ export function CreativeStudioPage() {
   );
 
   const renderVoiceResults = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {lastVoice ? (
-        <div style={csCard}>
-          <AvaAudioPlayer src={lastVoice} />
-          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated voice — {VOICES.find(v => v.id === voiceId)?.label || voiceId}</div>
-          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{voiceText}</div>
-        </div>
-      ) : (
-        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
-          Generated voice will appear here
-        </div>
-      )}
-    </div>
+    <CreativeGalleryStrip
+      items={voiceGallery.items}
+      onRegenerate={onRegenerateVoice}
+      onDelete={voiceGallery.deleteItem}
+      emptyHint="Your voice generations will appear here."
+    />
   );
 
   /* ---------- SFX tab ---------- */
@@ -13727,19 +13650,12 @@ export function CreativeStudioPage() {
   );
 
   const renderSfxResults = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {lastSfx ? (
-        <div style={csCard}>
-          <AvaAudioPlayer src={lastSfx} />
-          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated sound effect</div>
-          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{sfxPrompt}</div>
-        </div>
-      ) : (
-        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
-          Generated sound effects will appear here
-        </div>
-      )}
-    </div>
+    <CreativeGalleryStrip
+      items={sfxGallery.items}
+      onRegenerate={onRegenerateSfx}
+      onDelete={sfxGallery.deleteItem}
+      emptyHint="Your sound effects will appear here."
+    />
   );
 
   /* ---------- Video tab ---------- */
@@ -13783,33 +13699,12 @@ export function CreativeStudioPage() {
   );
 
   const renderVideoResults = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {lastVideo ? (
-        <div style={csCard}>
-          <video controls src={lastVideo} style={{ width: '100%', borderRadius: 10, display: 'block' }} />
-          <div style={{ marginTop: 10, fontSize: 11, color: '#6c7086' }}>Generated video</div>
-          <div style={{ marginTop: 4, fontSize: 12, color: '#a6adc8', lineHeight: 1.5 }}>{videoPrompt}</div>
-          <a
-            href={lastVideo}
-            download
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'inline-block', marginTop: 10, padding: '6px 14px',
-              borderRadius: 6, fontSize: 11, fontWeight: 500,
-              background: 'rgba(49,34,68,0.5)', color: '#cdd6f4',
-              textDecoration: 'none', border: '1px solid rgba(168,85,247,0.12)',
-            }}
-          >
-            Download
-          </a>
-        </div>
-      ) : (
-        <div style={{ ...csCard, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#585b70', fontSize: 13 }}>
-          Generated videos will appear here
-        </div>
-      )}
-    </div>
+    <CreativeGalleryStrip
+      items={videoGallery.items}
+      onRegenerate={onRegenerateVideo}
+      onDelete={videoGallery.deleteItem}
+      emptyHint="Your video generations will appear here."
+    />
   );
 
   return (
