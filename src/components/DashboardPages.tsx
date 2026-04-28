@@ -1855,6 +1855,7 @@ export function AvaChatPage() {
     // literally called 'supernova', then silently degrades to qwen3.5-flash.
     'auto': 'auto',
     'supernova': 'supernova',
+    'aurora': 'aurora',
     'qwen3.6-plus': 'platform:qwen3.6-plus',
     'kimi-k2.6': 'kimi:kimi-k2.6',
     'kimi-k2.5': 'kimi:kimi-k2.5',
@@ -1888,20 +1889,23 @@ export function AvaChatPage() {
   // args under sequential pressure; media models (MiniMax) aren't agentic
   // coordinators. Both are excluded.
   //
-  // 'auto' (Maestro) and 'supernova' resolve to known coordinators server-
-  // side (Qwen 3.6 Plus / DeepSeek V4 Pro), both desktop-capable, so they
-  // count.
+  // 'auto' (Maestro), 'supernova' and 'aurora' resolve to known coordinators
+  // server-side (Qwen 3.6 Plus / DeepSeek V4 Pro / Mistral Large 3), all
+  // desktop-capable, so they count.
   const DESKTOP_CAPABLE_MODEL_IDS = new Set<string>([
-    'auto', 'supernova',
+    'auto', 'supernova', 'aurora',
     // Platform / Qwen direct
     'qwen3.6-plus', 'qwen3.5-plus', 'qwen3.5-omni-plus',
     // Platform DeepSeek (admin-gated)
     'deepseek-v4-pro-platform', 'deepseek-v4-pro',
+    // Platform Mistral (Aurora's fleet, available on platform)
+    'mistral-large-3-platform', 'mistral-small-4-platform',
     // Anthropic
     'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
     // Kimi
     'kimi-k2.6', 'kimi-k2.5',
     // Mistral
+    'mistral-large-3', 'mistral-small-4',
     'mistral-large-latest', 'codestral-latest', 'devstral-latest',
     // Zhipu / GLM
     'glm-5',
@@ -2623,7 +2627,7 @@ export function AvaChatPage() {
           // ProviderRegistry resolver can find them. Never silently coerce
           // to `qwen:` — that produces nonsense ids like `qwen:supernova` and
           // makes the resolver fall back to qwen3.5-flash without warning.
-          activeModel: modelMap[model] || (model === 'auto' || model === 'supernova' ? model : `platform:${model}`),
+          activeModel: modelMap[model] || (model === 'auto' || model === 'supernova' || model === 'aurora' ? model : `platform:${model}`),
           cwd: localStorage.getItem('ava-ide-project-folder') || '.',
           mode,
           permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
@@ -2705,11 +2709,11 @@ export function AvaChatPage() {
     const sidecar = getSidecar();
     if (model !== prevModelRef.current) {
       prevModelRef.current = model;
-      // Same orchestrated-id passthrough as init: 'auto'/'supernova' must
-      // not get a provider prefix or the sidecar's AutoCoordinator handler
-      // misses them.
+      // Same orchestrated-id passthrough as init: 'auto' / 'supernova' /
+      // 'aurora' must not get a provider prefix or the sidecar's
+      // AutoCoordinator handler misses them.
       sidecar.setModel(
-        SIDECAR_MODEL_MAP[model] || (model === 'auto' || model === 'supernova' ? model : `platform:${model}`),
+        SIDECAR_MODEL_MAP[model] || (model === 'auto' || model === 'supernova' || model === 'aurora' ? model : `platform:${model}`),
       ).catch(() => {});
     }
     if (mode !== prevModeRef.current) {
@@ -3916,6 +3920,7 @@ export function AvaChatPage() {
   // ── Active mode info ──────────────────────────────────────────────────────
   const currentMode = MODES.find((m) => m.id === mode) || MODES[0];
   const activeModelName = useMemo(() => {
+    if (model === 'aurora') return '✦ Aurora';
     if (model === 'supernova') return '✦ Supernova';
     if (model === 'auto') return '✦ Maestro';
     if (model === 'qwen3.6-plus') return 'Qwen 3.6 Plus';
@@ -3989,6 +3994,7 @@ export function AvaChatPage() {
                 {(() => {
                   const isAdmin = chatTier === 'admin';
                   const orchestrated = [
+                    { id: 'aurora',    label: '✦ Aurora',    subtitle: 'EU stack — Mistral only',                          enabled: true,    title: 'Aurora — Mistral-only polyglot routing. Mistral Large 3 coordinator + Mistral Small 4 specialists. Stays inside European infrastructure.' },
                     { id: 'supernova', label: '✦ Supernova', subtitle: isAdmin ? 'Polyglot ensemble' : 'In development', enabled: isAdmin, title: 'Multi-model orchestration — coordinator picks the best specialist for each task' },
                     { id: 'auto',      label: '✦ Maestro',   subtitle: 'Best model per task',                              enabled: true,    title: 'One coordinator handles everything — proven, production-tuned' },
                   ];
