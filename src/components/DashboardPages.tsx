@@ -3994,7 +3994,7 @@ export function AvaChatPage() {
                 {(() => {
                   const isAdmin = chatTier === 'admin';
                   const orchestrated = [
-                    { id: 'aurora',    label: '✦ Aurora',    subtitle: 'EU stack — Mistral only',                          enabled: true,    title: 'Aurora — Mistral-only polyglot routing. Mistral Large 3 coordinator + Mistral Small 4 specialists. Stays inside European infrastructure.' },
+                    { id: 'aurora',    label: '✦ Aurora',    subtitle: isAdmin ? 'EU stack — Mistral only' : 'In development', enabled: isAdmin, title: 'Aurora — Mistral-only polyglot routing. Mistral Large 3 coordinator + Mistral Small 4 specialists. Stays inside European infrastructure.' },
                     { id: 'supernova', label: '✦ Supernova', subtitle: isAdmin ? 'Polyglot ensemble' : 'In development', enabled: isAdmin, title: 'Multi-model orchestration — coordinator picks the best specialist for each task' },
                     { id: 'auto',      label: '✦ Maestro',   subtitle: 'Best model per task',                              enabled: true,    title: 'One coordinator handles everything — proven, production-tuned' },
                   ];
