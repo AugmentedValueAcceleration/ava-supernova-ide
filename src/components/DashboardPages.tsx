@@ -2328,7 +2328,12 @@ export function AvaChatPage() {
   }, [secrets]);
 
   const chatUserAvatar = useMemo(() => localStorage.getItem('ava-ide-user-avatar') || '', []);
-  const chatAiAvatar = useMemo(() => localStorage.getItem('ava-ide-ai-avatar') || '', []);
+  // Ava's preset avatar — shipped from packages/core/assets/ava-avatar.jpeg,
+  // copied into each surface's public/ so Vite serves it. Operator can
+  // still override per-IDE-install via the localStorage key (Settings →
+  // Personality), but the default is the brand image rather than a
+  // gradient + star icon.
+  const chatAiAvatar = useMemo(() => localStorage.getItem('ava-ide-ai-avatar') || '/ava-avatar.jpeg', []);
 
   // ── Tasks panel state ──────────────────────────────────────────────────
   const [tasksPanelOpen, setTasksPanelOpen] = useState<boolean>(() => {
