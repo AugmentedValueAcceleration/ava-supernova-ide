@@ -10524,6 +10524,60 @@ export function UsagePage() {
                   ))}
                 </div>
 
+                {/* Active orchestration mode header — surfaces "you are
+                    in Aurora" so the breakdown below makes sense. Used
+                    to be confusing: Aurora session showed only Mistral
+                    Large 3 in the list (because chat-only sessions only
+                    invoke the coordinator), making it look like Aurora
+                    was a one-model mode. The header now names the mode
+                    + lists the fleet roles so the operator can see the
+                    full topology even if specialists haven't fired. */}
+                {(() => {
+                  const activeId = (typeof localStorage !== 'undefined' ? localStorage.getItem('ava-ide-active-model') : null) || '';
+                  const modeInfo = activeId === 'aurora'
+                    ? { label: 'Aurora', flavour: 'Mistral three-tier · sovereign EU stack', roles: [
+                        { name: 'Mistral Large 3', role: 'Coordinator + heavy specialists' },
+                        { name: 'Mistral Medium 3.5', role: 'Builder · mid-tier · vision · long-form' },
+                        { name: 'Mistral Small 4', role: 'Intent gate' },
+                      ] }
+                    : activeId === 'supernova'
+                      ? { label: 'Supernova', flavour: 'DeepSeek + Qwen ensemble', roles: [
+                          { name: 'DeepSeek V4 Pro', role: 'Coordinator' },
+                          { name: 'DeepSeek V4 Flash', role: 'Mid-tier specialists' },
+                          { name: 'Qwen 3.6 Plus', role: 'Builder' },
+                          { name: 'Qwen 3.5 Flash', role: 'Light tier / intent gate' },
+                          { name: 'Qwen 3.5 Omni Plus', role: 'Vision' },
+                          { name: 'Qwen 3.5 Plus', role: 'Long-form writing' },
+                        ] }
+                      : activeId === 'auto'
+                        ? { label: 'Maestro', flavour: 'Qwen-only · daily work, predictable cost', roles: [
+                            { name: 'Qwen 3.6 Plus', role: 'Coordinator + Builder' },
+                            { name: 'Qwen 3.5 Flash', role: 'Light tier / intent gate' },
+                          ] }
+                        : null;
+                  if (!modeInfo) return null;
+                  return (
+                    <div style={{ ...card, borderColor: 'rgba(168, 85, 247, 0.25)' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#a855f7', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Active Mode</span>
+                        <span style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4' }}>{modeInfo.label}</span>
+                        <span style={{ fontSize: 11, color: '#6c7086' }}>{modeInfo.flavour}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>
+                        Models below show specialists that actually fired this session. Chat-only sessions typically only invoke the coordinator — the rest activate when the orchestrator spawns Builders, vision, long-form, etc.
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 4 }}>
+                        {modeInfo.roles.map((r) => (
+                          <div key={r.name} style={{ display: 'flex', gap: 8, fontSize: 11 }}>
+                            <span style={{ color: '#cdd6f4', minWidth: 160, fontWeight: 500 }}>{r.name}</span>
+                            <span style={{ color: '#6c7086' }}>{r.role}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Model Breakdown */}
                 {models.length > 0 && (
                   <div style={{ ...card }}>
