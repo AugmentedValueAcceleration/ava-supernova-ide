@@ -14491,6 +14491,8 @@ function ideDetectAuditPatterns(entries: IdeAuditEntry[]): IdeAuditFinding[] {
   }
   return findings;
 }
+const AUDIT_PAGE_SIZE = 25;
+
 function IdeAuditView({
   entries, expandedIdx, onToggleExpand,
   search, onSearchChange, riskFilter, onRiskFilterChange, statusFilter, onStatusFilterChange,
@@ -14514,6 +14516,17 @@ function IdeAuditView({
     if (statusFilter !== 'all' && e.status !== statusFilter) return false;
     return true;
   }), [entries, search, riskFilter, statusFilter]);
+
+  // Pagination — audit logs grow fast; rendering 1000+ entries was
+  // janky. 25/page is the sweet spot with the existing row height.
+  // Page resets to 0 whenever filters change so the user isn't
+  // stranded on an empty page after narrowing the result set.
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [search, riskFilter, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageStart = safePage * AUDIT_PAGE_SIZE;
+  const paged = filtered.slice(pageStart, pageStart + AUDIT_PAGE_SIZE);
   const totals = useMemo(() => {
     let credits = 0, usd = 0;
     for (const e of filtered) {
@@ -14587,7 +14600,12 @@ function IdeAuditView({
           <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 60px 90px 80px 60px', gap: 8, padding: '8px 12px', borderBottom: '1px solid rgba(168,85,247,0.12)', fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' as const, color: '#6c7086' }}>
             <span>Time</span><span>Tool</span><span>Category</span><span>Risk</span><span>Approval</span><span style={{ textAlign: 'right' }}>Cost</span><span>Status</span>
           </div>
-          {filtered.map((entry, i) => {
+          {paged.map((entry, localI) => {
+            // Use the absolute filtered index so expandedIdx stays
+            // stable across page changes (a user expanding a row on
+            // page 1, flipping to page 2, then back, sees their row
+            // still open).
+            const i = pageStart + localI;
             const time = new Date(entry.timestamp).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
             const isExp = expandedIdx === i;
             const approvalColors: Record<string, string> = { 'auto': '#34d399', 'first-time': '#60a5fa', 'user-approved': '#fbbf24', 'denied': '#f87171' };
@@ -14624,6 +14642,29 @@ function IdeAuditView({
               </div>
             );
           })}
+          {/* Pagination footer — only renders when there's more than
+              one page worth of filtered entries. Showing it on a 5-row
+              filter result would be noise. */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderTop: '1px solid rgba(168,85,247,0.12)', fontSize: 11, color: '#6c7086' }}>
+              <span>
+                Showing {pageStart + 1}–{Math.min(pageStart + AUDIT_PAGE_SIZE, filtered.length)} of {filtered.length}
+              </span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  style={{ ...btnStyle, opacity: safePage === 0 ? 0.4 : 1, cursor: safePage === 0 ? 'default' : 'pointer' }}
+                >Prev</button>
+                <span style={{ minWidth: 60, textAlign: 'center' }}>Page {safePage + 1} of {totalPages}</span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage >= totalPages - 1}
+                  style={{ ...btnStyle, opacity: safePage >= totalPages - 1 ? 0.4 : 1, cursor: safePage >= totalPages - 1 ? 'default' : 'pointer' }}
+                >Next</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
