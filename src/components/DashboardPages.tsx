@@ -1925,7 +1925,7 @@ export function AvaChatPage() {
     MiniMax: [{ id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' }],
     Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
-    Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'codestral-latest', name: 'Codestral' }],
+    Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
     Anthropic: [{ id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-opus-4-6', name: 'Claude Opus 4.6' }],
   };
 
