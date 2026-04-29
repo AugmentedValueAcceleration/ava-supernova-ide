@@ -4066,7 +4066,7 @@ export function AvaChatPage() {
                   // them up the moment the right keys are present
                   // (Maestro=Qwen, Supernova=DeepSeek+Qwen, Aurora=Mistral).
                   const orchestrated = [
-                    { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: 'Aurora — Mistral-only polyglot routing. Mistral Large 3 coordinator + Mistral Small 4 specialists. Stays inside European infrastructure.' },
+                    { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: 'Aurora — Mistral-only three-tier EU stack. Large 3 coordinator + heavy specialists, Medium 3.5 for Builder + mid-tier + vision + long-form, Small 4 at the intent gate. Stays inside European infrastructure.' },
                     { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova', enabled: modeAvailability.supernova, title: 'Supernova — DeepSeek V4 Pro coordinator + V4 Flash specialists with Qwen builders. Heavy multi-step work.' },
                     { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   enabled: modeAvailability.maestro,   title: 'Maestro — single Qwen 3.6 Plus conductor. Daily work, predictable cost.' },
                   ].map(o => ({ ...o, subtitle: modeSubtitle(o.modeId, modeAvailability, modeState) }));
@@ -11059,7 +11059,7 @@ export function SettingsPage() {
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M2.7 self-evolving, M2.5 best tool calling' },
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5, GLM-4.7 \u2014 best tool-call reliability' },
     { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.5 Omni Plus and Omni Flash — multimodal' },
-    { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Codestral, Devstral 2' },
+    { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4, Codestral, Devstral 2' },
   ];
 
   const LANGUAGES = [

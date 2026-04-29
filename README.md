@@ -12,7 +12,7 @@ The standalone AI-native development environment. Built with Tauri v2, React 19,
 - **Three orchestrated modes** — pick a routing strategy from the dropdown:
   - **Maestro** — single coordinator (Qwen 3.6 Plus default), production-tuned
   - **Supernova** — polyglot ensemble (DeepSeek V4 Pro coordinator + Qwen 3.6 Plus Builder + Omni for vision)
-  - **Aurora** — European AI stack, end-to-end (Mistral Large 3 coordinator + Mistral Small 4 specialists). Never leaves European infrastructure. Apache-2.0, open weights, sovereign by design.
+  - **Aurora** — European AI stack, three-tier (Mistral Large 3 coordinator + heavy specialists, Mistral Medium 3.5 for Builder + mid-tier + vision + long-form, Mistral Small 4 at the intent gate). Never leaves European infrastructure. Open weights, sovereign by design.
 - **Knowledge packs** — toggle domain expertise on/off in the chat-bar dropdown. Live system-prompt rebuild — Ava picks up the extra context the moment you flip the switch, no restart.
 - **Mode selector** — Work (>>), Plan (::), Chat (..), Teach (??), Security (!!), Brainstorm (**)
 
