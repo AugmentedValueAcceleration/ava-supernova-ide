@@ -30,6 +30,7 @@ import {
 } from '@phosphor-icons/react';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
+import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { Tooltip } from './Tooltip';
@@ -2054,15 +2055,13 @@ export function AvaChatPage() {
   // the extension's account?.tier === 'admin' check. Listens to the
   // 'ava-tier-changed' event so the gate flips when the user signs in
   // or refreshes their account info without a panel re-mount.
-  const [chatTier, setChatTier] = useState<string>(() => localStorage.getItem('ava-ide-tier') || 'free');
-  useEffect(() => {
-    const onTierChange = (e: Event) => {
-      const detail = (e as CustomEvent<{ tier?: string }>).detail;
-      if (detail?.tier) setChatTier(detail.tier);
-    };
-    window.addEventListener('ava-tier-changed', onTierChange);
-    return () => window.removeEventListener('ava-tier-changed', onTierChange);
-  }, []);
+  // Unified mode-availability hook — single source of truth for the
+  // 3 orchestrated modes (Aurora / Supernova / Maestro). Recomputes on
+  // ava-auth-changed (sign in/out), ava-byok-changed (key add/remove),
+  // and ava-tier-changed (admin promotion). Tier-gating, platform-key
+  // detection, and BYOK-key detection all flow through this hook —
+  // see lib/mode-availability.ts.
+  const { state: modeState, availability: modeAvailability } = useModeAvailability();
   const [enabledPacks, setEnabledPacks] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('ava-knowledge-packs');
@@ -4061,12 +4060,16 @@ export function AvaChatPage() {
                   Orchestrated
                 </div>
                 {(() => {
-                  const isAdmin = chatTier === 'admin';
+                  // Mode list now sourced from useModeAvailability —
+                  // a plan path lights up Maestro for everyone and
+                  // Aurora/Supernova for admins; a BYOK path lights
+                  // them up the moment the right keys are present
+                  // (Maestro=Qwen, Supernova=DeepSeek+Qwen, Aurora=Mistral).
                   const orchestrated = [
-                    { id: 'aurora',    label: '✦ Aurora',    subtitle: isAdmin ? 'EU stack — Mistral only' : 'In development', enabled: isAdmin, title: 'Aurora — Mistral-only polyglot routing. Mistral Large 3 coordinator + Mistral Small 4 specialists. Stays inside European infrastructure.' },
-                    { id: 'supernova', label: '✦ Supernova', subtitle: isAdmin ? 'Polyglot ensemble' : 'In development', enabled: isAdmin, title: 'Multi-model orchestration — coordinator picks the best specialist for each task' },
-                    { id: 'auto',      label: '✦ Maestro',   subtitle: 'Best model per task',                              enabled: true,    title: 'One coordinator handles everything — proven, production-tuned' },
-                  ];
+                    { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: 'Aurora — Mistral-only polyglot routing. Mistral Large 3 coordinator + Mistral Small 4 specialists. Stays inside European infrastructure.' },
+                    { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova', enabled: modeAvailability.supernova, title: 'Supernova — DeepSeek V4 Pro coordinator + V4 Flash specialists with Qwen builders. Heavy multi-step work.' },
+                    { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   enabled: modeAvailability.maestro,   title: 'Maestro — single Qwen 3.6 Plus conductor. Daily work, predictable cost.' },
+                  ].map(o => ({ ...o, subtitle: modeSubtitle(o.modeId, modeAvailability, modeState) }));
                   return orchestrated.map((o) => {
                     const active = model === o.id;
                     return (
@@ -4074,11 +4077,7 @@ export function AvaChatPage() {
                         key={o.id}
                         disabled={!o.enabled}
                         onClick={() => { if (!o.enabled) return; setModel(o.id); setModelMenuOpen(false); }}
-                        title={o.enabled
-                          ? o.title
-                          : o.id === 'aurora'
-                            ? `${o.label.replace('✦ ', '')} — admin-gated while Mistral enterprise pricing is finalised.`
-                            : `${o.label.replace('✦ ', '')} — admin-gated while DeepSeek partnership is finalised.`}
+                        title={o.enabled ? o.title : `${o.label.replace('✦ ', '')} — ${o.subtitle}`}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
                           padding: '8px 10px', background: o.enabled && active ? 'rgba(168,85,247,0.15)' : 'transparent',
@@ -4099,35 +4098,12 @@ export function AvaChatPage() {
                     );
                   });
                 })()}
-                <div style={{ height: 1, background: 'rgba(49, 34, 68, 0.5)', margin: '6px 0' }} />
-                {/* Qwen family */}
-                <div style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>Qwen</div>
-                {[
-                  { id: 'qwen3.6-plus', name: 'Qwen 3.6 Plus', tag: 'New' },
-                  { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus', tag: '' },
-                  { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus', tag: '' },
-                  { id: 'qwen3.5-omni-flash', name: 'Qwen 3.5 Omni Flash', tag: '' },
-                  { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash', tag: '' },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => { setModel(m.id); setModelMenuOpen(false); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                      padding: '8px 10px', background: model === m.id ? 'rgba(168,85,247,0.15)' : 'transparent',
-                      border: 'none', borderRadius: 6, color: model === m.id ? '#e0b0ff' : '#cdd6f4',
-                      fontSize: 12, cursor: 'pointer', textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => { if (model !== m.id) e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
-                    onMouseLeave={(e) => { if (model !== m.id) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {model === m.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a6e3a1' }} />}
-                      {m.name}
-                    </span>
-                    <span style={{ fontSize: 10, color: '#a6e3a1', fontWeight: 500 }}>{m.tag}</span>
-                  </button>
-                ))}
+                {/* Raw individual models (Qwen, MiniMax, etc.) are no
+                    longer surfaced here for plan users — plans = the 3
+                    modes only. The BYOK section below shows raw models
+                    per the user's own keys; that's the only path to
+                    direct model selection now. Decision 2026-04-29 —
+                    see project_byok_mode_gating memory. */}
 
                 {/* BYOK models */}
                 {byokModels.length > 0 && (
@@ -13347,7 +13323,10 @@ function CSTokenBar({ refreshKey }: { refreshKey: number }) {
   );
   const rem = Math.max(0, bal.limit - bal.used);
   const pct = bal.limit > 0 ? (rem / bal.limit) * 100 : 0;
-  const fmt = (n: number) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${Math.round(n / 1000)}K`;
+  // Exact credit count with locale-grouped digits — operator wants the
+  // precise number, not "5K" / "1.2M" rounded buckets, so they can see
+  // exactly how many credits a generation actually cost.
+  const fmt = (n: number) => n.toLocaleString();
   return (
     <div style={{ width: 180, flexShrink: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6c7086', marginBottom: 4 }}>
@@ -13385,6 +13364,20 @@ export function CreativeStudioPage() {
   const voiceGallery = useCreativeGallery('voice');
   const sfxGallery   = useCreativeGallery('sfx');
   const videoGallery = useCreativeGallery('video');
+
+  // Session start — anchors the per-medium strips to "things made this
+  // session". Library is the canonical archive; Creative Studio is for
+  // creation only. Reload = empty right panel; new generations stack.
+  const sessionStart = useMemo(() => new Date().toISOString(), []);
+  const inSession = useCallback(
+    (i: GalleryItem) => (i.createdAt || '') >= sessionStart,
+    [sessionStart],
+  );
+  const sessionImages = useMemo(() => imageGallery.items.filter(inSession), [imageGallery.items, inSession]);
+  const sessionMusic  = useMemo(() => musicGallery.items.filter(inSession), [musicGallery.items, inSession]);
+  const sessionVoice  = useMemo(() => voiceGallery.items.filter(inSession), [voiceGallery.items, inSession]);
+  const sessionSfx    = useMemo(() => sfxGallery.items.filter(inSession), [sfxGallery.items, inSession]);
+  const sessionVideo  = useMemo(() => videoGallery.items.filter(inSession), [videoGallery.items, inSession]);
 
   // Images state
   const [imagePrompt, setImagePrompt] = useState('');
@@ -13455,10 +13448,14 @@ export function CreativeStudioPage() {
     setError(null);
     try {
       const sizeMap: Record<string, string> = { '1:1': '1280*1280', '3:4': '768*1280', '4:3': '1280*768' };
+      // No model field → server defaults to Wan (DashScope wan2.6-t2i).
+      // Wan handles vector / graphic-design output materially better than
+      // MiniMax image-01 — the previous default — which renders every
+      // prompt as soft painterly illustration.
       const res = await fetch(`${PLATFORM_API}/generate-image`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ prompt: imagePrompt.trim(), size: sizeMap[imageSize], model: 'minimax' }),
+        body: JSON.stringify({ prompt: imagePrompt.trim(), size: sizeMap[imageSize] }),
       });
       if (!res.ok) throw new Error(`Image generation failed (${res.status})`);
       const data = await res.json();
@@ -13662,10 +13659,10 @@ export function CreativeStudioPage() {
 
   const renderImagesResults = () => (
     <CreativeGalleryStrip
-      items={imageGallery.items}
+      items={sessionImages}
       onRegenerate={onRegenerateImage}
       onDelete={imageGallery.deleteItem}
-      emptyHint="Your image generations will appear here. Make one — they stack up newest first."
+      emptyHint="Generate an image — it'll appear here for this session, then live in your Library."
     />
   );
 
@@ -13705,10 +13702,10 @@ export function CreativeStudioPage() {
 
   const renderAudioResults = () => (
     <CreativeGalleryStrip
-      items={musicGallery.items}
+      items={sessionMusic}
       onRegenerate={onRegenerateMusic}
       onDelete={musicGallery.deleteItem}
-      emptyHint="Your music generations will appear here."
+      emptyHint="Generate music — it'll appear here for this session, then live in your Library."
     />
   );
 
@@ -13772,10 +13769,10 @@ export function CreativeStudioPage() {
 
   const renderVoiceResults = () => (
     <CreativeGalleryStrip
-      items={voiceGallery.items}
+      items={sessionVoice}
       onRegenerate={onRegenerateVoice}
       onDelete={voiceGallery.deleteItem}
-      emptyHint="Your voice generations will appear here."
+      emptyHint="Generate voice — it'll appear here for this session, then live in your Library."
     />
   );
 
@@ -13802,10 +13799,10 @@ export function CreativeStudioPage() {
 
   const renderSfxResults = () => (
     <CreativeGalleryStrip
-      items={sfxGallery.items}
+      items={sessionSfx}
       onRegenerate={onRegenerateSfx}
       onDelete={sfxGallery.deleteItem}
-      emptyHint="Your sound effects will appear here."
+      emptyHint="Generate a sound effect — it'll appear here for this session, then live in your Library."
     />
   );
 
@@ -13851,10 +13848,10 @@ export function CreativeStudioPage() {
 
   const renderVideoResults = () => (
     <CreativeGalleryStrip
-      items={videoGallery.items}
+      items={sessionVideo}
       onRegenerate={onRegenerateVideo}
       onDelete={videoGallery.deleteItem}
-      emptyHint="Your video generations will appear here."
+      emptyHint="Generate a video — it'll appear here for this session, then live in your Library."
     />
   );
 
@@ -13863,7 +13860,7 @@ export function CreativeStudioPage() {
       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={pageTitle}>Creative Studio</div>
-          <div style={pageSubtitle}>Generate images, music, and video with MiniMax</div>
+          <div style={pageSubtitle}>Generate images with Wan, plus music, voice, and video with MiniMax</div>
         </div>
         <CSTokenBar refreshKey={refreshKey} />
       </div>

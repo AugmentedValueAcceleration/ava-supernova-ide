@@ -425,9 +425,16 @@ export default function WelcomeOverlay({ onComplete }: Props) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               {[
-                { label: 'Open Ava Chat', icon: '💬', nav: 'Ava Chat' },
-                { label: 'Documentation', icon: '📖', nav: 'Documentation' },
-                { label: 'Command Centre', icon: '⚡', nav: 'Command Centre' },
+                // `nav` values must match DashboardPageId IDs in
+                // EditorArea.tsx — kebab-case, not the display labels.
+                // Previously these passed labels like "Ava Chat" which
+                // weren't valid IDs, so the saved value rejected on
+                // next load and App.tsx fell back to its default
+                // 'command-centre' — meaning every selection ended up
+                // on Command Centre regardless of what the user picked.
+                { label: 'Open Ava Chat', icon: '💬', nav: 'ava-chat' },
+                { label: 'Documentation', icon: '📖', nav: 'documentation' },
+                { label: 'Command Centre', icon: '⚡', nav: 'command-centre' },
                 { label: 'Meet Ava', icon: '✨', nav: 'meet-ava-external' },
               ].map(a => (
                 <button

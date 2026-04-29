@@ -2,14 +2,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { getPlatformKey, apiStreamUrl, fetchPlatformModels, getCachedModels, type PlatformModel } from '../lib/api';
+import { useModeAvailability } from '../lib/mode-availability';
 import { t, useLocale } from '../lib/i18n';
 import ModelDropdown, { type IdeModelOption } from './ModelDropdown';
 
-// Tier readout — drives Supernova admin gating in the dropdown. Mirrors
-// the pattern from the extension's Header / NavSidebar (account?.tier === 'admin').
-function readTier(): string {
-  try { return localStorage.getItem('ava-ide-tier') || 'free'; } catch { return 'free'; }
-}
+// Tier + auth state are now sourced via useModeAvailability — see
+// lib/mode-availability.ts. The local readTier helper is retired.
 
 interface Props {
   activeTab: BottomTab;
@@ -72,18 +70,11 @@ function AvaCliPanel() {
     try { return localStorage.getItem('ava-ide-active-model') || 'auto'; } catch { return 'auto'; }
   });
   const [platformModels, setPlatformModels] = useState<PlatformModel[]>(() => getCachedModels() || []);
-  const [tier, setTier] = useState<string>(() => readTier());
-
-  // Refresh tier on mount + on cross-window tier-change events (the IDE
-  // dispatches these from refreshTier in lib/api.ts).
-  useEffect(() => {
-    const onTierChange = (e: Event) => {
-      const detail = (e as CustomEvent<{ tier?: string }>).detail;
-      if (detail?.tier) setTier(detail.tier);
-    };
-    window.addEventListener('ava-tier-changed', onTierChange);
-    return () => window.removeEventListener('ava-tier-changed', onTierChange);
-  }, []);
+  // Mode availability — Aurora / Supernova / Maestro gated via the
+  // shared lib so this picker stays in lockstep with the dashboard
+  // chat picker. Hook handles ava-auth-changed / ava-byok-changed /
+  // ava-tier-changed internally.
+  const { state: modeState, availability: modeAvailability } = useModeAvailability();
 
   // Lazy-load the platform model list (1-hour cache inside fetchPlatformModels).
   // Falls back silently when offline / unauthenticated — orchestrated modes
@@ -101,19 +92,33 @@ function AvaCliPanel() {
   // gets it active, everyone else sees "In development") + raw platform
   // models (BYOK + managed) sourced from /api/models.
   const dropdownModels: IdeModelOption[] = useMemo(() => {
-    const isAdmin = tier === 'admin';
+    // Three orchestrated modes — gated identically to the dashboard
+    // chat picker via mode-availability lib. Plan path lights up
+    // Maestro for everyone, Aurora/Supernova for admins; BYOK path
+    // lights each one up the moment the right keys are present.
     const orchestrated: IdeModelOption[] = [
-      { id: 'supernova', name: 'Supernova', provider: 'platform', available: isAdmin },
-      { id: 'auto',      name: 'Maestro',   provider: 'platform', available: true },
+      { id: 'aurora',    name: 'Aurora',    provider: 'platform', available: modeAvailability.aurora },
+      { id: 'supernova', name: 'Supernova', provider: 'platform', available: modeAvailability.supernova },
+      { id: 'auto',      name: 'Maestro',   provider: 'platform', available: modeAvailability.maestro },
     ];
-    const raw: IdeModelOption[] = platformModels.map((m) => ({
-      id: m.id,
-      name: m.name,
-      provider: m.provider,
-      available: true,
-    }));
+    // Raw individual models are now BYOK-only. Plans surface only the
+    // 3 modes; raw model selection is a BYOK-side power-user path.
+    // section==='byok' means the server returned this model because
+    // the user has the relevant provider key configured.
+    const raw: IdeModelOption[] = platformModels
+      .filter((m) => m.section === 'byok')
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        provider: m.provider,
+        available: true,
+      }));
     return [...orchestrated, ...raw];
-  }, [platformModels, tier]);
+  }, [platformModels, modeAvailability]);
+  // Surface modeState so the orchestrated subtitles can explain unlock
+  // paths (e.g. "Add Mistral key" / "Connect or add DeepSeek + Qwen").
+  // Read here so eslint sees it as used; ModelDropdown is the consumer.
+  void modeState;
 
   const handleSwitchModel = useCallback((modelId: string) => {
     setActiveModel(modelId);

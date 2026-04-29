@@ -197,7 +197,20 @@ export function useSignIn() {
     url.searchParams.set('hint', method);
 
     try {
-      await openUrl(url.toString());
+      // In a real Tauri build, @tauri-apps/plugin-opener's openUrl handles
+      // the system browser. In `vite dev` (browser-only preview, no Tauri
+      // runtime), the plugin's transport is undefined and openUrl throws
+      // "Cannot read properties of undefined (reading 'invoke')". Detect
+      // Tauri up front and fall back to window.open() so the dev server
+      // can still walk the auth flow.
+      const isTauri = typeof window !== 'undefined'
+        && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+      if (isTauri) {
+        await openUrl(url.toString());
+      } else {
+        const opened = window.open(url.toString(), '_blank', 'noopener,noreferrer');
+        if (!opened) throw new Error('Browser blocked the popup — allow popups for localhost.');
+      }
     } catch (err) {
       cancelPending();
       setError(err instanceof Error ? `Could not open browser: ${err.message}` : 'Could not open browser.');

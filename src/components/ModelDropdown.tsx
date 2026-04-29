@@ -17,6 +17,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Tooltip } from './Tooltip';
+import { useModeAvailability, modeSubtitle, type ModeId } from '../lib/mode-availability';
 
 export interface IdeModelOption {
   id: string;
@@ -33,24 +34,33 @@ interface ModelDropdownProps {
   onSwitch: (modelId: string) => void;
 }
 
-const ORCHESTRATED: { id: string; label: string; subtitle: string; title: string }[] = [
+// IDs match the picker's setModel target. modeId is the lookup into
+// the shared mode-availability lib for unlock-path messaging.
+const ORCHESTRATED: { id: string; modeId: ModeId; label: string; title: string }[] = [
+  {
+    id: 'aurora',
+    modeId: 'aurora',
+    label: '✦ Aurora',
+    title: 'Aurora — Mistral-only EU stack. Mistral Large 3 coordinator + Mistral Small 4 specialists. EU-only data residency, GDPR-strict.',
+  },
   {
     id: 'supernova',
+    modeId: 'supernova',
     label: '✦ Supernova',
-    subtitle: 'Polyglot ensemble',
-    title: 'Multi-model orchestration — coordinator picks the best specialist for each task',
+    title: 'Supernova — DeepSeek V4 Pro coordinator + V4 Flash specialists with Qwen builders. Heavy multi-step work.',
   },
   {
     id: 'auto',
+    modeId: 'maestro',
     label: '✦ Maestro',
-    subtitle: 'Single conductor',
-    title: 'One coordinator handles everything — proven, production-tuned',
+    title: 'Maestro — single Qwen 3.6 Plus conductor. Daily work, predictable cost.',
   },
 ];
 
 export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { state: modeState, availability: modeAvailability } = useModeAvailability();
 
   useEffect(() => {
     if (!open) return;
@@ -63,15 +73,18 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
 
   const isAuto = activeModel === 'auto';
   const isSupernova = activeModel === 'supernova';
+  const isAurora = activeModel === 'aurora';
   const activeName = isAuto
     ? 'Maestro'
     : isSupernova
       ? 'Supernova'
-      : models.find((m) => m.id === activeModel)?.name ?? 'Select model';
+      : isAurora
+        ? 'Aurora'
+        : models.find((m) => m.id === activeModel)?.name ?? 'Select model';
 
   // Orchestrated entries first, then raw models alphabetically.
   const rawModels = [...models]
-    .filter((m) => m.id !== 'auto' && m.id !== 'supernova')
+    .filter((m) => m.id !== 'auto' && m.id !== 'supernova' && m.id !== 'aurora')
     .sort((a, b) => {
       if (a.available !== b.available) return a.available ? -1 : 1;
       return a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name);
@@ -102,11 +115,11 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: isAuto || isSupernova ? '#A855F7' : '#10b981',
+            background: isAuto || isSupernova || isAurora ? '#A855F7' : '#10b981',
             display: 'inline-block',
           }}
         />
-        {isAuto ? '✦ Maestro' : isSupernova ? '✦ Supernova' : activeName}
+        {isAuto ? '✦ Maestro' : isSupernova ? '✦ Supernova' : isAurora ? '✦ Aurora' : activeName}
         <span style={{ fontSize: 8, opacity: 0.5, marginLeft: 2 }}>▼</span>
       </button>
 
@@ -130,11 +143,11 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
             const m = models.find((x) => x.id === o.id);
             if (!m) return null;
             const enabled = m.available;
-            const subtitle = enabled ? o.subtitle : 'In development';
+            const subtitle = modeSubtitle(o.modeId, modeAvailability, modeState);
             const isActive = activeModel === o.id;
             const tooltipContent = enabled
               ? o.title
-              : `${o.label.replace('✦ ', '')} — admin-gated while DeepSeek partnership is finalised.`;
+              : `${o.label.replace('✦ ', '')} — ${subtitle}`;
             return (
               <Tooltip key={o.id} content={tooltipContent} placement="top">
                 <button
