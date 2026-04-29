@@ -2328,12 +2328,12 @@ export function AvaChatPage() {
   }, [secrets]);
 
   const chatUserAvatar = useMemo(() => localStorage.getItem('ava-ide-user-avatar') || '', []);
-  // Ava's preset avatar — shipped from packages/core/assets/ava-avatar.jpeg,
-  // copied into each surface's public/ so Vite serves it. Operator can
-  // still override per-IDE-install via the localStorage key (Settings →
-  // Personality), but the default is the brand image rather than a
-  // gradient + star icon.
-  const chatAiAvatar = useMemo(() => localStorage.getItem('ava-ide-ai-avatar') || '/ava-avatar.jpeg', []);
+  // Ava's avatar is brand-locked — sourced from
+  // packages/core/assets/ava-avatar.jpeg (copied to public/). The
+  // operator-override path via `ava-ide-ai-avatar` localStorage was
+  // removed alongside the Settings → Avatars upload UI; Ava reads
+  // consistently across every install and every surface.
+  const chatAiAvatar = '/ava-avatar.jpeg';
 
   // ── Tasks panel state ──────────────────────────────────────────────────
   const [tasksPanelOpen, setTasksPanelOpen] = useState<boolean>(() => {
@@ -10950,7 +10950,6 @@ export function SettingsPage() {
         setSettings(defaultSettings);
         setPersonality(null);
         setUserAvatar('');
-        setAiAvatar('');
         setProviderKeys({});
       }
       setAuthKey(k => k + 1);
@@ -11021,7 +11020,6 @@ export function SettingsPage() {
   }, [datasetCfg, writeDatasetCfg]);
 
   const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
-  const [aiAvatar, setAiAvatar] = useState<string>(() => localStorage.getItem('ava-ide-ai-avatar') || '');
 
   // Resize image to max 128x128 and compress as JPEG for storage efficiency
   const resizeAvatar = useCallback((dataUri: string): Promise<string> => {
@@ -11045,30 +11043,29 @@ export function SettingsPage() {
     });
   }, []);
 
-  const saveAvatar = useCallback(async (type: 'user' | 'ai', dataUri: string) => {
+  // Avatar mutators are now user-only — Ava's avatar is brand-locked
+  // (sourced from packages/core/assets/ava-avatar.jpeg) and operators
+  // can no longer override it.
+  const saveAvatar = useCallback(async (_type: 'user', dataUri: string) => {
     const resized = await resizeAvatar(dataUri);
-    const key = type === 'user' ? 'ava-ide-user-avatar' : 'ava-ide-ai-avatar';
-    localStorage.setItem(key, resized);
-    if (type === 'user') setUserAvatar(resized); else setAiAvatar(resized);
-    // Cloud sync only when Data Mode allows it — Local mode keeps the
-    // avatar on-device only.
+    localStorage.setItem('ava-ide-user-avatar', resized);
+    setUserAvatar(resized);
     if (connected && dataModeIncludesCloud()) {
       apiFetch('/settings', {
         method: 'POST',
-        body: JSON.stringify({ [`${type}_avatar`]: resized }),
+        body: JSON.stringify({ user_avatar: resized }),
       }).catch(() => {});
     }
     return resized;
   }, [connected, resizeAvatar]);
 
-  const removeAvatar = useCallback((type: 'user' | 'ai') => {
-    const key = type === 'user' ? 'ava-ide-user-avatar' : 'ava-ide-ai-avatar';
-    localStorage.removeItem(key);
-    if (type === 'user') setUserAvatar(''); else setAiAvatar('');
+  const removeAvatar = useCallback((_type: 'user') => {
+    localStorage.removeItem('ava-ide-user-avatar');
+    setUserAvatar('');
     if (connected && dataModeIncludesCloud()) {
       apiFetch('/settings', {
         method: 'POST',
-        body: JSON.stringify({ [`${type}_avatar`]: null }),
+        body: JSON.stringify({ user_avatar: null }),
       }).catch(() => {});
     }
   }, [connected]);
@@ -11107,9 +11104,10 @@ export function SettingsPage() {
           setSettings((prev: any) => ({ ...prev, ...data }));
           if (data.personality) setPersonality(data.personality);
           if (data.providerKeys) setProviderKeys(data.providerKeys);
-          // Load avatars from platform (overrides local if present)
+          // Load user avatar from platform (overrides local if present).
+          // Ava avatar is brand-locked — `data.ai_avatar` from the
+          // platform is intentionally ignored.
           if (data.user_avatar) { setUserAvatar(data.user_avatar); localStorage.setItem('ava-ide-user-avatar', data.user_avatar); }
-          if (data.ai_avatar) { setAiAvatar(data.ai_avatar); localStorage.setItem('ava-ide-ai-avatar', data.ai_avatar); }
         }
       })
       .catch(() => {});
@@ -11313,45 +11311,10 @@ export function SettingsPage() {
               )}
             </div>
 
-            {/* AI Avatar */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>Ava</div>
-              <div
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.onchange = () => {
-                    const file = input.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => saveAvatar('ai', reader.result as string);
-                    reader.readAsDataURL(file);
-                  };
-                  input.click();
-                }}
-                style={{
-                  width: 64, height: 64, borderRadius: '50%', cursor: 'pointer',
-                  border: '2px dashed rgba(168,85,247,0.3)',
-                  background: aiAvatar ? 'transparent' : 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(99,102,241,0.2))',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  overflow: 'hidden',
-                }}
-                title={t('dash.settings.avatar_upload_ai_hint')}
-              >
-                {aiAvatar ? (
-                  <img src={aiAvatar} alt="Ava" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                  </svg>
-                )}
-              </div>
-              {aiAvatar && (
-                <button onClick={() => removeAvatar('ai')}
-                  style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>{t('dash.settings.remove')}</button>
-              )}
-            </div>
+            {/* AI (Ava) avatar upload removed — Ava's image is brand-locked
+                to packages/core/assets/ava-avatar.jpeg. Operator can set
+                their own avatar above; Ava's avatar is fixed across all
+                surfaces so the brand reads consistently in chat. */}
           </div>
           <div style={{ fontSize: 11, color: '#45475a', marginTop: 10 }}>{t('dash.settings.avatar_stored_locally')}</div>
         </div>
