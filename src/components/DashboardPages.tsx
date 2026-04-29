@@ -4367,39 +4367,43 @@ export function AvaChatPage() {
         );
       })()}
 
-      {/* First-load banner — visible while account or history are still
-          being fetched. Drops in one sweep when both arrive so users
-          don't see a half-populated state (Free → Pro flash, empty
-          conversation list reading as "no chats" before localStorage
-          drains). Mirrors the extension chat panel banner. */}
+      {/* First-load takeover — full-area spinner replaces the previous
+          thin banner, which was too easy to miss. The chat surface
+          stays empty-looking until data arrives; the spinner makes
+          it obvious that something's happening. Drops in one sweep
+          when both fetches resolve. */}
       {dataLoading && (
         <div
           role="status"
           aria-live="polite"
           style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '6px 24px',
-            background: 'rgba(168, 85, 247, 0.08)',
-            borderBottom: '1px solid rgba(168, 85, 247, 0.2)',
-            color: '#cdd6f4', fontSize: 11,
-            flexShrink: 0,
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            color: '#cdd6f4',
           }}
         >
-          <span
+          <div
             style={{
-              width: 10, height: 10, borderRadius: '50%',
-              background: '#a855f7',
-              animation: 'avaPulse 1.5s ease-in-out infinite',
-              flexShrink: 0,
+              width: 36, height: 36, borderRadius: '50%',
+              border: '2.5px solid rgba(168, 85, 247, 0.18)',
+              borderTopColor: '#a855f7',
+              animation: 'avaSpin 0.9s linear infinite',
             }}
           />
-          <span>
+          <div style={{ fontSize: 12, color: '#a6adc8' }}>
             {accountLoading && historyLoading
               ? 'Loading your account and chat history…'
               : accountLoading
                 ? 'Loading your account…'
                 : 'Loading your chat history…'}
-          </span>
+          </div>
+          <style>{`
+            @keyframes avaSpin { to { transform: rotate(360deg); } }
+          `}</style>
         </div>
       )}
 
@@ -4411,10 +4415,15 @@ export function AvaChatPage() {
            `compress` RPC method added). */}
       <ContextBar contextPercent={contextPercent} isCompressing={statusText.toLowerCase().includes('compress')} />
 
-      {/* ── Messages Area (flex-1, scrollable) ──────────────────────────── */}
+      {/* ── Messages Area (flex-1, scrollable) ────────────────────────────
+           Hidden while dataLoading so the spinner above takes the full
+           area instead of competing with an empty messages list for
+           flex space. Flips back the moment data resolves. */}
       <div style={{
-        flex: 1, overflowY: 'auto', padding: '20px 24px',
-        display: 'flex', flexDirection: 'column', gap: 4,
+        flex: dataLoading ? 0 : 1,
+        display: dataLoading ? 'none' : 'flex',
+        overflowY: 'auto', padding: '20px 24px',
+        flexDirection: 'column', gap: 4,
       }}>
         {/* Empty-state helper — six starter chips covering each mode,
             shown until the user sends their first message. Click prefills
@@ -4571,7 +4580,7 @@ export function AvaChatPage() {
                 </div>
               )}
 
-              <div style={{ maxWidth: '75%', position: 'relative' }}>
+              <div style={{ maxWidth: '85%', position: 'relative' }}>
                 {/* Name + timestamp */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4,
