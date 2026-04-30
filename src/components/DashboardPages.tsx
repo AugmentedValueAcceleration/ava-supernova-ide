@@ -29,7 +29,7 @@ import {
   Rocket as PhRocket,
 } from '@phosphor-icons/react';
 import { t, useLocale, getLocale } from '../lib/i18n';
-import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
+import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
 import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
@@ -1572,6 +1572,11 @@ export function CommandCentrePage() {
     const refresh = () => setUserName(resolveUserName());
     window.addEventListener('ava-auth-changed', refresh);
     window.addEventListener('ava-ide-name-changed', refresh);
+    // On mount, pull the name from the platform if signed in. The
+    // helper writes localStorage + dispatches the event when the value
+    // changes, which the listener above already picks up — keeps the
+    // sync flow single-direction at this surface.
+    refreshDisplayName().catch(() => { /* offline / not signed in is fine */ });
     return () => {
       window.removeEventListener('ava-auth-changed', refresh);
       window.removeEventListener('ava-ide-name-changed', refresh);
@@ -1582,10 +1587,21 @@ export function CommandCentrePage() {
     if (next) {
       localStorage.setItem('ava-ide-user-name', next);
       setUserName(next);
+      // Push to the platform so the extension / companion / dashboard
+      // pick up the same name on their next refresh. Fire-and-forget;
+      // local-first means the UI commits the change regardless. Failure
+      // (network down, API error, not signed in) is silent — local
+      // value still applies on this surface.
+      updateDisplayName(next).catch(() => { /* local-first */ });
     } else {
       // Empty input clears the custom name; greeting falls back to email prefix.
       localStorage.removeItem('ava-ide-user-name');
       setUserName((localStorage.getItem('ava-ide-email')?.split('@')[0] ?? '').trim());
+      // Don't push empties to the platform — the API rejects them and
+      // there's no clear-name path yet. Leaving the platform record at
+      // its previous value is acceptable; the local greeting is what
+      // matters here, other surfaces will keep showing the platform
+      // value until the user picks a new name on this surface.
     }
     window.dispatchEvent(new CustomEvent('ava-ide-name-changed'));
     setEditingName(false);

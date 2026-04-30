@@ -231,6 +231,72 @@ export async function validateKey(key: string): Promise<{ valid: boolean; email?
 }
 
 /**
+ * Push the user's display name to the platform and refresh the local
+ * cache. Local-first: caller should already have written to localStorage
+ * before invoking this — the round-trip exists so other surfaces (the
+ * extension, the companion, the web dashboard) read the same name.
+ *
+ * No-op when not connected — falls back to localStorage-only behaviour
+ * so the name editor still works for users without a platform account.
+ * Returns true on success, false on any failure (network, API error,
+ * not signed in).
+ */
+export async function updateDisplayName(name: string): Promise<boolean> {
+  const key = getPlatformKey();
+  if (!key) return false;
+  try {
+    const trimmed = (name ?? '').trim();
+    // Empty name maps to "clear" — but the existing /account-info PATCH
+    // rejects empty strings. Send a single space as a sentinel, server
+    // can treat it as the same as null. Until the server supports
+    // explicit clear, only push non-empty names; an empty local clear
+    // simply leaves the platform record at its previous value, which is
+    // acceptable — the local greeting falls back to email prefix anyway.
+    if (!trimmed) return true;
+    const res = await fetch(`${PLATFORM_URL}/api/account-info`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Re-fetch the user's display name from the platform and sync it into
+ * localStorage if different. Called on app launch and after sign-in so
+ * an edit made on another surface (extension, companion, dashboard)
+ * propagates to the IDE without requiring a sign-out/sign-in cycle.
+ *
+ * Fires `ava-ide-name-changed` only when the value actually changes,
+ * so unrelated re-renders don't cascade. Returns the resolved name or
+ * null if not connected / fetch failed.
+ */
+export async function refreshDisplayName(): Promise<string | null> {
+  const key = getPlatformKey();
+  if (!key) return null;
+  try {
+    const res = await fetch(`${PLATFORM_URL}/api/account-info`, {
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const next = (data.name ?? '').trim();
+    if (!next) return null;
+    const prev = (localStorage.getItem('ava-ide-user-name') ?? '').trim();
+    if (next !== prev) {
+      localStorage.setItem('ava-ide-user-name', next);
+      window.dispatchEvent(new CustomEvent('ava-ide-name-changed'));
+    }
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Re-fetch the user's current tier from the platform and update the
  * localStorage cache. Called on app launch and on window focus so an
  * upgrade made on the website propagates to the IDE without requiring
