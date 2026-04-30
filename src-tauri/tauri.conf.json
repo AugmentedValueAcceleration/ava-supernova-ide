@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Ava Supernova IDE",
-  "version": "0.19.1",
+  "version": "0.19.2",
   "identifier": "com.augmentedvalueacceleration.ide",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1430",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm bundle-sidecar && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
