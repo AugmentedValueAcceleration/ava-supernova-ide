@@ -837,6 +837,10 @@ async function handleInit(data) {
       platformKey: config.platformKey,
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
       minimaxApiKey: config.providers?.minimax?.apiKey || process.env.MINIMAX_API_KEY,
+      kimiApiKey: config.providers?.kimi?.apiKey || process.env.KIMI_API_KEY,
+      deepseekApiKey: config.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY,
+      mistralApiKey: config.providers?.mistral?.apiKey || process.env.MISTRAL_API_KEY,
+      anthropicApiKey: config.providers?.anthropic?.apiKey || process.env.ANTHROPIC_API_KEY,
       activeModelId: resolved.model.id,
       // Computer Use — bridges to Tauri desktop commands
       screenshotProvider: screenshotBridge,
@@ -1635,18 +1639,46 @@ async function handleSetModel(data) {
     const cwd = globalThis._cwd || process.cwd();
     const sharedState = globalThis._sharedState || {};
 
-    // Maestro / Supernova orchestrated modes — both go through AutoCoordinator.
-    // Supernova pins coordinator to DeepSeek V4 Pro and runs Builder spawns
-    // on Qwen 3.6 Plus per the polyglot routing map; Maestro uses the
-    // default coordinator priority ladder. Mirrors AvaViewProvider.setActiveModel
-    // in the extension.
-    if (data.model === 'auto' || data.model === 'supernova') {
+    // Maestro / Supernova / Aurora orchestrated modes — all go through
+    // AutoCoordinator. Supernova pins coordinator to DeepSeek V4 Pro and
+    // runs Builder spawns on Qwen 3.6 Plus per the polyglot routing map.
+    // Aurora pins coordinator to Mistral Large 3 with Mistral-only
+    // resolution chain — never silently routes to a non-Mistral model
+    // (the EU-stack guarantee). Maestro uses the default coordinator
+    // priority ladder. Mirrors AvaViewProvider.setActiveModel in the
+    // extension.
+    if (data.model === 'auto' || data.model === 'supernova' || data.model === 'aurora') {
       const availableProviders = new Set();
       if (sharedState.platformKey) availableProviders.add('platform');
       if (sharedState.qwenApiKey) availableProviders.add('qwen');
       if (sharedState.minimaxApiKey) availableProviders.add('minimax');
       if (sharedState.kimiApiKey) availableProviders.add('kimi');
       if (sharedState.deepseekApiKey) availableProviders.add('deepseek');
+      if (sharedState.mistralApiKey) availableProviders.add('mistral');
+      if (sharedState.anthropicApiKey) availableProviders.add('anthropic');
+
+      // Aurora's Mistral-only coordinator chain — try platform-managed
+      // Large 3 first, then BYOK Mistral Large 3, then Small 4 fallback.
+      // The first resolvable wins. Same chain as the extension.
+      let preferredCoordinatorId;
+      if (data.model === 'aurora') {
+        const tries = [
+          'platform:mistral-large-3-platform',
+          'mistral:mistral-large-3',
+          'mistral-large-3',
+          'platform:mistral-small-4-platform',
+          'mistral:mistral-small-4',
+          'mistral-small-4',
+        ];
+        for (const id of tries) {
+          if (providerRegistry.resolveModel(id)) {
+            preferredCoordinatorId = id;
+            break;
+          }
+        }
+      } else if (data.model === 'supernova') {
+        preferredCoordinatorId = 'platform:deepseek-v4-pro-platform';
+      }
 
       autoCoordinator = AutoCoordinator.create({
         providerRegistry,
@@ -1655,14 +1687,18 @@ async function handleSetModel(data) {
         sharedState,
         availableProviders,
         platformKey: sharedState.platformKey,
-        mode: data.model === 'supernova' ? 'supernova' : 'auto',
+        mode: data.model,
+        preferredCoordinatorId,
       });
 
+      const label = data.model === 'supernova'
+        ? 'Supernova'
+        : data.model === 'aurora'
+          ? 'Aurora'
+          : 'Maestro';
       if (autoCoordinator) {
-        const label = data.model === 'supernova' ? 'Supernova' : 'Maestro';
         emit({ event: 'model_changed', model: data.model, provider: label });
       } else {
-        const label = data.model === 'supernova' ? 'Supernova' : 'Maestro';
         emitError(`${label} unavailable — no providers found`);
       }
       return;
