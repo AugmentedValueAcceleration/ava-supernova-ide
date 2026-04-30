@@ -82,17 +82,19 @@ export function readTier(): string {
   try { return localStorage.getItem('ava-ide-tier') || 'free'; } catch { return 'free'; }
 }
 
-// The rule. Plan path lights up Maestro for everyone; Aurora and
-// Supernova require admin during the partnership-finalisation window.
-// BYOK path lights up the mode whenever the relevant fleet of keys
-// is present. The two paths are an OR — a plan user with their own
-// Mistral key gets Aurora regardless of admin gate.
+// The rule. Plan path lights up all three orchestrated modes for any
+// signed-in platform user (admin gate retired 2026-04-30 with the
+// public Aurora + Supernova launch — partnership conversations on
+// DeepSeek and Mistral resolved enough to ship). BYOK path lights up
+// the mode whenever the relevant fleet of keys is present. The two
+// paths are an OR — a plan user with their own Mistral key gets
+// Aurora the same way; isAdmin is no longer load-bearing.
 export function getModeAvailability(state: ModeAvailabilityState): ModeAvailability {
-  const { platformConnected, isAdmin, byok } = state;
+  const { platformConnected, byok } = state;
   return {
-    maestro: (platformConnected) || byok.qwen,
-    supernova: (platformConnected && isAdmin) || (byok.qwen && byok.deepseek),
-    aurora: (platformConnected && isAdmin) || byok.mistral,
+    maestro:   platformConnected || byok.qwen,
+    supernova: platformConnected || (byok.qwen && byok.deepseek),
+    aurora:    platformConnected || byok.mistral,
   };
 }
 
@@ -136,19 +138,18 @@ export function useModeAvailability(): {
 // via BYOK or just hasn't connected. Surfaced in mode subtitles.
 export function modeSubtitle(mode: ModeId, av: ModeAvailability, state: ModeAvailabilityState): string {
   if (av[mode]) {
-    if (mode === 'maestro') return state.platformConnected ? 'Best model per task' : 'BYOK · Qwen';
-    if (mode === 'supernova') return state.platformConnected && state.isAdmin ? 'Polyglot ensemble' : 'BYOK · DeepSeek + Qwen';
-    if (mode === 'aurora') return state.platformConnected && state.isAdmin ? 'EU stack — Mistral only' : 'BYOK · Mistral';
+    if (mode === 'maestro')   return state.platformConnected ? 'Best model per task'           : 'BYOK · Qwen';
+    if (mode === 'supernova') return state.platformConnected ? 'Polyglot ensemble'              : 'BYOK · DeepSeek + Qwen';
+    if (mode === 'aurora')    return state.platformConnected ? 'EU stack — Mistral end-to-end' : 'BYOK · Mistral';
   }
-  // Locked — explain the unlock path
+  // Locked — explain the unlock path. Admin gate retired 2026-04-30,
+  // so locked = not-signed-in AND missing the BYOK keys for this mode.
   if (mode === 'supernova') {
-    if (state.platformConnected && !state.isAdmin) return 'In development';
     if (state.byok.qwen && !state.byok.deepseek) return 'Add DeepSeek key';
     if (state.byok.deepseek && !state.byok.qwen) return 'Add Qwen key';
     return 'Connect or add DeepSeek + Qwen keys';
   }
   if (mode === 'aurora') {
-    if (state.platformConnected && !state.isAdmin) return 'In development';
     return 'Connect or add Mistral key';
   }
   // maestro
