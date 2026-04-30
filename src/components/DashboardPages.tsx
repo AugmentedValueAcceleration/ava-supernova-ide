@@ -29,7 +29,7 @@ import {
   Rocket as PhRocket,
 } from '@phosphor-icons/react';
 import { t, useLocale, getLocale } from '../lib/i18n';
-import { apiFetch, getPlatformKey, getStoredEmail, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
+import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
@@ -1551,8 +1551,45 @@ export function CommandCentrePage() {
   void authRefresh;
 
   const connected = checkConnected();
-  const email = getStoredEmail();
   const dateStr = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  // ── Editable display name ────────────────────────────────────────────
+  // Source-of-truth for what Ava calls the user. `ava-ide-user-name` is
+  // the same key used by the chat panel's seeded welcome (line ~1997)
+  // and the trajectory event payload (line ~2692), so editing it here
+  // updates the greeting everywhere. Falls back to the email local-part
+  // when no custom name has been set.
+  const resolveUserName = (): string => {
+    const stored = (localStorage.getItem('ava-ide-user-name') ?? '').trim();
+    if (stored) return stored;
+    return (localStorage.getItem('ava-ide-email')?.split('@')[0] ?? '').trim();
+  };
+  const [userName, setUserName] = useState<string>(resolveUserName);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameHover, setNameHover] = useState(false);
+  useEffect(() => {
+    const refresh = () => setUserName(resolveUserName());
+    window.addEventListener('ava-auth-changed', refresh);
+    window.addEventListener('ava-ide-name-changed', refresh);
+    return () => {
+      window.removeEventListener('ava-auth-changed', refresh);
+      window.removeEventListener('ava-ide-name-changed', refresh);
+    };
+  }, []);
+  const saveUserName = () => {
+    const next = nameInput.trim();
+    if (next) {
+      localStorage.setItem('ava-ide-user-name', next);
+      setUserName(next);
+    } else {
+      // Empty input clears the custom name; greeting falls back to email prefix.
+      localStorage.removeItem('ava-ide-user-name');
+      setUserName((localStorage.getItem('ava-ide-email')?.split('@')[0] ?? '').trim());
+    }
+    window.dispatchEvent(new CustomEvent('ava-ide-name-changed'));
+    setEditingName(false);
+  };
 
   // ── Weather state (direct fetch, cached) ──────────────────────────────
   const [weather, setWeather] = useState<WeatherData | null>(getCachedWeather());
@@ -1693,8 +1730,54 @@ export function CommandCentrePage() {
           gap: 16, marginBottom: 20,
         }}>
           <div>
-            <div style={{ fontSize: 28, fontWeight: 300, color: '#cdd6f4', marginBottom: 4 }}>
-              {greeting}{email ? `, ${email.split('@')[0]}` : ''}
+            <div style={{ fontSize: 28, fontWeight: 300, color: '#cdd6f4', marginBottom: 4, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <span>{greeting}{userName || editingName ? ',' : ''}</span>
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  onBlur={saveUserName}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); saveUserName(); }
+                    else if (e.key === 'Escape') { setEditingName(false); setNameInput(''); }
+                  }}
+                  placeholder="What should Ava call you?"
+                  maxLength={40}
+                  style={{
+                    fontSize: 28, fontWeight: 300, color: '#cdd6f4',
+                    background: 'rgba(168,85,247,0.08)',
+                    border: '1px solid rgba(168,85,247,0.3)',
+                    borderRadius: 6,
+                    padding: '0 8px',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    minWidth: 220,
+                  }}
+                />
+              ) : userName ? (
+                <span
+                  onClick={() => { setNameInput(userName); setEditingName(true); }}
+                  onMouseEnter={() => setNameHover(true)}
+                  onMouseLeave={() => setNameHover(false)}
+                  title="Click to change what Ava calls you"
+                  style={{
+                    cursor: 'pointer',
+                    borderBottom: nameHover ? '1px dashed #a855f7' : '1px dashed transparent',
+                    transition: 'border-color 0.15s',
+                  }}
+                >
+                  {userName}
+                </span>
+              ) : (
+                <span
+                  onClick={() => { setNameInput(''); setEditingName(true); }}
+                  title="Tell Ava what to call you"
+                  style={{ cursor: 'pointer', color: '#a855f7', fontSize: 18, marginLeft: 4 }}
+                >
+                  + add name
+                </span>
+              )}
             </div>
             <div style={{ fontSize: 13, color: '#6c7086' }}>{dateStr}</div>
           </div>
