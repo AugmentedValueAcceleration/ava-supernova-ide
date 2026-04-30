@@ -10,9 +10,9 @@ The standalone AI-native development environment. Built with Tauri v2, React 19,
 - **Toggle freely** — switch between Local and Cloud from the chat header
 - **Model picker** — Qwen 3.6 Plus, MiniMax M2.7, DeepSeek, Kimi, Zhipu, Mistral + BYOK
 - **Three orchestrated modes** — pick a routing strategy from the dropdown:
-  - **Maestro** — single coordinator (Qwen 3.6 Plus default), production-tuned
-  - **Supernova** — polyglot ensemble (DeepSeek V4 Pro coordinator + Qwen 3.6 Plus Builder + Omni for vision)
-  - **Aurora** — European AI stack, three-tier (Mistral Large 3 coordinator + heavy specialists, Mistral Medium 3.5 for Builder + mid-tier + vision + long-form, Mistral Small 4 at the intent gate). Never leaves European infrastructure. Open weights, sovereign by design.
+  - **Maestro** — tier-differentiated Qwen fleet (3.6 Plus coordinator + Builder + planning, 3.5 Flash chat + image-gen + intent gate, Omni Plus vision + computer_use, 3.5 Plus long-form), production-tuned
+  - **Supernova** — polyglot ensemble (DeepSeek V4 Pro coordinator, V4 Flash chat + mid-tier review, Qwen 3.6 Plus Builder, Omni Plus vision, Omni Flash image-gen orchestration)
+  - **Aurora** — European AI stack, three-tier (Mistral Large 3 coordinator + heavy specialists, Mistral Medium 3.5 for Builder + mid-tier + vision + long-form, Mistral Small 4 for chat + image-gen + intent gate). Never leaves European infrastructure. Open weights, sovereign by design.
 - **Knowledge packs** — toggle domain expertise on/off in the chat-bar dropdown. Live system-prompt rebuild — Ava picks up the extra context the moment you flip the switch, no restart.
 - **Mode selector** — Work (>>), Plan (::), Chat (..), Teach (??), Security (!!), Brainstorm (**)
 
