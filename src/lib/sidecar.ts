@@ -45,15 +45,6 @@ export interface SidecarConfig {
    *  per-category pref off means no cloud push from the tools. */
   learningLocalOnly?: boolean;
   /**
-   * Manually enabled knowledge pack IDs. The sidecar looks each up in
-   * @ava/core's BUILTIN_PACKS and joins the content into the system
-   * prompt's `knowledgeContext` block. Without this, the IDE's pack
-   * dropdown is decorative — toggling a pack updates UI state but the
-   * agent never sees the extra context. Live updates land via the
-   * separate `set_knowledge_packs` command.
-   */
-  enabledPackIds?: string[];
-  /**
    * Local / custom OpenAI-compatible provider — Ollama, LM Studio, vLLM,
    * or any other server that speaks the OpenAI Chat Completions API. The
    * IDE Settings UI writes baseUrl + modelName into localStorage and

@@ -1939,17 +1939,13 @@ export function AvaChatPage() {
     model: string;
   }
 
-  // ── Sidecar model mapping (single source of truth) ─────────────────────────
-  const IDE_KNOWLEDGE_PACKS = [
-    { id: 'game-development', name: 'Game Development', icon: '\uD83C\uDFAE', desc: 'Unreal, Godot, Unity' },
-    { id: 'marketing', name: 'Marketing & Growth', icon: '\uD83D\uDCC8', desc: 'SEO, content, analytics' },
-    { id: 'finance', name: 'Finance & Business', icon: '\uD83D\uDCB0', desc: 'Modelling, budgeting' },
-    { id: 'legal', name: 'Legal & Compliance', icon: '\u2696\uFE0F', desc: 'Contracts, IP, privacy' },
-    { id: 'product', name: 'Product Management', icon: '\uD83D\uDCCB', desc: 'Roadmaps, metrics' },
-    { id: 'devops', name: 'DevOps & Infra', icon: '\u2601\uFE0F', desc: 'CI/CD, Docker, cloud' },
-    { id: 'data-science', name: 'Data Science', icon: '\uD83D\uDCC9', desc: 'Analysis, ML' },
-  ];
+  // ── Knowledge-pack list removed in v0.59.2 ─────────────────────────────────
+  // Frontier models cover the builtin domain content from training; the
+  // silent injection broke the post-rebalance ~1-credit chat promise.
+  // The const block below was the IDE pack catalogue — kept here as a
+  // tombstone comment since it was the only IDE-side reference.
 
+  // ── Sidecar model mapping (single source of truth) ─────────────────────────
   const SIDECAR_MODEL_MAP: Record<string, string> = {
     // Orchestrated modes — the sidecar handles these by id, no provider prefix.
     // Without this row, the fallback in setModel adds `platform:` (or worse,
@@ -2075,7 +2071,6 @@ export function AvaChatPage() {
         setChatBackend('local');
         setMessages([{ id: `msg-reset-${Date.now()}`, role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now() }]);
         setConversationTitle(t('dash.chat.new_chat'));
-        setEnabledPacks(new Set());
         setSecrets([]);
         setTokenCount(0);
         setContextPercent(0);
@@ -2149,7 +2144,7 @@ export function AvaChatPage() {
   const [copiedMsg, setCopiedMsg] = useState<string | null>(null);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [packsMenuOpen, setPacksMenuOpen] = useState(false);
+  // packsMenuOpen removed with knowledge-pack feature in v0.59.2.
   // Tier read for Supernova admin gating in the model dropdown. Mirrors
   // the extension's account?.tier === 'admin' check. Listens to the
   // 'ava-tier-changed' event so the gate flips when the user signs in
@@ -2161,12 +2156,8 @@ export function AvaChatPage() {
   // detection, and BYOK-key detection all flow through this hook —
   // see lib/mode-availability.ts.
   const { state: modeState, availability: modeAvailability } = useModeAvailability();
-  const [enabledPacks, setEnabledPacks] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('ava-knowledge-packs');
-      return saved ? new Set(JSON.parse(saved) as string[]) : new Set<string>();
-    } catch { return new Set<string>(); }
-  });
+  // Knowledge-pack enabled state removed in v0.59.2. localStorage key
+  // 'ava-knowledge-packs' from prior installs is harmless if it lingers.
   const [tokenCount, setTokenCount] = useState(0);
   // Platform credit balance — combined free + subscription pool. The shape
   // {used, limit} survives the rename from the old token-system state for
@@ -2452,7 +2443,7 @@ export function AvaChatPage() {
   const abortRef = useRef<AbortController | null>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
-  const packsMenuRef = useRef<HTMLDivElement>(null);
+  // packsMenuRef removed with knowledge-pack feature in v0.59.2.
 
   // ── Derived: available BYOK models ────────────────────────────────────────
   // ── BYOK models (reactive — updates when sidebar keys change) ────────────
@@ -2597,7 +2588,7 @@ export function AvaChatPage() {
     const handler = (e: MouseEvent) => {
       if (modeMenuOpen && modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) setModeMenuOpen(false);
       if (modelMenuOpen && modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) setModelMenuOpen(false);
-      if (packsMenuOpen && packsMenuRef.current && !packsMenuRef.current.contains(e.target as Node)) setPacksMenuOpen(false);
+      // packsMenu outside-click handler removed with knowledge-pack feature in v0.59.2.
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -2797,12 +2788,6 @@ export function AvaChatPage() {
           generationLocalOnly,
           learningLocalOnly,
           local: localBlock,
-          // Knowledge packs the user toggled on. Sidecar joins the
-          // matching BUILTIN_PACKS content into the system prompt's
-          // knowledgeContext block. Without this, the Packs dropdown
-          // is decorative — toggling a pack updates UI state but the
-          // agent never sees the extra context.
-          enabledPackIds: [...enabledPacks],
         } as SidecarConfig;
 
         await sidecar.start(config);
@@ -3416,24 +3401,10 @@ export function AvaChatPage() {
     }).catch(() => {});
   }, []);
 
+  // togglePack removed with knowledge-pack feature in v0.59.2.
+
   // ── Cancel streaming ──────────────────────────────────────────────────────
   // Soft interrupt — tap to get Ava's attention
-  const togglePack = useCallback((id: string) => {
-    setEnabledPacks(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      localStorage.setItem('ava-knowledge-packs', JSON.stringify([...next]));
-      // Push to sidecar so the change takes effect immediately — without
-      // this, toggling a pack would only land at next IDE restart.
-      // Mirrors the set_mode / set_desktop_permission_level live-rebuild
-      // pattern. Silent on failure: sidecar may not be running yet.
-      const sidecar = getSidecar();
-      sidecar.setKnowledgePacks([...next]).catch(() => {});
-      return next;
-    });
-  }, []);
-
   const interruptStream = useCallback(() => {
     const sidecar = getSidecar();
     sidecar.interrupt().catch(() => {
@@ -4237,73 +4208,7 @@ export function AvaChatPage() {
             )}
           </div>
 
-          {/* Knowledge packs dropdown */}
-          <div ref={packsMenuRef} style={{ position: 'relative' }}>
-            <button
-              onClick={() => setPacksMenuOpen(!packsMenuOpen)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-                background: enabledPacks.size > 0 ? 'rgba(168,85,247,0.1)' : 'rgba(49, 34, 68, 0.3)',
-                border: `1px solid ${enabledPacks.size > 0 ? 'rgba(168,85,247,0.3)' : 'rgba(168,85,247,0.1)'}`,
-                borderRadius: 8, color: enabledPacks.size > 0 ? '#a855f7' : '#6c7086',
-                fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M14.5 2H9l-.35-.15-.65-.64-.65.64L7 2H1.5l-.5.5v10l.5.5h13l.5-.5v-10l-.5-.5zM7 3H2v9h5V3zm7 9H9V3h5v9z"/>
-              </svg>
-              {enabledPacks.size > 0 ? `${enabledPacks.size} pack${enabledPacks.size > 1 ? 's' : ''}` : 'Packs'}
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                style={{ transform: packsMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', opacity: 0.5 }}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-              </svg>
-            </button>
-
-            {packsMenuOpen && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 999,
-                background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
-                padding: 6, minWidth: 240, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-              }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                  Knowledge Packs
-                </div>
-                {IDE_KNOWLEDGE_PACKS.map(pack => {
-                  const enabled = enabledPacks.has(pack.id);
-                  return (
-                    <button
-                      key={pack.id}
-                      onClick={() => togglePack(pack.id)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px',
-                        background: 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer', textAlign: 'left',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      <span style={{ fontSize: 14 }}>{pack.icon}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: enabled ? '#cdd6f4' : '#6c7086' }}>{pack.name}</div>
-                        <div style={{ fontSize: 10, color: '#6c7086', opacity: 0.6 }}>{pack.desc}</div>
-                      </div>
-                      <div style={{
-                        width: 32, height: 16, borderRadius: 8, position: 'relative', transition: 'all 0.2s',
-                        background: enabled ? '#a855f7' : 'rgba(108,112,134,0.3)',
-                      }}>
-                        <div style={{
-                          position: 'absolute', top: 2, width: 12, height: 12, borderRadius: 6, background: '#fff',
-                          transition: 'all 0.2s', left: enabled ? 16 : 2,
-                        }} />
-                      </div>
-                    </button>
-                  );
-                })}
-                <div style={{ fontSize: 10, color: '#6c7086', opacity: 0.4, padding: '6px 10px 4px', borderTop: '1px solid rgba(168,85,247,0.08)', marginTop: 2 }}>
-                  Game projects auto-detect. Others enable here.
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Knowledge packs dropdown removed in v0.59.2 — see DashboardPages.tsx history. */}
 
           {/* Conversation title */}
           <span style={{ fontSize: 12, color: '#6c7086', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
