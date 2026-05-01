@@ -12,7 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export interface ComputerUseSettings {
+export interface DesktopAutomationSettings {
   enabled: boolean;
   allowedApps: string[];
   permission: 'view_only' | 'navigate' | 'full' | 'restricted';
@@ -22,14 +22,12 @@ export interface ComputerUseSettings {
   logActions: boolean;
   inactivityTimeout: number;
   blockDangerous: boolean;
-  holoModel: 'Holo3-35B-A3B' | 'Holo3-122B-A10B';
 }
 
 export interface SidecarConfig {
   providers: Record<string, { apiKey: string; baseUrl?: string }>;
   platformKey?: string;
-  holoApiKey?: string;
-  computerUseSettings?: ComputerUseSettings;
+  desktopAutomationSettings?: DesktopAutomationSettings;
   activeModel: string;
   cwd: string;
   mode?: string;
@@ -103,19 +101,14 @@ export interface SidecarEvent {
   originalTokens?: number;
   compressedTokens?: number;
   droppedCount?: number;
-  // computer use
+  // desktop automation IPC
   requestId?: string;
   action?: string;
-  x?: number;
-  y?: number;
-  end_x?: number;
-  end_y?: number;
   text?: string;
   key?: string;
-  direction?: string;
-  amount?: number;
   window?: string;
-  settings?: ComputerUseSettings;
+  name?: string;
+  settings?: DesktopAutomationSettings;
   // browser automation — browser_send forwarding
   browserAction?: string;
   params?: Record<string, unknown>;
@@ -132,11 +125,6 @@ export interface SidecarEvent {
   grantId?: string;
   label?: string;
   reason?: string;
-  // computer_use_request for UIA / window targeting — the sidecar bridge
-  // sends `name`, legacy inline tools sent `text`. Both accepted for back
-  // compat by the computer-use handler; include `name` here so TypeScript
-  // doesn't complain at the `event.name ?? event.text` fallback.
-  name?: string;
 }
 
 type EventListener = (event: SidecarEvent) => void;
@@ -223,9 +211,9 @@ export class SidecarManager {
           // fresh 3-attempt allowance instead of starting partway used.
           this.respawnAttempts = 0;
         }
-        // Handle computer use requests from sidecar — invoke Tauri commands
-        if (event.event === 'computer_use_request' && event.requestId && event.action) {
-          this.handleComputerUseRequest(event);
+        // Handle desktop automation requests from sidecar — invoke Tauri commands
+        if (event.event === 'desktop_request' && event.requestId && event.action) {
+          this.handleDesktopRequest(event);
         }
         this.emitEvent(event.event, event);
       } catch {
@@ -466,35 +454,21 @@ export class SidecarManager {
   }
 
   /**
-   * Update computer use settings on the live sidecar.
+   * Update desktop automation settings on the live sidecar.
    */
-  async updateComputerUseSettings(settings: ComputerUseSettings): Promise<void> {
-    await this.send({ cmd: 'update_computer_use_settings', settings });
+  async updateDesktopAutomationSettings(settings: DesktopAutomationSettings): Promise<void> {
+    await this.send({ cmd: 'update_desktop_automation_settings', settings });
   }
 
   /**
-   * Handle computer_use_request from sidecar — invoke Tauri Rust commands.
+   * Handle desktop_request from sidecar — invoke Tauri Rust commands for
+   * UIA-based automation (no pixel coords) and browser automation.
    */
-  private async handleComputerUseRequest(event: SidecarEvent): Promise<void> {
+  private async handleDesktopRequest(event: SidecarEvent): Promise<void> {
     const { requestId, action } = event;
     try {
       let result: unknown;
       switch (action) {
-        case 'capture_screen':
-          result = await invoke('capture_screen');
-          break;
-        case 'click':
-          await invoke('click', { x: event.x, y: event.y });
-          result = 'ok';
-          break;
-        case 'double_click':
-          await invoke('double_click', { x: event.x, y: event.y });
-          result = 'ok';
-          break;
-        case 'right_click':
-          await invoke('right_click', { x: event.x, y: event.y });
-          result = 'ok';
-          break;
         case 'type_text':
           await invoke('type_text', { text: event.text });
           result = 'ok';
@@ -503,24 +477,6 @@ export class SidecarManager {
           await invoke('key_press', { key: event.key });
           result = 'ok';
           break;
-        case 'scroll':
-          await invoke('scroll', { direction: event.direction, amount: event.amount });
-          result = 'ok';
-          break;
-        case 'move_mouse':
-          await invoke('move_mouse', { x: event.x, y: event.y });
-          result = 'ok';
-          break;
-        case 'drag':
-          await invoke('drag', { x: event.x, y: event.y, endX: event.end_x, endY: event.end_y });
-          result = 'ok';
-          break;
-        case 'get_active_window':
-          result = await invoke('get_active_window');
-          break;
-        case 'get_dpi_scale':
-          result = await invoke('get_dpi_scale');
-          break;
         case 'list_ui_elements':
           result = await invoke('list_ui_elements');
           break;
@@ -528,9 +484,6 @@ export class SidecarManager {
           result = await invoke('get_foreground_window_title');
           break;
         case 'find_ui_element':
-          // Accept either event.name (uiaBridge) or event.text (legacy
-          // inline tools that used { text: … } arg shape). Rust command
-          // wants `name`.
           result = await invoke('find_ui_element', { name: event.name ?? event.text });
           break;
         case 'click_element':
@@ -540,11 +493,9 @@ export class SidecarManager {
           result = await invoke('focus_window', { name: event.name ?? event.text });
           break;
 
-        // ── Browser automation (Session 2 prototype, wired in for desktop mode)
-        // These proxy to the Rust commands that manage a headed Chromium
-        // via Playwright. They let the sidecar drive the visible browser
-        // the same way the Session 2 prototype did, but inside the normal
-        // agent loop.
+        // ── Browser automation — Playwright-backed headed Chromium driven
+        // through Rust. Lives alongside UIA so the desktop agent can drive
+        // either the OS or a visible browser inside the same loop.
         case 'launch_app':
           result = await invoke('launch_app', { name: event.name ?? event.text });
           break;
@@ -562,12 +513,12 @@ export class SidecarManager {
           break;
 
         default:
-          throw new Error(`Unknown computer use action: ${action}`);
+          throw new Error(`Unknown desktop action: ${action}`);
       }
-      await this.send({ cmd: 'computer_use_response', requestId, result });
+      await this.send({ cmd: 'desktop_response', requestId, result });
     } catch (err) {
       await this.send({
-        cmd: 'computer_use_response',
+        cmd: 'desktop_response',
         requestId,
         error: err instanceof Error ? err.message : String(err),
       });

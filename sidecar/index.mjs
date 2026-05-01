@@ -116,9 +116,9 @@ let browserLaunched = false;
 /** Map<confirmId, { resolve: Function }> */
 const pendingConfirmations = new Map();
 
-/** Map<requestId, { resolve: Function, reject: Function }> for computer use requests */
-const pendingComputerUse = new Map();
-let computerUseRequestId = 0;
+/** Map<requestId, { resolve: Function, reject: Function }> for desktop automation requests */
+const pendingDesktop = new Map();
+let desktopRequestId = 0;
 
 // ─── Secret working set ─────────────────────────────────────────────────────
 //
@@ -189,155 +189,38 @@ function substituteSecretHandles(args) {
 }
 
 /**
- * Send a computer use command to Tauri frontend and wait for the response.
- * The frontend calls the Tauri Rust command and sends back the result.
+ * Send a desktop automation command to Tauri frontend and wait for the
+ * response. The frontend calls the Tauri Rust command and sends back the
+ * result.
  */
-function computerUseRequest(action, args = {}) {
+function desktopRequest(action, args = {}) {
   return new Promise((resolve, reject) => {
-    const requestId = `cu_${++computerUseRequestId}`;
+    const requestId = `du_${++desktopRequestId}`;
     const timeout = setTimeout(() => {
-      pendingComputerUse.delete(requestId);
-      reject(new Error(`Computer use request timed out: ${action}`));
+      pendingDesktop.delete(requestId);
+      reject(new Error(`Desktop automation request timed out: ${action}`));
     }, 15000); // 15s timeout for any single action
 
-    pendingComputerUse.set(requestId, {
+    pendingDesktop.set(requestId, {
       resolve: (result) => { clearTimeout(timeout); resolve(result); },
       reject: (err) => { clearTimeout(timeout); reject(err); },
     });
 
-    emit({ event: 'computer_use_request', requestId, action, ...args });
+    emit({ event: 'desktop_request', requestId, action, ...args });
   });
 }
 
-/** Bridge providers for ComputerUseTool — delegates to Tauri via NDJSON */
-const screenshotBridge = {
-  async capture() {
-    const result = await computerUseRequest('capture_screen');
-    const data = result.data;
-    // New format returns { image, width, height }
-    if (data && typeof data === 'object' && data.image) {
-      // Always update dimensions (monitors can change)
-      const prevDims = screenshotDims;
-      screenshotDims = { width: data.width, height: data.height };
-      // Expose dimensions so computer-use tool can pass to Holo3
-      screenshotBridge._lastDims = screenshotDims;
-      if (!prevDims) {
-        emit({ event: 'info', message: `Screenshot: ${data.width}x${data.height} pixels` });
-      } else if (prevDims.width !== data.width || prevDims.height !== data.height) {
-        emit({ event: 'info', message: `Screenshot resolution changed: ${data.width}x${data.height}` });
-      }
-      return data.image;
-    }
-    return data; // fallback: raw base64 string
-  },
-  async captureWindow(windowTitle) {
-    const result = await computerUseRequest('capture_screen', { window: windowTitle });
-    const data = result.data;
-    if (data && typeof data === 'object' && data.image) return data.image;
-    return data;
-  },
-};
-
-/** DPI scale factor — screenshot pixels / logical screen pixels.
- *  Fetched fresh each action to handle monitor changes / docking. */
-let dpiScaleCache = null;
-let dpiScaleAge = 0;
-const DPI_CACHE_TTL = 10_000; // Re-detect every 10 seconds
-async function getDpiScale() {
-  const now = Date.now();
-  if (dpiScaleCache !== null && (now - dpiScaleAge) < DPI_CACHE_TTL) return dpiScaleCache;
-  try {
-    const result = await computerUseRequest('get_dpi_scale');
-    const scale = (typeof result.data === 'number' && result.data > 0) ? result.data : null;
-    if (scale) {
-      if (dpiScaleCache !== null && dpiScaleCache !== scale) {
-        emit({ event: 'info', message: `DPI scale changed: ${dpiScaleCache} → ${scale}` });
-      }
-      dpiScaleCache = scale;
-      dpiScaleAge = now;
-    } else if (dpiScaleCache === null) {
-      // First call failed — detect from screenshot vs screen resolution
-      dpiScaleCache = 1.0; // Safe default: assume 100% until proven otherwise
-      dpiScaleAge = now;
-      emit({ event: 'info', message: `DPI scale: 1.0 (detection failed, using safe default)` });
-    }
-  } catch {
-    if (dpiScaleCache === null) {
-      dpiScaleCache = 1.0;
-      dpiScaleAge = now;
-      emit({ event: 'info', message: `DPI scale: 1.0 (fallback)` });
-    }
-  }
-  return dpiScaleCache;
-}
-
-/** Scale Holo3 coordinates (physical pixels) to logical coordinates for enigo */
-async function scaleCoord(x, y) {
-  const scale = await getDpiScale();
-  return { x: Math.round(x / scale), y: Math.round(y / scale) };
-}
-
-/** First screenshot logs dimensions for coordinate calibration */
-let screenshotDims = null;
-
-/** Screenshot resize ratio — Holo3 sees 1280px wide, coordinates need scaling back.
- *  Rust returns original dimensions; the image is resized server-side. */
-const HOLO_MAX_WIDTH = 1280;
-function getResizeScale() {
-  if (!screenshotDims || screenshotDims.width <= HOLO_MAX_WIDTH) return 1.0;
-  return screenshotDims.width / HOLO_MAX_WIDTH;
-}
-
-/** Scale Holo3 coordinates → original screen → logical (DPI-adjusted) coordinates */
-async function scaleAndClamp(x, y) {
-  const dpi = await getDpiScale();
-  const resize = getResizeScale();
-  // Step 1: Holo3 coords (resized image space) → original screen pixels
-  const origX = Math.round(x * resize);
-  const origY = Math.round(y * resize);
-  // Step 2: original screen pixels → logical coordinates (for enigo)
-  let sx = Math.round(origX / dpi);
-  let sy = Math.round(origY / dpi);
-  // Clamp to screen bounds
-  if (screenshotDims) {
-    const maxX = Math.round(screenshotDims.width / dpi);
-    const maxY = Math.round(screenshotDims.height / dpi);
-    sx = Math.max(0, Math.min(sx, maxX - 1));
-    sy = Math.max(0, Math.min(sy, maxY - 1));
-  }
-  return { sx, sy, scale: dpi };
-}
-
+/** Input bridge — text + key. No pixel-coordinate input; UIA name-based
+ *  targeting is the only stable selector path. */
 const inputBridge = {
-  async click(x, y) {
-    const { sx, sy, scale } = await scaleAndClamp(x, y);
-    emit({ event: 'info', message: `Click: Holo3=(${x},${y}) → Screen=(${sx},${sy}) [DPI ${scale}]` });
-    await computerUseRequest('click', { x: sx, y: sy });
-  },
-  async doubleClick(x, y) { const { sx, sy } = await scaleAndClamp(x, y); await computerUseRequest('double_click', { x: sx, y: sy }); },
-  async rightClick(x, y) { const { sx, sy } = await scaleAndClamp(x, y); await computerUseRequest('right_click', { x: sx, y: sy }); },
-  async typeText(text) { await computerUseRequest('type_text', { text }); },
-  async keyPress(key) { await computerUseRequest('key_press', { key }); },
-  async scroll(direction, amount) { await computerUseRequest('scroll', { direction, amount }); },
-  async moveMouse(x, y) { const { sx, sy } = await scaleAndClamp(x, y); await computerUseRequest('move_mouse', { x: sx, y: sy }); },
-  async drag(x, y, endX, endY) {
-    const start = await scaleAndClamp(x, y);
-    const end = await scaleAndClamp(endX, endY);
-    await computerUseRequest('drag', { x: start.sx, y: start.sy, end_x: end.sx, end_y: end.sy });
-  },
-};
-
-const windowBridge = {
-  async getActiveWindow() {
-    const result = await computerUseRequest('get_active_window');
-    return result.data;
-  },
+  async typeText(text) { await desktopRequest('type_text', { text }); },
+  async keyPress(key) { await desktopRequest('key_press', { key }); },
 };
 
 /** App launcher bridge — narrow scoped replacement for `bash` in desktop mode. */
 const appLauncherBridge = {
   async launch(app) {
-    const result = await computerUseRequest('launch_app', { name: app });
+    const result = await desktopRequest('launch_app', { name: app });
     return result.data;
   },
 };
@@ -345,23 +228,23 @@ const appLauncherBridge = {
 /** UI Automation bridge — structured element detection */
 const uiaBridge = {
   async listElements() {
-    const result = await computerUseRequest('list_ui_elements');
+    const result = await desktopRequest('list_ui_elements');
     return result.data;
   },
   async findElement(name) {
-    const result = await computerUseRequest('find_ui_element', { name });
+    const result = await desktopRequest('find_ui_element', { name });
     return result.data;
   },
   async clickElement(name) {
-    const result = await computerUseRequest('click_element', { name });
+    const result = await desktopRequest('click_element', { name });
     return result.data;
   },
   async focusWindow(name) {
-    const result = await computerUseRequest('focus_window', { name });
+    const result = await desktopRequest('focus_window', { name });
     return result.data;
   },
   async foregroundWindowTitle() {
-    const result = await computerUseRequest('get_foreground_window_title');
+    const result = await desktopRequest('get_foreground_window_title');
     return typeof result?.data === 'string' ? result.data : '';
   },
 };
@@ -519,16 +402,14 @@ async function handleInit(data) {
 
     // Tools
     toolRegistry = new ToolRegistry();
-    toolRegistry.registerBuiltins({
-      exclude: ['screenshot', 'computer_use', 'computer_use_blackboard'], // computer_use disabled — coming back with improved integration
-    });
+    toolRegistry.registerBuiltins();
     toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
 
     // ── Desktop Automation Mode — Tools live in @ava/core ───────────────
     // The desktop_* and browser_* tool classes are registered by
     // toolRegistry.registerBuiltins() above. They call into the Tauri
     // layer via the providers on sharedState (uiaProvider, inputProvider,
-    // browserProvider, windowProvider). Nothing is registered inline here.
+    // browserProvider). Nothing is registered inline here.
     //
     // Schema visibility per mode is enforced inside agent.ts: when the
     // user message has a [Desktop Automation Mode] prefix, the agent
@@ -545,7 +426,7 @@ async function handleInit(data) {
     // failure mode; the pivot uses UIA tree + Playwright DOM exclusively.
 
     // Browser bridge — fulfils the @ava/core BrowserProvider contract by
-    // round-tripping through the IDE frontend via computerUseRequest, which
+    // round-tripping through the IDE frontend via desktopRequest, which
     // calls the Rust browser_launch + browser_send Tauri commands. The
     // Playwright worker (src-tauri/resources/browser-worker.mjs) handles
     // the actual navigate/snapshot/click/type/close operations.
@@ -555,7 +436,7 @@ async function handleInit(data) {
     async function ensureBrowser() {
       if (browserLaunched) return;
       try {
-        await computerUseRequest('browser_launch');
+        await desktopRequest('browser_launch');
         browserLaunched = true;
       } catch (launchErr) {
         const msg = String(launchErr.message || launchErr);
@@ -571,7 +452,7 @@ async function handleInit(data) {
     }
     async function browserSend(action, params) {
       await ensureBrowser();
-      const res = await computerUseRequest('browser_send', { browserAction: action, params });
+      const res = await desktopRequest('browser_send', { browserAction: action, params });
       const payload = res?.data ?? res?.result ?? res;
       if (payload && typeof payload === 'object' && payload.ok === false) {
         // Stale-state recovery: if the worker reports a dead browser (user
@@ -580,10 +461,10 @@ async function handleInit(data) {
         // would fail and Ava would have to restart the session manually.
         const errMsg = String(payload.error || '');
         if (/browser has been closed|not connected|disconnected|launch first/i.test(errMsg)) {
-          try { await computerUseRequest('browser_close'); } catch {}
+          try { await desktopRequest('browser_close'); } catch {}
           browserLaunched = false;
           await ensureBrowser();
-          const retry = await computerUseRequest('browser_send', { browserAction: action, params });
+          const retry = await desktopRequest('browser_send', { browserAction: action, params });
           const retryPayload = retry?.data ?? retry?.result ?? retry;
           if (retryPayload && typeof retryPayload === 'object' && retryPayload.ok === false) {
             throw new Error(retryPayload.error || `browser ${action} failed after reset`);
@@ -619,7 +500,7 @@ async function handleInit(data) {
       async type(text) { await browserSend('type', { text }); },
       async key(key) { await browserSend('key', { key }); },
       async close() {
-        try { await computerUseRequest('browser_close'); }
+        try { await desktopRequest('browser_close'); }
         catch (err) {
           const msg = String(err.message || err);
           if (!/not running|already closed/i.test(msg)) throw err;
@@ -707,7 +588,6 @@ async function handleInit(data) {
     // frontier models already cover from training. After the chat-tier
     // rebalance the silent injection started bumping ~1-credit chat
     // turns into the next bracket. Net: small lift, opaque cost.
-    // Removed wholesale; computer-use-knowledge survives separately.
     const knowledgeContext = undefined;
 
     // Stash args for rebuild on mode switch. The system prompt now varies
@@ -725,7 +605,6 @@ async function handleInit(data) {
       personality: personalityPrefix || undefined,
       language,
       knowledgeContext,
-      excludeTools: ['computer_use'],
       desktopMode: currentMode === 'desktop',
       // desktopPermissionLevel intentionally omitted at init — currentMode
       // at init is always 'work' so the desktop block isn't rendered yet,
@@ -802,14 +681,11 @@ async function handleInit(data) {
       mistralApiKey: config.providers?.mistral?.apiKey || process.env.MISTRAL_API_KEY,
       anthropicApiKey: config.providers?.anthropic?.apiKey || process.env.ANTHROPIC_API_KEY,
       activeModelId: resolved.model.id,
-      // Computer Use — bridges to Tauri desktop commands
-      screenshotProvider: screenshotBridge,
-      inputProvider: inputBridge,
-      windowProvider: windowBridge,
-      holoApiKey: process.env.HAI_API_KEY || config.holoApiKey,
-      uiaProvider: uiaBridge,
-      // Desktop Automation mode — narrow app launcher (replaces bash) +
+      // Desktop Automation — bridges to Tauri desktop commands. UIA tree
+      // for element targeting, narrow app launcher (replaces bash), and
       // Playwright-backed browser via Tauri worker.
+      inputProvider: inputBridge,
+      uiaProvider: uiaBridge,
       appLauncherProvider: appLauncherBridge,
       browserProvider: browserBridge,
       // Desktop safety gate — the @ava/core tools call these on every
@@ -838,8 +714,7 @@ async function handleInit(data) {
           pendingConfirmations.set(id, { resolve, toolName });
         });
       },
-      _debug_holo: !!(config.holoApiKey || process.env.HAI_API_KEY) ? 'BYOK' : (config.platformKey ? 'platform' : 'none'),
-      computerUseSettings: config.computerUseSettings || undefined,
+      desktopAutomationSettings: config.desktopAutomationSettings || undefined,
       // Creative asset cloud sync — gates generate_image / _music / _video /
       // _voice tools' post-write upload. Same formula as learningLocalOnly
       // in the VS Code extension: truthy when the user's Data Mode resolves
@@ -935,7 +810,6 @@ async function handleInit(data) {
     globalThis._sharedState = sharedState;
     globalThis._currentModel = resolved.model;
 
-    emit({ event: 'info', message: `Holo3: ${sharedState._debug_holo ? 'configured' : 'not configured'}` });
     emit({ event: 'ready', model: resolved.model.id, provider: resolved.provider.name });
   } catch (err) {
     emitError(`Init failed: ${err.message}`);
@@ -1194,14 +1068,6 @@ async function handleMessage(data) {
             });
             break;
           case 'tool_call_partial':
-            // Check for Holo3 usage data embedded in tool output
-            if (typeof agentEvent.data === 'string' && agentEvent.data.startsWith('__usage__:')) {
-              try {
-                const usageData = JSON.parse(agentEvent.data.slice(10));
-                emit({ event: 'usage', usage: usageData, cost: 0 });
-              } catch { /* ignore parse errors */ }
-              break; // Don't forward the raw __usage__ line to the UI
-            }
             emit({
               event: 'tool_call_partial',
               toolCallId: agentEvent.toolCallId,
@@ -1344,7 +1210,7 @@ async function handleMessage(data) {
     // auto-recovery in browserSend handles the reopen transparently.
     if (browserLaunched) {
       try {
-        await computerUseRequest('browser_close');
+        await desktopRequest('browser_close');
         emit({ event: 'info', message: 'Ava browser auto-closed at end of turn.' });
       } catch { /* non-fatal — worker may already be dead */ }
       browserLaunched = false;
@@ -1777,10 +1643,10 @@ rl.on('line', async (line) => {
         }
       }
       break;
-    case 'computer_use_response': {
-      const pending = pendingComputerUse.get(data.requestId);
+    case 'desktop_response': {
+      const pending = pendingDesktop.get(data.requestId);
       if (pending) {
-        pendingComputerUse.delete(data.requestId);
+        pendingDesktop.delete(data.requestId);
         if (data.error) {
           pending.reject(new Error(data.error));
         } else {
@@ -1789,11 +1655,11 @@ rl.on('line', async (line) => {
       }
       break;
     }
-    case 'update_computer_use_settings': {
-      // Live update computer use settings from the UI
+    case 'update_desktop_automation_settings': {
+      // Live update desktop automation settings from the UI
       if (agent?.sharedState) {
-        agent.sharedState.computerUseSettings = data.settings;
-        emit({ event: 'info', message: 'Computer use settings updated' });
+        agent.sharedState.desktopAutomationSettings = data.settings;
+        emit({ event: 'info', message: 'Desktop automation settings updated' });
       }
       break;
     }

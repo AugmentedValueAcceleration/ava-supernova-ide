@@ -51,7 +51,6 @@ export function disconnectAccount() {
 
   // Secrets and sensitive keys
   localStorage.removeItem('ava-ide-secrets');
-  localStorage.removeItem('ava-ide-holo-key');
 
   // Reset backend to local — cloud is no longer available
   localStorage.setItem('ava-ide-chat-backend', 'local');

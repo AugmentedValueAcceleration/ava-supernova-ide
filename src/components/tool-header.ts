@@ -164,11 +164,6 @@ export function getToolHeader(name: string, args: Record<string, unknown> | stri
     case 'news':
       return { verb: 'News', target: truncate((a.query as string) || (a.category as string) || '', 80) };
 
-    case 'computer_use':
-      return { verb: 'Computer use', target: truncate((a.task as string) || '', 80) };
-    case 'computer_use_blackboard':
-      return { verb: 'Computer use (planning)', target: '' };
-
     default:
       return { verb: capitalize(name.replace(/_/g, ' ')), target: '' };
   }

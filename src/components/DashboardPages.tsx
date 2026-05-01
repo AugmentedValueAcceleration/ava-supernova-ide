@@ -2783,8 +2783,6 @@ export function AvaChatPage() {
           userEmail: localStorage.getItem('ava-ide-email') || undefined,
           userTier: localStorage.getItem('ava-ide-tier') || undefined,
           _devPlatformFallback: !!getPlatformKey(),
-          // Computer Use — pass HAI key if configured
-          holoApiKey: localStorage.getItem('ava-ide-holo-key') || undefined,
           generationLocalOnly,
           learningLocalOnly,
           local: localBlock,
@@ -3437,7 +3435,6 @@ export function AvaChatPage() {
           permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
           autoMemory: true,
           _devPlatformFallback: true,
-          holoApiKey: localStorage.getItem('ava-ide-holo-key') || undefined,
           generationLocalOnly: fallbackSyncPrefs.generations === false || !fallbackCloudAllowed,
           learningLocalOnly: fallbackSyncPrefs.learning === false || !fallbackCloudAllowed,
         } as SidecarConfig).catch(() => {});
@@ -11155,9 +11152,6 @@ export function SettingsPage() {
       localStorage.setItem('ava-ide-language', value);
       import('../lib/i18n').then(({ initLocale }) => initLocale(value)).catch(() => {});
     }
-    if (key === 'holoApiKey') {
-      localStorage.setItem('ava-ide-holo-key', value || '');
-    }
     if (connected && dataModeIncludesCloud()) {
       apiFetch('/settings', {
         method: 'POST',
@@ -11551,9 +11545,9 @@ export function SettingsPage() {
                 { id: 'shell', icon: '💻', label: 'Shell', desc: 'bash, test_run, test_generate' },
                 { id: 'git', icon: '🔀', label: 'Git', desc: 'status, diff, commit, PR, rollback' },
                 { id: 'web', icon: '🌐', label: 'Web', desc: 'search, http_request, browser' },
-                { id: 'media', icon: '🎨', label: 'Media', desc: 'screenshot, generate_image' },
+                { id: 'media', icon: '🎨', label: 'Media', desc: 'generate_image, generate_video, generate_voice, generate_music' },
                 { id: 'database', icon: '🗄️', label: 'Database', desc: 'database_query' },
-                { id: 'system', icon: '🖥️', label: 'System', desc: 'computer_use' },
+                { id: 'system', icon: '🖥️', label: 'System', desc: 'desktop_*, browser_*' },
                 { id: 'documents', icon: '📄', label: 'Documents', desc: 'docs, presentations, reports' },
                 { id: 'memory', icon: '🧠', label: 'Memory', desc: 'save, recall, update, delete' },
                 { id: 'learning', icon: '🎓', label: 'Learning', desc: 'create, teach, progress' },
