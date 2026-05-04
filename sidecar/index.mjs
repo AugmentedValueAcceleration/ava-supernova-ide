@@ -108,6 +108,20 @@ let memoryAgentInstance = null;
 let currentAbort = null;
 let currentMode = 'work';
 let isRunning = false;
+
+// Bracket tags the core agent's detectModeFromMessages() looks for at the
+// start of a user message to apply MODE_ALLOWED_TOOLS. Without this prefix
+// the agent ships ALL ~70 tool schemas every turn — fine for Qwen, but
+// Mistral (Aurora) spirals on tool-stuffed prompts. Prepending the tag
+// lets the agent shrink the schema list to the per-mode allowlist.
+const MODE_PREFIX_TAG = {
+  plan:       '[Plan Mode]',
+  chat:       '[Chat Mode]',
+  brainstorm: '[Brainstorm Mode]',
+  teach:      '[Teach Mode]',
+  security:   '[Security Audit Mode]',
+  desktop:    '[Desktop Automation Mode]',
+};
 // Module-scoped so the handleMessage finally block can auto-close the
 // Ava browser at end of turn. Toggled by the browserBridge inside
 // handleInit.
@@ -875,6 +889,12 @@ async function handleMessage(data) {
     desktopStatePrefix = await captureDesktopContext();
   }
 
+  // Mode-prefix tag — see MODE_PREFIX_TAG comment above. Empty for work
+  // (no tag → agent defaults to work). When a desktop snapshot is also
+  // being prepended, the mode tag goes FIRST so detectModeFromMessages
+  // sees it on its `text.startsWith(...)` check.
+  const modeTag = MODE_PREFIX_TAG[currentMode] || '';
+
   try {
     // Sync conversation from UI history if provided (ensures sidecar sees full chat window)
     if (data.history && Array.isArray(data.history) && data.history.length > 0) {
@@ -904,9 +924,12 @@ async function handleMessage(data) {
         emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.6 Plus or Qwen 3.5 Omni Flash to analyse images.` });
       }
       const parts = [];
-      const prefixedContent = desktopStatePrefix && data.content
+      const baseContent = desktopStatePrefix && data.content
         ? `${desktopStatePrefix}\n\n${data.content}`
         : data.content;
+      const prefixedContent = modeTag && baseContent
+        ? `${modeTag} ${baseContent}`
+        : baseContent;
       if (prefixedContent) parts.push({ type: 'text', text: prefixedContent });
       for (const att of data.attachments) {
         if (att.mimeType?.startsWith('image/')) {
@@ -935,9 +958,12 @@ async function handleMessage(data) {
       }
       conversation.addUserMessage(parts.length > 0 ? parts : (prefixedContent ?? data.content));
     } else {
-      const userContent = desktopStatePrefix && data.content
+      const baseContent = desktopStatePrefix && data.content
         ? `${desktopStatePrefix}\n\n${data.content}`
         : data.content;
+      const userContent = modeTag && baseContent
+        ? `${modeTag} ${baseContent}`
+        : baseContent;
       conversation.addUserMessage(userContent);
     }
     let messages = conversation.getMessages();
