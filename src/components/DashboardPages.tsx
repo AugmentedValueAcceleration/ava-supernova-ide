@@ -36,6 +36,7 @@ import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { Tooltip } from './Tooltip';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
 import { DocumentationPage } from './DocumentationPage';
+import { LibraryPapersPage } from './LibraryPapersPage';
 import { ContextBar } from './ContextBar';
 import { getToolHeader } from './tool-header';
 import {
@@ -317,6 +318,17 @@ function useApiData<T>(path: string, defaultValue: T): { data: T; loading: boole
     window.addEventListener('ava-auth-changed', handler);
     return () => window.removeEventListener('ava-auth-changed', handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetch_]);
+
+  // Refresh on chat-turn end. The chat handler dispatches
+  // 'ava-usage-refresh' after every stream completes, so usage / balance /
+  // tasks / journal panels mounted via useApiData stay in sync with what
+  // the server has actually charged. Without this hook the dashboard only
+  // refreshes on mount and the operator sees a frozen snapshot.
+  useEffect(() => {
+    const handler = () => { if (checkConnected()) fetch_(); };
+    window.addEventListener('ava-usage-refresh', handler);
+    return () => window.removeEventListener('ava-usage-refresh', handler);
   }, [fetch_]);
 
   return { data, loading, error, refetch: fetch_ };
@@ -2273,7 +2285,18 @@ export function AvaChatPage() {
       const subLimit  = Number(u.credits_limit      ?? u.tokens_limit      ?? 0);
       const totalUsed  = freeUsed + subUsed;
       const totalLimit = freeLimit + subLimit;
-      setCreditBalance({ used: totalUsed, limit: totalLimit });
+      // Reconcile via max() on `used`. The platform's chat route runs
+      // increment_credits inside Vercel's after() — strictly post-stream-
+      // close. The fetchBalance triggered by the 'done' event will
+      // usually beat that commit, returning a pre-charge value. Without
+      // max() the displayed balance would roll backwards from the
+      // optimistic bump applied in the 'usage' / 'done' handlers.
+      // Once the server's after() commits, the next refresh comes back
+      // higher and replaces the optimistic value cleanly.
+      setCreditBalance((prev) => {
+        const used = prev && prev.used > totalUsed ? prev.used : totalUsed;
+        return { used, limit: totalLimit };
+      });
       // Mirror to localStorage so the App-level tick engine can fire
       // low-credit warnings without needing the dashboard mounted.
       try {
@@ -2286,6 +2309,15 @@ export function AvaChatPage() {
   useEffect(() => { fetchBalance(); }, [fetchBalance]);
   // Refresh balance when streaming ends
   useEffect(() => { if (!streaming) fetchBalance(); }, [streaming, fetchBalance]);
+  // Also subscribe to the global 'ava-usage-refresh' signal — covers the
+  // case where streaming flips false → true → false within the same render
+  // batch and the streaming-ends effect doesn't fire, plus keeps balance
+  // in sync with anywhere else that dispatches the event.
+  useEffect(() => {
+    const handler = () => { fetchBalance(); };
+    window.addEventListener('ava-usage-refresh', handler);
+    return () => window.removeEventListener('ava-usage-refresh', handler);
+  }, [fetchBalance]);
 
   // ── Local sidecar state ─────────────────────────────────────────────────
   const [chatBackend, setChatBackend] = useState<'local' | 'cloud' | 'both'>(() => {
@@ -2345,6 +2377,13 @@ export function AvaChatPage() {
   const [vaultRevealIds, setVaultRevealIds] = useState<Set<string>>(new Set());
   // Track which message IDs used secrets (for the lock icon)
   const secretMsgIds = useRef<Set<string>>(new Set());
+  // Tracks whether the sidecar emitted a 'usage' event during the current
+  // turn. Some providers (Ollama, LM Studio, custom OpenAI-compatible
+  // endpoints) don't include usage in streaming chunks, so the agent
+  // never fires a 'usage' event and the per-session token counter
+  // sits at 0 forever. Reset on stream_start, set on usage, fall back
+  // to a content-length estimate at 'done' when still false.
+  const usageEventFiredThisTurn = useRef<boolean>(false);
   // Track inline reveal toggles per message: msgId -> set of character offsets
   const [inlineReveals, setInlineReveals] = useState<Record<string, Set<number>>>({});
   const vaultPanelRef = useRef<HTMLDivElement>(null);
@@ -2840,6 +2879,63 @@ export function AvaChatPage() {
     };
   }, [canChat]); // Restart sidecar when chat ability changes
 
+  // ── Library → Papers "Read with Ava" handoff ────────────────────────
+  // LibraryPapersPage dispatches `ava-read-paper-with-ava` on the window
+  // when the user clicks the CTA on a paper card. Switch to Teach mode,
+  // persist it, and send the four-layer-pass primer through the sidecar.
+  // The chat panel's natural send loop renders the message + streams
+  // Ava's reply, so this handler doesn't need to manage UI state itself.
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ paper: {
+        id?: string; doi?: string; arxiv_id?: string; openalex_id?: string;
+        title: string; authors: { name: string }[];
+        year?: number; primary_url?: string; retracted?: boolean;
+      } }>).detail;
+      const paper = detail?.paper;
+      if (!paper) return;
+
+      const ident = paper.arxiv_id
+        ? `arxiv:${paper.arxiv_id}`
+        : paper.doi
+          ? `doi:${paper.doi}`
+          : paper.openalex_id
+            ? `openalex:${paper.openalex_id}`
+            : paper.primary_url ?? paper.title;
+
+      const primer =
+        `[Read with Ava]\n\n` +
+        `I'd like you to read and explain this scientific paper for me. ` +
+        `Use the four-layer pass: 1. What's the question? (one plain-English sentence). ` +
+        `2. Why does it matter? (the human stake). ` +
+        `3. What did they do? (method, jargon-stripped). ` +
+        `4. What did they find — and how confident should I be? (results + caveats specific to this paper's discipline).\n\n` +
+        `Paper: **${paper.title}**${paper.year ? ` (${paper.year})` : ''}\n` +
+        (paper.authors.length > 0 ? `Authors: ${paper.authors.slice(0, 6).map(a => a.name).join(', ')}${paper.authors.length > 6 ? ', et al.' : ''}\n` : '') +
+        `Identifier: \`${ident}\`\n` +
+        (paper.primary_url ? `URL: ${paper.primary_url}\n` : '') +
+        (paper.retracted ? `\n⚠ This paper is marked as RETRACTED. Surface that to me before discussing findings.\n` : '') +
+        `\nFetch the full text via the \`paper_fetch_full_text\` tool first if you need more than the abstract, then walk me through it.`;
+
+      // Switch to Teach mode and persist. The model/mode-change effect
+      // below will push the new mode to the sidecar on the next render.
+      setMode('teach');
+      try { localStorage.setItem('ava-ide-chat-mode', 'teach'); } catch { /* */ }
+      // Surface the user-side message in the chat history immediately
+      // so the operator sees the request landed. Then send through the
+      // sidecar — Ava's reply streams in as normal.
+      setMessages(prev => [...prev, { id: mkId(), role: 'user' as const, text: primer, timestamp: Date.now() }]);
+      setStreaming(true);
+      // Small delay so the mode change commits to the sidecar before the
+      // message hits — same pattern the desktop-mode `@@` switcher uses.
+      window.setTimeout(() => {
+        getSidecar().sendMessage(primer).catch(() => { setStreaming(false); });
+      }, 200);
+    };
+    window.addEventListener('ava-read-paper-with-ava', handler as EventListener);
+    return () => window.removeEventListener('ava-read-paper-with-ava', handler as EventListener);
+  }, []);
+
   // ── Send model/mode changes to running sidecar (no restart) ────────────
   // Initialised to null so the first effect pass after mount is treated
   // as a transition. That matters because `mode` may be hydrated from
@@ -2919,6 +3015,7 @@ export function AvaChatPage() {
     switch (event.event) {
       case 'stream_start':
         setStatusText('');
+        usageEventFiredThisTurn.current = false;
         break;
 
       // ── Status feedback — show users what Ava is doing ──────────────
@@ -3239,7 +3336,16 @@ export function AvaChatPage() {
             model,
           });
           setTokenCount((prev) => prev + credits);
+          // Optimistic balance bump — the platform's chat route runs
+          // increment_credits inside Vercel's after() so it commits
+          // strictly after the response closes. The post-`done`
+          // /account-info refetch races that commit and usually wins,
+          // returning the pre-charge value. Bumping the displayed used
+          // here keeps the bar moving in sync with the turn; fetchBalance
+          // reconciles via max() once the server catches up.
+          setCreditBalance((prev) => prev ? { ...prev, used: prev.used + credits } : prev);
           trackTokenUsage(event.usage, model);
+          usageEventFiredThisTurn.current = true;
         }
         break;
 
@@ -3269,6 +3375,44 @@ export function AvaChatPage() {
         setStreaming(false);
         setStatusText('');
         textareaRef.current?.focus();
+
+        // Fallback per-session token estimate when no 'usage' event fired
+        // this turn (provider didn't include usage in stream chunks). A
+        // crude 4-chars-per-token approximation keeps the session counter
+        // moving so the user has *some* signal. Real billing is server-side
+        // via /account-info — this is purely the local session display.
+        if (!usageEventFiredThisTurn.current) {
+          const last = (event.content as string) || '';
+          if (last) {
+            const estOutput = Math.max(1, Math.ceil(last.length / 4));
+            const { credits } = creditsForTurn('chat_turn', {
+              inputTokens: 0,
+              outputTokens: estOutput,
+              model,
+            });
+            setTokenCount((prev) => prev + credits);
+            // Same optimistic bump as the 'usage' branch — covers
+            // providers that don't emit a usage chunk so the balance
+            // bar still moves on every turn.
+            setCreditBalance((prev) => prev ? { ...prev, used: prev.used + credits } : prev);
+          }
+        }
+
+        // Refresh server-side usage / balance views (Usage page, account
+        // balance bar, etc). useApiData hooks listen for this event and
+        // refetch their endpoints — without this they only fetch on mount
+        // and the dashboard shows a frozen snapshot of usage.
+        window.dispatchEvent(new CustomEvent('ava-usage-refresh'));
+        // Second pulse a few seconds later so the authoritative server
+        // value lands once Vercel's after() has finished committing
+        // increment_credits. Without this, the optimistic bar stays at
+        // its predicted value indefinitely if the user doesn't navigate
+        // away — fetchBalance's max() reconciliation needs a fresh
+        // server read to converge.
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('ava-usage-refresh'));
+        }, 2500);
+
         // Mode transition: if switch_mode was approved, start new run in target mode
         if (pendingModeTransitionRef.current) {
           const { targetMode, context } = pendingModeTransitionRef.current;
@@ -4265,7 +4409,11 @@ export function AvaChatPage() {
               matches platform billing) when running standalone. */}
           {creditBalance && connected ? (() => {
             const isAdmin = creditBalance.limit >= 999_999_999;
-            if (isAdmin) return <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', opacity: 0.5 }} title="Unlimited credits">∞ credits</span>;
+            if (isAdmin) return (
+              <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', opacity: 0.5 }} title={`Unlimited credits — ${tokenCount.toLocaleString()} used this session`}>
+                ∞ {tokenCount > 0 ? `· ${tokenCount.toLocaleString()} session` : 'credits'}
+              </span>
+            );
             const remaining = Math.max(0, creditBalance.limit - creditBalance.used);
             const pct = creditBalance.limit > 0 ? (creditBalance.used / creditBalance.limit) * 100 : 0;
             const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
@@ -5706,7 +5854,11 @@ export function AvaChatPage() {
             {/* Credit balance in input bar */}
             {connected && creditBalance && (() => {
               const isAdmin = creditBalance.limit >= 999_999_999;
-              if (isAdmin) return <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#6c7086', opacity: 0.5, flexShrink: 0 }} title="Unlimited credits">∞</span>;
+              if (isAdmin) return (
+                <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#6c7086', opacity: 0.5, flexShrink: 0 }} title={`Unlimited credits — ${tokenCount.toLocaleString()} used this session`}>
+                  {tokenCount > 0 ? `∞ · ${tokenCount.toLocaleString()}` : '∞'}
+                </span>
+              );
               const remaining = Math.max(0, creditBalance.limit - creditBalance.used);
               const pct = creditBalance.limit > 0 ? (creditBalance.used / creditBalance.limit) * 100 : 0;
               const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
@@ -8441,7 +8593,9 @@ export function LearningLibraryPage() {
 // exposes a separate entry — both surfaces are reached via Library.
 export function LibraryPage() {
   useLocale();
-  const [tab, setTab] = useState<'courses' | 'assets' | 'documents'>('assets');
+  // Default tab is Courses — Library is a learning-first surface; the
+  // curated material (courses + papers) is what makes it valuable.
+  const [tab, setTab] = useState<'courses' | 'papers' | 'assets' | 'documents'>('courses');
 
   const tabBtnStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 16px', borderRadius: 0, border: 'none', cursor: 'pointer',
@@ -8463,12 +8617,13 @@ export function LibraryPage() {
           <div>
             <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>Library</h1>
             <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
-              Your courses, assets, and documents — everything Ava has made for you.
+              Your courses, papers, assets, and documents — everything Ava has made for you.
             </p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
           <button onClick={() => setTab('courses')} style={tabBtnStyle(tab === 'courses')}>Courses</button>
+          <button onClick={() => setTab('papers')} style={tabBtnStyle(tab === 'papers')}>Papers</button>
           <button onClick={() => setTab('assets')} style={tabBtnStyle(tab === 'assets')}>Assets</button>
           <button onClick={() => setTab('documents')} style={tabBtnStyle(tab === 'documents')}>Documents</button>
         </div>
@@ -8476,6 +8631,7 @@ export function LibraryPage() {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {tab === 'courses' && <LearningLibraryPage />}
+        {tab === 'papers' && <LibraryPapersPage />}
         {tab === 'assets' && <LibraryAssetsView kind="assets" />}
         {tab === 'documents' && <LibraryAssetsView kind="documents" />}
       </div>
