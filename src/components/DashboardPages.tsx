@@ -13133,71 +13133,34 @@ export function ReleaseNotesPage() {
   );
 }
 
-/* ===== Roadmap ===== */
+/* ===== Roadmap =====
+ *
+ * Fetched live from the platform's /api/roadmap (single source of
+ * truth shared with the public web roadmap, the extension Roadmap
+ * tab, and the Hub admin editor). The previous hardcoded
+ * ROADMAP_THEMES const drifted out of sync — that whole block is
+ * gone now. New shape lives below as a runtime fetch keyed off
+ * the IDE's current locale.
+ */
 
-const ROADMAP_THEMES = [
-  { title: 'Intelligence', icon: '\uD83E\uDDE0', color: '#a855f7', colorBg: 'rgba(168,85,247,0.08)', items: [
-    { label: 'Core agent loop with 60 tools', shipped: true }, { label: '6 thinking modes', shipped: true },
-    { label: '24 specialist personas with conductor', shipped: true }, { label: '5-layer memory with TF-IDF recall', shipped: true },
-    { label: 'Memory Agent — curated briefs, not raw dumps', shipped: true },
-    { label: 'Memory hot-path cleanup — durable user/project facts, not conversation logs', shipped: true },
-    { label: 'Auto Mode — best model per task routing', shipped: true },
-    { label: 'AutoCoordinator orchestration gate — no task expansion from single-action requests', shipped: true },
-    { label: 'Self-inspect — Ava reads her own code from Supabase', shipped: true },
-    { label: '10 knowledge packs (game dev, web, mobile, API, DevOps, systems, data science)', shipped: true },
-    { label: 'Self-improvement vault', shipped: true }, { label: 'Flat system prompt (80% token reduction)', shipped: true },
-    { label: 'Direct mode — no auto-orchestration', shipped: true }, { label: 'Qwen 3.6 + MiniMax M2.7 multimodal', shipped: true },
-    { label: 'Listen-first intent gate — Qwen 3.5 Flash classifier, soft-nudge style signals', shipped: true },
-    { label: 'Hard exploration budget — blocks runaway reads before they burn tokens', shipped: true },
-    { label: 'Compression overhaul — 70% trigger, task continuity preserved post-compress', shipped: true },
-    { label: 'Tool schema aligned with model conventions (write/read/edit)', shipped: true },
-    { label: 'Image downsampling + aging — screenshots resize before context injection', shipped: true },
-    { label: '~2\u00D7 token economics — halved per-task spend vs pre-v0.39.0', shipped: true },
-    { label: 'Computer use (browser + desktop)', shipped: true },
-    { label: 'Voice system (Kokoro TTS)', shipped: false },
-  ]},
-  { title: 'Surfaces', icon: '\uD83D\uDCBB', color: '#f97316', colorBg: 'rgba(249,115,22,0.08)', items: [
-    { label: 'VS Code extension (unified panel)', shipped: true }, { label: 'Ava IDE (Tauri desktop)', shipped: true },
-    { label: 'Companion web/mobile app', shipped: true }, { label: 'CLI agent', shipped: true },
-    { label: 'Consolidated sidebar — 7 items, identical across extension + IDE', shipped: true },
-    { label: 'IDE file explorer with syntax highlighting', shipped: true },
-    { label: 'Resizable sidebar with flip', shipped: true }, { label: 'Single-bubble responses', shipped: true },
-    { label: 'Context bar — real-time token usage indicator at top of chat', shipped: true },
-    { label: 'Readable tool-call labels (Edit <path>, Bash <command>, Grep <pattern>)', shipped: true },
-    { label: 'Stop button — real hard cancel, task momentum cleared on stop', shipped: true },
-    { label: 'Data portability (export/import)', shipped: true }, { label: 'Game engine integrations', shipped: false },
-    { label: 'Plugin marketplace', shipped: false }, { label: 'Code signing', shipped: false },
-  ]},
-  { title: 'Education', icon: '\uD83C\uDF93', color: '#3b82f6', colorBg: 'rgba(59,130,246,0.08)', items: [
-    { label: 'Teach mode with curriculums', shipped: true }, { label: 'Spaced repetition', shipped: true },
-    { label: 'Fact-checked content', shipped: true }, { label: '20 language support', shipped: true },
-    { label: 'Game dev knowledge pack', shipped: true }, { label: 'AI-era learning paths', shipped: true },
-    { label: 'Community knowledge packs', shipped: true },
-  ]},
-  { title: 'Privacy & Security', icon: '\uD83D\uDD12', color: '#10b981', colorBg: 'rgba(16,185,129,0.08)', items: [
-    { label: 'Local-first architecture', shipped: true }, { label: 'Cloud sync opt-in', shipped: true },
-    { label: 'BYOK fully private', shipped: true }, { label: 'Secret vault', shipped: true },
-    { label: 'Security audit mode (OWASP)', shipped: true }, { label: 'Atomic token enforcement', shipped: true },
-    { label: '3-layer hub auth', shipped: true }, { label: 'Independent security audit', shipped: false },
-    { label: 'E2E encryption for cloud sync', shipped: true },
-  ]},
-  { title: 'Platform & Business', icon: '\uD83D\uDE80', color: '#ec4899', colorBg: 'rgba(236,72,153,0.08)', items: [
-    { label: 'Web platform with auth', shipped: true }, { label: 'Company hub (Tauri admin)', shipped: true },
-    { label: 'Qwen partnership (50% pricing)', shipped: true }, { label: 'Qwen 3.6 Plus — primary model', shipped: true },
-    { label: '9 providers, 20+ models (inc. MiniMax, Qwen 3.6, Kimi, MiMo)', shipped: true },
-    { label: 'Ava Credits system — unified credit-based pricing', shipped: true },
-    { label: 'Free tier — 300 monthly credits (BYOK unlimited)', shipped: true },
-    { label: 'Paid plans live (Pro $19, Ultra $39, Enterprise $79)', shipped: true },
-    { label: 'Credit top-ups ($3 / $8 / $15 bundles)', shipped: true },
-    { label: 'Credit usage bar with real-time deduction', shipped: true },
-    { label: 'Period rollover for paid plans', shipped: true },
-    { label: 'Device sessions (1 key, 3 platforms)', shipped: true },
-    { label: 'Creative studio', shipped: true }, { label: 'Delete all memories (local + platform)', shipped: true },
-    { label: 'Live chat support — Ava first-line triage', shipped: true },
-    { label: 'Contributor marketplace — users get paid', shipped: false },
-    { label: 'OAuth connections', shipped: false }, { label: 'Ava Foundation (40% of earnings)', shipped: false },
-  ]},
-];
+interface IdeRoadmapItem {
+  id: string;
+  label: string;
+  shipped: boolean;
+  sort_order: number;
+}
+
+interface IdeRoadmapTheme {
+  id: string;
+  slug: string;
+  title: string;
+  icon: string;
+  color: string;
+  color_bg: string;
+  sort_order: number;
+  items: IdeRoadmapItem[];
+}
+
 
 /* ═══════════════════════════════════════════════════════════════════
  * CONSOLIDATED PAGES — match extension sidebar layout
@@ -13326,47 +13289,92 @@ function RoadmapInner() { return <RoadmapPage />; }
 
 export function RoadmapPage() {
   useLocale();
-  const totalShipped = ROADMAP_THEMES.reduce((s, t) => s + t.items.filter(i => i.shipped).length, 0);
-  const totalAll = ROADMAP_THEMES.reduce((s, t) => s + t.items.length, 0);
-  const pctAll = Math.round((totalShipped / totalAll) * 100);
+  const [themes, setThemes] = useState<IdeRoadmapTheme[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    apiFetch(`/roadmap?locale=${encodeURIComponent(getLocale())}`)
+      .then((res: { themes?: IdeRoadmapTheme[] } | null) => {
+        if (cancelled) return;
+        setThemes(res?.themes ?? []);
+        setLoading(false);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : 'Failed to load roadmap');
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const totalShipped = themes.reduce((s, t) => s + t.items.filter(i => i.shipped).length, 0);
+  const totalAll = themes.reduce((s, t) => s + t.items.length, 0);
+  const pctAll = totalAll > 0 ? Math.round((totalShipped / totalAll) * 100) : 0;
+
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%', maxWidth: 700 }}>
         <div style={pageTitle}>Roadmap</div>
         <div style={{ ...pageSubtitle, marginBottom: 24 }}>Where Ava has been and where she is heading.</div>
-        <div style={{ display: 'flex', gap: 32, marginBottom: 32 }}>
-          <div><div style={{ fontSize: 28, fontWeight: 300, color: '#a855f7' }}>{pctAll}%</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Complete</div></div>
-          <div><div style={{ fontSize: 28, fontWeight: 300, color: '#a6e3a1' }}>{totalShipped}</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Shipped</div></div>
-          <div><div style={{ fontSize: 28, fontWeight: 300, color: '#89b4fa' }}>{totalAll - totalShipped}</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Coming</div></div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {ROADMAP_THEMES.map(theme => {
-            const shipped = theme.items.filter(i => i.shipped).length;
-            const total = theme.items.length;
-            const themePct = Math.round((shipped / total) * 100);
-            return (
-              <div key={theme.title} style={{ ...card, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px' }}>
-                  <span style={{ fontSize: 20 }}>{theme.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 14, fontWeight: 400, color: '#cdd6f4' }}>{theme.title}</span><span style={{ fontSize: 10, color: '#6c7086' }}>{shipped}/{total}</span></div>
-                    <div style={{ marginTop: 6, height: 4, width: '100%', borderRadius: 2, background: theme.colorBg }}><div style={{ height: '100%', borderRadius: 2, background: theme.color, width: themePct + '%' }} /></div>
-                  </div>
-                </div>
-                <div style={{ padding: '0 20px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-                  {theme.items.map(item => (
-                    <div key={item.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 8px', borderRadius: 6, background: item.shipped ? 'transparent' : theme.colorBg }}>
-                      {item.shipped
-                        ? <svg width="12" height="12" viewBox="0 0 16 16" style={{ marginTop: 2, flexShrink: 0, color: theme.color }}><path fill="currentColor" d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
-                        : <span style={{ marginTop: 2, width: 12, height: 12, borderRadius: '50%', border: '1.5px solid ' + theme.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ width: 4, height: 4, borderRadius: '50%', background: theme.color, opacity: 0.5 }} /></span>}
-                      <span style={{ fontSize: 11, fontWeight: 300, lineHeight: 1.4, color: item.shipped ? '#6c7086' : '#cdd6f4' }}>{item.label}</span>
+
+        {loading && themes.length === 0 && (
+          <div style={{ ...card, padding: 40, textAlign: 'center', fontSize: 13, color: '#6c7086' }}>Loading roadmap…</div>
+        )}
+
+        {error && !loading && (
+          <div style={{ ...card, padding: 20, fontSize: 12, color: '#f38ba8', borderColor: 'rgba(243, 139, 168, 0.3)' }}>
+            Could not load roadmap: {error}
+          </div>
+        )}
+
+        {!loading && !error && themes.length === 0 && (
+          <div style={{ ...card, padding: 40, textAlign: 'center', fontSize: 13, color: '#6c7086' }}>
+            No roadmap items yet. New ones land here as they ship.
+          </div>
+        )}
+
+        {themes.length > 0 && (
+          <>
+            <div style={{ display: 'flex', gap: 32, marginBottom: 32 }}>
+              <div><div style={{ fontSize: 28, fontWeight: 300, color: '#a855f7' }}>{pctAll}%</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Complete</div></div>
+              <div><div style={{ fontSize: 28, fontWeight: 300, color: '#a6e3a1' }}>{totalShipped}</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Shipped</div></div>
+              <div><div style={{ fontSize: 28, fontWeight: 300, color: '#89b4fa' }}>{totalAll - totalShipped}</div><div style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>Coming</div></div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {themes.map(theme => {
+                const shipped = theme.items.filter(i => i.shipped).length;
+                const total = theme.items.length;
+                const themePct = total > 0 ? Math.round((shipped / total) * 100) : 0;
+                if (total === 0) return null;
+                return (
+                  <div key={theme.id} style={{ ...card, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px' }}>
+                      <span style={{ fontSize: 20 }}>{theme.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 14, fontWeight: 400, color: '#cdd6f4' }}>{theme.title}</span><span style={{ fontSize: 10, color: '#6c7086' }}>{shipped}/{total}</span></div>
+                        <div style={{ marginTop: 6, height: 4, width: '100%', borderRadius: 2, background: theme.color_bg }}><div style={{ height: '100%', borderRadius: 2, background: theme.color, width: themePct + '%' }} /></div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    <div style={{ padding: '0 20px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                      {theme.items.map(item => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 8px', borderRadius: 6, background: item.shipped ? 'transparent' : theme.color_bg }}>
+                          {item.shipped
+                            ? <svg width="12" height="12" viewBox="0 0 16 16" style={{ marginTop: 2, flexShrink: 0, color: theme.color }}><path fill="currentColor" d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+                            : <span style={{ marginTop: 2, width: 12, height: 12, borderRadius: '50%', border: '1.5px solid ' + theme.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ width: 4, height: 4, borderRadius: '50%', background: theme.color, opacity: 0.5 }} /></span>}
+                          <span style={{ fontSize: 11, fontWeight: 300, lineHeight: 1.4, color: item.shipped ? '#6c7086' : '#cdd6f4' }}>{item.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
