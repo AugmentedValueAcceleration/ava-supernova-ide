@@ -10176,18 +10176,24 @@ export function CloudSyncPage() {
   const [syncingTypes, setSyncingTypes] = useState<Set<string>>(new Set());
   const [syncResults, setSyncResults] = useState<Record<string, { success: boolean; count?: number; error?: string }>>({});
 
+  // Categories that default OFF — opt-in only. The user must explicitly
+  // enable cloud sync for these: shared learnings leave the device, and
+  // the health profile is sensitive body data.
+  const OPT_IN_ONLY = new Set(['shared', 'health_profile']);
+  const defaultEnabled = (key: string) => !OPT_IN_ONLY.has(key);
+
   // Per-section sync toggles (local-first, persisted to localStorage)
   const [syncPrefs, setSyncPrefs] = useState<Record<string, boolean>>(() => {
     try { const raw = localStorage.getItem('ava-ide-sync-prefs'); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
   });
   const togglePref = (key: string) => {
     setSyncPrefs(prev => {
-      const next = { ...prev, [key]: !(prev[key] ?? (key === 'shared' ? false : true)) };
+      const next = { ...prev, [key]: !(prev[key] ?? defaultEnabled(key)) };
       try { localStorage.setItem('ava-ide-sync-prefs', JSON.stringify(next)); } catch {}
       return next;
     });
   };
-  const isSyncEnabled = (key: string) => syncPrefs[key] ?? (key === 'shared' ? false : true);
+  const isSyncEnabled = (key: string) => syncPrefs[key] ?? defaultEnabled(key);
 
   const DATA_TYPES = [
     { key: 'memory',      label: t('dash.sync.memory'),           icon: '\uD83E\uDDE0', description: t('dash.sync.memory_desc'),    endpoint: '/memories' },
@@ -10197,6 +10203,7 @@ export function CloudSyncPage() {
     { key: 'settings',    label: t('dash.sync.settings'),         icon: '\u2699',       description: t('dash.sync.settings_desc'),           endpoint: '/settings' },
     { key: 'personality', label: t('dash.sync.personality'),      icon: '\uD83C\uDFAD', description: t('dash.sync.personality_desc'),       endpoint: '/settings' },
     { key: 'shared',      label: t('dash.sync.shared_learnings'), icon: '\uD83D\uDCA1', description: t('dash.sync.shared_learnings_desc'),        endpoint: '/shared-learnings' },
+    { key: 'health_profile', label: t('dash.sync.health_profile'), icon: '\uD83C\uDFCB\uFE0F', description: t('dash.sync.health_profile_desc'), endpoint: '/health/profile/sync' },
   ];
 
   const [counts, setCounts] = useState<Record<string, { local: number; cloud: number; lastSynced?: string }>>({});
@@ -10207,6 +10214,19 @@ export function CloudSyncPage() {
       const results: Record<string, { local: number; cloud: number; lastSynced?: string }> = {};
       for (const dt of DATA_TYPES) {
         try {
+          if (dt.key === 'health_profile') {
+            // Health profile is local-first (Tauri fs), not an account
+            // collection — count it as 1 once a profile has been saved.
+            const { loadHealthProfile } = await import('../lib/health-store');
+            const local = await loadHealthProfile();
+            const cloud = await apiFetch(dt.endpoint);
+            results[dt.key] = {
+              local: local.updated_at ? 1 : 0,
+              cloud: cloud?.profile ? 1 : 0,
+              lastSynced: cloud?.updated_at || undefined,
+            };
+            continue;
+          }
           const data = await apiFetch(dt.endpoint);
           const count = Array.isArray(data) ? data.length : (data?.count || data?.total || (data ? 1 : 0));
           results[dt.key] = { local: count, cloud: count, lastSynced: new Date().toISOString() };
@@ -10223,13 +10243,25 @@ export function CloudSyncPage() {
     if (!connected) return;
     setSyncingTypes(prev => new Set(prev).add(key));
     try {
-      const data = await apiFetch(endpoint);
-      const count = Array.isArray(data) ? data.length : (data?.count || data?.total || 1);
-      setSyncResults(prev => ({ ...prev, [key]: { success: true, count } }));
-      setCounts(prev => ({
-        ...prev,
-        [key]: { ...prev[key], local: count, cloud: count, lastSynced: new Date().toISOString() },
-      }));
+      if (key === 'health_profile') {
+        // Push the local-first health profile up to the cloud copy.
+        const { loadHealthProfile } = await import('../lib/health-store');
+        const profile = await loadHealthProfile();
+        await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ profile }) });
+        setSyncResults(prev => ({ ...prev, [key]: { success: true, count: 1 } }));
+        setCounts(prev => ({
+          ...prev,
+          [key]: { local: 1, cloud: 1, lastSynced: new Date().toISOString() },
+        }));
+      } else {
+        const data = await apiFetch(endpoint);
+        const count = Array.isArray(data) ? data.length : (data?.count || data?.total || 1);
+        setSyncResults(prev => ({ ...prev, [key]: { success: true, count } }));
+        setCounts(prev => ({
+          ...prev,
+          [key]: { ...prev[key], local: count, cloud: count, lastSynced: new Date().toISOString() },
+        }));
+      }
     } catch (err: any) {
       setSyncResults(prev => ({ ...prev, [key]: { success: false, error: err.message || 'Failed' } }));
     }

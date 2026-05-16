@@ -24,6 +24,7 @@ import {
   HelpPage,
 } from './DashboardPages';
 import { DocumentationPage } from './DocumentationPage';
+import { HealthPage } from './HealthPage';
 import { useState, useEffect } from 'react';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { t, useLocale } from '../lib/i18n';
@@ -40,6 +41,7 @@ export type DashboardPageId =
   | 'learning-library'
   | 'creative-studio'
   | 'library'
+  | 'health'
   | 'personality'
   | 'cloud-sync'
   | 'usage'
@@ -75,6 +77,7 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'learning-library': '\uD83D\uDCDA',
   'creative-studio': '\uD83C\uDFA8',
   'library': '\uD83D\uDDBC\uFE0F',
+  'health': '\uD83C\uDFCB\uFE0F',
   'personality': '\uD83C\uDFA8',
   'cloud-sync': '\u2601\uFE0F',
   'usage': '\uD83D\uDCCA',
@@ -103,6 +106,7 @@ const dashboardLabelKeys: Record<DashboardPageId, string> = {
   'learning-library': 'dash.nav.learning_library',
   'creative-studio': 'dash.nav.creative_studio',
   'library': 'dash.nav.library',
+  'health': 'dash.nav.health',
   'personality': 'dash.nav.personality',
   'cloud-sync': 'dash.nav.cloud_sync',
   'usage': 'dash.nav.usage',
@@ -130,6 +134,7 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'learning-library': LearningLibraryPage,
   'creative-studio': CreativeStudioPage,
   'library': LibraryPage,
+  'health': HealthPage,
   'personality': PersonalityPage,
   'cloud-sync': CloudSyncPage,
   'usage': UsagePage,
