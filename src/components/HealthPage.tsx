@@ -17,6 +17,7 @@ import {
   type HealthSubmissionStatus,
   loadTaxonomies,
   submitExercise,
+  submitRecipe,
   type HealthTaxonomies,
 } from '../lib/health-catalog';
 import {
@@ -1122,7 +1123,7 @@ function ContributeModal({ onClose }: { onClose: () => void }) {
         </div>
         {kind === 'exercise'
           ? <ExerciseSubmissionForm taxonomies={taxonomies} onDone={onClose} />
-          : <CenterNote>The recipe submission form lands in the next step.</CenterNote>}
+          : <RecipeSubmissionForm taxonomies={taxonomies} onDone={onClose} />}
       </div>
     </ModalShell>
   );
@@ -1282,6 +1283,188 @@ function ChipSelect({ options, selected, onChange }: {
           }}>{o.name}</button>
         );
       })}
+    </div>
+  );
+}
+
+// ── Recipe submission form ────────────────────────────────────────────────
+
+interface IngredientDraft {
+  name: string;
+  quantity: string;
+  unit: string;
+  optional: boolean;
+}
+
+const emptyIngredient = (): IngredientDraft => ({ name: '', quantity: '', unit: '', optional: false });
+
+function RecipeSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxonomies | null; onDone: () => void }) {
+  const [name, setName] = useState('');
+  const [cuisineSlug, setCuisineSlug] = useState('');
+  const [course, setCourse] = useState('');
+  const [originCountry, setOriginCountry] = useState('');
+  const [overview, setOverview] = useState('');
+  const [ingredients, setIngredients] = useState<IngredientDraft[]>([emptyIngredient()]);
+  const [allergens, setAllergens] = useState<string[]>([]);
+  const [method, setMethod] = useState<string[]>(['']);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const canSubmit = name.trim().length > 0 && !submitting;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const cleanIngredients = ingredients
+        .filter(i => i.name.trim())
+        .map(i => ({
+          name: i.name.trim(),
+          quantity: parseNum(i.quantity),
+          unit: i.unit.trim() || null,
+          optional: i.optional,
+          notes: null,
+        }));
+      const cleanSteps = method.map(s => s.trim()).filter(Boolean);
+      // One method version when steps are filled in; the schema also
+      // accepts an empty versions array (operator composes the
+      // skill-level versions post-approval).
+      const versions = cleanSteps.length > 0
+        ? [{
+            level: 'intermediate' as HealthRecipeSkillLevel,
+            description: null,
+            prep_time_minutes: null,
+            cook_time_minutes: null,
+            total_time_minutes: null,
+            default_servings: null,
+            steps: cleanSteps.map(action => ({
+              action, notes: null, technique_term: null, time_estimate_seconds: null, tricky_flag: false,
+            })),
+            equipment: [],
+            diet_slugs: [],
+            dietary_flag_slugs: [],
+          }]
+        : [];
+      const row = await submitRecipe({
+        name: name.trim(),
+        cuisine_slug: cuisineSlug || null,
+        course: course || null,
+        origin_country: originCountry.trim() || null,
+        overview: overview.trim() || null,
+        ingredients: cleanIngredients,
+        allergen_slugs: allergens,
+        versions,
+      });
+      setResult({
+        ok: true,
+        msg: row.status === 'published' ? 'Published — thank you for contributing.' : 'Submitted for review — thank you for contributing.',
+      });
+    } catch (e) {
+      setResult({ ok: false, msg: e instanceof Error ? e.message : 'Submission failed.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (result?.ok) {
+    return (
+      <div>
+        <CenterNote>{result.msg}</CenterNote>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <button onClick={onDone} style={primaryBtn}>Done</button>
+        </div>
+      </div>
+    );
+  }
+
+  const area: React.CSSProperties = { ...fieldInputStyle, resize: 'vertical' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <Field label="Name">
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Lemon herb roast chicken" style={fieldInputStyle} />
+      </Field>
+      <FieldRow>
+        <Field label="Cuisine">
+          <select value={cuisineSlug} onChange={e => setCuisineSlug(e.target.value)} style={fieldInputStyle}>
+            <option value="">—</option>
+            {(taxonomies?.cuisines ?? []).map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Course">
+          <select value={course} onChange={e => setCourse(e.target.value)} style={fieldInputStyle}>
+            <option value="">—</option>
+            {COURSES.map(c => <option key={c} value={c}>{COURSE_LABEL[c]}</option>)}
+          </select>
+        </Field>
+        <Field label="Origin country">
+          <input value={originCountry} onChange={e => setOriginCountry(e.target.value)} style={fieldInputStyle} />
+        </Field>
+      </FieldRow>
+      <Field label="Overview">
+        <textarea value={overview} onChange={e => setOverview(e.target.value)} rows={2} style={area} />
+      </Field>
+      <Field label="Ingredients">
+        <IngredientsEditor ingredients={ingredients} onChange={setIngredients} />
+      </Field>
+      <Field label="Method — steps">
+        <StepsEditor steps={method} onChange={setMethod} />
+      </Field>
+      {taxonomies && taxonomies.allergens.length > 0 && (
+        <Field label="Allergens">
+          <ChipSelect
+            options={taxonomies.allergens.map(a => ({ slug: a.slug, name: a.name }))}
+            selected={allergens}
+            onChange={setAllergens}
+          />
+        </Field>
+      )}
+      {result && !result.ok && (
+        <div style={{ fontSize: 12, color: '#f38ba8' }}>{result.msg}</div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          onClick={submit}
+          disabled={!canSubmit}
+          style={{ ...primaryBtn, opacity: canSubmit ? 1 : 0.4, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
+        >
+          {submitting ? 'Submitting…' : 'Submit for review'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Ingredient list editor — name / quantity / unit / optional rows. */
+function IngredientsEditor({ ingredients, onChange }: {
+  ingredients: IngredientDraft[];
+  onChange: (next: IngredientDraft[]) => void;
+}) {
+  const set = (i: number, patch: Partial<IngredientDraft>) =>
+    onChange(ingredients.map((ing, idx) => (idx === i ? { ...ing, ...patch } : ing)));
+  const add = () => onChange([...ingredients, emptyIngredient()]);
+  const remove = (i: number) =>
+    onChange(ingredients.length > 1 ? ingredients.filter((_, idx) => idx !== i) : [emptyIngredient()]);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {ingredients.map((ing, i) => (
+        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input value={ing.quantity} onChange={e => set(i, { quantity: e.target.value })} placeholder="Qty" inputMode="numeric"
+            style={{ ...fieldInputStyle, width: 56 }} />
+          <input value={ing.unit} onChange={e => set(i, { unit: e.target.value })} placeholder="Unit"
+            style={{ ...fieldInputStyle, width: 72 }} />
+          <input value={ing.name} onChange={e => set(i, { name: e.target.value })} placeholder={`Ingredient ${i + 1}`}
+            style={{ ...fieldInputStyle, flex: 1 }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#6c7086' }}>
+            <input type="checkbox" checked={ing.optional} onChange={e => set(i, { optional: e.target.checked })} />
+            opt.
+          </label>
+          <button onClick={() => remove(i)} aria-label="Remove ingredient"
+            style={{ width: 26, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer', fontSize: 15 }}>×</button>
+        </div>
+      ))}
+      <button onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>+ Add ingredient</button>
     </div>
   );
 }
