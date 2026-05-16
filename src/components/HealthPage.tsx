@@ -9,11 +9,15 @@ import {
   type HealthRecipeSummary,
   type HealthRecipeDetail,
   type HealthRecipeSkillLevel,
+  type HealthExerciseType,
   type HealthWorkoutType,
   loadMySubmissions,
   clearRejectedSubmissions,
   type HealthMySubmissions,
   type HealthSubmissionStatus,
+  loadTaxonomies,
+  submitExercise,
+  type HealthTaxonomies,
 } from '../lib/health-catalog';
 import {
   loadHealthProfile,
@@ -62,6 +66,7 @@ const COURSE_LABEL: Record<string, string> = {
 
 export function HealthPage() {
   const [tab, setTab] = useState<HealthTab>('exercises');
+  const [contributeOpen, setContributeOpen] = useState(false);
 
   const tabBtnStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 16px', borderRadius: 0, border: 'none', cursor: 'pointer',
@@ -79,12 +84,26 @@ export function HealthPage() {
         borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
         background: 'rgba(12, 8, 20, 0.4)',
       }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>
-          Health &amp; Nutrition
-        </h1>
-        <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
-          A free, open library of exercises and recipes. Informational only.
-        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>
+              Health &amp; Nutrition
+            </h1>
+            <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
+              A free, open library of exercises and recipes. Informational only.
+            </p>
+          </div>
+          <button
+            onClick={() => setContributeOpen(true)}
+            style={{
+              flexShrink: 0, padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              borderRadius: 6, background: 'rgba(168, 85, 247, 0.12)', color: '#c084fc',
+              border: '1px solid rgba(168, 85, 247, 0.35)',
+            }}
+          >
+            + Contribute
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: 2 }}>
           <button onClick={() => setTab('exercises')} style={tabBtnStyle(tab === 'exercises')}>Exercises</button>
           <button onClick={() => setTab('recipes')} style={tabBtnStyle(tab === 'recipes')}>Recipes</button>
@@ -99,6 +118,8 @@ export function HealthPage() {
         {tab === 'mine' && <MySubmissionsTab />}
         {tab === 'profile' && <ProfileTab />}
       </div>
+
+      {contributeOpen && <ContributeModal onClose={() => setContributeOpen(false)} />}
     </div>
   );
 }
@@ -1041,6 +1062,226 @@ function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Contribute modal ──────────────────────────────────────────────────────
+
+const primaryBtn: React.CSSProperties = {
+  padding: '7px 16px', fontSize: 12, fontWeight: 600, borderRadius: 8,
+  background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc',
+  border: '1px solid rgba(168, 85, 247, 0.4)', cursor: 'pointer',
+};
+
+const ghostBtn: React.CSSProperties = {
+  padding: '4px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
+  background: 'transparent', color: '#9b8caa', border: '1px solid rgba(168, 85, 247, 0.15)',
+};
+
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const EXERCISE_TYPES: HealthExerciseType[] = [
+  'compound', 'isolation', 'bodyweight', 'plyometric',
+  'mobility', 'cardio', 'isometric', 'stretching', 'breathing',
+];
+
+function ContributeModal({ onClose }: { onClose: () => void }) {
+  const [kind, setKind] = useState<'exercise' | 'recipe'>('exercise');
+  const [taxonomies, setTaxonomies] = useState<HealthTaxonomies | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    loadTaxonomies().then(t => { if (live) setTaxonomies(t); }).catch(() => { /* pickers degrade gracefully */ });
+    return () => { live = false; };
+  }, []);
+
+  const kindBtn = (k: 'exercise' | 'recipe', label: string) => (
+    <button onClick={() => setKind(k)} style={{
+      flex: 1, padding: '8px 0', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: 8,
+      background: kind === k ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+      color: kind === k ? '#c084fc' : '#6c7086',
+      border: `1px solid ${kind === k ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.12)'}`,
+    }}>{label}</button>
+  );
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div style={{ padding: '28px 28px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div>
+          <h2 style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>Contribute</h2>
+          <p style={{ fontSize: 12, color: '#9b8caa', margin: '4px 0 0' }}>
+            Add to the open library. Submissions are reviewed before they appear publicly.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {kindBtn('exercise', 'Exercise')}
+          {kindBtn('recipe', 'Recipe')}
+        </div>
+        {kind === 'exercise'
+          ? <ExerciseSubmissionForm taxonomies={taxonomies} onDone={onClose} />
+          : <CenterNote>The recipe submission form lands in the next step.</CenterNote>}
+      </div>
+    </ModalShell>
+  );
+}
+
+function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxonomies | null; onDone: () => void }) {
+  const [name, setName] = useState('');
+  const [exerciseType, setExerciseType] = useState<HealthExerciseType>('compound');
+  const [workoutType, setWorkoutType] = useState<HealthWorkoutType>('strength');
+  const [difficulty, setDifficulty] = useState(3);
+  const [description, setDescription] = useState('');
+  const [beginnerDetail, setBeginnerDetail] = useState('');
+  const [commonMistakes, setCommonMistakes] = useState('');
+  const [steps, setSteps] = useState<string[]>(['']);
+  const [contraindications, setContraindications] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const canSubmit = name.trim().length > 0 && !submitting;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const row = await submitExercise({
+        name: name.trim(),
+        exercise_type: exerciseType,
+        workout_type: workoutType,
+        difficulty,
+        description: description.trim() || null,
+        beginner_detail: beginnerDetail.trim() || null,
+        common_mistakes: commonMistakes.trim() || null,
+        steps: steps.map(s => s.trim()).filter(Boolean),
+        contraindication_slugs: contraindications,
+      });
+      setResult({
+        ok: true,
+        msg: row.status === 'published' ? 'Published — thank you for contributing.' : 'Submitted for review — thank you for contributing.',
+      });
+    } catch (e) {
+      setResult({ ok: false, msg: e instanceof Error ? e.message : 'Submission failed.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (result?.ok) {
+    return (
+      <div>
+        <CenterNote>{result.msg}</CenterNote>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <button onClick={onDone} style={primaryBtn}>Done</button>
+        </div>
+      </div>
+    );
+  }
+
+  const area: React.CSSProperties = { ...fieldInputStyle, resize: 'vertical' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <Field label="Name">
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Bulgarian split squat" style={fieldInputStyle} />
+      </Field>
+      <FieldRow>
+        <Field label="Exercise type">
+          <select value={exerciseType} onChange={e => setExerciseType(e.target.value as HealthExerciseType)} style={fieldInputStyle}>
+            {EXERCISE_TYPES.map(t => <option key={t} value={t}>{cap(t)}</option>)}
+          </select>
+        </Field>
+        <Field label="Workout type">
+          <select value={workoutType} onChange={e => setWorkoutType(e.target.value as HealthWorkoutType)} style={fieldInputStyle}>
+            {WORKOUT_TYPES.map(w => <option key={w} value={w}>{WORKOUT_LABEL[w]}</option>)}
+          </select>
+        </Field>
+        <Field label="Difficulty (1–5)">
+          <select value={difficulty} onChange={e => setDifficulty(Number(e.target.value))} style={fieldInputStyle}>
+            {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </Field>
+      </FieldRow>
+      <Field label="Description">
+        <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} style={area} />
+      </Field>
+      <Field label="How to do it — steps">
+        <StepsEditor steps={steps} onChange={setSteps} />
+      </Field>
+      <Field label="If you're new to this">
+        <textarea value={beginnerDetail} onChange={e => setBeginnerDetail(e.target.value)} rows={2} style={area} />
+      </Field>
+      <Field label="Common mistakes">
+        <textarea value={commonMistakes} onChange={e => setCommonMistakes(e.target.value)} rows={2} style={area} />
+      </Field>
+      {taxonomies && taxonomies.contraindications.length > 0 && (
+        <Field label="Contraindications — who should avoid this">
+          <ChipSelect
+            options={taxonomies.contraindications.map(c => ({ slug: c.slug, name: c.name }))}
+            selected={contraindications}
+            onChange={setContraindications}
+          />
+        </Field>
+      )}
+      {result && !result.ok && (
+        <div style={{ fontSize: 12, color: '#f38ba8' }}>{result.msg}</div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          onClick={submit}
+          disabled={!canSubmit}
+          style={{ ...primaryBtn, opacity: canSubmit ? 1 : 0.4, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
+        >
+          {submitting ? 'Submitting…' : 'Submit for review'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** A string[] list editor — numbered rows with add / remove. */
+function StepsEditor({ steps, onChange }: { steps: string[]; onChange: (next: string[]) => void }) {
+  const set = (i: number, v: string) => onChange(steps.map((s, idx) => (idx === i ? v : s)));
+  const add = () => onChange([...steps, '']);
+  const remove = (i: number) => onChange(steps.length > 1 ? steps.filter((_, idx) => idx !== i) : ['']);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {steps.map((s, i) => (
+        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#6c7086', width: 16, textAlign: 'right' }}>{i + 1}</span>
+          <input value={s} onChange={e => set(i, e.target.value)} placeholder={`Step ${i + 1}`} style={{ ...fieldInputStyle, flex: 1 }} />
+          <button onClick={() => remove(i)} aria-label="Remove step" style={{ width: 26, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer', fontSize: 15 }}>×</button>
+        </div>
+      ))}
+      <button onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>+ Add step</button>
+    </div>
+  );
+}
+
+/** Multi-select chip group over a slug/name option list. */
+function ChipSelect({ options, selected, onChange }: {
+  options: Array<{ slug: string; name: string }>;
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const toggle = (slug: string) =>
+    onChange(selected.includes(slug) ? selected.filter(s => s !== slug) : [...selected, slug]);
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {options.map(o => {
+        const on = selected.includes(o.slug);
+        return (
+          <button key={o.slug} onClick={() => toggle(o.slug)} style={{
+            padding: '3px 9px', fontSize: 10, cursor: 'pointer', borderRadius: 999,
+            background: on ? 'rgba(168, 85, 247, 0.18)' : 'transparent',
+            color: on ? '#c084fc' : '#6c7086',
+            border: `1px solid ${on ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.12)'}`,
+          }}>{o.name}</button>
+        );
+      })}
     </div>
   );
 }
