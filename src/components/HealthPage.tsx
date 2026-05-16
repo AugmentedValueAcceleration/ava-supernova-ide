@@ -10,6 +10,10 @@ import {
   type HealthRecipeDetail,
   type HealthRecipeSkillLevel,
   type HealthWorkoutType,
+  loadMySubmissions,
+  clearRejectedSubmissions,
+  type HealthMySubmissions,
+  type HealthSubmissionStatus,
 } from '../lib/health-catalog';
 import {
   loadHealthProfile,
@@ -92,7 +96,7 @@ export function HealthPage() {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px' }}>
         {tab === 'exercises' && <ExercisesGrid />}
         {tab === 'recipes' && <RecipesGrid />}
-        {tab === 'mine' && <ComingSoon label="My submissions — the contribution flow lands in a follow-up." />}
+        {tab === 'mine' && <MySubmissionsTab />}
         {tab === 'profile' && <ProfileTab />}
       </div>
     </div>
@@ -315,17 +319,6 @@ function CenterNote({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 12, color: '#6c7086' }}>
       {children}
-    </div>
-  );
-}
-
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div style={{
-      border: '1px dashed rgba(168, 85, 247, 0.2)', borderRadius: 12,
-      padding: '40px 24px', textAlign: 'center', fontSize: 12, color: '#9b8caa',
-    }}>
-      {label}
     </div>
   );
 }
@@ -619,6 +612,130 @@ function RecipeDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
             : <RecipeDetailBody r={detail} />}
       </div>
     </ModalShell>
+  );
+}
+
+// ── My submissions tab ────────────────────────────────────────────────────
+
+const STATUS_STYLE: Record<HealthSubmissionStatus, { fg: string; label: string }> = {
+  pending: { fg: '#fbbf24', label: 'Pending review' },
+  rejected: { fg: '#f38ba8', label: 'Rejected' },
+  published: { fg: '#34d399', label: 'Published' },
+};
+
+function StatusBadge({ status }: { status: HealthSubmissionStatus }) {
+  const s = STATUS_STYLE[status];
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1,
+      padding: '2px 8px', borderRadius: 999,
+      color: s.fg, background: `${s.fg}1f`, border: `1px solid ${s.fg}55`,
+    }}>
+      {s.label}
+    </span>
+  );
+}
+
+interface SubmissionRowData {
+  key: string;
+  name: string;
+  kind: string;
+  status: HealthSubmissionStatus;
+  at: string | null;
+  notes: string | null;
+}
+
+function SubmissionRow({ row }: { row: SubmissionRowData }) {
+  return (
+    <div style={{
+      ...cardStyle, padding: 14,
+      display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6c7086' }}>{row.kind}</span>
+        <span style={{ fontSize: 13, color: '#cdd6f4', flex: 1, minWidth: 0 }}>{row.name}</span>
+        <StatusBadge status={row.status} />
+      </div>
+      <div style={{ fontSize: 10, color: '#6c7086' }}>
+        {row.at
+          ? `Submitted ${new Date(row.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+          : 'Submitted'}
+      </div>
+      {row.status === 'rejected' && row.notes && (
+        <div style={{
+          fontSize: 11, color: '#9b8caa', lineHeight: 1.5,
+          borderLeft: '2px solid rgba(243,139,168,0.4)', paddingLeft: 8, marginTop: 2,
+        }}>
+          {row.notes}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The caller's own submissions — pending / rejected / published —
+ *  with a "clear rejected" action. Reads through the submission data
+ *  layer; the submit modal that creates these lands in 2e-3. */
+function MySubmissionsTab() {
+  const [data, setData] = useState<HealthMySubmissions | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    loadMySubmissions()
+      .then(setData)
+      .catch(() => setData({ exercises: [], recipes: [] }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const clearRejected = useCallback(async () => {
+    setClearing(true);
+    try {
+      await clearRejectedSubmissions();
+      reload();
+    } catch {
+      /* non-fatal — the list just stays as-is */
+    } finally {
+      setClearing(false);
+    }
+  }, [reload]);
+
+  if (loading) return <CenterNote>Loading your submissions…</CenterNote>;
+
+  const d = data ?? { exercises: [], recipes: [] };
+  const rows: SubmissionRowData[] = [
+    ...d.exercises.map(e => ({ key: `e-${e.id}`, name: e.name, kind: 'Exercise', status: e.status, at: e.submitted_at, notes: e.review_notes })),
+    ...d.recipes.map(r => ({ key: `r-${r.id}`, name: r.name, kind: 'Recipe', status: r.status, at: r.submitted_at, notes: r.review_notes })),
+  ];
+
+  if (rows.length === 0) {
+    return <CenterNote>You haven&apos;t submitted anything yet — use Contribute to add an exercise or recipe.</CenterNote>;
+  }
+
+  const hasRejected = rows.some(r => r.status === 'rejected');
+
+  return (
+    <div style={{ maxWidth: 620, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {hasRejected && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={clearRejected}
+            disabled={clearing}
+            style={{
+              padding: '5px 12px', fontSize: 11, cursor: clearing ? 'wait' : 'pointer',
+              borderRadius: 6, background: 'transparent', color: '#f38ba8',
+              border: '1px solid rgba(243,139,168,0.3)',
+            }}
+          >
+            {clearing ? 'Clearing…' : 'Clear rejected'}
+          </button>
+        </div>
+      )}
+      {rows.map(row => <SubmissionRow key={row.key} row={row} />)}
+    </div>
   );
 }
 
