@@ -175,25 +175,53 @@ export interface HealthTaxonomies {
 
 // ── Fetch helper ──────────────────────────────────────────────────────────
 
-/** GET a health endpoint. Anonymous-capable — attaches the Bearer
- *  token only when an account is connected. Bounded by an 8s timeout
- *  (a bare unbounded fetch is exactly the class of bug that stalled
- *  chat init). */
-async function healthGet<T>(path: string): Promise<T> {
+/** Stable per-install device id — read from the same localStorage key
+ *  the IDE's apiFetch uses, so anonymous health submissions stay
+ *  attributable across sessions. */
+function deviceId(): string | null {
+  try {
+    return localStorage.getItem('ava-ide-device-id');
+  } catch {
+    return null;
+  }
+}
+
+interface HealthRequestOptions {
+  method?: string;
+  body?: unknown;
+  timeoutMs?: number;
+}
+
+/** Call a health endpoint. Anonymous-capable — attaches the Bearer
+ *  token only when an account is connected, plus the device id for
+ *  anonymous attribution. Bounded by a timeout (a bare unbounded
+ *  fetch is the class of bug that stalled chat init). On a non-2xx
+ *  response the server's `error` message is surfaced. */
+async function healthRequest<T>(path: string, opts: HealthRequestOptions = {}): Promise<T> {
   const key = getPlatformKey();
+  const dev = deviceId();
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), HEALTH_TIMEOUT_MS);
+  const timer = setTimeout(() => abort.abort(), opts.timeoutMs ?? HEALTH_TIMEOUT_MS);
   try {
     const res = await fetch(`${PLATFORM_URL}${path}`, {
-      method: 'GET',
+      method: opts.method ?? 'GET',
       signal: abort.signal,
       headers: {
         'Content-Type': 'application/json',
         'X-Ava-Platform': 'ide',
+        ...(dev ? { 'X-Ava-Device': dev } : {}),
         ...(key ? { Authorization: `Bearer ${key}` } : {}),
       },
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
-    if (!res.ok) throw new Error(`Health API ${res.status}`);
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const j = await res.json() as { error?: string };
+        if (j && j.error) detail = j.error;
+      } catch { /* no JSON error body */ }
+      throw new Error(detail);
+    }
     return await res.json() as T;
   } finally {
     clearTimeout(timer);
@@ -220,7 +248,7 @@ export async function loadExercises(
   });
   if (p.workoutType) params.set('workout_type', p.workoutType);
   if (p.q && p.q.trim()) params.set('q', p.q.trim());
-  const data = await healthGet<{ exercises?: HealthExerciseSummary[]; total?: number }>(
+  const data = await healthRequest<{ exercises?: HealthExerciseSummary[]; total?: number }>(
     `/health/exercises?${params.toString()}`,
   );
   return { exercises: data.exercises ?? [], total: data.total ?? 0 };
@@ -244,7 +272,7 @@ export async function loadRecipes(
   });
   if (p.course) params.set('course', p.course);
   if (p.q && p.q.trim()) params.set('q', p.q.trim());
-  const data = await healthGet<{ recipes?: HealthRecipeSummary[]; total?: number }>(
+  const data = await healthRequest<{ recipes?: HealthRecipeSummary[]; total?: number }>(
     `/health/recipes?${params.toString()}`,
   );
   return { recipes: data.recipes ?? [], total: data.total ?? 0 };
@@ -253,7 +281,7 @@ export async function loadRecipes(
 /** Full detail for one exercise. Returns null when the slug isn't
  *  found (or is a non-published row the caller can't see). */
 export async function loadExerciseDetail(slug: string): Promise<HealthExerciseDetail | null> {
-  const data = await healthGet<{ exercise?: HealthExerciseDetail | null }>(
+  const data = await healthRequest<{ exercise?: HealthExerciseDetail | null }>(
     `/health/exercises/${encodeURIComponent(slug)}`,
   );
   return data.exercise ?? null;
@@ -261,7 +289,7 @@ export async function loadExerciseDetail(slug: string): Promise<HealthExerciseDe
 
 /** Full detail for one recipe (all skill-level versions). */
 export async function loadRecipeDetail(slug: string): Promise<HealthRecipeDetail | null> {
-  const data = await healthGet<{ recipe?: HealthRecipeDetail | null }>(
+  const data = await healthRequest<{ recipe?: HealthRecipeDetail | null }>(
     `/health/recipes/${encodeURIComponent(slug)}`,
   );
   return data.recipe ?? null;
@@ -270,5 +298,134 @@ export async function loadRecipeDetail(slug: string): Promise<HealthRecipeDetail
 /** The taxonomy lists (allergens, cuisines, diets, …) — public,
  *  used to populate the contribution flow's pickers. */
 export async function loadTaxonomies(): Promise<HealthTaxonomies> {
-  return healthGet<HealthTaxonomies>('/health/taxonomies');
+  return healthRequest<HealthTaxonomies>('/health/taxonomies');
+}
+
+// ── Contribution / submission flow ────────────────────────────────────────
+
+export interface HealthExerciseSubmissionPayload {
+  name: string;
+  exercise_type: HealthExerciseType;
+  workout_type: HealthWorkoutType;
+  difficulty: number;
+  description: string | null;
+  beginner_detail: string | null;
+  common_mistakes: string | null;
+  steps: string[];
+  contraindication_slugs: string[];
+}
+
+export interface HealthRecipeVersionStepPayload {
+  action: string;
+  notes: string | null;
+  technique_term: string | null;
+  time_estimate_seconds: number | null;
+  tricky_flag: boolean;
+}
+
+export interface HealthRecipeVersionEquipmentPayload {
+  name: string;
+  notes: string | null;
+  optional: boolean;
+}
+
+export interface HealthRecipeVersionPayload {
+  level: HealthRecipeSkillLevel;
+  description: string | null;
+  prep_time_minutes: number | null;
+  cook_time_minutes: number | null;
+  total_time_minutes: number | null;
+  default_servings: number | null;
+  steps: HealthRecipeVersionStepPayload[];
+  equipment: HealthRecipeVersionEquipmentPayload[];
+  diet_slugs: string[];
+  dietary_flag_slugs: string[];
+}
+
+export interface HealthRecipeSubmissionPayload {
+  name: string;
+  cuisine_slug: string | null;
+  course: string | null;
+  origin_country: string | null;
+  overview: string | null;
+  ingredients: Array<{
+    name: string;
+    quantity: number | null;
+    unit: string | null;
+    optional: boolean;
+    notes: string | null;
+  }>;
+  allergen_slugs: string[];
+  versions: HealthRecipeVersionPayload[];
+}
+
+export interface HealthMySubmissionExercise {
+  id: string;
+  slug: string;
+  name: string;
+  status: HealthSubmissionStatus;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  exercise_type: string;
+  workout_type: string;
+}
+
+export interface HealthMySubmissionRecipe {
+  id: string;
+  slug: string;
+  name: string;
+  status: HealthSubmissionStatus;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  course: string | null;
+}
+
+export interface HealthMySubmissions {
+  exercises: HealthMySubmissionExercise[];
+  recipes: HealthMySubmissionRecipe[];
+}
+
+/** The row the server echoes back for a freshly-accepted submission. */
+export interface HealthSubmissionRow {
+  id: string;
+  slug: string;
+  name: string;
+  status: HealthSubmissionStatus;
+}
+
+/** Submit an exercise for review. Auth optional — signed-in callers
+ *  get full attribution, anonymous callers a device-id pseudonym. */
+export async function submitExercise(
+  payload: HealthExerciseSubmissionPayload,
+): Promise<HealthSubmissionRow> {
+  const data = await healthRequest<{ submission: HealthSubmissionRow }>(
+    '/health/submissions/exercise',
+    { method: 'POST', body: payload, timeoutMs: 15000 },
+  );
+  return data.submission;
+}
+
+/** Submit a recipe for review. */
+export async function submitRecipe(
+  payload: HealthRecipeSubmissionPayload,
+): Promise<HealthSubmissionRow> {
+  const data = await healthRequest<{ submission: HealthSubmissionRow }>(
+    '/health/submissions/recipe',
+    { method: 'POST', body: payload, timeoutMs: 15000 },
+  );
+  return data.submission;
+}
+
+/** Load the caller's own submissions — pending, rejected and
+ *  published — so they can track what they've contributed. */
+export async function loadMySubmissions(): Promise<HealthMySubmissions> {
+  const data = await healthRequest<Partial<HealthMySubmissions>>('/health/submissions/mine');
+  return { exercises: data.exercises ?? [], recipes: data.recipes ?? [] };
+}
+
+/** Clear the caller's rejected submissions from their list. */
+export async function clearRejectedSubmissions(): Promise<void> {
+  await healthRequest('/health/submissions/mine', { method: 'DELETE' });
 }
