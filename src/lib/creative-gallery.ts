@@ -21,7 +21,7 @@
 import { writeFile, writeTextFile, readTextFile, mkdir, BaseDirectory, remove } from '@tauri-apps/plugin-fs';
 import { homeDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { getDataMode, type DataMode } from './data-mode';
+import { cloudSyncEnabled } from './data-mode';
 import { getPlatformKey, apiFetch } from './api';
 import { useEffect, useState, useCallback } from 'react';
 
@@ -202,32 +202,34 @@ function normaliseKind(raw: string): MediumKind {
 
 // ── Hook ──────────────────────────────────────────────────────────────────
 
-/** Per-medium gallery hook. Loads on mount + on data-mode change, exposes
- *  save/delete operations that honour the active mode. Items are sorted
- *  newest-first so the gallery strip naturally puts the most recent
- *  generation at the front. */
+/** Per-medium gallery hook. Loads on mount + on cloud-sync change,
+ *  exposes save/delete operations. Items are sorted newest-first so the
+ *  gallery strip naturally puts the most recent generation at the
+ *  front. Local assets always load; cloud assets load too when cloud
+ *  sync is on (so generations from other devices show). */
 export function useCreativeGallery(kind: MediumKind) {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<DataMode>(getDataMode());
+  const [cloudSync, setCloudSync] = useState<boolean>(cloudSyncEnabled());
 
-  // Subscribe to data-mode changes — reload from the appropriate stores.
+  // Subscribe to cloud-sync changes — reload to add / drop cloud assets.
   useEffect(() => {
     const handler = (e: Event) => {
-      const next = (e as CustomEvent<{ mode: DataMode }>).detail?.mode;
-      if (next) setMode(next);
+      const next = (e as CustomEvent<{ enabled: boolean }>).detail?.enabled;
+      if (typeof next === 'boolean') setCloudSync(next);
     };
-    window.addEventListener('ava-data-mode-changed', handler);
-    return () => window.removeEventListener('ava-data-mode-changed', handler);
+    window.addEventListener('ava-cloud-sync-changed', handler);
+    return () => window.removeEventListener('ava-cloud-sync-changed', handler);
   }, []);
 
-  // Load gallery — local + cloud, deduped by id, filtered to this medium.
+  // Load gallery — local always, plus cloud when sync is on; deduped by
+  // id, filtered to this medium.
   const reload = useCallback(async () => {
     setLoading(true);
     try {
       const [local, cloud] = await Promise.all([
-        mode === 'cloud' ? Promise.resolve([]) : readLocalMetadata(),
-        mode === 'local' ? Promise.resolve([]) : fetchCloudGallery(),
+        readLocalMetadata(),
+        cloudSync ? fetchCloudGallery() : Promise.resolve([]),
       ]);
       const seen = new Set<string>();
       const merged: GalleryItem[] = [];
@@ -242,7 +244,7 @@ export function useCreativeGallery(kind: MediumKind) {
     } finally {
       setLoading(false);
     }
-  }, [kind, mode]);
+  }, [kind, cloudSync]);
 
   useEffect(() => {
     reload();
@@ -265,18 +267,17 @@ export function useCreativeGallery(kind: MediumKind) {
       createdAt,
     };
 
-    const dataMode = getDataMode();
-    if (dataMode === 'local' || dataMode === 'both') {
-      const saved = await saveBinaryToDisk(item);
-      if (saved) {
-        item = { ...item, url: saved.assetUrl, localPath: saved.localPath };
-      }
-      const meta = await readLocalMetadata();
-      meta.unshift(item);
-      await writeLocalMetadata(meta).catch(() => {});
+    // Always save to disk — local-first.
+    const saved = await saveBinaryToDisk(item);
+    if (saved) {
+      item = { ...item, url: saved.assetUrl, localPath: saved.localPath };
     }
+    const meta = await readLocalMetadata();
+    meta.unshift(item);
+    await writeLocalMetadata(meta).catch(() => {});
 
-    if (dataMode === 'cloud' || dataMode === 'both') {
+    // Also save to the cloud when cloud sync is on.
+    if (cloudSyncEnabled()) {
       const cloud = await saveCloud(item);
       if (cloud) item = { ...item, cloudId: cloud.cloudId };
     }

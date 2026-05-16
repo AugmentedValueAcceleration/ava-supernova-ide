@@ -1,36 +1,45 @@
-// IDE-side Data Mode helper — mirror of the extension's host module.
-// The toggle UI lives in the IDE dashboard ('ava-data-mode' in
-// localStorage, written by the mode button in the chat header) and
-// every cloud-persisting save site reads through this module before
-// hitting apiFetch. Keeps gating logic in one place so audits line up
-// with the extension.
+// Cloud-sync state for the IDE. Data is ALWAYS saved locally — the
+// floor, not a setting. This module only governs whether a copy is
+// also written to the cloud. Mirror of the extension's binary model.
+//
+// Replaces the old three-value local/cloud/both "Data Mode". In the
+// IDE that toggle was doubly overloaded — it also picked the chat
+// backend (local sidecar vs platform). Those concerns are now
+// separate: chat-backend routing lives in Settings, this is purely
+// the data-backup axis.
 
-export type DataMode = 'local' | 'cloud' | 'both';
+const KEY = 'ava-cloud-sync';
 
-const KEY = 'ava-data-mode';
-
-export function getDataMode(): DataMode {
-  const raw = (typeof localStorage !== 'undefined') ? localStorage.getItem(KEY) : null;
-  if (raw === 'cloud' || raw === 'both' || raw === 'local') return raw;
-  return 'local';
+/** True when a cloud copy should also be written. Default OFF.
+ *  Migrates the legacy three-value `ava-data-mode`: `cloud`/`both`
+ *  -> on, `local` -> off. */
+export function cloudSyncEnabled(): boolean {
+  try {
+    const v = localStorage.getItem(KEY);
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    const legacy = localStorage.getItem('ava-data-mode');
+    return legacy === 'cloud' || legacy === 'both';
+  } catch {
+    return false;
+  }
 }
 
-export function setDataMode(mode: DataMode): void {
-  if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, mode);
-  // Broadcast so other surfaces (Library Source filter, Sync tab, etc.)
-  // can react in real time without polling localStorage. Same pattern as
-  // 'ava-auth-changed' / 'ava-tier-changed' used elsewhere in the IDE.
+/** Persist the cloud-sync choice and broadcast it so other surfaces
+ *  (Sync page, Library, creative gallery) re-render without polling. */
+export function setCloudSync(enabled: boolean): void {
   try {
-    window.dispatchEvent(new CustomEvent('ava-data-mode-changed', { detail: { mode } }));
+    localStorage.setItem(KEY, String(enabled));
+  } catch { /* storage unavailable */ }
+  try {
+    window.dispatchEvent(new CustomEvent('ava-cloud-sync-changed', { detail: { enabled } }));
   } catch { /* SSR / no window — ignore */ }
 }
 
-export function includesLocal(): boolean {
-  const m = getDataMode();
-  return m === 'local' || m === 'both';
-}
-
-export function includesCloud(): boolean {
-  const m = getDataMode();
-  return m === 'cloud' || m === 'both';
+/** Value for the outgoing `X-Ava-Data-Mode` request header. The
+ *  platform still speaks the legacy vocabulary (its `isLocalOnlyRequest`
+ *  check looks for `local`), so map the boolean onto terms it already
+ *  understands — no platform change needed. */
+export function dataModeHeader(): 'local' | 'both' {
+  return cloudSyncEnabled() ? 'both' : 'local';
 }

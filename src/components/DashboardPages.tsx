@@ -67,12 +67,12 @@ import {
   BENCH_CATEGORY_LABELS,
 } from '@ava/core/benchmarks';
 import { IdePurchaseCard } from './_IdePurchaseCard';
-// Data Mode gate — every cloud write must check includesCloud() before
-// calling apiFetch. The toggle UI lives in this file too (mode switcher
-// in the chat header); setDataMode() writes to localStorage and the
-// helpers below read from there so a single localStorage value is the
-// source of truth across the IDE.
-import { includesCloud as dataModeIncludesCloud, setDataMode, getDataMode } from '../lib/data-mode';
+// Cloud-sync gate — every cloud write must check cloudSyncEnabled()
+// before calling apiFetch. Data is always saved locally; this only
+// governs the optional cloud copy. The binary "Cloud sync" toggle in
+// the chat header calls setCloudSync(); a single localStorage value is
+// the source of truth across the IDE.
+import { cloudSyncEnabled, setCloudSync } from '../lib/data-mode';
 import { useCreativeGallery, type GalleryItem } from '../lib/creative-gallery';
 import { CreativeGalleryStrip } from './CreativeOutputCard';
 
@@ -245,13 +245,9 @@ function LoadingSpinner() {
 }
 
 function StorageBadge() {
-  const mode = (localStorage.getItem('ava-data-mode') as 'local' | 'cloud' | 'both') || 'local';
-  const styles = {
-    local: { bg: 'rgba(166,227,161,0.10)', fg: '#a6e3a1', border: 'rgba(166,227,161,0.20)', label: 'Local' },
-    cloud: { bg: 'rgba(96,165,250,0.10)', fg: '#60a5fa', border: 'rgba(96,165,250,0.20)', label: 'Cloud' },
-    both:  { bg: 'rgba(168,85,247,0.10)', fg: '#a855f7', border: 'rgba(168,85,247,0.20)', label: 'Both' },
-  };
-  const s = styles[mode];
+  const s = cloudSyncEnabled()
+    ? { bg: 'rgba(96,165,250,0.10)', fg: '#60a5fa', border: 'rgba(96,165,250,0.20)', label: 'Cloud sync' }
+    : { bg: 'rgba(166,227,161,0.10)', fg: '#a6e3a1', border: 'rgba(166,227,161,0.20)', label: 'Local only' };
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500,
@@ -752,7 +748,7 @@ function WorkingHoursClock() {
       window.dispatchEvent(new CustomEvent('ava-working-hours-changed'));
     } catch {}
     // Cloud sync only when Data Mode allows it.
-    if (checkConnected() && dataModeIncludesCloud()) {
+    if (checkConnected() && cloudSyncEnabled()) {
       apiFetch('/settings', { method: 'POST', body: JSON.stringify({ work_start: s, work_end: e }) }).catch(() => {});
     }
   }, []);
@@ -1266,7 +1262,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
   }, [tasks, today]);
 
   const handleComplete = async (id: string) => {
-    if (!dataModeIncludesCloud()) {
+    if (!cloudSyncEnabled()) {
       onRefresh();
       return;
     }
@@ -2320,14 +2316,21 @@ export function AvaChatPage() {
   }, [fetchBalance]);
 
   // ── Local sidecar state ─────────────────────────────────────────────────
-  const [chatBackend, setChatBackend] = useState<'local' | 'cloud' | 'both'>(() => {
-    const saved = localStorage.getItem('ava-ide-chat-backend') as 'local' | 'cloud' | 'both' | null;
+  // chatBackend selects where the chat runs — local sidecar (BYOK) vs the
+  // platform. Binary: the legacy 'both' value migrates to 'cloud' (it only
+  // ever differed for the data axis, which is now the separate cloud-sync
+  // toggle). The control lives in Settings.
+  const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() => {
+    const saved = localStorage.getItem('ava-ide-chat-backend');
     // Force local if not connected — Cloud needs a platform account
     if (!checkConnected()) return 'local';
-    return saved || 'cloud';
+    return saved === 'local' ? 'local' : 'cloud';
   });
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
+  // Cloud-sync toggle state (the data-backup axis) — independent of
+  // chatBackend. Mirrors the extension's binary "Cloud sync" toggle.
+  const [cloudSync, setCloudSyncState] = useState<boolean>(cloudSyncEnabled());
   const [pendingConfirm, setPendingConfirm] = useState<{
     id: string;
     toolName: string;
@@ -2592,7 +2595,7 @@ export function AvaChatPage() {
   useEffect(() => { if (tasksPanelOpen) fetchUserTasks(); }, [tasksPanelOpen, fetchUserTasks]);
 
   const handleToggleTask = useCallback(async (taskId: string) => {
-    if (!checkConnected() || !dataModeIncludesCloud()) return;
+    if (!checkConnected() || !cloudSyncEnabled()) return;
     try {
       const task = allTasks.find(t => t.id === taskId);
       const newStatus = task?.status === 'done' ? 'todo' : 'done';
@@ -2727,17 +2730,36 @@ export function AvaChatPage() {
   }, []);
 
   // ── Persist chat backend ─────────────────────────────────────────────────
-  // Two writes intentionally: 'ava-ide-chat-backend' is IDE-internal, used
-  // for sidecar-vs-cloud routing on this surface; 'ava-data-mode' is the
-  // shared key the data-mode helper reads (and the extension mirrors).
-  // setDataMode() broadcasts 'ava-data-mode-changed' so Library / Sync /
-  // anywhere else can re-filter without polling localStorage.
+  // chatBackend (where the chat runs) is independent of cloud sync (data
+  // backup) — the two were previously conflated on one toggle. The
+  // chat-backend control now lives in Settings, which dispatches
+  // 'ava-chat-backend-changed'; this component owns the state + persists it.
   useEffect(() => {
     try {
       localStorage.setItem('ava-ide-chat-backend', chatBackend);
     } catch { /* */ }
-    setDataMode(chatBackend);
   }, [chatBackend]);
+
+  // Honour chat-backend changes made from the Settings page.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const next = (e as CustomEvent<{ backend: 'local' | 'cloud' }>).detail?.backend;
+      if (next === 'local' || next === 'cloud') setChatBackend(next);
+    };
+    window.addEventListener('ava-chat-backend-changed', handler);
+    return () => window.removeEventListener('ava-chat-backend-changed', handler);
+  }, []);
+
+  // Keep the header's cloud-sync toggle in step with changes from
+  // anywhere else (e.g. another surface broadcasting the change).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const next = (e as CustomEvent<{ enabled: boolean }>).detail?.enabled;
+      if (typeof next === 'boolean') setCloudSyncState(next);
+    };
+    window.addEventListener('ava-cloud-sync-changed', handler);
+    return () => window.removeEventListener('ava-cloud-sync-changed', handler);
+  }, []);
 
   // Ref to hold the latest event handler — set synchronously, never null after mount
   const sidecarEventRef = useRef<(event: SidecarEvent) => void>(() => {});
@@ -2788,7 +2810,7 @@ export function AvaChatPage() {
           try { return JSON.parse(localStorage.getItem('ava-ide-sync-prefs') || '{}') as Record<string, boolean>; }
           catch { return {}; }
         })();
-        const idesCloudAllowed = dataModeIncludesCloud();
+        const idesCloudAllowed = cloudSyncEnabled();
         const generationLocalOnly = idesSyncPrefs.generations === false || !idesCloudAllowed;
         const learningLocalOnly = idesSyncPrefs.learning === false || !idesCloudAllowed;
 
@@ -3569,7 +3591,7 @@ export function AvaChatPage() {
           try { return JSON.parse(localStorage.getItem('ava-ide-sync-prefs') || '{}') as Record<string, boolean>; }
           catch { return {}; }
         })();
-        const fallbackCloudAllowed = dataModeIncludesCloud();
+        const fallbackCloudAllowed = cloudSyncEnabled();
         sidecar.start({
           providers: {},
           platformKey: getPlatformKey() || undefined,
@@ -4357,52 +4379,63 @@ export function AvaChatPage() {
           </span>
         </div>
 
-        {/* Right: backend toggle + tokens + new chat */}
+        {/* Right: cloud-sync toggle + tokens + new chat */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Local/Cloud/Both toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button
-              onClick={() => {
-                if (!connected) return;
-                const modes: Array<'local' | 'cloud' | 'both'> = ['local', 'cloud', 'both'];
-                const idx = modes.indexOf(chatBackend);
-                setChatBackend(modes[(idx + 1) % modes.length]);
-              }}
+          {/* Local sidecar status — read-only. Shown only when the chat
+              backend is the local sidecar (set in Settings), so the
+              operator can see at a glance whether the local model is
+              ready. Not a control — the Cloud sync toggle beside it is. */}
+          {chatBackend === 'local' && (
+            <span
+              title={`Local model — ${sidecarStatus}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                background: chatBackend === 'cloud' ? 'rgba(96,165,250,0.1)'
-                  : chatBackend === 'both' ? 'rgba(168,85,247,0.1)'
-                  : 'rgba(166,227,161,0.1)',
-                border: `1px solid ${chatBackend === 'cloud' ? 'rgba(96,165,250,0.3)'
-                  : chatBackend === 'both' ? 'rgba(168,85,247,0.3)'
-                  : 'rgba(166,227,161,0.3)'}`,
-                borderRadius: 6, fontSize: 10, fontWeight: 600,
-                cursor: connected ? 'pointer' : 'not-allowed',
-                color: chatBackend === 'cloud' ? '#60a5fa'
-                  : chatBackend === 'both' ? '#a855f7'
-                  : '#a6e3a1',
-                opacity: connected ? 1 : 0.5,
+                background: 'rgba(166,227,161,0.1)',
+                border: '1px solid rgba(166,227,161,0.3)',
+                borderRadius: 6, fontSize: 10, fontWeight: 600, color: '#a6e3a1',
               }}
-              title={!connected
-                ? t('dash.chat.connect_for_cloud')
-                : chatBackend === 'local'
-                  ? 'Local — data stays on your machine. Click to switch to Cloud.'
-                  : chatBackend === 'cloud'
-                  ? 'Cloud — syncing to platform. Click to switch to Both.'
-                  : 'Both — local backup + cloud sync. Click to switch to Local.'}
             >
               <span style={{
                 width: 6, height: 6, borderRadius: '50%',
-                background: chatBackend === 'local'
-                  ? (sidecarStatus === 'ready' ? '#a6e3a1' : sidecarStatus === 'starting' ? '#eab308' : '#ef4444')
-                  : chatBackend === 'cloud'
-                  ? (connected ? '#60a5fa' : '#6c7086')
-                  : (connected ? '#a855f7' : '#6c7086'),
+                background: sidecarStatus === 'ready' ? '#a6e3a1'
+                  : sidecarStatus === 'starting' ? '#eab308'
+                  : sidecarStatus === 'error' ? '#ef4444' : '#6c7086',
                 ...(sidecarStatus === 'starting' ? { animation: 'avaPulse 1.5s infinite' } : {}),
               }} />
-              {chatBackend === 'local' ? t('dash.chat.local') : chatBackend === 'cloud' ? t('dash.chat.cloud') : 'Both'}
+              {sidecarStatus === 'ready' ? 'Local model'
+                : sidecarStatus === 'starting' ? 'Starting…'
+                : sidecarStatus === 'error' ? 'Model error' : 'Local model off'}
+            </span>
+          )}
+          {/* Cloud-sync toggle — data is always saved locally; this is
+              the optional cloud backup. Mirrors the extension exactly.
+              Shown only when connected (cloud sync needs an account);
+              chat-backend routing now lives in Settings. */}
+          {connected && (
+            <button
+              onClick={() => {
+                const next = !cloudSync;
+                setCloudSyncState(next);
+                setCloudSync(next);
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
+                background: cloudSync ? 'rgba(96,165,250,0.1)' : 'rgba(166,227,161,0.1)',
+                border: `1px solid ${cloudSync ? 'rgba(96,165,250,0.3)' : 'rgba(166,227,161,0.3)'}`,
+                borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                color: cloudSync ? '#60a5fa' : '#a6e3a1',
+              }}
+              title={cloudSync
+                ? 'Cloud sync ON — a copy of your data is backed up to the platform. Click to turn off.'
+                : 'Cloud sync OFF — your data stays on this machine only. Click to turn on.'}
+            >
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: cloudSync ? '#60a5fa' : '#a6e3a1',
+              }} />
+              {cloudSync ? 'Cloud sync' : 'Local only'}
             </button>
-          </div>
+          )}
 
           {/* Credit display — platform balance when signed in, or local
               session credit estimate (computed via creditsForTurn so the unit
@@ -6512,14 +6545,13 @@ export function MemoryPage() {
   };
 
   const handleDelete = async (id: string | number) => {
-    const mode = (localStorage.getItem('ava-data-mode') as 'local' | 'cloud' | 'both') || 'local';
     try {
-      // Delete from cloud if cloud or both
-      if (mode === 'cloud' || mode === 'both') {
+      // Delete the cloud copy too when cloud sync is on.
+      if (cloudSyncEnabled()) {
         await apiFetch(`/memories/${id}`, { method: 'DELETE' });
       }
-      // Delete from local if local or both
-      if (mode === 'local' || mode === 'both') {
+      // Always delete from the local store — local-first.
+      {
         try {
           const { readTextFile, writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
           const raw = await readTextFile('.ava/memory.json', { baseDir: BaseDirectory.Home });
@@ -7031,7 +7063,7 @@ export function TasksPage() {
     // cases skip the cloud write — we just add to the React state and
     // return. (When Data Mode flips back to Cloud/Both, the Sync tab's
     // bulk push will upload whatever isn't already there.)
-    if (!connected || !dataModeIncludesCloud()) {
+    if (!connected || !cloudSyncEnabled()) {
       setTasks((t) => [...t, newTask]);
       resetForm();
       return;
@@ -7064,7 +7096,7 @@ export function TasksPage() {
           : tt
       )
     );
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       try {
         await apiFetch(`/tasks/${id}`, {
           method: 'PATCH',
@@ -7078,7 +7110,7 @@ export function TasksPage() {
     const id = task.id || task._id;
     setTasks((t) => t.filter((tt) => (tt.id || tt._id) !== id));
     setConfirmDeleteId(null);
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       try { await apiFetch(`/tasks/${id}`, { method: 'DELETE' }); } catch { /* */ }
     }
   };
@@ -7534,7 +7566,7 @@ export function JournalPage() {
     // Cloud write only when Data Mode allows it. Local mode keeps
     // the localStorage write above and skips the /journal POST
     // entirely, so the entry stays on device.
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       try {
         await apiFetch('/journal', {
           method: 'POST',
@@ -8655,25 +8687,11 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   const [cloudFiles, setCloudFiles] = useState<LibraryFile[]>([]);
   const [localFiles, setLocalFiles] = useState<LibraryFile[]>([]);
   const [loading, setLoading] = useState(true);
-  // Source filter — drives off the global Data Mode toggle (the
-  // Local/Cloud/Both pill in the chat header) so the two surfaces stay
-  // in sync. Mode='local' → show local files only. Mode='cloud' → cloud
-  // only. Mode='both' → show All (the merged view). Operator can still
-  // override per session by clicking the source tabs; the listener below
-  // only re-syncs when the global mode actually changes.
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'cloud' | 'local'>(() => {
-    const m = getDataMode();
-    return m === 'local' ? 'local' : m === 'cloud' ? 'cloud' : 'all';
-  });
-  useEffect(() => {
-    const onModeChange = (e: Event) => {
-      const next = (e as CustomEvent<{ mode: 'local' | 'cloud' | 'both' }>).detail?.mode;
-      if (!next) return;
-      setSourceFilter(next === 'local' ? 'local' : next === 'cloud' ? 'cloud' : 'all');
-    };
-    window.addEventListener('ava-data-mode-changed', onModeChange);
-    return () => window.removeEventListener('ava-data-mode-changed', onModeChange);
-  }, []);
+  // Source filter — an independent control on this page, driven by the
+  // source tabs below. It is NOT derived from any global toggle: cloud
+  // sync governs whether data is backed up, never what the Library
+  // shows. Defaults to "All" — the merged local + cloud view.
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'cloud' | 'local'>('all');
   // Filter axis is the real media kind, not the coalesced LibraryFileType,
   // so the user can isolate just music / video / voice within the Assets
   // tab — previously they all collapsed under Images.
@@ -9925,7 +9943,7 @@ export function PersonalityPage() {
     setSaving(true);
     // Cloud sync only when Data Mode permits it. Local mode keeps the
     // localStorage save above but skips POST /settings.
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       try {
         await apiFetch('/settings', {
           method: 'POST',
@@ -9949,7 +9967,7 @@ export function PersonalityPage() {
     setEnergy('enthusiastic');
     setStyle('conversational');
     setDescription('');
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       try {
         await apiFetch('/settings', {
           method: 'POST',
@@ -11117,6 +11135,53 @@ function LocalModelSettings() {
   );
 }
 
+/** Settings control for chat-backend routing — where the chat runs:
+ *  the local sidecar (your own API keys / BYOK) or the Ava platform.
+ *  Independent of cloud sync (which is the data-backup axis). Persists
+ *  to 'ava-ide-chat-backend' and broadcasts 'ava-chat-backend-changed'
+ *  so the chat surface picks the change up live. */
+function ChatBackendSetting() {
+  const [backend, setBackend] = useState<'local' | 'cloud'>(() =>
+    localStorage.getItem('ava-ide-chat-backend') === 'local' ? 'local' : 'cloud',
+  );
+  const choose = (next: 'local' | 'cloud') => {
+    setBackend(next);
+    try { localStorage.setItem('ava-ide-chat-backend', next); } catch { /* */ }
+    try {
+      window.dispatchEvent(new CustomEvent('ava-chat-backend-changed', { detail: { backend: next } }));
+    } catch { /* no window */ }
+  };
+  const opts: Array<{ id: 'local' | 'cloud'; label: string; desc: string }> = [
+    { id: 'cloud', label: 'Platform', desc: 'Run the chat on the Ava platform — needs a connected account.' },
+    { id: 'local', label: 'Local sidecar', desc: 'Run the chat on this machine with your own API keys (BYOK).' },
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+      {opts.map((o) => {
+        const active = backend === o.id;
+        return (
+          <button
+            key={o.id}
+            onClick={() => choose(o.id)}
+            style={{
+              textAlign: 'left', padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+              background: active ? 'rgba(168,85,247,0.1)' : 'rgba(26,16,40,0.6)',
+              border: `1px solid ${active ? 'rgba(168,85,247,0.4)' : 'rgba(168,85,247,0.12)'}`,
+              color: '#cdd6f4',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: active ? '#a855f7' : '#6c7086' }} />
+              {o.label}
+            </div>
+            <div style={{ fontSize: 11, color: '#6c7086', marginTop: 3 }}>{o.desc}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ===== 10. Settings ===== */
 export function SettingsPage() {
   useLocale();
@@ -11237,7 +11302,7 @@ export function SettingsPage() {
     const resized = await resizeAvatar(dataUri);
     localStorage.setItem('ava-ide-user-avatar', resized);
     setUserAvatar(resized);
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       apiFetch('/settings', {
         method: 'POST',
         body: JSON.stringify({ user_avatar: resized }),
@@ -11249,7 +11314,7 @@ export function SettingsPage() {
   const removeAvatar = useCallback((_type: 'user') => {
     localStorage.removeItem('ava-ide-user-avatar');
     setUserAvatar('');
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       apiFetch('/settings', {
         method: 'POST',
         body: JSON.stringify({ user_avatar: null }),
@@ -11308,7 +11373,7 @@ export function SettingsPage() {
       localStorage.setItem('ava-ide-language', value);
       import('../lib/i18n').then(({ initLocale }) => initLocale(value)).catch(() => {});
     }
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       apiFetch('/settings', {
         method: 'POST',
         body: JSON.stringify(updated),
@@ -11323,7 +11388,7 @@ export function SettingsPage() {
     // Provider keys never leave the device in Local mode. OS keychain
     // on the extension holds the BYOK keys locally; mirroring to cloud
     // is opt-in via Data Mode.
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       apiFetch('/settings/provider-key', {
         method: 'POST',
         body: JSON.stringify({ provider: providerId, apiKey: key }),
@@ -11336,7 +11401,7 @@ export function SettingsPage() {
   };
 
   const handleRemoveProviderKey = (providerId: string) => {
-    if (connected && dataModeIncludesCloud()) {
+    if (connected && cloudSyncEnabled()) {
       apiFetch('/settings/provider-key', {
         method: 'DELETE',
         body: JSON.stringify({ provider: providerId }),
@@ -11776,6 +11841,13 @@ export function SettingsPage() {
 
         {/* ── Group: Models (sec 6+7) ──────────────────────────── */}
         <div style={{ display: settingsTab === 'models' ? 'contents' : 'none' }}>
+
+        {/* Chat backend — where the chat runs (local sidecar vs platform).
+            Independent of cloud sync; previously these shared one header
+            toggle, now separated so the IDE chat header mirrors the
+            extension. */}
+        <div style={sLabel}>CHAT BACKEND</div>
+        <ChatBackendSetting />
 
         {/* Custom OpenAI-compatible model — Ollama / LM Studio / vLLM /
             any local or remote endpoint that speaks the OpenAI Chat

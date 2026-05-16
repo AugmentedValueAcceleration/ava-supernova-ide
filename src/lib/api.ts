@@ -1,3 +1,5 @@
+import { dataModeHeader } from './data-mode';
+
 const PLATFORM_URL = 'https://ava-supernova.com/api';
 
 export function getPlatformKey(): string | null {
@@ -71,10 +73,9 @@ function getDeviceId(): string {
 export async function apiFetch(path: string, options?: RequestInit) {
   const key = getPlatformKey();
   if (!key) throw new Error('Not connected');
-  // Data Mode header — server-side routes (generate-image, generate-music,
-  // render-video, ...) gate their cloud persistence on this. The IDE
-  // sets it from localStorage so every call carries the user's choice.
-  const dataMode = (typeof localStorage !== 'undefined' ? localStorage.getItem('ava-data-mode') : null) || 'local';
+  // Data-mode header — server-side routes (generate-image, generate-music,
+  // render-video, ...) gate their cloud persistence on this. Derived from
+  // the binary cloud-sync toggle: off -> 'local', on -> 'both'.
   const res = await fetch(`${PLATFORM_URL}${path}`, {
     ...options,
     headers: {
@@ -82,7 +83,7 @@ export async function apiFetch(path: string, options?: RequestInit) {
       'Content-Type': 'application/json',
       'X-Ava-Platform': 'ide',
       'X-Ava-Device': getDeviceId(),
-      'X-Ava-Data-Mode': dataMode,
+      'X-Ava-Data-Mode': dataModeHeader(),
       ...options?.headers,
     },
   });
