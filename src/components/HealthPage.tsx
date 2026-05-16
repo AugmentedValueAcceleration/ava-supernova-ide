@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   loadExercises,
   loadRecipes,
@@ -11,6 +11,11 @@ import {
   type HealthRecipeSkillLevel,
   type HealthWorkoutType,
 } from '../lib/health-catalog';
+import {
+  loadHealthProfile,
+  saveHealthProfile,
+  type HealthProfile,
+} from '../lib/health-store';
 
 /**
  * Health & Nutrition page for the IDE — the public exercise + recipe
@@ -88,7 +93,7 @@ export function HealthPage() {
         {tab === 'exercises' && <ExercisesGrid />}
         {tab === 'recipes' && <RecipesGrid />}
         {tab === 'mine' && <ComingSoon label="My submissions — the contribution flow lands in a follow-up." />}
-        {tab === 'profile' && <ComingSoon label="Profile — your body stats, goals and constraints. Lands next." />}
+        {tab === 'profile' && <ProfileTab />}
       </div>
     </div>
   );
@@ -614,6 +619,228 @@ function RecipeDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
             : <RecipeDetailBody r={detail} />}
       </div>
     </ModalShell>
+  );
+}
+
+// ── Profile tab ───────────────────────────────────────────────────────────
+
+const fieldInputStyle: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 12,
+  background: 'rgba(12, 8, 20, 0.5)', color: '#cdd6f4',
+  border: '1px solid rgba(168, 85, 247, 0.18)', borderRadius: 6, outline: 'none',
+  colorScheme: 'dark',
+};
+
+function parseNum(s: string): number | null {
+  const t = s.trim();
+  if (t === '') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Profile form — body stats, goals, constraints, schedule. Reads /
+ *  writes the local-first health-store with debounced autosave. */
+function ProfileTab() {
+  const [profile, setProfile] = useState<HealthProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [savedTick, setSavedTick] = useState(0);
+  const saveTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    loadHealthProfile().then(p => { if (live) { setProfile(p); setLoading(false); } });
+    return () => {
+      live = false;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  // Debounced autosave — 600ms after the last edit.
+  const update = useCallback((next: HealthProfile) => {
+    setProfile(next);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveHealthProfile(next)
+        .then(() => setSavedTick(t => t + 1))
+        .catch(() => { /* non-fatal — retried on next edit */ });
+    }, 600);
+  }, []);
+
+  if (loading || !profile) return <CenterNote>Loading profile…</CenterNote>;
+  const p = profile;
+
+  return (
+    <div style={{ maxWidth: 620, display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <p style={{ fontSize: 12, color: '#9b8caa', margin: 0 }}>
+        Stored on this machine. Ava reads it to shape your daily brief and plan.
+        {savedTick > 0 && <span style={{ color: '#34d399', marginLeft: 8 }}>Saved</span>}
+      </p>
+
+      <ProfileSection title="Body">
+        <FieldRow>
+          <Field label="Sex">
+            <select
+              value={p.body.sex ?? ''}
+              onChange={e => update({ ...p, body: { ...p.body, sex: (e.target.value || null) as HealthProfile['body']['sex'] } })}
+              style={fieldInputStyle}
+            >
+              <option value="">—</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Date of birth">
+            <input type="date" value={p.body.date_of_birth ?? ''}
+              onChange={e => update({ ...p, body: { ...p.body, date_of_birth: e.target.value || null } })}
+              style={fieldInputStyle} />
+          </Field>
+        </FieldRow>
+        <FieldRow>
+          <Field label="Height (cm)">
+            <input type="number" inputMode="numeric" value={p.body.height_cm ?? ''}
+              onChange={e => update({ ...p, body: { ...p.body, height_cm: parseNum(e.target.value) } })}
+              style={fieldInputStyle} />
+          </Field>
+          <Field label="Weight (kg)">
+            <input type="number" inputMode="numeric" value={p.body.weight_kg ?? ''}
+              onChange={e => update({ ...p, body: { ...p.body, weight_kg: parseNum(e.target.value) } })}
+              style={fieldInputStyle} />
+          </Field>
+          <Field label="Body fat (%)">
+            <input type="number" inputMode="numeric" value={p.body.body_fat_pct ?? ''}
+              onChange={e => update({ ...p, body: { ...p.body, body_fat_pct: parseNum(e.target.value) } })}
+              style={fieldInputStyle} />
+          </Field>
+        </FieldRow>
+      </ProfileSection>
+
+      <ProfileSection title="Goals">
+        <FieldRow>
+          <Field label="Primary goal">
+            <select
+              value={p.goals.primary ?? ''}
+              onChange={e => update({ ...p, goals: { ...p.goals, primary: (e.target.value || null) as HealthProfile['goals']['primary'] } })}
+              style={fieldInputStyle}
+            >
+              <option value="">—</option>
+              <option value="fat_loss">Fat loss</option>
+              <option value="muscle_gain">Muscle gain</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="athletic">Athletic performance</option>
+              <option value="recovery">Recovery</option>
+              <option value="longevity">Longevity</option>
+            </select>
+          </Field>
+          <Field label="This week's focus">
+            <input type="text" value={p.goals.weekly_focus ?? ''} placeholder="e.g. deload week"
+              onChange={e => update({ ...p, goals: { ...p.goals, weekly_focus: e.target.value || null } })}
+              style={fieldInputStyle} />
+          </Field>
+        </FieldRow>
+      </ProfileSection>
+
+      <ProfileSection title="Constraints">
+        <Field label="Allergens (comma-separated)">
+          <input type="text" value={p.constraints.allergens.join(', ')}
+            onChange={e => update({ ...p, constraints: { ...p.constraints, allergens: csv(e.target.value) } })}
+            style={fieldInputStyle} />
+        </Field>
+        <Field label="Dietary (comma-separated)">
+          <input type="text" value={p.constraints.dietary.join(', ')} placeholder="e.g. vegan, gluten_free"
+            onChange={e => update({ ...p, constraints: { ...p.constraints, dietary: csv(e.target.value) } })}
+            style={fieldInputStyle} />
+        </Field>
+        <Field label="Injuries / limiting conditions (comma-separated)">
+          <input type="text" value={p.constraints.injuries.join(', ')}
+            onChange={e => update({ ...p, constraints: { ...p.constraints, injuries: csv(e.target.value) } })}
+            style={fieldInputStyle} />
+        </Field>
+        <Field label="Equipment available (comma-separated)">
+          <input type="text" value={p.constraints.equipment_available.join(', ')} placeholder="e.g. dumbbells, pull_up_bar"
+            onChange={e => update({ ...p, constraints: { ...p.constraints, equipment_available: csv(e.target.value) } })}
+            style={fieldInputStyle} />
+        </Field>
+        <Field label="Minutes per day available">
+          <input type="number" inputMode="numeric" value={p.constraints.minutes_per_day_target ?? ''}
+            onChange={e => update({ ...p, constraints: { ...p.constraints, minutes_per_day_target: parseNum(e.target.value) } })}
+            style={fieldInputStyle} />
+        </Field>
+      </ProfileSection>
+
+      <ProfileSection title="Schedule">
+        <FieldRow>
+          <Field label="Training — start">
+            <input type="time" value={p.schedule.training_window.start ?? ''}
+              onChange={e => update({ ...p, schedule: { ...p.schedule, training_window: { ...p.schedule.training_window, start: e.target.value || null } } })}
+              style={fieldInputStyle} />
+          </Field>
+          <Field label="Training — end">
+            <input type="time" value={p.schedule.training_window.end ?? ''}
+              onChange={e => update({ ...p, schedule: { ...p.schedule, training_window: { ...p.schedule.training_window, end: e.target.value || null } } })}
+              style={fieldInputStyle} />
+          </Field>
+        </FieldRow>
+        <FieldRow>
+          <Field label="Breakfast">
+            <input type="time" value={p.schedule.meal_times.breakfast ?? ''}
+              onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, breakfast: e.target.value || null } } })}
+              style={fieldInputStyle} />
+          </Field>
+          <Field label="Lunch">
+            <input type="time" value={p.schedule.meal_times.lunch ?? ''}
+              onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, lunch: e.target.value || null } } })}
+              style={fieldInputStyle} />
+          </Field>
+          <Field label="Dinner">
+            <input type="time" value={p.schedule.meal_times.dinner ?? ''}
+              onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, dinner: e.target.value || null } } })}
+              style={fieldInputStyle} />
+          </Field>
+        </FieldRow>
+        <FieldRow>
+          <Field label="Bedtime">
+            <input type="time" value={p.schedule.sleep_target.bedtime ?? ''}
+              onChange={e => update({ ...p, schedule: { ...p.schedule, sleep_target: { ...p.schedule.sleep_target, bedtime: e.target.value || null } } })}
+              style={fieldInputStyle} />
+          </Field>
+          <Field label="Wake">
+            <input type="time" value={p.schedule.sleep_target.wake ?? ''}
+              onChange={e => update({ ...p, schedule: { ...p.schedule, sleep_target: { ...p.schedule.sleep_target, wake: e.target.value || null } } })}
+              style={fieldInputStyle} />
+          </Field>
+        </FieldRow>
+      </ProfileSection>
+    </div>
+  );
+}
+
+/** Split a comma-separated input into a trimmed, de-emptied string array. */
+function csv(value: string): string[] {
+  return value.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086', marginBottom: 12 }}>
+        {title}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
+    </div>
+  );
+}
+
+function FieldRow({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>{children}</div>;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label style={{ flex: '1 1 160px', minWidth: 140, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={{ fontSize: 10, color: '#9b8caa' }}>{label}</span>
+      {children}
+    </label>
   );
 }
 
