@@ -74,6 +74,7 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 // the source of truth across the IDE.
 import { cloudSyncEnabled, setCloudSync } from '../lib/data-mode';
 import { useCreativeGallery, type GalleryItem } from '../lib/creative-gallery';
+import { HealthDashboard } from './HealthDashboard';
 import { CreativeGalleryStrip } from './CreativeOutputCard';
 
 /* ===== Shared Styles ===== */
@@ -1525,7 +1526,7 @@ function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
 
 // ── Main Command Centre Page ────────────────────────────────────────────────
 
-type CcTab = 'daily' | 'briefing' | 'reflect';
+type CcTab = 'daily' | 'briefing' | 'reflect' | 'health';
 
 export function CommandCentrePage() {
   useLocale();
@@ -1535,7 +1536,7 @@ export function CommandCentrePage() {
   // Inner tab state — persists so the user lands back on whichever lens
   // they last had open instead of always hitting Daily.
   const [tab, setTab] = useState<CcTab>(() => {
-    try { const stored = localStorage.getItem('ava-ide-cc-tab'); return (stored === 'briefing' || stored === 'reflect') ? stored : 'daily'; }
+    try { const stored = localStorage.getItem('ava-ide-cc-tab'); return (stored === 'briefing' || stored === 'reflect' || stored === 'health') ? stored : 'daily'; }
     catch { return 'daily'; }
   });
   const switchTab = (next: CcTab) => {
@@ -1854,6 +1855,7 @@ export function CommandCentrePage() {
           <TabBtn id="daily" label="Daily" />
           <TabBtn id="briefing" label="Briefing" />
           <TabBtn id="reflect" label="Reflect" />
+          <TabBtn id="health" label="Health" />
         </div>
 
         {/* ── Daily tab ─────────────────────────────────────────────── */}
@@ -1918,6 +1920,9 @@ export function CommandCentrePage() {
             )}
           </div>
         )}
+
+        {/* ── Health tab ────────────────────────────────────────────── */}
+        {tab === 'health' && <HealthDashboard />}
       </div>
     </div>
   );
