@@ -10,6 +10,7 @@
 // fetchers that produce them.
 
 import { getPlatformKey } from './api';
+import type { HealthProfile, HealthDailyLog } from './health-store';
 
 const PLATFORM_URL = 'https://ava-supernova.com/api';
 const HEALTH_TIMEOUT_MS = 8000;
@@ -428,4 +429,26 @@ export async function loadMySubmissions(): Promise<HealthMySubmissions> {
 /** Clear the caller's rejected submissions from their list. */
 export async function clearRejectedSubmissions(): Promise<void> {
   await healthRequest('/health/submissions/mine', { method: 'DELETE' });
+}
+
+// ── Morning brief ─────────────────────────────────────────────────────────
+
+export interface MorningBriefContext {
+  date: string;
+  profile: HealthProfile;
+  log: HealthDailyLog;
+}
+
+/** Ask Ava to write today's morning-brief paragraph from a snapshot
+ *  of the local profile + log. The profile stays local; only this
+ *  snapshot travels, and only when the operator clicks generate.
+ *  Needs a connected account (the route is sk-ava authed). Long
+ *  timeout — first-token latency + cold start can run to ~60s. */
+export async function generateMorningBrief(context: MorningBriefContext): Promise<string> {
+  const data = await healthRequest<{ brief?: string }>('/health/morning-brief', {
+    method: 'POST',
+    body: { context },
+    timeoutMs: 120000,
+  });
+  return data.brief ?? '';
 }
