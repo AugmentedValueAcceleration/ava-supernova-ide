@@ -134,10 +134,12 @@ function ExercisesGrid() {
   const [filter, setFilter] = useState<'all' | HealthWorkoutType>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [modalSlug, setModalSlug] = useState<string | null>(null);
 
   const fetchPage = useCallback(async (off: number) => {
     setLoading(true);
+    setFailed(false);
     try {
       const r = await loadExercises({
         limit: PAGE_SIZE,
@@ -151,6 +153,7 @@ function ExercisesGrid() {
     } catch {
       setItems([]);
       setTotal(0);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -175,6 +178,8 @@ function ExercisesGrid() {
 
       {loading ? (
         <CenterNote>Loading exercises…</CenterNote>
+      ) : failed ? (
+        <LoadError noun="exercises" onRetry={() => void fetchPage(0)} />
       ) : items.length === 0 ? (
         <CenterNote>{search ? `No exercises match "${search}".` : 'No exercises found.'}</CenterNote>
       ) : (
@@ -217,10 +222,12 @@ function RecipesGrid() {
   const [filter, setFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [modalSlug, setModalSlug] = useState<string | null>(null);
 
   const fetchPage = useCallback(async (off: number) => {
     setLoading(true);
+    setFailed(false);
     try {
       const r = await loadRecipes({
         limit: PAGE_SIZE,
@@ -234,6 +241,7 @@ function RecipesGrid() {
     } catch {
       setItems([]);
       setTotal(0);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -257,6 +265,8 @@ function RecipesGrid() {
 
       {loading ? (
         <CenterNote>Loading recipes…</CenterNote>
+      ) : failed ? (
+        <LoadError noun="recipes" onRetry={() => void fetchPage(0)} />
       ) : items.length === 0 ? (
         <CenterNote>{search ? `No recipes match "${search}".` : 'No recipes found.'}</CenterNote>
       ) : (
@@ -341,6 +351,30 @@ function CenterNote({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 12, color: '#6c7086' }}>
       {children}
+    </div>
+  );
+}
+
+// Shown when a catalog fetch failed — distinct from a genuinely empty
+// result. Reassures the user it's a network hiccup, not lost data, and
+// offers an explicit retry.
+function LoadError({ noun, onRetry }: { noun: string; onRetry: () => void }) {
+  return (
+    <div style={{ padding: '44px 0', textAlign: 'center' }}>
+      <div style={{ fontSize: 13, color: '#cdd6f4', marginBottom: 4 }}>Couldn&apos;t load {noun}.</div>
+      <div style={{ fontSize: 11, color: '#6c7086', maxWidth: 300, margin: '0 auto 12px', lineHeight: 1.5 }}>
+        The connection to the library failed — your data is safe, this is a network hiccup.
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        style={{
+          cursor: 'pointer', borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 600,
+          border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.12)', color: '#cba6f7',
+        }}
+      >
+        Retry
+      </button>
     </div>
   );
 }
