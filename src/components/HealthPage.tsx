@@ -189,7 +189,20 @@ function ExercisesGrid() {
               const accent = WORKOUT_ACCENT[ex.workout_type];
               return (
                 <Card key={ex.id} onClick={() => setModalSlug(ex.slug)}>
-                  <div style={{ height: 3, background: accent, borderRadius: '8px 8px 0 0' }} />
+                  {/* Hero image — per-exercise thumbnail from the catalog,
+                      mirrors the recipe card. Falls back to a workout-type
+                      tinted panel when an exercise has no image yet. */}
+                  <div style={{
+                    position: 'relative', aspectRatio: '4 / 3',
+                    background: `linear-gradient(135deg, ${accent}33 0%, ${accent}11 100%)`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: '8px 8px 0 0', overflow: 'hidden',
+                  }}>
+                    {ex.thumbnail_url
+                      ? <img src={ex.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <span style={{ fontSize: 26, opacity: 0.3 }}>🏋</span>}
+                    <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: accent }} />
+                  </div>
                   <div style={{ padding: 14 }}>
                     <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: accent, marginBottom: 4 }}>
                       {WORKOUT_LABEL[ex.workout_type]}
