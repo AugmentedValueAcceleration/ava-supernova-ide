@@ -110,6 +110,23 @@ export interface HealthRecipeEquipment {
   optional: boolean;
 }
 
+/** Per-serving nutrition for a recipe version — Ava-estimated on the
+ *  platform from the ingredient list. `source` stays 'estimated' until
+ *  hand-verified. All numeric fields optional; an un-estimated version
+ *  returns {}. */
+export interface HealthRecipeNutrition {
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  fibre_g?: number;
+  sugar_g?: number;
+  sodium_mg?: number;
+  saturated_fat_g?: number;
+  source?: 'estimated' | 'verified';
+  generated_at?: string;
+}
+
 export interface HealthRecipeVersionDetail {
   level: HealthRecipeSkillLevel;
   description: string | null;
@@ -117,6 +134,7 @@ export interface HealthRecipeVersionDetail {
   cook_time_minutes: number | null;
   total_time_minutes: number | null;
   default_servings: number | null;
+  nutrition: HealthRecipeNutrition;
   steps: HealthRecipeStep[];
   dietary_flags: string[];
   diets: string[];

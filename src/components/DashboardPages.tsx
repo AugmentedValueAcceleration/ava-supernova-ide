@@ -75,6 +75,7 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 import { cloudSyncEnabled, setCloudSync } from '../lib/data-mode';
 import { useCreativeGallery, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
+import HealthPlansPage from './HealthPlansPage';
 import { CreativeGalleryStrip } from './CreativeOutputCard';
 
 /* ===== Shared Styles ===== */
@@ -13276,11 +13277,12 @@ interface IdeRoadmapTheme {
  * ═══════════════════════════════════════════════════════════════════ */
 
 export function PlannerPage() {
-  const [tab, setTab] = useState<'tasks' | 'journal' | 'learning'>('tasks');
+  const [tab, setTab] = useState<'tasks' | 'journal' | 'learning' | 'plans'>('tasks');
   const tabs = [
     { key: 'tasks' as const, icon: '\u2713', label: 'Tasks' },
     { key: 'journal' as const, icon: '\u270E', label: 'Journal' },
     { key: 'learning' as const, icon: '\u2605', label: 'Learning' },
+    { key: 'plans' as const, icon: '\u2630', label: 'Plans' },
   ];
   return (
     <div style={pageWrapper}>
@@ -13301,6 +13303,7 @@ export function PlannerPage() {
       {tab === 'tasks' && <TasksPageInner />}
       {tab === 'journal' && <JournalPageInner />}
       {tab === 'learning' && <LearningPageInner />}
+      {tab === 'plans' && <HealthPlansPage />}
     </div>
   );
 }
