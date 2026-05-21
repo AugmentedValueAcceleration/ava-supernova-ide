@@ -47,6 +47,18 @@ try {
   core = await import(`file://${corePath.replace(/\\/g, '/')}`);
 }
 
+// Health subpath — gives the sidecar a Node-fs HealthPlanStore for the
+// agent's health_plan_* tools. Same files the renderer reads/writes via
+// the Tauri-fs store, so Ava-driven and UI-driven plans share storage.
+let healthCore;
+try {
+  healthCore = await import('@ava/core/health');
+} catch {
+  const healthPath = join(__dirname, '..', '..', 'core', 'dist', 'health', 'index.js');
+  healthCore = await import(`file://${healthPath.replace(/\\/g, '/')}`);
+}
+const { NodeHealthPlanStore } = healthCore;
+
 const {
   Agent,
   Conversation,
@@ -686,6 +698,10 @@ async function handleInit(data) {
       memoryManager,
       journalManager,
       taskManager,
+      // Surface-injected health plan store — Node-fs impl pointed at
+      // ~/.ava/health/plans/*.json, the same files the renderer's
+      // Tauri-fs store reads/writes. See COMMAND_PALETTE_PLAN.md §10.
+      healthPlanStore: new NodeHealthPlanStore(),
       projectIndexer,
       platformKey: config.platformKey,
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,

@@ -49,8 +49,35 @@ import { zhTWStrings } from '../../../core/dist/i18n/locales/zh-TW.js';
 let currentLocale = 'en';
 let localeVersion = 0;
 
+/** Command-palette UI strings — English. t() falls back to these for every
+ *  locale until the core locale files carry them. See COMMAND_PALETTE_PLAN.md. */
+const paletteStrings: Record<string, string> = {
+  'palette.title': 'Quick Actions',
+  'palette.tooltip': 'Quick Actions — click or type / to open',
+  'palette.empty': 'No matching commands',
+  'palette.col.task': 'Task',
+  'palette.col.journal': 'Journal',
+  'palette.col.creative': 'Creative',
+  'palette.col.support': 'Support',
+  'palette.col.memory': 'Memory',
+  'palette.col.learning': 'Learning',
+  'palette.task.create': 'New task',
+  'palette.journal.create': 'New entry',
+  'palette.creative.image': 'Image',
+  'palette.creative.music': 'Music',
+  'palette.creative.video': 'Video',
+  'palette.creative.voice': 'Voice',
+  'palette.support.create': 'Contact support',
+  'palette.memory.create': 'Remember this',
+  'palette.learning.create': 'New path',
+  'palette.col.plans': 'Plans',
+  'palette.plans.meal': 'Meal plan',
+  'palette.plans.fitness': 'Fitness plan',
+  'palette.plans.combined': 'Combined plan',
+};
+
 const translations: Record<string, Record<string, string>> = {
-  en: enStrings, ar: arStrings, de: deStrings, es: esStrings, fr: frStrings,
+  en: { ...enStrings, ...paletteStrings }, ar: arStrings, de: deStrings, es: esStrings, fr: frStrings,
   hi: hiStrings, id: idStrings, it: itStrings, ja: jaStrings, ko: koStrings,
   nl: nlStrings, pl: plStrings, pt: ptStrings, ru: ruStrings, th: thStrings,
   tr: trStrings, uk: ukStrings, vi: viStrings, 'zh-CN': zhCNStrings, 'zh-TW': zhTWStrings,

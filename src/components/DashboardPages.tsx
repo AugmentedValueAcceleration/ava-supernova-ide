@@ -29,6 +29,7 @@ import {
   Rocket as PhRocket,
 } from '@phosphor-icons/react';
 import { t, useLocale, getLocale } from '../lib/i18n';
+import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
 import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
 import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
@@ -2421,6 +2422,62 @@ export function AvaChatPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showVault]);
 
+  // ── Command palette state ─────────────────────────────────────────────
+  const [showPalette, setShowPalette] = useState(false);
+  const [paletteActiveIndex, setPaletteActiveIndex] = useState(0);
+  const palettePanelRef = useRef<HTMLDivElement>(null);
+  const paletteBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Close palette on outside click — mirrors the vault handler above.
+  useEffect(() => {
+    if (!showPalette) return;
+    const handler = (e: MouseEvent) => {
+      if (palettePanelRef.current && !palettePanelRef.current.contains(e.target as Node) && paletteBtnRef.current && !paletteBtnRef.current.contains(e.target as Node)) setShowPalette(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPalette]);
+
+  // Typing `/` at the start of the input opens the palette; the text after
+  // the slash becomes the filter query. Typing anything else closes it so
+  // the input goes back to being a normal chat composer.
+  useEffect(() => {
+    if (input.startsWith('/')) {
+      setShowPalette(true);
+    } else if (input.length > 0) {
+      setShowPalette(false);
+    }
+    setPaletteActiveIndex(0);
+  }, [input]);
+
+  const paletteQuery = input.startsWith('/') ? input.slice(1) : '';
+  const filteredPaletteActions: PaletteAction[] = useMemo(
+    () => filterPaletteActions(paletteQuery),
+    [paletteQuery],
+  );
+
+  // Clamp active index when the filtered list shrinks below it.
+  useEffect(() => {
+    if (paletteActiveIndex >= filteredPaletteActions.length) {
+      setPaletteActiveIndex(Math.max(0, filteredPaletteActions.length - 1));
+    }
+  }, [filteredPaletteActions.length, paletteActiveIndex]);
+
+  // Group filtered actions by section for rendering (preserving canonical
+  // section order; sections with no matches disappear from the dropdown).
+  const groupedPaletteActions = useMemo(() => {
+    const order: string[] = [];
+    const map = new Map<string, PaletteAction[]>();
+    for (const a of filteredPaletteActions) {
+      if (!map.has(a.sectionKey)) {
+        map.set(a.sectionKey, []);
+        order.push(a.sectionKey);
+      }
+      map.get(a.sectionKey)!.push(a);
+    }
+    return order.map((sectionKey) => ({ sectionKey, items: map.get(sectionKey)! }));
+  }, [filteredPaletteActions]);
+
   const addSecret = useCallback(() => {
     const label = vaultNewLabel.trim();
     const value = vaultNewValue.trim();
@@ -4181,6 +4238,26 @@ export function AvaChatPage() {
     sendLocal(outgoingText, userMsg.attachments);
   }, [input, messages, sendLocal, pendingAttachments, model, injectSecrets, secrets, mode]);
 
+  // ── Command palette — fire a pre-classified intent ──────────────────────
+  // Click and Enter both land here. Clear the textarea (in case it held a
+  // `/query` filter), close the palette, then dispatch the confirmed intent.
+  // Mode prefix mirrors send().
+  const handlePaletteAction = useCallback((tool: PaletteTool, action: string) => {
+    if (streaming) return;
+    const built = buildPaletteDirective(tool, action);
+    if (!built) return;
+    setInput('');
+    setShowPalette(false);
+    setPaletteActiveIndex(0);
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    const userMsg: ChatMessage = { id: mkId(), role: 'user', text: built.label, timestamp: Date.now() };
+    setMessages((prev) => [...prev, userMsg]);
+    trackMessage(model);
+    const modeInfo = MODES.find((m) => m.id === mode);
+    const outgoing = modeInfo?.prefix ? modeInfo.prefix + built.directive : built.directive;
+    sendLocal(outgoing);
+  }, [streaming, mode, model, sendLocal]);
+
   // ── Tool confirmation handlers ─────────────────────────────────────────
   // Pending mode transition — scheduled by switch_mode tool approval
   const pendingModeTransitionRef = useRef<{ targetMode: string; context: string } | null>(null);
@@ -5356,6 +5433,70 @@ export function AvaChatPage() {
         background: 'rgba(26, 16, 40, 0.6)', flexShrink: 0,
       }}>
         <div style={{ width: '100%', position: 'relative' }}>
+          {/* ── Command palette dropdown (slash-command picker) ─────────────
+              Anchored above the input bar, scrollable when filtered list
+              exceeds max-height. See COMMAND_PALETTE_PLAN.md. */}
+          {showPalette && (
+            <div
+              ref={palettePanelRef}
+              style={{
+                position: 'absolute', bottom: '100%', left: 12,
+                marginBottom: 8,
+                width: 320,
+                maxHeight: 320,
+                overflowY: 'auto',
+                background: '#0f0a1a',
+                border: '1px solid rgba(168, 85, 247, 0.30)',
+                borderRadius: 12,
+                boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.5), 0 -2px 0 rgba(168, 85, 247, 0.15) inset',
+                zIndex: 100,
+              }}
+              role="listbox"
+              aria-label={t('palette.title')}
+            >
+              {filteredPaletteActions.length === 0 ? (
+                <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 12, color: '#6c7086', opacity: 0.7 }}>
+                  {t('palette.empty')}
+                </div>
+              ) : (
+                groupedPaletteActions.map((group) => (
+                  <div key={group.sectionKey}>
+                    <div style={{
+                      padding: '10px 14px 4px',
+                      fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase',
+                      color: 'rgba(168, 85, 247, 0.7)',
+                    }}>
+                      {t(group.sectionKey)}
+                    </div>
+                    {group.items.map((a) => {
+                      const idx = filteredPaletteActions.indexOf(a);
+                      const isActive = idx === paletteActiveIndex;
+                      return (
+                        <button
+                          key={`${a.tool}.${a.action}`}
+                          ref={isActive ? (el) => { el?.scrollIntoView({ block: 'nearest' }); } : undefined}
+                          onClick={() => handlePaletteAction(a.tool, a.action)}
+                          onMouseEnter={() => setPaletteActiveIndex(idx)}
+                          style={{
+                            display: 'block', width: '100%', textAlign: 'left',
+                            padding: '8px 16px', fontSize: 12, fontWeight: 500,
+                            background: isActive ? 'rgba(168, 85, 247, 0.18)' : 'transparent',
+                            color: isActive ? '#fff' : '#cdd6f4',
+                            border: 'none', cursor: 'pointer',
+                            transition: 'background 0.1s',
+                          }}
+                          role="option"
+                          aria-selected={isActive}
+                        >
+                          {t(a.labelKey)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
           {/* ── Secret Vault Panel (slides up from input) ─────────────────────
               Security-critical surface — solid background, confident border,
               clear hierarchy. Trust signal in the header, monospace columns
@@ -5798,6 +5939,36 @@ export function AvaChatPage() {
                 value={input}
                 onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
                 onKeyDown={(e) => {
+                  // Palette takes over the keyboard while it is open —
+                  // arrows navigate the dropdown, Enter fires the highlighted
+                  // action, Escape closes and clears any `/query` text.
+                  if (showPalette) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setPaletteActiveIndex((i) => Math.min(filteredPaletteActions.length - 1, i + 1));
+                      return;
+                    }
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setPaletteActiveIndex((i) => Math.max(0, i - 1));
+                      return;
+                    }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      const item = filteredPaletteActions[paletteActiveIndex];
+                      if (item) handlePaletteAction(item.tool, item.action);
+                      return;
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setShowPalette(false);
+                      if (input.startsWith('/')) {
+                        setInput('');
+                        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+                      }
+                      return;
+                    }
+                  }
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     if (!streaming) send();
@@ -5859,11 +6030,29 @@ export function AvaChatPage() {
             </button>
             </Tooltip>
 
+            {/* Command palette button */}
+            <Tooltip content={t('palette.tooltip')} placement="top">
+            <button
+              ref={paletteBtnRef}
+              onClick={() => { setShowPalette(!showPalette); setShowVault(false); }}
+              style={{
+                width: 36, height: 36, borderRadius: 8,
+                border: showPalette ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.15)',
+                background: showPalette ? 'rgba(168,85,247,0.2)' : 'rgba(168,85,247,0.05)',
+                color: showPalette ? '#a855f7' : '#6c7086', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                transition: 'all 0.2s',
+              }}
+            >
+              <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'monospace', lineHeight: 1 }}>/</span>
+            </button>
+            </Tooltip>
+
             {/* Secret Vault button */}
             <Tooltip content={t('dash.chat.secret_vault')} placement="top">
             <button
               ref={vaultBtnRef}
-              onClick={() => setShowVault(!showVault)}
+              onClick={() => { setShowVault(!showVault); setShowPalette(false); }}
               style={{
                 width: 36, height: 36, borderRadius: 8,
                 border: showVault ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.15)',
