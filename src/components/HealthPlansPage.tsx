@@ -702,6 +702,8 @@ function PlanBuilder(props: {
             onChange={upsertDay}
             onAddExercises={() => setPicker('exercise')}
             onAddMeals={() => setPicker('recipe')}
+            onLoadExerciseDetail={onLoadExerciseDetail}
+            onLoadRecipeDetail={onLoadRecipeDetail}
           />
         </div>
       </div>
@@ -792,7 +794,7 @@ function MonthCalendar({ month, onMonthChange, marks, selected, onSelectDate }: 
 }
 
 // ── Day editor ────────────────────────────────────────────────────────
-function DayPanel({ day, startDate, showTraining, showMeals, recipeDetails, exerciseDetails, onChange, onAddExercises, onAddMeals }: {
+function DayPanel({ day, startDate, showTraining, showMeals, recipeDetails, exerciseDetails, onChange, onAddExercises, onAddMeals, onLoadExerciseDetail, onLoadRecipeDetail }: {
   day: HealthPlanDay;
   startDate: string | null;
   showTraining: boolean;
@@ -802,15 +804,38 @@ function DayPanel({ day, startDate, showTraining, showMeals, recipeDetails, exer
   onChange: (day: HealthPlanDay) => void;
   onAddExercises: () => void;
   onAddMeals: () => void;
+  onLoadExerciseDetail: (slug: string) => void;
+  onLoadRecipeDetail: (slug: string) => void;
 }) {
   const date = planDate(startDate, day.day_index);
   const { totals, estimated } = useMemo(() => dayTotals(day, recipeDetails), [day, recipeDetails]);
+  const [editing, setEditing] = useState(false);
+  // Navigating to another day drops back to the calm read view.
+  useEffect(() => { setEditing(false); }, [day.day_index]);
+
+  const dateLabel = date ? `${WEEKDAY[date.getDay()]} ${date.getDate()} — Day ${day.day_index}` : `Day ${day.day_index}`;
+  const kindLabel = day.kind === 'training' ? 'Training' : day.kind === 'active_recovery' ? 'Active recovery' : 'Rest';
+  const wrapStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 16, borderRadius: 8, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.05)', padding: 16 };
+  const editBtn: CSSProperties = { ...accentBtn(true), padding: '4px 10px', fontSize: 11 };
+
+  if (!editing) {
+    return (
+      <div style={wrapStyle}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{dateLabel}</span>
+          <span style={{ borderRadius: 4, border: `1px solid ${BORDER}`, padding: '1px 6px', fontSize: 10, color: MUTED }}>{kindLabel}</span>
+          {day.title && <span style={{ fontSize: 12, color: TEXT2 }}>{day.title}</span>}
+          <button type="button" onClick={() => setEditing(true)} style={{ ...editBtn, marginLeft: 'auto' }}>Edit day</button>
+        </div>
+        <DayReadView day={day} showTraining={showTraining} showMeals={showMeals} exerciseDetails={exerciseDetails} recipeDetails={recipeDetails} totals={totals} estimated={estimated} onLoadExerciseDetail={onLoadExerciseDetail} onLoadRecipeDetail={onLoadRecipeDetail} />
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, borderRadius: 8, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.05)', padding: 16 }}>
+    <div style={wrapStyle}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>
-          {date ? `${WEEKDAY[date.getDay()]} ${date.getDate()} — Day ${day.day_index}` : `Day ${day.day_index}`}
-        </span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{dateLabel}</span>
         <select value={day.kind} onChange={e => onChange({ ...day, kind: e.target.value as HealthPlanDay['kind'] })} style={inputStyle}>
           <option value="training">Training</option>
           <option value="rest">Rest</option>
@@ -818,6 +843,7 @@ function DayPanel({ day, startDate, showTraining, showMeals, recipeDetails, exer
         </select>
         <input value={day.title ?? ''} onChange={e => onChange({ ...day, title: e.target.value || null })}
           placeholder="Day title — e.g. Upper body, Long run" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+        <button type="button" onClick={() => setEditing(false)} style={editBtn}>Done</button>
       </div>
 
       {showTraining && (
@@ -855,6 +881,199 @@ function DayPanel({ day, startDate, showTraining, showMeals, recipeDetails, exer
 
       <textarea value={day.notes ?? ''} onChange={e => onChange({ ...day, notes: e.target.value || null })}
         placeholder="Day notes (optional)" rows={2} style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
+    </div>
+  );
+}
+
+/** One-line readable summary of an exercise — "3 × 12 · bodyweight · 60s rest". */
+function exerciseSummary(ex: HealthPlanExercise): string {
+  const parts: string[] = [];
+  if (ex.sets != null && ex.reps) parts.push(`${ex.sets} × ${ex.reps}`);
+  else if (ex.sets != null) parts.push(`${ex.sets} sets`);
+  else if (ex.reps) parts.push(ex.reps);
+  if (ex.weight) parts.push(ex.weight);
+  if (ex.rest_seconds != null) parts.push(`${ex.rest_seconds}s rest`);
+  return parts.join('  ·  ') || '—';
+}
+/** One-line readable summary of a meal — "1 serving · 350 cal · 30g protein". */
+function mealSummaryLine(meal: HealthPlanMeal, recipeDetails: Record<string, HealthRecipeDetail>): string {
+  const parts: string[] = [];
+  if (meal.servings != null) parts.push(`${meal.servings} serving${meal.servings === 1 ? '' : 's'}`);
+  const { macros } = mealMacros(meal, recipeDetails);
+  if (macros.calories != null) parts.push(`${macros.calories} cal`);
+  if (macros.protein_g != null) parts.push(`${macros.protein_g}g protein`);
+  return parts.join('  ·  ') || '—';
+}
+
+/** Calm read view of a day — small clickable cards; tap one for the
+ *  exercise's technique guide or the recipe. */
+function DayReadView({ day, showTraining, showMeals, exerciseDetails, recipeDetails, totals, estimated, onLoadExerciseDetail, onLoadRecipeDetail }: {
+  day: HealthPlanDay;
+  showTraining: boolean;
+  showMeals: boolean;
+  exerciseDetails: Record<string, HealthExerciseDetail>;
+  recipeDetails: Record<string, HealthRecipeDetail>;
+  totals: { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null };
+  estimated: boolean;
+  onLoadExerciseDetail: (slug: string) => void;
+  onLoadRecipeDetail: (slug: string) => void;
+}) {
+  const [detail, setDetail] = useState<{ kind: 'exercise' | 'recipe'; slug: string; name: string } | null>(null);
+  const openExercise = (ex: HealthPlanExercise) => { if (!ex.ref) return; onLoadExerciseDetail(ex.ref.slug); setDetail({ kind: 'exercise', slug: ex.ref.slug, name: ex.name || 'Exercise' }); };
+  const openMeal = (meal: HealthPlanMeal) => { if (!meal.ref) return; onLoadRecipeDetail(meal.ref.slug); setDetail({ kind: 'recipe', slug: meal.ref.slug, name: meal.name || 'Meal' }); };
+
+  if (day.training.length === 0 && day.meals.length === 0) {
+    return <div style={{ borderRadius: 6, border: `1px dashed ${BORDER}`, padding: 16, fontSize: 11, fontStyle: 'italic', color: MUTED }}>Nothing scheduled — hit “Edit day” to add {showTraining ? 'exercises' : ''}{showTraining && showMeals ? ' or ' : ''}{showMeals ? 'meals' : ''}.</div>;
+  }
+
+  const card = (clickable: boolean): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap: 4, borderRadius: 6, border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.02)', padding: '8px 12px', textAlign: 'left', cursor: clickable ? 'pointer' : 'default' });
+  const grid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 8 };
+  const nameStyle: CSSProperties = { fontSize: 12, fontWeight: 500, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {showTraining && day.training.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ ...labelCap, letterSpacing: '0.14em' }}>Training</span>
+          <div style={grid}>
+            {day.training.map(ex => {
+              const clickable = !!ex.ref;
+              return (
+                <button key={ex.id} type="button" disabled={!clickable} onClick={() => openExercise(ex)} style={card(clickable)}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={nameStyle}>{ex.name || 'Exercise'}</span>
+                    {clickable && <span style={{ fontSize: 14, color: ACCENT }}>›</span>}
+                  </div>
+                  <span style={{ fontSize: 10, color: MUTED }}>{exerciseSummary(ex)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {showMeals && day.meals.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ ...labelCap, letterSpacing: '0.14em' }}>Meals</span>
+          <div style={grid}>
+            {day.meals.map(meal => {
+              const clickable = !!meal.ref;
+              return (
+                <button key={meal.id} type="button" disabled={!clickable} onClick={() => openMeal(meal)} style={card(clickable)}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={nameStyle}><span style={{ fontSize: 10, textTransform: 'uppercase', color: MUTED, marginRight: 6 }}>{meal.slot}</span>{meal.name || 'Meal'}</span>
+                    {clickable && <span style={{ fontSize: 14, color: ACCENT }}>›</span>}
+                  </div>
+                  <span style={{ fontSize: 10, color: MUTED }}>{mealSummaryLine(meal, recipeDetails)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, borderRadius: 6, border: '1px solid rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.05)', padding: '8px 12px' }}>
+            <span style={{ ...labelCap, color: 'rgba(251,191,36,0.8)' }}>Day total</span>
+            {MACRO_FIELDS.map(f => (<span key={f.key} style={{ fontSize: 11, color: TEXT2 }}>{f.label} <span style={{ fontWeight: 600, color: TEXT }}>{totals[f.key] ?? 0}{f.unit}</span></span>))}
+            {estimated && <span style={{ fontSize: 9, fontStyle: 'italic', color: MUTED }}>estimated</span>}
+          </div>
+        </div>
+      )}
+      {day.notes && <div style={{ borderRadius: 6, border: `1px solid ${BORDER}`, padding: '8px 12px', fontSize: 11, lineHeight: 1.5, color: TEXT2 }}>{day.notes}</div>}
+
+      {detail && (
+        <ItemDetailModal
+          detail={detail}
+          exercise={detail.kind === 'exercise' ? exerciseDetails[detail.slug] : undefined}
+          recipe={detail.kind === 'recipe' ? recipeDetails[detail.slug] : undefined}
+          onClose={() => setDetail(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+const dChip: CSSProperties = { borderRadius: 999, border: `1px solid ${BORDER}`, padding: '1px 8px', fontSize: 10, textTransform: 'capitalize', color: MUTED };
+const dHd: CSSProperties = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: MUTED };
+
+function ItemDetailModal({ detail, exercise, recipe, onClose }: {
+  detail: { kind: 'exercise' | 'recipe'; slug: string; name: string };
+  exercise: HealthExerciseDetail | undefined;
+  recipe: HealthRecipeDetail | undefined;
+  onClose: () => void;
+}) {
+  const loaded = detail.kind === 'exercise' ? !!exercise : !!recipe;
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', maxHeight: '85vh', width: '100%', maxWidth: 640, overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(168,85,247,0.25)', background: 'linear-gradient(to bottom right, #100d1a, #181327)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid rgba(168,85,247,0.14)', padding: '12px 20px' }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: TEXT }}>{detail.name}</span>
+          <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 14, color: MUTED, cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ minHeight: 0, flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {!loaded ? <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>Loading…</div>
+            : exercise ? <ExerciseDetailBody ex={exercise} />
+              : recipe ? <RecipeDetailBody rec={recipe} />
+                : <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>No detail available.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
+  const r = ex.routine;
+  const routineParts = [
+    r.sets != null ? `${r.sets} sets` : null,
+    r.reps_target ? `${r.reps_target} reps` : null,
+    r.rest_seconds != null ? `${r.rest_seconds}s rest` : null,
+    r.tempo ? `tempo ${r.tempo}` : null,
+    r.frequency_per_week ? `${r.frequency_per_week}/wk` : null,
+  ].filter(Boolean);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontSize: 12, lineHeight: 1.5, color: TEXT2 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <span style={dChip}>{ex.exercise_type}</span>
+        <span style={dChip}>{ex.workout_type}</span>
+        {typeof ex.difficulty === 'number' && <span style={dChip}>difficulty {ex.difficulty}</span>}
+      </div>
+      {ex.thumbnail_url && <img src={ex.thumbnail_url} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'cover' }} />}
+      {ex.description && <p style={{ margin: 0 }}>{ex.description}</p>}
+      {routineParts.length > 0 && <div><div style={dHd}>Routine</div><p style={{ margin: '4px 0 0' }}>{routineParts.join('  ·  ')}{r.progression ? ` — ${r.progression}` : ''}</p></div>}
+      {ex.steps.length > 0 && <div><div style={dHd}>How to do it</div><ol style={{ margin: '4px 0 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>{ex.steps.map((s, i) => <li key={i}>{s}</li>)}</ol></div>}
+      {ex.common_mistakes && <div><div style={dHd}>Common mistakes</div><p style={{ margin: '4px 0 0' }}>{ex.common_mistakes}</p></div>}
+      {ex.muscles.length > 0 && <div><div style={dHd}>Muscles</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>{ex.muscles.map(mu => <span key={mu.slug} style={dChip}>{mu.name}{mu.role === 'secondary' ? ' (secondary)' : ''}</span>)}</div></div>}
+      {ex.equipment.length > 0 && <div><div style={dHd}>Equipment</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>{ex.equipment.map(eq => <span key={eq.slug} style={dChip}>{eq.name}</span>)}</div></div>}
+      {ex.demo_video_url && <a href={ex.demo_video_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: ACCENT }}>Watch demo →</a>}
+    </div>
+  );
+}
+
+function RecipeDetailBody({ rec }: { rec: HealthRecipeDetail }) {
+  const version = rec.versions.find(v => v.level === 'intermediate') ?? rec.versions[0];
+  const n = version?.nutrition;
+  const timeParts = version ? [
+    version.prep_time_minutes != null ? `${version.prep_time_minutes}m prep` : null,
+    version.cook_time_minutes != null ? `${version.cook_time_minutes}m cook` : null,
+  ].filter(Boolean) : [];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontSize: 12, lineHeight: 1.5, color: TEXT2 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {rec.course && <span style={dChip}>{rec.course}</span>}
+        {rec.cuisine_name && <span style={dChip}>{rec.cuisine_name}</span>}
+        {version?.default_servings != null && <span style={dChip}>{version.default_servings} servings</span>}
+      </div>
+      {rec.hero_image_url && <img src={rec.hero_image_url} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'cover' }} />}
+      {(rec.overview || version?.description) && <p style={{ margin: 0 }}>{rec.overview ?? version?.description}</p>}
+      {timeParts.length > 0 && <p style={{ margin: 0, color: MUTED }}>{timeParts.join('  ·  ')}</p>}
+      {n && typeof n.calories === 'number' && (
+        <div><div style={dHd}>Nutrition (per serving{n.source === 'verified' ? '' : ', estimated'})</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
+            {n.calories != null && <span>Cal <span style={{ fontWeight: 600, color: TEXT }}>{n.calories}</span></span>}
+            {n.protein_g != null && <span>Protein <span style={{ fontWeight: 600, color: TEXT }}>{n.protein_g}g</span></span>}
+            {n.carbs_g != null && <span>Carbs <span style={{ fontWeight: 600, color: TEXT }}>{n.carbs_g}g</span></span>}
+            {n.fat_g != null && <span>Fat <span style={{ fontWeight: 600, color: TEXT }}>{n.fat_g}g</span></span>}
+          </div>
+        </div>
+      )}
+      {rec.ingredients.length > 0 && <div><div style={dHd}>Ingredients</div><ul style={{ margin: '4px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>{[...rec.ingredients].sort((a, b) => a.sort_order - b.sort_order).map((ing, i) => <li key={i}>{[ing.quantity != null ? ing.quantity : null, ing.unit, ing.name].filter(v => v != null && v !== '').join(' ')}{ing.optional ? ' (optional)' : ''}</li>)}</ul></div>}
+      {version && version.steps.length > 0 && <div><div style={dHd}>Method</div><ol style={{ margin: '4px 0 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>{[...version.steps].sort((a, b) => a.sort_order - b.sort_order).map((s, i) => <li key={i}>{s.action}</li>)}</ol></div>}
     </div>
   );
 }
