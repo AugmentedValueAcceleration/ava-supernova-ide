@@ -75,7 +75,6 @@ const DURATION_PRESETS = [
 ];
 const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAY_INITIAL = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const EMPTY_MARKS = new Map<string, { training: boolean; meals: boolean }>();
 
 // ── Helpers ───────────────────────────────────────────────────────────
 function durationLabel(days: number): string {
@@ -275,7 +274,46 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
   onDelete: (id: string) => void;
 }) {
   const [tab, setTab] = useState<'calendar' | 'programs'>('calendar');
-  const [month, setMonth] = useState<Date>(() => new Date());
+  const [month, setMonth] = useState<Date>(() => {
+    const dated = plans.find(p => p.start_date);
+    return dated?.start_date ? new Date(`${dated.start_date}T00:00:00`) : new Date();
+  });
+
+  // Mark every day each plan spans — training (accent) / meals (amber) —
+  // so created plans actually show on the calendar (was hardcoded empty).
+  const planMarks = useMemo(() => {
+    const map = new Map<string, { training: boolean; meals: boolean }>();
+    for (const p of plans) {
+      if (!p.start_date) continue;
+      const start = new Date(`${p.start_date}T00:00:00`);
+      if (isNaN(start.getTime())) continue;
+      const training = p.type === 'fitness' || p.type === 'combined';
+      const meals = p.type === 'meal' || p.type === 'combined';
+      for (let i = 0; i < p.duration_days; i++) {
+        const d = new Date(start); d.setDate(d.getDate() + i);
+        const key = ymd(d);
+        const prev = map.get(key) ?? { training: false, meals: false };
+        map.set(key, { training: prev.training || training, meals: prev.meals || meals });
+      }
+    }
+    return map;
+  }, [plans]);
+  // Which plan covers a date? Prefer active, then most recently updated.
+  const planForDate = useCallback((key: string): HealthPlanSummary | null => {
+    const sel = new Date(`${key}T00:00:00`).getTime();
+    const covering = plans.filter(p => {
+      if (!p.start_date) return false;
+      const s = new Date(`${p.start_date}T00:00:00`).getTime();
+      if (isNaN(s)) return false;
+      return sel >= s && sel <= s + (p.duration_days - 1) * 86400000;
+    });
+    if (covering.length === 0) return null;
+    covering.sort((a, b) => {
+      if ((a.status === 'active') !== (b.status === 'active')) return a.status === 'active' ? -1 : 1;
+      return (b.updated_at ?? '').localeCompare(a.updated_at ?? '');
+    });
+    return covering[0];
+  }, [plans]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -300,7 +338,7 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
       </div>
 
       {tab === 'calendar' ? (
-        <MonthCalendar month={month} onMonthChange={setMonth} marks={EMPTY_MARKS} selected={null} onSelectDate={() => onNew()} />
+        <MonthCalendar month={month} onMonthChange={setMonth} marks={planMarks} selected={null} onSelectDate={(key) => { const p = planForDate(key); if (p) onOpen(p.id); else onNew(); }} />
       ) : plans.length === 0 ? (
         <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '40px 16px', textAlign: 'center' }}>
           <div style={{ fontSize: 12, color: TEXT2 }}>No programs yet</div>

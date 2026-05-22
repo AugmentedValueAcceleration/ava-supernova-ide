@@ -80,6 +80,8 @@ export interface HealthPlanSummary {
   title: string;
   status: HealthPlanStatus;
   duration_days: number;
+  /** Plan start date (YYYY-MM-DD) so the Plans calendar can place it. */
+  start_date: string | null;
   source: HealthPlanSource;
   updated_at: string | null;
 }
@@ -89,7 +91,7 @@ export interface HealthPlanSummary {
 function toSummary(p: HealthPlan): HealthPlanSummary {
   return {
     id: p.id, type: p.type, title: p.title, status: p.status,
-    duration_days: p.duration_days, source: p.source, updated_at: p.updated_at,
+    duration_days: p.duration_days, start_date: p.start_date, source: p.source, updated_at: p.updated_at,
   };
 }
 
