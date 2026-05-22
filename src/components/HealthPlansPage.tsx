@@ -267,6 +267,43 @@ export default function HealthPlansPage() {
 }
 
 // ── Base tab — Calendar / Programs inner tabs ─────────────────────────
+/** Compact custom dropdown for the plan builder — content-width panel so
+ *  options never truncate. Mirrors the extension's Select(size="sm"). */
+function PlanSelect({ value, onChange, options }: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  const selected = options.find(o => o.value === value);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(!open)} style={{ ...inputStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, cursor: 'pointer', textAlign: 'left' }}>
+        <span style={{ whiteSpace: 'nowrap' }}>{selected?.label ?? value}</span>
+        <span style={{ fontSize: 9, color: MUTED, transform: open ? 'rotate(180deg)' : 'none' }}>{'▾'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', zIndex: 50, marginTop: 4, maxHeight: 240, width: 'max-content', minWidth: '100%', overflowY: 'auto', borderRadius: 8, border: `1px solid ${BORDER}`, background: '#1a1028', padding: 4, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+          {options.map(o => (
+            <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
+              style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 12, border: 'none', cursor: 'pointer', borderRadius: 4, padding: '6px 10px', fontSize: 12, textAlign: 'left', background: o.value === value ? 'rgba(168,85,247,0.1)' : 'transparent', color: o.value === value ? TEXT : TEXT2 }}>
+              <span style={{ whiteSpace: 'nowrap' }}>{o.label}</span>
+              {o.value === value && <span style={{ color: ACCENT }}>✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
   plans: HealthPlanSummary[];
   onNew: () => void;
@@ -666,15 +703,10 @@ function PlanBuilder(props: {
           <span style={{ borderRadius: 4, border: `1px solid ${m.accent}`, padding: '1px 6px', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', color: m.accent }}>{m.label}</span>
           <input value={draft.title} onChange={e => commit({ ...draft, title: e.target.value })} placeholder="Plan title"
             style={{ ...inputStyle, flex: 1, minWidth: 180, fontSize: 14 }} />
-          <select value={draft.status} onChange={e => commit({ ...draft, status: e.target.value as HealthPlanStatus })} style={inputStyle}>
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="archived">Archived</option>
-          </select>
-          <select value={draft.duration_days} onChange={e => setDuration(Number(e.target.value))} style={inputStyle}>
-            {DURATION_PRESETS.map(p => <option key={p.days} value={p.days}>{p.label}</option>)}
-          </select>
+          <PlanSelect value={draft.status} onChange={v => commit({ ...draft, status: v as HealthPlanStatus })}
+            options={[{ value: 'draft', label: 'Draft' }, { value: 'active', label: 'Active' }, { value: 'completed', label: 'Completed' }, { value: 'archived', label: 'Archived' }]} />
+          <PlanSelect value={String(draft.duration_days)} onChange={v => setDuration(Number(v))}
+            options={DURATION_PRESETS.map(p => ({ value: String(p.days), label: p.label }))} />
         </div>
         <input value={draft.goal ?? ''} onChange={e => commit({ ...draft, goal: e.target.value || null })}
           placeholder="Goal — e.g. lose 4 kg, first 5 k, build pressing strength" style={{ ...inputStyle, width: '100%' }} />
@@ -836,11 +868,8 @@ function DayPanel({ day, startDate, showTraining, showMeals, recipeDetails, exer
     <div style={wrapStyle}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{dateLabel}</span>
-        <select value={day.kind} onChange={e => onChange({ ...day, kind: e.target.value as HealthPlanDay['kind'] })} style={inputStyle}>
-          <option value="training">Training</option>
-          <option value="rest">Rest</option>
-          <option value="active_recovery">Active recovery</option>
-        </select>
+        <PlanSelect value={day.kind} onChange={v => onChange({ ...day, kind: v as HealthPlanDay['kind'] })}
+          options={[{ value: 'training', label: 'Training' }, { value: 'rest', label: 'Rest' }, { value: 'active_recovery', label: 'Active recovery' }]} />
         <input value={day.title ?? ''} onChange={e => onChange({ ...day, title: e.target.value || null })}
           placeholder="Day title — e.g. Upper body, Long run" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
         <button type="button" onClick={() => setEditing(false)} style={editBtn}>Done</button>
@@ -1145,12 +1174,8 @@ function MealRow({ meal, recipeDetails, onChange, onRemove }: {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderRadius: 6, border: `1px solid ${BORDER}`, background: INPUT_BG, padding: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <select value={meal.slot} onChange={e => onChange({ ...meal, slot: e.target.value as HealthPlanMeal['slot'] })} style={inputStyle}>
-          <option value="breakfast">Breakfast</option>
-          <option value="lunch">Lunch</option>
-          <option value="dinner">Dinner</option>
-          <option value="snack">Snack</option>
-        </select>
+        <PlanSelect value={meal.slot} onChange={v => onChange({ ...meal, slot: v as HealthPlanMeal['slot'] })}
+          options={[{ value: 'breakfast', label: 'Breakfast' }, { value: 'lunch', label: 'Lunch' }, { value: 'dinner', label: 'Dinner' }, { value: 'snack', label: 'Snack' }]} />
         <input value={meal.name} onChange={e => onChange({ ...meal, name: e.target.value })} placeholder="Meal name" style={{ ...inputStyle, flex: 1 }} />
         <button type="button" onClick={onRemove} title="Remove" style={{ border: 'none', background: 'transparent', padding: '0 4px', color: MUTED, cursor: 'pointer' }}>✕</button>
       </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { readDir } from '@tauri-apps/plugin-fs';
+import { loadHealthPlanIndex } from '../lib/health-plans-store';
 import { Tooltip } from './Tooltip';
 import {
   Lightning as PhCommand,
@@ -1402,6 +1403,37 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
 function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: string) => void }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [taskDates, setTaskDates] = useState<Set<string>>(new Set());
+  const [planMarks, setPlanMarks] = useState<Map<string, { training: boolean; meals: boolean }>>(new Map());
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('ava.ideSidebarCalCollapsed') === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => setCollapsed(c => {
+    const next = !c;
+    try { localStorage.setItem('ava.ideSidebarCalCollapsed', next ? '1' : '0'); } catch { /* */ }
+    return next;
+  });
+
+  // Plan dots — load summaries once and mark training (accent) / meals
+  // (amber), matching the Plans calendar.
+  useEffect(() => {
+    loadHealthPlanIndex().then(plans => {
+      const map = new Map<string, { training: boolean; meals: boolean }>();
+      for (const p of plans) {
+        if (!p.start_date) continue;
+        const start = new Date(`${p.start_date}T00:00:00`);
+        if (isNaN(start.getTime())) continue;
+        const training = p.type === 'fitness' || p.type === 'combined';
+        const meals = p.type === 'meal' || p.type === 'combined';
+        for (let i = 0; i < p.duration_days; i++) {
+          const d = new Date(start); d.setDate(d.getDate() + i);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const prev = map.get(key) ?? { training: false, meals: false };
+          map.set(key, { training: prev.training || training, meals: prev.meals || meals });
+        }
+      }
+      setPlanMarks(map);
+    }).catch(() => {});
+  }, []);
 
   // Fetch task dates
   useEffect(() => {
@@ -1439,6 +1471,20 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
   const label = target.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
   const todayStr = now.toISOString().slice(0, 10);
 
+  if (collapsed) {
+    return (
+      <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.12)', padding: '10px 14px', flexShrink: 0 }}>
+        <button onClick={toggleCollapsed} title="Show calendar" style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer', color: '#a6adc8' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: '#a855f7', color: '#fff', fontSize: 9, fontWeight: 600 }}>{now.getDate()}</span>
+            <span style={{ fontSize: 11 }}>{now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+          </span>
+          <span style={{ fontSize: 9, color: '#6c7086' }}>{'▼'}</span>
+        </button>
+      </div>
+    );
+  }
+
   function handleDayClick(day: number) {
     const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'tasks' }));
@@ -1455,7 +1501,15 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <button onClick={() => setMonthOffset(o => o - 1)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 10, padding: 2 }}>{'\u25C0'}</button>
         <span style={{ fontSize: 10, fontWeight: 600, color: '#a6adc8' }}>{label}</span>
-        <button onClick={() => setMonthOffset(o => o + 1)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 10, padding: 2 }}>{'\u25B6'}</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button onClick={() => setMonthOffset(o => o + 1)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 10, padding: 2 }}>{'\u25B6'}</button>
+          <button onClick={toggleCollapsed} title="Hide calendar" style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 9, padding: 2 }}>{'\u25B2'}</button>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4, fontSize: 7, color: '#6c7086' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#a855f7' }} />Training</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />Meals</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#38bdf8' }} />Tasks</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, textAlign: 'center', marginBottom: 2 }}>
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
@@ -1467,7 +1521,11 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
         {days.map(day => {
           const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const isToday = iso === todayStr;
-          const hasTask = taskDates.has(iso);
+          const mk = planMarks.get(iso);
+          const dots: string[] = [];
+          if (mk?.training) dots.push('#a855f7');
+          if (mk?.meals) dots.push('#f59e0b');
+          if (taskDates.has(iso)) dots.push('#38bdf8');
           return (
             <button
               key={day}
@@ -1482,11 +1540,10 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
               }}
             >
               {day}
-              {hasTask && (
-                <span style={{
-                  position: 'absolute', bottom: 1, width: 4, height: 4, borderRadius: '50%',
-                  background: isToday ? '#a855f7' : '#f59e0b',
-                }} />
+              {dots.length > 0 && (
+                <span style={{ position: 'absolute', bottom: 1, display: 'flex', gap: 1 }}>
+                  {dots.map((c, di) => <span key={di} style={{ width: 4, height: 4, borderRadius: '50%', background: c }} />)}
+                </span>
               )}
             </button>
           );
