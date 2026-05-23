@@ -25,6 +25,7 @@ import {
   saveHealthProfile,
   type HealthProfile,
 } from '../lib/health-store';
+import { t, useLocale } from '../lib/i18n';
 
 /**
  * Health & Nutrition page for the IDE — the public exercise + recipe
@@ -45,11 +46,8 @@ const WORKOUT_TYPES: HealthWorkoutType[] = [
   'mobility', 'yoga', 'pilates', 'recovery', 'running', 'cycling', 'hybrid',
 ];
 
-const WORKOUT_LABEL: Record<HealthWorkoutType, string> = {
-  strength: 'Strength', hypertrophy: 'Hypertrophy', conditioning: 'Conditioning',
-  hiit: 'HIIT', mobility: 'Mobility', yoga: 'Yoga', pilates: 'Pilates',
-  recovery: 'Recovery', running: 'Running', cycling: 'Cycling', hybrid: 'Hybrid',
-};
+// Browse-tab workout-type label — looked up live so it follows the locale.
+const workoutLabel = (type: HealthWorkoutType): string => t(`health.browse.workout.${type}`);
 
 const WORKOUT_ACCENT: Record<HealthWorkoutType, string> = {
   strength: '#a8a8b3', hypertrophy: '#c084fc', conditioning: '#34d399',
@@ -58,14 +56,14 @@ const WORKOUT_ACCENT: Record<HealthWorkoutType, string> = {
 };
 
 const COURSES = ['breakfast', 'main', 'starter', 'side', 'snack', 'dessert'] as const;
-const COURSE_LABEL: Record<string, string> = {
-  breakfast: 'Breakfast', main: 'Mains', starter: 'Starters',
-  side: 'Sides', snack: 'Snacks', dessert: 'Desserts',
-};
+// Browse-tab course label — looked up live so it follows the locale.
+const courseLabel = (course: string): string => t(`health.browse.course.${course}`);
+const exerciseTypeLabel = (type: string): string => t(`health.submit.ex_type.${type}`);
 
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export function HealthPage() {
+  useLocale();
   const [tab, setTab] = useState<HealthTab>('exercises');
   const [contributeOpen, setContributeOpen] = useState(false);
 
@@ -88,10 +86,10 @@ export function HealthPage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div>
             <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>
-              Health &amp; Nutrition
+              {t('health.browse.title')}
             </h1>
             <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
-              A free, open library of exercises and recipes. Informational only.
+              {t('health.browse.subtitle')}
             </p>
           </div>
           <button
@@ -102,14 +100,14 @@ export function HealthPage() {
               border: '1px solid rgba(168, 85, 247, 0.35)',
             }}
           >
-            + Contribute
+            {t('health.browse.contribute')}
           </button>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
-          <button onClick={() => setTab('exercises')} style={tabBtnStyle(tab === 'exercises')}>Exercises</button>
-          <button onClick={() => setTab('recipes')} style={tabBtnStyle(tab === 'recipes')}>Recipes</button>
-          <button onClick={() => setTab('mine')} style={tabBtnStyle(tab === 'mine')}>My submissions</button>
-          <button onClick={() => setTab('profile')} style={tabBtnStyle(tab === 'profile')}>Profile</button>
+          <button onClick={() => setTab('exercises')} style={tabBtnStyle(tab === 'exercises')}>{t('health.browse.tab.exercises')}</button>
+          <button onClick={() => setTab('recipes')} style={tabBtnStyle(tab === 'recipes')}>{t('health.browse.tab.recipes')}</button>
+          <button onClick={() => setTab('mine')} style={tabBtnStyle(tab === 'mine')}>{t('health.browse.tab.mine')}</button>
+          <button onClick={() => setTab('profile')} style={tabBtnStyle(tab === 'profile')}>{t('health.browse.tab.profile')}</button>
         </div>
       </div>
 
@@ -161,27 +159,27 @@ function ExercisesGrid() {
 
   // Refetch (page 0) on filter / search change — search debounced 300ms.
   useEffect(() => {
-    const t = setTimeout(() => { void fetchPage(0); }, search ? 300 : 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { void fetchPage(0); }, search ? 300 : 0);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, search]);
 
   return (
     <div>
-      <SearchInput value={search} onChange={setSearch} placeholder="Search exercises — e.g. 'squat'" />
+      <SearchInput value={search} onChange={setSearch} placeholder={t('health.browse.search_exercises_placeholder')} />
       <FilterRow>
-        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>All</FilterChip>
+        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>{t('health.browse.filter.all')}</FilterChip>
         {WORKOUT_TYPES.map(w => (
-          <FilterChip key={w} active={filter === w} onClick={() => setFilter(w)}>{WORKOUT_LABEL[w]}</FilterChip>
+          <FilterChip key={w} active={filter === w} onClick={() => setFilter(w)}>{workoutLabel(w)}</FilterChip>
         ))}
       </FilterRow>
 
       {loading ? (
-        <CenterNote>Loading exercises…</CenterNote>
+        <CenterNote>{t('health.browse.loading_exercises')}</CenterNote>
       ) : failed ? (
-        <LoadError noun="exercises" onRetry={() => void fetchPage(0)} />
+        <LoadError noun={t('health.browse.noun.exercises')} onRetry={() => void fetchPage(0)} />
       ) : items.length === 0 ? (
-        <CenterNote>{search ? `No exercises match "${search}".` : 'No exercises found.'}</CenterNote>
+        <CenterNote>{search ? t('health.browse.no_exercises_match_q', { q: search }) : t('health.browse.no_exercises_found')}</CenterNote>
       ) : (
         <>
           <CardGrid>
@@ -205,12 +203,12 @@ function ExercisesGrid() {
                   </div>
                   <div style={{ padding: 14 }}>
                     <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: accent, marginBottom: 4 }}>
-                      {WORKOUT_LABEL[ex.workout_type]}
+                      {workoutLabel(ex.workout_type)}
                     </div>
                     <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.3 }}>{ex.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                       <Dots value={ex.difficulty} accent={accent} />
-                      <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{ex.exercise_type}</span>
+                      <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{exerciseTypeLabel(ex.exercise_type)}</span>
                     </div>
                   </div>
                 </Card>
@@ -261,27 +259,27 @@ function RecipesGrid() {
   }, [filter, search]);
 
   useEffect(() => {
-    const t = setTimeout(() => { void fetchPage(0); }, search ? 300 : 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { void fetchPage(0); }, search ? 300 : 0);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, search]);
 
   return (
     <div>
-      <SearchInput value={search} onChange={setSearch} placeholder="Search recipes — e.g. 'chicken'" />
+      <SearchInput value={search} onChange={setSearch} placeholder={t('health.browse.search_recipes_placeholder')} />
       <FilterRow>
-        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>All</FilterChip>
+        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>{t('health.browse.filter.all')}</FilterChip>
         {COURSES.map(c => (
-          <FilterChip key={c} active={filter === c} onClick={() => setFilter(c)}>{COURSE_LABEL[c]}</FilterChip>
+          <FilterChip key={c} active={filter === c} onClick={() => setFilter(c)}>{courseLabel(c)}</FilterChip>
         ))}
       </FilterRow>
 
       {loading ? (
-        <CenterNote>Loading recipes…</CenterNote>
+        <CenterNote>{t('health.browse.loading_recipes')}</CenterNote>
       ) : failed ? (
-        <LoadError noun="recipes" onRetry={() => void fetchPage(0)} />
+        <LoadError noun={t('health.browse.noun.recipes')} onRetry={() => void fetchPage(0)} />
       ) : items.length === 0 ? (
-        <CenterNote>{search ? `No recipes match "${search}".` : 'No recipes found.'}</CenterNote>
+        <CenterNote>{search ? t('health.browse.no_recipes_match_q', { q: search }) : t('health.browse.no_recipes_found')}</CenterNote>
       ) : (
         <>
           <CardGrid>
@@ -374,9 +372,9 @@ function CenterNote({ children }: { children: React.ReactNode }) {
 function LoadError({ noun, onRetry }: { noun: string; onRetry: () => void }) {
   return (
     <div style={{ padding: '44px 0', textAlign: 'center' }}>
-      <div style={{ fontSize: 13, color: '#cdd6f4', marginBottom: 4 }}>Couldn&apos;t load {noun}.</div>
+      <div style={{ fontSize: 13, color: '#cdd6f4', marginBottom: 4 }}>{t('health.browse.load_error', { noun })}</div>
       <div style={{ fontSize: 11, color: '#6c7086', maxWidth: 300, margin: '0 auto 12px', lineHeight: 1.5 }}>
-        The connection to the library failed — your data is safe, this is a network hiccup.
+        {t('health.browse.load_error_hint')}
       </div>
       <button
         type="button"
@@ -386,7 +384,7 @@ function LoadError({ noun, onRetry }: { noun: string; onRetry: () => void }) {
           border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.12)', color: '#cba6f7',
         }}
       >
-        Retry
+        {t('health.browse.retry')}
       </button>
     </div>
   );
@@ -436,7 +434,7 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
 
 function Dots({ value, accent }: { value: number; accent: string }) {
   return (
-    <span style={{ display: 'inline-flex', gap: 3 }} aria-label={`Difficulty ${value} of 5`}>
+    <span style={{ display: 'inline-flex', gap: 3 }} aria-label={t('health.browse.difficulty_of_5', { n: value })}>
       {[1, 2, 3, 4, 5].map(n => (
         <span key={n} style={{
           width: 5, height: 5, borderRadius: '50%',
@@ -463,12 +461,12 @@ function Pagination({ total, offset, loading, onPage }: {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 24 }}>
       <button disabled={atStart || loading} style={btn(atStart || loading)}
-        onClick={() => !atStart && !loading && onPage(Math.max(0, offset - PAGE_SIZE))}>← Prev</button>
+        onClick={() => !atStart && !loading && onPage(Math.max(0, offset - PAGE_SIZE))}>‹ {t('health.browse.prev')}</button>
       <span style={{ fontSize: 11, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 1 }}>
-        Page {currentPage} of {totalPages}
+        {t('health.browse.page_of', { current: currentPage, total: totalPages })}
       </span>
       <button disabled={atEnd || loading} style={btn(atEnd || loading)}
-        onClick={() => !atEnd && !loading && onPage(offset + PAGE_SIZE)}>Next →</button>
+        onClick={() => !atEnd && !loading && onPage(offset + PAGE_SIZE)}>{t('health.browse.next')} ›</button>
     </div>
   );
 }
@@ -502,7 +500,7 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
       >
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t('health.browse.close')}
           style={{
             position: 'absolute', top: 12, right: 12, zIndex: 1,
             width: 30, height: 30, borderRadius: '50%', cursor: 'pointer',
@@ -545,9 +543,9 @@ function ExerciseDetailModal({ slug, onClose }: { slug: string; onClose: () => v
     <ModalShell onClose={onClose}>
       <div style={{ padding: '28px 28px 32px' }}>
         {loading
-          ? <CenterNote>Loading exercise…</CenterNote>
+          ? <CenterNote>{t('health.browse.loading_exercise')}</CenterNote>
           : failed || !detail
-            ? <CenterNote>Couldn&apos;t load this exercise.</CenterNote>
+            ? <CenterNote>{t('health.browse.couldnt_load_exercise')}</CenterNote>
             : <ExerciseDetailBody ex={detail} />}
       </div>
     </ModalShell>
@@ -557,11 +555,11 @@ function ExerciseDetailModal({ slug, onClose }: { slug: string; onClose: () => v
 function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
   const accent = WORKOUT_ACCENT[ex.workout_type];
   const routine: Array<[string, string]> = [];
-  if (ex.routine.sets != null) routine.push(['Sets', String(ex.routine.sets)]);
-  if (ex.routine.reps_target) routine.push(['Reps', ex.routine.reps_target]);
-  if (ex.routine.rest_seconds != null) routine.push(['Rest', `${ex.routine.rest_seconds}s`]);
-  if (ex.routine.tempo) routine.push(['Tempo', ex.routine.tempo]);
-  if (ex.routine.frequency_per_week) routine.push(['Freq.', ex.routine.frequency_per_week]);
+  if (ex.routine.sets != null) routine.push([t('health.browse.routine.sets'), String(ex.routine.sets)]);
+  if (ex.routine.reps_target) routine.push([t('health.browse.routine.reps'), ex.routine.reps_target]);
+  if (ex.routine.rest_seconds != null) routine.push([t('health.browse.routine.rest'), `${ex.routine.rest_seconds}s`]);
+  if (ex.routine.tempo) routine.push([t('health.browse.routine.tempo'), ex.routine.tempo]);
+  if (ex.routine.frequency_per_week) routine.push([t('health.browse.routine.freq'), ex.routine.frequency_per_week]);
   const primaries = ex.muscles.filter(m => m.role === 'primary');
   const secondaries = ex.muscles.filter(m => m.role === 'secondary');
 
@@ -569,13 +567,13 @@ function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       <div>
         <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: accent, marginBottom: 6 }}>
-          {WORKOUT_LABEL[ex.workout_type]}
+          {workoutLabel(ex.workout_type)}
         </div>
         <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{ex.name}</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
-          <span style={{ textTransform: 'capitalize', background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{ex.exercise_type}</span>
+          <span style={{ textTransform: 'capitalize', background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
           <Dots value={ex.difficulty} accent={accent} />
-          <span>Difficulty {ex.difficulty}/5</span>
+          <span>{t('health.browse.difficulty_n', { n: ex.difficulty })}</span>
         </div>
       </div>
 
@@ -585,7 +583,7 @@ function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
 
       {ex.steps.length > 0 && (
         <div>
-          {sectionLabel('How to do it')}
+          {sectionLabel(t('health.browse.how_to_do_it'))}
           <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {ex.steps.map((s, i) => (
               <li key={i} style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4' }}>{s}</li>
@@ -596,7 +594,7 @@ function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
 
       {routine.length > 0 && (
         <div>
-          {sectionLabel('How to use it')}
+          {sectionLabel(t('health.browse.how_to_use_it'))}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
             {routine.map(([k, v]) => (
               <div key={k}>
@@ -613,21 +611,21 @@ function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
 
       {ex.beginner_detail && (
         <div>
-          {sectionLabel("If you're new to this")}
+          {sectionLabel(t('health.browse.if_youre_new'))}
           <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.beginner_detail}</p>
         </div>
       )}
 
       {ex.common_mistakes && (
         <div>
-          {sectionLabel('Common mistakes')}
+          {sectionLabel(t('health.browse.common_mistakes'))}
           <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.common_mistakes}</p>
         </div>
       )}
 
       {(primaries.length > 0 || secondaries.length > 0) && (
         <div>
-          {sectionLabel('Muscles')}
+          {sectionLabel(t('health.browse.muscles'))}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {primaries.map(m => (
               <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: `${accent}26`, color: accent }}>{m.name}</span>
@@ -641,7 +639,7 @@ function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
 
       {ex.equipment.length > 0 && (
         <div>
-          {sectionLabel('Equipment')}
+          {sectionLabel(t('health.browse.equipment'))}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {ex.equipment.map(e => (
               <span key={e.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.08)', color: '#9b8caa', textTransform: 'capitalize' }}>{e.name}</span>
@@ -675,9 +673,9 @@ function RecipeDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
     <ModalShell onClose={onClose}>
       <div style={{ padding: '28px 28px 32px' }}>
         {loading
-          ? <CenterNote>Loading recipe…</CenterNote>
+          ? <CenterNote>{t('health.browse.loading_recipe')}</CenterNote>
           : failed || !detail
-            ? <CenterNote>Couldn&apos;t load this recipe.</CenterNote>
+            ? <CenterNote>{t('health.browse.couldnt_load_recipe')}</CenterNote>
             : <RecipeDetailBody r={detail} />}
       </div>
     </ModalShell>
@@ -686,10 +684,10 @@ function RecipeDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
 
 // ── My submissions tab ────────────────────────────────────────────────────
 
-const STATUS_STYLE: Record<HealthSubmissionStatus, { fg: string; label: string }> = {
-  pending: { fg: '#fbbf24', label: 'Pending review' },
-  rejected: { fg: '#f38ba8', label: 'Rejected' },
-  published: { fg: '#34d399', label: 'Published' },
+const STATUS_STYLE: Record<HealthSubmissionStatus, { fg: string; labelKey: string }> = {
+  pending: { fg: '#fbbf24', labelKey: 'health.mysubs.status.pending' },
+  rejected: { fg: '#f38ba8', labelKey: 'health.mysubs.status.rejected' },
+  published: { fg: '#34d399', labelKey: 'health.mysubs.status.published' },
 };
 
 function StatusBadge({ status }: { status: HealthSubmissionStatus }) {
@@ -700,7 +698,7 @@ function StatusBadge({ status }: { status: HealthSubmissionStatus }) {
       padding: '2px 8px', borderRadius: 999,
       color: s.fg, background: `${s.fg}1f`, border: `1px solid ${s.fg}55`,
     }}>
-      {s.label}
+      {t(s.labelKey)}
     </span>
   );
 }
@@ -727,8 +725,8 @@ function SubmissionRow({ row }: { row: SubmissionRowData }) {
       </div>
       <div style={{ fontSize: 10, color: '#6c7086' }}>
         {row.at
-          ? `Submitted ${new Date(row.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
-          : 'Submitted'}
+          ? t('health.mysubs.submitted', { date: new Date(row.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) })
+          : t('health.mysubs.submitted_no_date')}
       </div>
       {row.status === 'rejected' && row.notes && (
         <div style={{
@@ -772,16 +770,16 @@ function MySubmissionsTab() {
     }
   }, [reload]);
 
-  if (loading) return <CenterNote>Loading your submissions…</CenterNote>;
+  if (loading) return <CenterNote>{t('health.mysubs.loading')}</CenterNote>;
 
   const d = data ?? { exercises: [], recipes: [] };
   const rows: SubmissionRowData[] = [
-    ...d.exercises.map(e => ({ key: `e-${e.id}`, name: e.name, kind: 'Exercise', status: e.status, at: e.submitted_at, notes: e.review_notes })),
-    ...d.recipes.map(r => ({ key: `r-${r.id}`, name: r.name, kind: 'Recipe', status: r.status, at: r.submitted_at, notes: r.review_notes })),
+    ...d.exercises.map(e => ({ key: `e-${e.id}`, name: e.name, kind: t('health.submit.kind.exercise'), status: e.status, at: e.submitted_at, notes: e.review_notes })),
+    ...d.recipes.map(r => ({ key: `r-${r.id}`, name: r.name, kind: t('health.submit.kind.recipe'), status: r.status, at: r.submitted_at, notes: r.review_notes })),
   ];
 
   if (rows.length === 0) {
-    return <CenterNote>You haven&apos;t submitted anything yet — use Contribute to add an exercise or recipe.</CenterNote>;
+    return <CenterNote>{t('health.mysubs.empty_use_contribute')}</CenterNote>;
   }
 
   const hasRejected = rows.some(r => r.status === 'rejected');
@@ -799,7 +797,7 @@ function MySubmissionsTab() {
               border: '1px solid rgba(243,139,168,0.3)',
             }}
           >
-            {clearing ? 'Clearing…' : 'Clear rejected'}
+            {clearing ? t('health.mysubs.clearing') : t('health.mysubs.clear_rejected_short')}
           </button>
         </div>
       )}
@@ -852,48 +850,48 @@ function ProfileTab() {
     }, 600);
   }, []);
 
-  if (loading || !profile) return <CenterNote>Loading profile…</CenterNote>;
+  if (loading || !profile) return <CenterNote>{t('health.profile.loading')}</CenterNote>;
   const p = profile;
 
   return (
     <div style={{ maxWidth: 620, display: 'flex', flexDirection: 'column', gap: 24 }}>
       <p style={{ fontSize: 12, color: '#9b8caa', margin: 0 }}>
-        Stored on this machine. Ava reads it to shape your daily brief and plan.
-        {savedTick > 0 && <span style={{ color: '#34d399', marginLeft: 8 }}>Saved</span>}
+        {t('health.profile.local_blurb')}
+        {savedTick > 0 && <span style={{ color: '#34d399', marginLeft: 8 }}>{t('health.profile.saved')}</span>}
       </p>
 
-      <ProfileSection title="Body">
+      <ProfileSection title={t('health.profile.body')}>
         <FieldRow>
-          <Field label="Sex">
+          <Field label={t('health.profile.sex')}>
             <select
               value={p.body.sex ?? ''}
               onChange={e => update({ ...p, body: { ...p.body, sex: (e.target.value || null) as HealthProfile['body']['sex'] } })}
               style={fieldInputStyle}
             >
               <option value="">—</option>
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-              <option value="other">Other</option>
+              <option value="female">{t('health.profile.sex.female')}</option>
+              <option value="male">{t('health.profile.sex.male')}</option>
+              <option value="other">{t('health.profile.sex.other_short')}</option>
             </select>
           </Field>
-          <Field label="Date of birth">
+          <Field label={t('health.profile.date_of_birth')}>
             <input type="date" value={p.body.date_of_birth ?? ''}
               onChange={e => update({ ...p, body: { ...p.body, date_of_birth: e.target.value || null } })}
               style={fieldInputStyle} />
           </Field>
         </FieldRow>
         <FieldRow>
-          <Field label="Height (cm)">
+          <Field label={t('health.profile.height_cm')}>
             <input type="number" inputMode="numeric" value={p.body.height_cm ?? ''}
               onChange={e => update({ ...p, body: { ...p.body, height_cm: parseNum(e.target.value) } })}
               style={fieldInputStyle} />
           </Field>
-          <Field label="Weight (kg)">
+          <Field label={t('health.profile.weight_kg')}>
             <input type="number" inputMode="numeric" value={p.body.weight_kg ?? ''}
               onChange={e => update({ ...p, body: { ...p.body, weight_kg: parseNum(e.target.value) } })}
               style={fieldInputStyle} />
           </Field>
-          <Field label="Body fat (%)">
+          <Field label={t('health.profile.body_fat_pct')}>
             <input type="number" inputMode="numeric" value={p.body.body_fat_pct ?? ''}
               onChange={e => update({ ...p, body: { ...p.body, body_fat_pct: parseNum(e.target.value) } })}
               style={fieldInputStyle} />
@@ -901,96 +899,96 @@ function ProfileTab() {
         </FieldRow>
       </ProfileSection>
 
-      <ProfileSection title="Goals">
+      <ProfileSection title={t('health.profile.goals')}>
         <FieldRow>
-          <Field label="Primary goal">
+          <Field label={t('health.profile.primary_goal')}>
             <select
               value={p.goals.primary ?? ''}
               onChange={e => update({ ...p, goals: { ...p.goals, primary: (e.target.value || null) as HealthProfile['goals']['primary'] } })}
               style={fieldInputStyle}
             >
               <option value="">—</option>
-              <option value="fat_loss">Fat loss</option>
-              <option value="muscle_gain">Muscle gain</option>
-              <option value="maintenance">Maintenance</option>
-              <option value="athletic">Athletic performance</option>
-              <option value="recovery">Recovery</option>
-              <option value="longevity">Longevity</option>
+              <option value="fat_loss">{t('health.profile.goal.fat_loss')}</option>
+              <option value="muscle_gain">{t('health.profile.goal.muscle_gain')}</option>
+              <option value="maintenance">{t('health.profile.goal.maintenance')}</option>
+              <option value="athletic">{t('health.profile.goal.athletic_performance')}</option>
+              <option value="recovery">{t('health.profile.goal.recovery')}</option>
+              <option value="longevity">{t('health.profile.goal.longevity')}</option>
             </select>
           </Field>
-          <Field label="This week's focus">
-            <input type="text" value={p.goals.weekly_focus ?? ''} placeholder="e.g. deload week"
+          <Field label={t('health.profile.this_weeks_focus')}>
+            <input type="text" value={p.goals.weekly_focus ?? ''} placeholder={t('health.profile.weekly_focus_short_placeholder')}
               onChange={e => update({ ...p, goals: { ...p.goals, weekly_focus: e.target.value || null } })}
               style={fieldInputStyle} />
           </Field>
         </FieldRow>
       </ProfileSection>
 
-      <ProfileSection title="Constraints">
-        <Field label="Allergens (comma-separated)">
+      <ProfileSection title={t('health.profile.constraints')}>
+        <Field label={t('health.profile.allergens_csv')}>
           <input type="text" value={p.constraints.allergens.join(', ')}
             onChange={e => update({ ...p, constraints: { ...p.constraints, allergens: csv(e.target.value) } })}
             style={fieldInputStyle} />
         </Field>
-        <Field label="Dietary (comma-separated)">
-          <input type="text" value={p.constraints.dietary.join(', ')} placeholder="e.g. vegan, gluten_free"
+        <Field label={t('health.profile.dietary_csv')}>
+          <input type="text" value={p.constraints.dietary.join(', ')} placeholder={t('health.profile.dietary_csv_placeholder')}
             onChange={e => update({ ...p, constraints: { ...p.constraints, dietary: csv(e.target.value) } })}
             style={fieldInputStyle} />
         </Field>
-        <Field label="Injuries / limiting conditions (comma-separated)">
+        <Field label={t('health.profile.injuries_csv')}>
           <input type="text" value={p.constraints.injuries.join(', ')}
             onChange={e => update({ ...p, constraints: { ...p.constraints, injuries: csv(e.target.value) } })}
             style={fieldInputStyle} />
         </Field>
-        <Field label="Equipment available (comma-separated)">
-          <input type="text" value={p.constraints.equipment_available.join(', ')} placeholder="e.g. dumbbells, pull_up_bar"
+        <Field label={t('health.profile.equipment_csv')}>
+          <input type="text" value={p.constraints.equipment_available.join(', ')} placeholder={t('health.profile.equipment_csv_placeholder')}
             onChange={e => update({ ...p, constraints: { ...p.constraints, equipment_available: csv(e.target.value) } })}
             style={fieldInputStyle} />
         </Field>
-        <Field label="Minutes per day available">
+        <Field label={t('health.profile.minutes_per_day_available')}>
           <input type="number" inputMode="numeric" value={p.constraints.minutes_per_day_target ?? ''}
             onChange={e => update({ ...p, constraints: { ...p.constraints, minutes_per_day_target: parseNum(e.target.value) } })}
             style={fieldInputStyle} />
         </Field>
       </ProfileSection>
 
-      <ProfileSection title="Schedule">
+      <ProfileSection title={t('health.profile.schedule')}>
         <FieldRow>
-          <Field label="Training — start">
+          <Field label={t('health.profile.training_start_short')}>
             <input type="time" value={p.schedule.training_window.start ?? ''}
               onChange={e => update({ ...p, schedule: { ...p.schedule, training_window: { ...p.schedule.training_window, start: e.target.value || null } } })}
               style={fieldInputStyle} />
           </Field>
-          <Field label="Training — end">
+          <Field label={t('health.profile.training_end_short')}>
             <input type="time" value={p.schedule.training_window.end ?? ''}
               onChange={e => update({ ...p, schedule: { ...p.schedule, training_window: { ...p.schedule.training_window, end: e.target.value || null } } })}
               style={fieldInputStyle} />
           </Field>
         </FieldRow>
         <FieldRow>
-          <Field label="Breakfast">
+          <Field label={t('health.profile.breakfast')}>
             <input type="time" value={p.schedule.meal_times.breakfast ?? ''}
               onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, breakfast: e.target.value || null } } })}
               style={fieldInputStyle} />
           </Field>
-          <Field label="Lunch">
+          <Field label={t('health.profile.lunch')}>
             <input type="time" value={p.schedule.meal_times.lunch ?? ''}
               onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, lunch: e.target.value || null } } })}
               style={fieldInputStyle} />
           </Field>
-          <Field label="Dinner">
+          <Field label={t('health.profile.dinner')}>
             <input type="time" value={p.schedule.meal_times.dinner ?? ''}
               onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, dinner: e.target.value || null } } })}
               style={fieldInputStyle} />
           </Field>
         </FieldRow>
         <FieldRow>
-          <Field label="Bedtime">
+          <Field label={t('health.profile.bedtime')}>
             <input type="time" value={p.schedule.sleep_target.bedtime ?? ''}
               onChange={e => update({ ...p, schedule: { ...p.schedule, sleep_target: { ...p.schedule.sleep_target, bedtime: e.target.value || null } } })}
               style={fieldInputStyle} />
           </Field>
-          <Field label="Wake">
+          <Field label={t('health.profile.wake')}>
             <input type="time" value={p.schedule.sleep_target.wake ?? ''}
               onChange={e => update({ ...p, schedule: { ...p.schedule, sleep_target: { ...p.schedule.sleep_target, wake: e.target.value || null } } })}
               style={fieldInputStyle} />
@@ -1047,7 +1045,7 @@ function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
         {(r.origin_country || r.course) && (
           <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
             {r.origin_country && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{r.origin_country}</span>}
-            {r.course && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6, textTransform: 'capitalize' }}>{r.course}</span>}
+            {r.course && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6, textTransform: 'capitalize' }}>{courseLabel(r.course)}</span>}
           </div>
         )}
       </div>
@@ -1058,14 +1056,14 @@ function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
 
       {r.ingredients.length > 0 && (
         <div>
-          {sectionLabel('Ingredients')}
+          {sectionLabel(t('health.browse.ingredients'))}
           <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {r.ingredients.map((ing, i) => (
               <li key={i} style={{ fontSize: 13, color: '#cdd6f4' }}>
                 <span style={{ color: '#9b8caa', fontFamily: 'monospace', fontSize: 11, marginRight: 8 }}>
                   {ing.quantity != null ? `${ing.quantity}${ing.unit ? ' ' + ing.unit : ''}` : (ing.unit ?? '—')}
                 </span>
-                {ing.name}{ing.optional && <span style={{ color: '#6c7086' }}> (optional)</span>}
+                {ing.name}{ing.optional && <span style={{ color: '#6c7086' }}> ({t('health.browse.optional')})</span>}
               </li>
             ))}
           </ul>
@@ -1075,7 +1073,7 @@ function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
       {r.versions.length > 0 && v && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            {sectionLabel('Method')}
+            {sectionLabel(t('health.browse.method'))}
             <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
               {(['beginner', 'intermediate', 'expert'] as HealthRecipeSkillLevel[]).filter(l => levels.includes(l)).map(l => (
                 <button key={l} onClick={() => setLevel(l)} style={{
@@ -1083,7 +1081,7 @@ function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
                   borderRadius: 6, border: 'none',
                   background: l === level ? 'rgba(251,191,36,0.18)' : 'transparent',
                   color: l === level ? '#fbbf24' : '#6c7086',
-                }}>{l}</button>
+                }}>{t(`health.browse.level.${l}`)}</button>
               ))}
             </div>
           </div>
@@ -1127,10 +1125,6 @@ const ghostBtn: React.CSSProperties = {
   background: 'transparent', color: '#9b8caa', border: '1px solid rgba(168, 85, 247, 0.15)',
 };
 
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 const EXERCISE_TYPES: HealthExerciseType[] = [
   'compound', 'isolation', 'bodyweight', 'plyometric',
   'mobility', 'cardio', 'isometric', 'stretching', 'breathing',
@@ -1159,14 +1153,14 @@ function ContributeModal({ onClose }: { onClose: () => void }) {
     <ModalShell onClose={onClose}>
       <div style={{ padding: '28px 28px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
-          <h2 style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>Contribute</h2>
+          <h2 style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{t('health.submit.contribute_short')}</h2>
           <p style={{ fontSize: 12, color: '#9b8caa', margin: '4px 0 0' }}>
-            Add to the open library. Submissions are reviewed before they appear publicly.
+            {t('health.submit.contribute_short_blurb')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {kindBtn('exercise', 'Exercise')}
-          {kindBtn('recipe', 'Recipe')}
+          {kindBtn('exercise', t('health.submit.kind.exercise'))}
+          {kindBtn('recipe', t('health.submit.kind.recipe'))}
         </div>
         {kind === 'exercise'
           ? <ExerciseSubmissionForm taxonomies={taxonomies} onDone={onClose} />
@@ -1209,10 +1203,10 @@ function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxo
       });
       setResult({
         ok: true,
-        msg: row.status === 'published' ? 'Published — thank you for contributing.' : 'Submitted for review — thank you for contributing.',
+        msg: row.status === 'published' ? t('health.submit.published_thanks') : t('health.submit.submitted_thanks'),
       });
     } catch (e) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : 'Submission failed.' });
+      setResult({ ok: false, msg: e instanceof Error ? e.message : t('health.submit.submission_failed') });
     } finally {
       setSubmitting(false);
     }
@@ -1223,7 +1217,7 @@ function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxo
       <div>
         <CenterNote>{result.msg}</CenterNote>
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <button onClick={onDone} style={primaryBtn}>Done</button>
+          <button onClick={onDone} style={primaryBtn}>{t('health.submit.done')}</button>
         </div>
       </div>
     );
@@ -1233,40 +1227,40 @@ function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxo
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Field label="Name">
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Bulgarian split squat" style={fieldInputStyle} />
+      <Field label={t('health.submit.name')}>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder={t('health.submit.ex_name_ph')} style={fieldInputStyle} />
       </Field>
       <FieldRow>
-        <Field label="Exercise type">
+        <Field label={t('health.submit.exercise_type')}>
           <select value={exerciseType} onChange={e => setExerciseType(e.target.value as HealthExerciseType)} style={fieldInputStyle}>
-            {EXERCISE_TYPES.map(t => <option key={t} value={t}>{cap(t)}</option>)}
+            {EXERCISE_TYPES.map(et => <option key={et} value={et}>{t(`health.submit.ex_type.${et}`)}</option>)}
           </select>
         </Field>
-        <Field label="Workout type">
+        <Field label={t('health.submit.workout_type')}>
           <select value={workoutType} onChange={e => setWorkoutType(e.target.value as HealthWorkoutType)} style={fieldInputStyle}>
-            {WORKOUT_TYPES.map(w => <option key={w} value={w}>{WORKOUT_LABEL[w]}</option>)}
+            {WORKOUT_TYPES.map(w => <option key={w} value={w}>{t(`health.submit.wk_type.${w}`)}</option>)}
           </select>
         </Field>
-        <Field label="Difficulty (1–5)">
+        <Field label={t('health.submit.difficulty_1_5')}>
           <select value={difficulty} onChange={e => setDifficulty(Number(e.target.value))} style={fieldInputStyle}>
             {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </Field>
       </FieldRow>
-      <Field label="Description">
+      <Field label={t('health.submit.description')}>
         <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} style={area} />
       </Field>
-      <Field label="How to do it — steps">
+      <Field label={t('health.submit.how_to_do_it_steps')}>
         <StepsEditor steps={steps} onChange={setSteps} />
       </Field>
-      <Field label="If you're new to this">
+      <Field label={t('health.submit.ex_beginner_label_short')}>
         <textarea value={beginnerDetail} onChange={e => setBeginnerDetail(e.target.value)} rows={2} style={area} />
       </Field>
-      <Field label="Common mistakes">
+      <Field label={t('health.submit.ex_mistakes_label_short')}>
         <textarea value={commonMistakes} onChange={e => setCommonMistakes(e.target.value)} rows={2} style={area} />
       </Field>
       {taxonomies && taxonomies.contraindications.length > 0 && (
-        <Field label="Contraindications — who should avoid this">
+        <Field label={t('health.submit.contraindications_label')}>
           <ChipSelect
             options={taxonomies.contraindications.map(c => ({ slug: c.slug, name: c.name }))}
             selected={contraindications}
@@ -1283,7 +1277,7 @@ function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxo
           disabled={!canSubmit}
           style={{ ...primaryBtn, opacity: canSubmit ? 1 : 0.4, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
         >
-          {submitting ? 'Submitting…' : 'Submit for review'}
+          {submitting ? t('health.submit.submitting') : t('health.submit.submit_for_review')}
         </button>
       </div>
     </div>
@@ -1300,11 +1294,11 @@ function StepsEditor({ steps, onChange }: { steps: string[]; onChange: (next: st
       {steps.map((s, i) => (
         <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: '#6c7086', width: 16, textAlign: 'right' }}>{i + 1}</span>
-          <input value={s} onChange={e => set(i, e.target.value)} placeholder={`Step ${i + 1}`} style={{ ...fieldInputStyle, flex: 1 }} />
-          <button onClick={() => remove(i)} aria-label="Remove step" style={{ width: 26, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer', fontSize: 15 }}>×</button>
+          <input value={s} onChange={e => set(i, e.target.value)} placeholder={t('health.submit.step_n_placeholder', { n: i + 1 })} style={{ ...fieldInputStyle, flex: 1 }} />
+          <button onClick={() => remove(i)} aria-label={t('health.submit.remove_step')} style={{ width: 26, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer', fontSize: 15 }}>×</button>
         </div>
       ))}
-      <button onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>+ Add step</button>
+      <button onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>{t('health.submit.add_step')}</button>
     </div>
   );
 }
@@ -1405,10 +1399,10 @@ function RecipeSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxono
       });
       setResult({
         ok: true,
-        msg: row.status === 'published' ? 'Published — thank you for contributing.' : 'Submitted for review — thank you for contributing.',
+        msg: row.status === 'published' ? t('health.submit.published_thanks') : t('health.submit.submitted_thanks'),
       });
     } catch (e) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : 'Submission failed.' });
+      setResult({ ok: false, msg: e instanceof Error ? e.message : t('health.submit.submission_failed') });
     } finally {
       setSubmitting(false);
     }
@@ -1419,7 +1413,7 @@ function RecipeSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxono
       <div>
         <CenterNote>{result.msg}</CenterNote>
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <button onClick={onDone} style={primaryBtn}>Done</button>
+          <button onClick={onDone} style={primaryBtn}>{t('health.submit.done')}</button>
         </div>
       </div>
     );
@@ -1429,37 +1423,37 @@ function RecipeSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxono
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Field label="Name">
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Lemon herb roast chicken" style={fieldInputStyle} />
+      <Field label={t('health.submit.name')}>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder={t('health.submit.rc_name_ph')} style={fieldInputStyle} />
       </Field>
       <FieldRow>
-        <Field label="Cuisine">
+        <Field label={t('health.submit.cuisine')}>
           <select value={cuisineSlug} onChange={e => setCuisineSlug(e.target.value)} style={fieldInputStyle}>
             <option value="">—</option>
             {(taxonomies?.cuisines ?? []).map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
           </select>
         </Field>
-        <Field label="Course">
+        <Field label={t('health.submit.rc_course_label')}>
           <select value={course} onChange={e => setCourse(e.target.value)} style={fieldInputStyle}>
             <option value="">—</option>
-            {COURSES.map(c => <option key={c} value={c}>{COURSE_LABEL[c]}</option>)}
+            {COURSES.map(c => <option key={c} value={c}>{courseLabel(c)}</option>)}
           </select>
         </Field>
-        <Field label="Origin country">
+        <Field label={t('health.submit.origin_country')}>
           <input value={originCountry} onChange={e => setOriginCountry(e.target.value)} style={fieldInputStyle} />
         </Field>
       </FieldRow>
-      <Field label="Overview">
+      <Field label={t('health.submit.overview')}>
         <textarea value={overview} onChange={e => setOverview(e.target.value)} rows={2} style={area} />
       </Field>
-      <Field label="Ingredients">
+      <Field label={t('health.submit.ingredients')}>
         <IngredientsEditor ingredients={ingredients} onChange={setIngredients} />
       </Field>
-      <Field label="Method — steps">
+      <Field label={t('health.submit.method_steps')}>
         <StepsEditor steps={method} onChange={setMethod} />
       </Field>
       {taxonomies && taxonomies.allergens.length > 0 && (
-        <Field label="Allergens">
+        <Field label={t('health.submit.allergens')}>
           <ChipSelect
             options={taxonomies.allergens.map(a => ({ slug: a.slug, name: a.name }))}
             selected={allergens}
@@ -1476,7 +1470,7 @@ function RecipeSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxono
           disabled={!canSubmit}
           style={{ ...primaryBtn, opacity: canSubmit ? 1 : 0.4, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
         >
-          {submitting ? 'Submitting…' : 'Submit for review'}
+          {submitting ? t('health.submit.submitting') : t('health.submit.submit_for_review')}
         </button>
       </div>
     </div>
@@ -1497,21 +1491,21 @@ function IngredientsEditor({ ingredients, onChange }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {ingredients.map((ing, i) => (
         <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input value={ing.quantity} onChange={e => set(i, { quantity: e.target.value })} placeholder="Qty" inputMode="numeric"
+          <input value={ing.quantity} onChange={e => set(i, { quantity: e.target.value })} placeholder={t('health.submit.qty')} inputMode="numeric"
             style={{ ...fieldInputStyle, width: 56 }} />
-          <input value={ing.unit} onChange={e => set(i, { unit: e.target.value })} placeholder="Unit"
+          <input value={ing.unit} onChange={e => set(i, { unit: e.target.value })} placeholder={t('health.submit.unit')}
             style={{ ...fieldInputStyle, width: 72 }} />
-          <input value={ing.name} onChange={e => set(i, { name: e.target.value })} placeholder={`Ingredient ${i + 1}`}
+          <input value={ing.name} onChange={e => set(i, { name: e.target.value })} placeholder={t('health.submit.ingredient_n_placeholder', { n: i + 1 })}
             style={{ ...fieldInputStyle, flex: 1 }} />
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#6c7086' }}>
             <input type="checkbox" checked={ing.optional} onChange={e => set(i, { optional: e.target.checked })} />
-            opt.
+            {t('health.submit.opt_short')}
           </label>
-          <button onClick={() => remove(i)} aria-label="Remove ingredient"
+          <button onClick={() => remove(i)} aria-label={t('health.submit.remove_ingredient')}
             style={{ width: 26, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer', fontSize: 15 }}>×</button>
         </div>
       ))}
-      <button onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>+ Add ingredient</button>
+      <button onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>{t('health.submit.add_ingredient')}</button>
     </div>
   );
 }

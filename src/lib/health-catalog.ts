@@ -10,6 +10,7 @@
 // fetchers that produce them.
 
 import { getPlatformKey } from './api';
+import { getLocale } from './i18n';
 import type { HealthProfile, HealthDailyLog } from './health-store';
 
 const PLATFORM_URL = 'https://ava-supernova.com/api';
@@ -267,6 +268,7 @@ export async function loadExercises(
   });
   if (p.workoutType) params.set('workout_type', p.workoutType);
   if (p.q && p.q.trim()) params.set('q', p.q.trim());
+  { const l = getLocale(); if (l && l !== 'en') params.set('locale', l); }
   const data = await healthRequest<{ exercises?: HealthExerciseSummary[]; total?: number }>(
     `/health/exercises?${params.toString()}`,
   );
@@ -291,6 +293,7 @@ export async function loadRecipes(
   });
   if (p.course) params.set('course', p.course);
   if (p.q && p.q.trim()) params.set('q', p.q.trim());
+  { const l = getLocale(); if (l && l !== 'en') params.set('locale', l); }
   const data = await healthRequest<{ recipes?: HealthRecipeSummary[]; total?: number }>(
     `/health/recipes?${params.toString()}`,
   );
@@ -300,16 +303,20 @@ export async function loadRecipes(
 /** Full detail for one exercise. Returns null when the slug isn't
  *  found (or is a non-published row the caller can't see). */
 export async function loadExerciseDetail(slug: string): Promise<HealthExerciseDetail | null> {
+  const l = getLocale();
+  const qs = l && l !== 'en' ? `?locale=${encodeURIComponent(l)}` : '';
   const data = await healthRequest<{ exercise?: HealthExerciseDetail | null }>(
-    `/health/exercises/${encodeURIComponent(slug)}`,
+    `/health/exercises/${encodeURIComponent(slug)}${qs}`,
   );
   return data.exercise ?? null;
 }
 
 /** Full detail for one recipe (all skill-level versions). */
 export async function loadRecipeDetail(slug: string): Promise<HealthRecipeDetail | null> {
+  const l = getLocale();
+  const qs = l && l !== 'en' ? `?locale=${encodeURIComponent(l)}` : '';
   const data = await healthRequest<{ recipe?: HealthRecipeDetail | null }>(
-    `/health/recipes/${encodeURIComponent(slug)}`,
+    `/health/recipes/${encodeURIComponent(slug)}${qs}`,
   );
   return data.recipe ?? null;
 }

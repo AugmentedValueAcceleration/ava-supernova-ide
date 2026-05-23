@@ -9,6 +9,7 @@ import {
   type HealthDailyLog,
 } from '../lib/health-store';
 import { generateMorningBrief } from '../lib/health-catalog';
+import { t, useLocale } from '../lib/i18n';
 
 /**
  * Health Dashboard — the daily view, rendered as a tab in the IDE's
@@ -27,13 +28,13 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function greeting(): string {
+function greetingKey(): string {
   const h = new Date().getHours();
-  if (h < 5) return 'Late night';
-  if (h < 12) return 'Morning';
-  if (h < 17) return 'Afternoon';
-  if (h < 21) return 'Evening';
-  return 'Late evening';
+  if (h < 5) return 'health.home.greeting.late_night';
+  if (h < 12) return 'health.home.greeting.morning';
+  if (h < 17) return 'health.home.greeting.afternoon';
+  if (h < 21) return 'health.home.greeting.evening';
+  return 'health.home.greeting.late_evening';
 }
 
 function longDate(): string {
@@ -70,45 +71,51 @@ interface StatusFigure { value: string; hint: string }
 function readiness(p: HealthProfile | null, plan: HealthDailyPlan | null): StatusFigure {
   const sleep = plan?.log.sleep_hours ?? null;
   const mood = plan?.log.mood ?? null;
-  if (sleep == null && mood == null) return { value: '—', hint: 'Log sleep and mood to see this' };
+  if (sleep == null && mood == null) return { value: '—', hint: t('health.home.readiness.empty') };
   const target = targetSleepHours(p);
   let score = 0;
   let weight = 0;
   if (sleep != null) { score += Math.min(sleep / target, 1) * 0.6; weight += 0.6; }
   if (mood != null) { score += (mood / 5) * 0.4; weight += 0.4; }
   const pct = Math.round((score / weight) * 100);
-  const word = pct >= 80 ? 'Strong' : pct >= 60 ? 'Good' : pct >= 40 ? 'Fair' : 'Low';
+  const word = pct >= 80 ? t('health.home.readiness.strong') : pct >= 60 ? t('health.home.readiness.good') : pct >= 40 ? t('health.home.readiness.fair') : t('health.home.readiness.low');
   const bits: string[] = [];
-  if (sleep != null) bits.push(`${formatHours(sleep)} sleep`);
-  if (mood != null) bits.push(`mood ${mood}/5`);
+  if (sleep != null) bits.push(t('health.home.readiness.sleep_of', { actual: formatHours(sleep), target: formatHours(target) }));
+  if (mood != null) bits.push(t('health.home.readiness.mood', { n: mood }));
   return { value: word, hint: bits.join(' · ') };
 }
 
 function nutrition(plan: HealthDailyPlan | null): StatusFigure {
   const meals = plan?.log.meals ?? [];
   const water = plan?.log.water_ml ?? 0;
-  if (meals.length === 0 && water === 0) return { value: '—', hint: 'Log meals and water to see this' };
+  if (meals.length === 0 && water === 0) return { value: '—', hint: t('health.home.nutrition.empty') };
   const protein = meals.reduce((a, m) => a + (m.protein_g ?? 0), 0);
   const bits: string[] = [];
-  if (protein > 0) bits.push(`${Math.round(protein)} g protein`);
-  bits.push(`${water} ml water`);
-  return { value: meals.length > 0 ? `${meals.length} meal${meals.length === 1 ? '' : 's'}` : '—', hint: bits.join(' · ') };
+  if (protein > 0) bits.push(t('health.home.nutrition.protein', { n: Math.round(protein) }));
+  bits.push(t('health.home.nutrition.water', { n: water }));
+  const value = meals.length > 0 ? (meals.length === 1 ? t('health.home.nutrition.meals_one') : t('health.home.nutrition.meals', { n: meals.length })) : '—';
+  return { value, hint: bits.join(' · ') };
 }
 
 function training(plan: HealthDailyPlan | null): StatusFigure {
   const items = (plan?.items ?? []).filter(i => i.kind === 'workout' || i.kind === 'mobility');
-  if (items.length === 0) return { value: 'Rest day', hint: 'No training scheduled today' };
+  if (items.length === 0) return { value: t('health.home.training_load.rest_day'), hint: t('health.home.training_load.none') };
   const done = items.filter(i => i.status === 'done').length;
   const min = items.reduce((a, i) => a + (i.duration_minutes ?? 0), 0);
   return {
-    value: min > 0 ? `${min} min` : `${items.length} session${items.length === 1 ? '' : 's'}`,
-    hint: `${done} of ${items.length} done`,
+    value: min > 0
+      ? t('health.home.n_min', { n: min })
+      : (items.length === 1 ? t('health.home.training_load.sessions_one', { n: items.length }) : t('health.home.training_load.sessions', { n: items.length })),
+    hint: items.length === 1
+      ? t('health.home.training_load.sessions_done_one', { done })
+      : t('health.home.training_load.sessions_done', { done, total: items.length }),
   };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function HealthDashboard() {
+  useLocale();
   const [profile, setProfile] = useState<HealthProfile | null>(null);
   const [plan, setPlan] = useState<HealthDailyPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,14 +158,14 @@ export function HealthDashboard() {
         return next;
       });
     } catch (e) {
-      setBriefError(e instanceof Error ? e.message : 'Could not write the brief.');
+      setBriefError(e instanceof Error ? e.message : t('health.home.brief.error'));
     } finally {
       setBriefGenerating(false);
     }
   }, [profile, plan, empty, today]);
 
   if (loading) {
-    return <div style={{ padding: 48, textAlign: 'center', fontSize: 12, color: '#6c7086' }}>Loading your day…</div>;
+    return <div style={{ padding: 48, textAlign: 'center', fontSize: 12, color: '#6c7086' }}>{t('health.home.loading')}</div>;
   }
 
   const tabBtn = (active: boolean): React.CSSProperties => ({
@@ -172,12 +179,12 @@ export function HealthDashboard() {
     <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 22 }}>
       <header>
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086' }}>{longDate()}</div>
-        <h1 style={{ fontSize: 20, fontWeight: 300, color: '#cdd6f4', margin: '4px 0 0' }}>{greeting()}.</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 300, color: '#cdd6f4', margin: '4px 0 0' }}>{t(greetingKey())}.</h1>
       </header>
 
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168,85,247,0.12)' }}>
-        <button onClick={() => setInnerTab('overview')} style={tabBtn(innerTab === 'overview')}>Overview</button>
-        <button onClick={() => setInnerTab('plans')} style={tabBtn(innerTab === 'plans')}>Plans</button>
+        <button onClick={() => setInnerTab('overview')} style={tabBtn(innerTab === 'overview')}>{t('health.home.tab.overview')}</button>
+        <button onClick={() => setInnerTab('plans')} style={tabBtn(innerTab === 'plans')}>{t('health.home.tab.plans')}</button>
       </div>
 
       {empty && (
@@ -185,14 +192,13 @@ export function HealthDashboard() {
           border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.05)',
           borderRadius: 8, padding: '12px 14px', fontSize: 12, color: '#9b8caa', lineHeight: 1.5,
         }}>
-          Set up your <strong style={{ color: '#cdd6f4' }}>Profile</strong> on the Health &amp; Nutrition page —
-          Ava reads it to write your brief and shape your plan.
+          {t('health.home.empty.before')}<strong style={{ color: '#cdd6f4' }}>{t('health.home.empty.profile')}</strong>{t('health.home.empty.after')}
         </div>
       )}
 
       {innerTab === 'overview' ? (
         <>
-          <Section title="Today's brief">
+          <Section title={t('health.home.section.brief')}>
             <BriefBlock
               brief={plan?.morning_brief ?? null}
               profileEmpty={empty}
@@ -201,10 +207,10 @@ export function HealthDashboard() {
               onGenerate={writeBrief}
             />
           </Section>
-          <Section title="Where you are">
+          <Section title={t('health.home.section.where_you_are')}>
             <StatusRow profile={profile} plan={plan} />
           </Section>
-          <Section title="Quick log">
+          <Section title={t('health.home.section.quick_log')}>
             <QuickLogRow plan={plan} commitLog={commitLog} />
           </Section>
         </>
@@ -213,7 +219,7 @@ export function HealthDashboard() {
       )}
 
       <footer style={{ fontSize: 10, color: '#6c7086', paddingTop: 6 }}>
-        Local-first — your health data stays on this machine unless you turn on sync. {today}
+        {t('health.home.footer', { date: today })}
       </footer>
     </div>
   );
@@ -247,8 +253,8 @@ function BriefBlock({ brief, profileEmpty, generating, error, onGenerate }: {
           fontSize: 12, fontStyle: 'italic', color: '#6c7086', lineHeight: 1.6,
         }}>
           {profileEmpty
-            ? "Ava writes today's brief once your profile is set up."
-            : "Today's brief hasn't been written yet — Ava can draft it from your profile."}
+            ? t('health.home.brief.empty_profile')
+            : t('health.home.brief.empty')}
         </div>
       )}
       {error && (
@@ -266,10 +272,10 @@ function BriefBlock({ brief, profileEmpty, generating, error, onGenerate }: {
             opacity: generating || profileEmpty ? 0.4 : 1,
           }}
         >
-          {generating ? 'Writing…' : brief ? 'Rewrite brief' : "Write today's brief"}
+          {generating ? t('health.home.brief.writing') : brief ? t('health.home.brief.rewrite') : t('health.home.brief.write')}
         </button>
         <span style={{ fontSize: 10, color: '#6c7086' }}>
-          Ava reads a snapshot of your profile. The profile itself stays local.
+          {t('health.home.brief.snapshot_note')}
         </span>
       </div>
     </div>
@@ -279,12 +285,12 @@ function BriefBlock({ brief, profileEmpty, generating, error, onGenerate }: {
 function StatusRow({ profile, plan }: { profile: HealthProfile | null; plan: HealthDailyPlan | null }) {
   const r = readiness(profile, plan);
   const n = nutrition(plan);
-  const t = training(plan);
+  const tr = training(plan);
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-      <StatusTile label="Readiness" {...r} />
-      <StatusTile label="Nutrition" {...n} />
-      <StatusTile label="Training" {...t} />
+      <StatusTile label={t('health.home.status.readiness')} {...r} />
+      <StatusTile label={t('health.home.status.nutrition')} {...n} />
+      <StatusTile label={t('health.home.status.training_load')} {...tr} />
     </div>
   );
 }
@@ -340,10 +346,10 @@ function QuickLogRow({ plan, commitLog }: {
   return (
     <div>
       <div style={{ display: 'flex', gap: 8 }}>
-        {tile('meal', 'Meal', meals.length > 0 ? `${meals.length} logged` : 'none yet')}
-        {tile('water', 'Water', `${water} ml`)}
-        {tile('sleep', 'Sleep', sleep != null ? formatHours(sleep) : 'not set')}
-        {tile('mood', 'Mood', mood != null ? `${MOOD_FACE[mood]} ${mood}/5` : 'not set')}
+        {tile('meal', t('health.home.quick.meal'), meals.length > 0 ? t('health.home.quick.meals_logged', { n: meals.length }) : t('health.home.quick.none_yet'))}
+        {tile('water', t('health.home.quick.water'), t('health.home.quick.ml', { n: water }))}
+        {tile('sleep', t('health.home.quick.sleep'), sleep != null ? formatHours(sleep) : t('health.home.quick.not_set'))}
+        {tile('mood', t('health.home.quick.mood'), mood != null ? t('health.home.quick.mood_value', { face: MOOD_FACE[mood], n: mood }) : t('health.home.quick.not_set'))}
       </div>
 
       {open && (
@@ -353,7 +359,7 @@ function QuickLogRow({ plan, commitLog }: {
         }}>
           {open === 'water' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 11, color: '#6c7086' }}>{water} ml today</span>
+              <span style={{ fontSize: 11, color: '#6c7086' }}>{t('health.home.quick.water_today', { n: water })}</span>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 {chip(() => commitLog(l => ({ ...l, water_ml: l.water_ml + 250 })), '+250')}
                 {chip(() => commitLog(l => ({ ...l, water_ml: l.water_ml + 500 })), '+500')}
@@ -363,7 +369,7 @@ function QuickLogRow({ plan, commitLog }: {
           )}
           {open === 'sleep' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 11, color: '#6c7086' }}>Hours slept</span>
+              <span style={{ fontSize: 11, color: '#6c7086' }}>{t('health.home.quick.hours_slept')}</span>
               <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                 {chip(() => commitLog(l => ({ ...l, sleep_hours: Math.max(0, ((l.sleep_hours ?? 7.5) - 0.5)) })), '−')}
                 <span style={{ fontSize: 14, color: '#cdd6f4', width: 44, textAlign: 'center' }}>{formatHours(sleep ?? 7.5)}</span>
@@ -373,7 +379,7 @@ function QuickLogRow({ plan, commitLog }: {
           )}
           {open === 'mood' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 11, color: '#6c7086' }}>How are you feeling?</span>
+              <span style={{ fontSize: 11, color: '#6c7086' }}>{t('health.home.quick.how_feeling')}</span>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 {([1, 2, 3, 4, 5] as const).map(m => (
                   <button key={m} onClick={() => { commitLog(l => ({ ...l, mood: m })); setOpen(null); }}
@@ -405,7 +411,7 @@ function QuickLogRow({ plan, commitLog }: {
                     setMealText('');
                   }
                 }}
-                placeholder="What did you eat? (Enter to log)"
+                placeholder={t('health.home.quick.meal_placeholder')}
                 style={{
                   flex: 1, padding: '6px 10px', fontSize: 12, borderRadius: 6,
                   background: 'rgba(12,8,20,0.5)', color: '#cdd6f4',
@@ -429,15 +435,15 @@ function PlansView({ plan }: { plan: HealthDailyPlan | null }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <Section title="Today's meals">
+      <Section title={t('health.home.section.todays_meals')}>
         {meals.length === 0
-          ? <PlanEmpty body="When meal planning ships, your meals for the day show here." />
+          ? <PlanEmpty body={t('health.home.plans.empty_meals')} />
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{meals.map(m => <PlanItem key={m.id} item={m} />)}</div>}
       </Section>
-      <Section title="Today's training">
+      <Section title={t('health.home.section.todays_training')}>
         {train.length === 0
-          ? <PlanEmpty body="When fitness planning ships, today's workout shows here." />
-          : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{train.map(t => <PlanItem key={t.id} item={t} />)}</div>}
+          ? <PlanEmpty body={t('health.home.plans.empty_training')} />
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{train.map(item => <PlanItem key={item.id} item={item} />)}</div>}
       </Section>
     </div>
   );
