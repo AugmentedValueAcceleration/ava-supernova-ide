@@ -3,6 +3,7 @@
 // Sidebar is scroll-anchored (matches the extension). Audience toggle collapses power-only pages.
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { useLocale } from '../lib/i18n';
 import {
   type RendererAdapter,
   type DocBlock,
@@ -294,13 +295,15 @@ function renderBlock(block: DocBlock, adapter: RendererAdapter<React.ReactNode>,
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function DocumentationPage() {
+  const locale = useLocale();
   const { pages, sidebar } = useMemo(() => {
     // Static — no audience filter, no search, no collapse toggle. Show
     // every page available on this surface, every time. Operator wanted
-    // the docs sidebar fixed.
-    const all = filterBySurface(getPages(), 'ide');
+    // the docs sidebar fixed. Content localizes to the active locale
+    // (English fallback per block).
+    const all = filterBySurface(getPages(locale), 'ide');
     return { pages: all, sidebar: buildSidebar(all) };
-  }, []);
+  }, [locale]);
 
   const data: FactsData = {
     tools: TOOLS, providers: PROVIDERS, modes: MODES, personas: PERSONAS,
