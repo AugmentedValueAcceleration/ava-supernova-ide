@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 // Phosphor icons (duotone weight) — distinctive layered fill that reads
@@ -27,6 +27,9 @@ import {
   CloudSun as PhWeather,
   Clock as PhClock,
   Rocket as PhRocket,
+  CaretRight as PhCaretRight,
+  Stack as PhStack,
+  ArrowSquareOut as PhArrowSquareOut,
 } from '@phosphor-icons/react';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
@@ -66,6 +69,8 @@ import {
   getCachedLeaderboard as getCachedBenchLeaderboard,
   isCacheStale as isCachedBenchLeaderboardStale,
   BENCH_CATEGORY_LABELS,
+  type BenchLeaderboard as BenchLeaderboardType,
+  type BenchModelScores as BenchModelScoresType,
 } from '@ava/core/benchmarks';
 import { IdePurchaseCard } from './_IdePurchaseCard';
 // Cloud-sync gate — every cloud write must check cloudSyncEnabled()
@@ -14743,6 +14748,14 @@ export function ModelsPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  const toggle = (id: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   const refresh = useCallback(async () => {
     setLoading(true); setError(null);
@@ -14771,6 +14784,132 @@ export function ModelsPage() {
     return 'rgba(239,68,68,0.45)';
   };
 
+  const openExternal = (url: string) => {
+    import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {});
+  };
+
+  // No-naked-score sub-line — cost + latency + n, each only when present.
+  const metaLine = (m: BenchModelScoresType): string | null => {
+    const parts: string[] = [];
+    if (m.cost_credits_per_task != null) parts.push(`${m.cost_credits_per_task.toFixed(1)} cr/task`);
+    if (m.median_latency_s != null) parts.push(`${m.median_latency_s.toFixed(0)}s`);
+    if (m.overall_sample_size != null) parts.push(`n=${m.overall_sample_size}`);
+    return parts.length ? parts.join(' · ') : null;
+  };
+
+  // Lowest cells across the whole board — surfaced on purpose.
+  const worstCells = (lb: BenchLeaderboardType, limit = 4) => {
+    const cells: { name: string; cat: string; score: number }[] = [];
+    for (const m of lb.models) {
+      for (const cat of lb.categories) {
+        const cell = m.scores[cat];
+        if (cell) cells.push({ name: m.display_name, cat: BENCH_CATEGORY_LABELS[cat], score: cell.score });
+      }
+    }
+    return cells.sort((a, b) => a.score - b.score).slice(0, limit);
+  };
+
+  const models = leaderboard?.models.filter(m => m.entry_kind !== 'mode') ?? [];
+  const modes = leaderboard?.models.filter(m => m.entry_kind === 'mode') ?? [];
+
+  // One heatmap — reused for the Models block and the Modes block. `expandable`
+  // turns on the fleet-disclosure row for mode entries.
+  const renderTable = (rows: BenchModelScoresType[], expandable: boolean) => {
+    if (!leaderboard || rows.length === 0) return null;
+    return (
+      <div style={{ ...card, padding: 16, marginBottom: 16, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 4 }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', fontSize: 11, color: '#6c7086', fontWeight: 500, padding: '6px 10px' }}>{expandable ? 'Mode' : 'Model'}</th>
+              {leaderboard.categories.map(cat => (
+                <th key={cat} style={{ textAlign: 'center', fontSize: 10, color: '#6c7086', fontWeight: 500, padding: '6px 8px', minWidth: 110 }}>
+                  {BENCH_CATEGORY_LABELS[cat]}
+                </th>
+              ))}
+              <th style={{ textAlign: 'center', fontSize: 10, color: '#6c7086', fontWeight: 500, padding: '6px 8px' }}>Overall</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(m => {
+              const meta = metaLine(m);
+              const hasFleet = expandable && !!m.constituent_models?.length;
+              const isOpen = expanded.has(m.model_id);
+              return (
+                <Fragment key={m.model_id}>
+                  <tr>
+                    <td style={{ padding: '8px 10px', verticalAlign: 'top' }}>
+                      <div
+                        onClick={() => hasFleet && toggle(m.model_id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 500, color: '#cdd6f4', cursor: hasFleet ? 'pointer' : 'default' }}
+                      >
+                        {hasFleet && (
+                          <PhCaretRight size={11} weight="bold" style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                        )}
+                        {m.display_name}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 8px', marginTop: 4 }}>
+                        {meta && <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#6c7086' }}>{meta}</span>}
+                        {m.tasks_after_release != null && m.tasks_total != null && (
+                          <span
+                            title="Tasks published after this model shipped — no training-data contamination on those."
+                            style={{ fontSize: 9, fontFamily: 'monospace', color: '#a6e3a1', background: 'rgba(34,197,94,0.1)', borderRadius: 4, padding: '1px 5px' }}
+                          >
+                            clean {m.tasks_after_release}/{m.tasks_total}
+                          </span>
+                        )}
+                        {m.receipts_url && (
+                          <span
+                            onClick={() => openExternal(m.receipts_url!)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, fontFamily: 'monospace', color: '#a855f7', cursor: 'pointer' }}
+                          >
+                            <PhArrowSquareOut size={10} weight="duotone" />
+                            receipts
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    {leaderboard.categories.map(cat => {
+                      const cell = m.scores[cat];
+                      const lowConfidence = cell && cell.sample_size < 10;
+                      return (
+                        <td key={cat}
+                          title={cell ? `${cell.score.toFixed(1)}% over ${cell.sample_size} runs${lowConfidence ? ' (low confidence)' : ''}` : 'no runs in this category yet'}
+                          style={{
+                            textAlign: 'center', fontSize: 11, fontFamily: 'monospace', color: '#cdd6f4', verticalAlign: 'middle',
+                            background: cellColor(cell?.score), borderRadius: 6, padding: '10px 8px',
+                            opacity: lowConfidence ? 0.5 : 1,
+                          }}>
+                          {cell ? `${cell.score.toFixed(0)}%` : '—'}
+                        </td>
+                      );
+                    })}
+                    <td style={{ textAlign: 'center', fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: '#cdd6f4', verticalAlign: 'middle', background: cellColor(m.overall_pass_rate), borderRadius: 6, padding: '10px 8px' }}>
+                      {m.overall_pass_rate.toFixed(0)}%
+                    </td>
+                  </tr>
+                  {hasFleet && isOpen && (
+                    <tr>
+                      <td colSpan={leaderboard.categories.length + 2} style={{ padding: '0 10px 8px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid rgba(168,85,247,0.15)', background: 'rgba(26,16,40,0.4)', padding: '8px 12px' }}>
+                          <PhStack size={12} weight="duotone" style={{ color: '#a855f7' }} />
+                          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', marginRight: 4 }}>Fleet</span>
+                          {m.constituent_models!.map(cm => (
+                            <span key={cm} style={{ fontSize: 10, fontFamily: 'monospace', color: '#cdd6f4', background: 'rgba(168,85,247,0.1)', borderRadius: 4, padding: '1px 6px' }}>{cm}</span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
@@ -14781,7 +14920,7 @@ export function ModelsPage() {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 11, color: '#6c7086' }}>
-            {leaderboard ? `Generated ${leaderboard.generated_at} · ${leaderboard.total_runs} total runs · ${leaderboard.models.length} models` : 'No leaderboard data yet'}
+            {leaderboard ? `Generated ${leaderboard.generated_at} · ${leaderboard.total_runs} total runs · ${leaderboard.models.length} entries` : 'No leaderboard data yet'}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {/* GitHub link only shows once data has actually published —
@@ -14789,9 +14928,7 @@ export function ModelsPage() {
                 that doesn't exist yet. */}
             {leaderboard && (
               <button
-                onClick={() => {
-                  import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl('https://github.com/AugmentedValueAcceleration/ava-supernova-bench')).catch(() => {});
-                }}
+                onClick={() => openExternal('https://github.com/AugmentedValueAcceleration/ava-supernova-bench')}
                 style={{
                   padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.25)',
                   background: 'rgba(168,85,247,0.08)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer',
@@ -14826,52 +14963,56 @@ export function ModelsPage() {
 
         {leaderboard && (
           <>
-            <div style={{ ...card, padding: 16, marginBottom: 16, overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 4 }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left', fontSize: 11, color: '#6c7086', fontWeight: 500, padding: '6px 10px' }}>Model</th>
-                    {leaderboard.categories.map(cat => (
-                      <th key={cat} style={{ textAlign: 'center', fontSize: 10, color: '#6c7086', fontWeight: 500, padding: '6px 8px', minWidth: 110 }}>
-                        {BENCH_CATEGORY_LABELS[cat]}
-                      </th>
-                    ))}
-                    <th style={{ textAlign: 'center', fontSize: 10, color: '#6c7086', fontWeight: 500, padding: '6px 8px' }}>Overall</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.models.map(m => (
-                    <tr key={m.model_id}>
-                      <td style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', padding: '8px 10px' }}>{m.display_name}</td>
-                      {leaderboard.categories.map(cat => {
-                        const cell = m.scores[cat];
-                        const lowConfidence = cell && cell.sample_size < 10;
-                        return (
-                          <td key={cat}
-                            title={cell ? `${cell.score.toFixed(1)}% over ${cell.sample_size} runs${lowConfidence ? ' (low confidence)' : ''}` : 'no runs in this category yet'}
-                            style={{
-                              textAlign: 'center', fontSize: 11, fontFamily: 'monospace', color: '#cdd6f4',
-                              background: cellColor(cell?.score), borderRadius: 6, padding: '10px 8px',
-                              opacity: lowConfidence ? 0.5 : 1,
-                            }}>
-                            {cell ? `${cell.score.toFixed(0)}%` : '—'}
-                          </td>
-                        );
-                      })}
-                      <td style={{ textAlign: 'center', fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: '#cdd6f4', background: cellColor(m.overall_pass_rate), borderRadius: 6, padding: '10px 8px' }}>
-                        {m.overall_pass_rate.toFixed(0)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Models (raw models, Tier 1) */}
+            {models.length > 0 && (
+              <>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>Models</div>
+                {renderTable(models, false)}
+              </>
+            )}
 
+            {/* Ava Modes (Tier 2) — physically separate so a mode's number can
+                never be misread as beating a raw model's. */}
+            {modes.length > 0 && (
+              <>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginTop: 20, marginBottom: 4 }}>Ava Modes</div>
+                <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.6, maxWidth: 640, marginBottom: 8 }}>
+                  Modes orchestrate several models. They are compared only to each other — never ranked against a raw model, because a mode costs more and runs slower by design. Expand a mode to see the fleet it actually ran.
+                </div>
+                {renderTable(modes, true)}
+              </>
+            )}
+
+            {/* Where we lose — our weakest cells, surfaced on purpose. */}
+            {leaderboard.total_runs > 0 && (
+              <div style={{ borderRadius: 16, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.04)', padding: 16, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#f38ba8', marginBottom: 4 }}>Where we lose</div>
+                <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.6, marginBottom: 10 }}>
+                  Our weakest results, shown on purpose. Publishing your own losses is the part nobody fakes.
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {worstCells(leaderboard).map((w, i) => (
+                    <span key={i} style={{ fontSize: 10, color: '#cdd6f4', border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(26,16,40,0.6)', borderRadius: 8, padding: '4px 10px' }}>
+                      <span style={{ fontWeight: 500 }}>{w.name}</span>
+                      <span style={{ color: '#6c7086' }}> · {w.cat} · </span>
+                      <span style={{ fontFamily: 'monospace', color: '#f38ba8' }}>{w.score.toFixed(0)}%</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Plain-language summaries */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
               {leaderboard.models.map(m => (
                 <div key={m.model_id} style={{ ...card, padding: '12px 16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{m.display_name}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>
+                      {m.display_name}
+                      {m.entry_kind === 'mode' && (
+                        <span style={{ marginLeft: 6, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, color: '#a855f7', background: 'rgba(168,85,247,0.15)', borderRadius: 4, padding: '1px 5px', verticalAlign: 'middle' }}>mode</span>
+                      )}
+                    </span>
                     <span style={{ fontSize: 12, fontFamily: 'monospace', color: m.overall_pass_rate >= 80 ? '#a6e3a1' : m.overall_pass_rate >= 60 ? '#f9e2af' : '#f38ba8' }}>
                       {m.overall_pass_rate.toFixed(1)}%
                     </span>
