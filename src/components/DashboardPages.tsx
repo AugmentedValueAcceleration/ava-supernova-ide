@@ -1985,7 +1985,7 @@ export function AvaChatPage() {
     'deepseek-reasoner': 'deepseek:deepseek-reasoner',
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
     'glm-4-plus': 'zhipu:glm-4-plus',
-    'mistral-large': 'mistral:mistral-large-latest',
+    'mistral-large': 'mistral:mistral-large-3',
   };
 
   // ── Mode definitions ───────────────────────────────────────────────────────
@@ -2013,20 +2013,20 @@ export function AvaChatPage() {
   const DESKTOP_CAPABLE_MODEL_IDS = new Set<string>([
     'auto', 'supernova', 'aurora',
     // Platform / Qwen direct
-    'qwen3.6-plus', 'qwen3.5-plus', 'qwen3.5-omni-plus',
+    'qwen3.7-max', 'qwen3.6-plus', 'qwen3.5-plus', 'qwen3.5-omni-plus',
     // Platform DeepSeek (admin-gated)
     'deepseek-v4-pro-platform', 'deepseek-v4-pro',
     // Platform Mistral (Aurora's fleet, available on platform)
     'mistral-large-3-platform', 'mistral-small-4-platform',
     // Anthropic
-    'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+    'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
     // Kimi
     'kimi-k2.6', 'kimi-k2.5',
     // Mistral
-    'mistral-large-3', 'mistral-small-4',
-    'mistral-large-latest', 'codestral-latest', 'devstral-latest',
+    'mistral-large-3', 'mistral-medium-3.5', 'mistral-small-4',
+    'codestral-latest', 'devstral-latest',
     // Zhipu / GLM
-    'glm-5',
+    'glm-5.1', 'glm-5', 'glm-4.7',
     // Xiaomi MiMo
     'mimo-v2.5-pro', 'mimo-v2.5',
   ]);
@@ -2036,12 +2036,12 @@ export function AvaChatPage() {
   // ── BYOK model map — fetched from platform, fallback to hardcoded ──────────
   const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
-    Qwen: [{ id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3.5-omni-flash', name: 'Qwen 3.5 Omni Flash' }, { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
+    Qwen: [{ id: 'qwen3.7-max', name: 'Qwen 3.7 Max' }, { id: 'qwen3.6-plus', name: 'Qwen 3.6 Plus' }, { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
     MiniMax: [{ id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' }],
     Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
-    Zhipu: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4-plus', name: 'GLM-4 Plus' }],
-    Mistral: [{ id: 'mistral-large-latest', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
-    Anthropic: [{ id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-opus-4-6', name: 'Claude Opus 4.6' }],
+    Zhipu: [{ id: 'glm-5.1', name: 'GLM-5.1' }, { id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4.7', name: 'GLM-4.7' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
+    Mistral: [{ id: 'mistral-large-3', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
+    Anthropic: [{ id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
   };
 
   const [platformModels, setPlatformModels] = useState<Record<string, { id: string; name: string }[]> | null>(null);
