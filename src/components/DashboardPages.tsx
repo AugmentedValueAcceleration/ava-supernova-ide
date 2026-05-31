@@ -3140,6 +3140,14 @@ export function AvaChatPage() {
         setStatusText(t('dash.chat.status.executing'));
         break;
 
+      case 'progress': {
+        // Coordinator prep/routing status during the silent classify + intent
+        // gate + route window (worst in the orchestration modes) — fills the
+        // gap before stream_start with a real, localized line.
+        const e = event as any;
+        setStatusText(t(e.labelKey, e.model ? { model: e.model } : undefined));
+        break;
+      }
       case 'auto_routing':
         setStatusText(t('dash.chat.status.selecting_model'));
         break;
