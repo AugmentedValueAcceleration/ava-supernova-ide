@@ -3703,6 +3703,11 @@ export function AvaChatPage() {
   // ── Render markdown (basic) ───────────────────────────────────────────────
   const renderMarkdown = useCallback((text: string) => {
     if (!text) return null;
+    // Hide the internal <changes-summary> completion-contract block — the
+    // coordinator parses it from the stored message for verification, so it
+    // stays in the message, but it's never meant for display. Matches a
+    // complete block or an unterminated one (mid-stream).
+    text = text.replace(/\s*<changes-summary>[\s\S]*?(?:<\/changes-summary>|$)/i, '');
     const parts: React.ReactNode[] = [];
     // Split on code blocks first
     const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
