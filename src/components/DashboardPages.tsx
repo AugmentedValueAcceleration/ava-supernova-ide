@@ -38,6 +38,8 @@ import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { Tooltip } from './Tooltip';
+import { LessonPlayer, SAMPLE_LESSON, type PlayableLesson, type LessonStep } from './LessonPlayer';
+import { readLocalLearning } from '../lib/learning-store';
 import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
 import { DocumentationPage } from './DocumentationPage';
 import { LibraryPapersPage } from './LibraryPapersPage';
@@ -1679,8 +1681,10 @@ export function CommandCentrePage() {
   const { data: rawTasks2, loading: tasksLoading, refetch: refetchTasks } = useApiData<any>('/tasks', null);
   const tasks: TaskEntry[] = Array.isArray(rawTasks2) ? rawTasks2 : (rawTasks2?.tasks ?? rawTasks2?.data ?? []);
   const { data: journalDay, loading: journalLoading } = useApiData<JournalDay | null>(`/journal?date=${new Date().toISOString().slice(0, 10)}`, null);
-  const { data: rawLearning, loading: learningLoading } = useApiData<any>('/learning', null);
-  const curriculums: LearningCurriculum[] = Array.isArray(rawLearning) ? rawLearning : (rawLearning?.curriculums ?? rawLearning?.data ?? []);
+  // Learning is local-first — read the shared ~/.ava/learning.json (no account needed).
+  const [curriculums, setCurriculums] = useState<LearningCurriculum[]>([]);
+  const [learningLoading, setLearningLoading] = useState(true);
+  useEffect(() => { void readLocalLearning().then(c => { setCurriculums(c as LearningCurriculum[]); setLearningLoading(false); }); }, []);
   const { data: rawMemories2, loading: memoriesLoading } = useApiData<any>('/memories', null);
   const memories: MemoryEntry[] = Array.isArray(rawMemories2) ? rawMemories2 : (rawMemories2?.memories ?? rawMemories2?.entries ?? rawMemories2?.data ?? []);
   const [releaseData, setReleaseData] = useState<any>(null);
@@ -8120,28 +8124,25 @@ export function LearningPage() {
   const { data: rawData, loading, error } = useApiData<any>('/learning', null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+  const [playingLessonId, setPlayingLessonId] = useState<string | null>(null);
+  const [playingSample, setPlayingSample] = useState(false);
 
-  // Local-first: load from localStorage, merge with cloud
-  const [localCurricula] = useState<any[]>(() => {
-    try { const saved = localStorage.getItem('ava-ide-learning'); return saved ? JSON.parse(saved) : []; } catch { return []; }
-  });
+  // Local-first: the user's curriculums + progress live in the SHARED
+  // ~/.ava/learning.json (the same file the CLI, extension and @ava/core use),
+  // read via Tauri fs — works with no account and no connection. Cloud is
+  // additive (merged in when signed in), never required.
+  const [localCurricula, setLocalCurricula] = useState<any[]>([]);
+  useEffect(() => { void readLocalLearning().then(setLocalCurricula); }, []);
 
   const cloudCurricula: any[] = Array.isArray(rawData) ? rawData : rawData?.curricula || rawData?.courses || [];
 
-  // Merge: cloud + local (deduplicated by id)
+  // Merge: local first (the source of truth), plus any cloud-only curriculums.
   const curricula: any[] = useMemo(() => {
     if (cloudCurricula.length === 0) return localCurricula;
-    const cloudIds = new Set(cloudCurricula.map((c: any) => c.id || c._id));
-    const localOnly = localCurricula.filter((c: any) => !cloudIds.has(c.id || c._id));
-    return [...cloudCurricula, ...localOnly];
-  }, [cloudCurricula, localCurricula]);
-
-  // Persist to localStorage on change
-  useEffect(() => {
-    if (curricula.length > 0) {
-      try { localStorage.setItem('ava-ide-learning', JSON.stringify(curricula)); } catch {}
-    }
-  }, [curricula]);
+    const localIds = new Set(localCurricula.map((c: any) => c.id || c._id));
+    const cloudOnly = cloudCurricula.filter((c: any) => !localIds.has(c.id || c._id));
+    return [...localCurricula, ...cloudOnly];
+  }, [localCurricula, cloudCurricula]);
 
   const levelColors: Record<string, { color: string; bg: string }> = {
     beginner:     { color: '#34d399', bg: 'rgba(52,211,153,0.10)' },
@@ -8171,9 +8172,42 @@ export function LearningPage() {
 
   const selected = curricula.find((c: any) => (c.id || c._id) === selectedId);
 
+  // Sample lesson — playable with zero setup, from anywhere in the view.
+  if (playingSample) {
+    return (
+      <div style={pageWrapper}>
+        <div style={{ width: '100%' }}>
+          <LessonPlayer lesson={SAMPLE_LESSON} onClose={() => setPlayingSample(false)} />
+        </div>
+      </div>
+    );
+  }
+
   // Detail view
   if (selected) {
     const modules: any[] = selected.modules || [];
+
+    // Playing a lesson — hand off to the interactive player.
+    if (playingLessonId) {
+      const playing = modules
+        .flatMap((m: any) => (m.lessons || []))
+        .find((l: any) => (l.id || l.title) === playingLessonId);
+      if (playing) {
+        return (
+          <div style={pageWrapper}>
+            <div style={{ width: '100%' }}>
+              <LessonPlayer
+                lesson={playing as PlayableLesson}
+                curriculumId={selected.id || selected._id}
+                onComplete={setLocalCurricula}
+                onClose={() => setPlayingLessonId(null)}
+              />
+            </div>
+          </div>
+        );
+      }
+    }
+
     const progress = selected.progress_percent ?? selected.progress ?? 0;
     const lc = levelColors[selected.level] || levelColors.mixed;
 
@@ -8265,27 +8299,40 @@ export function LearningPage() {
 
                   {isOpen && lessons.length > 0 && (
                     <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.12)' }}>
-                      {lessons.map((lesson: any) => (
-                        <div
-                          key={lesson.id || lesson.title}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '8px 16px', fontSize: 11,
-                            borderBottom: '1px solid rgba(49,50,68,0.5)',
-                          }}
-                        >
-                          <span>{typeIcons[lesson.type] || '\uD83D\uDCD6'}</span>
-                          <span style={{
-                            color: lesson.status === 'completed' ? '#6c7086' : '#cdd6f4',
-                            textDecoration: lesson.status === 'completed' ? 'line-through' : 'none',
-                            flex: 1,
-                          }}>
-                            {lesson.title}
-                          </span>
-                          {lesson.status === 'completed' && <span style={{ color: '#34d399' }}>&#10003;</span>}
-                          {lesson.score != null && <span style={{ color: '#6c7086', marginLeft: 'auto' }}>{lesson.score}%</span>}
-                        </div>
-                      ))}
+                      {lessons.map((lesson: any) => {
+                        const interactive = ((lesson.steps as LessonStep[] | undefined)?.length ?? 0) > 0;
+                        return (
+                          <button
+                            key={lesson.id || lesson.title}
+                            onClick={() => setPlayingLessonId(lesson.id || lesson.title)}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '8px 16px', fontSize: 11, textAlign: 'left',
+                              border: 'none', borderBottom: '1px solid rgba(49,50,68,0.5)',
+                              background: 'transparent', cursor: 'pointer', transition: 'background 0.15s',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(49, 34, 68, 0.5)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <span>{typeIcons[lesson.type] || '\uD83D\uDCD6'}</span>
+                            <span style={{
+                              color: lesson.status === 'completed' ? '#6c7086' : '#cdd6f4',
+                              textDecoration: lesson.status === 'completed' ? 'line-through' : 'none',
+                              flex: 1,
+                            }}>
+                              {lesson.title}
+                            </span>
+                            {interactive && (
+                              <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.5, color: '#a855f7' }}>
+                                interactive
+                              </span>
+                            )}
+                            {lesson.status === 'completed' && <span style={{ color: '#34d399' }}>&#10003;</span>}
+                            {lesson.score != null && lesson.status !== 'completed' && <span style={{ color: '#6c7086' }}>{lesson.score}%</span>}
+                            <span style={{ color: '#6c7086', opacity: 0.4 }}>&#9654;</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -8306,6 +8353,24 @@ export function LearningPage() {
           <StorageBadge />
         </div>
         <div style={pageSubtitle}>{t('dash.learning.subtitle')}</div>
+
+        {/* Try a sample interactive lesson — playable with zero data */}
+        <button
+          onClick={() => setPlayingSample(true)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20,
+            borderRadius: 10, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.05)',
+            padding: '10px 16px', textAlign: 'left', cursor: 'pointer', transition: 'background 0.15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(168,85,247,0.1)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(168,85,247,0.05)'; }}
+        >
+          <span style={{ fontSize: 16 }}>&#9654;</span>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>Try a sample interactive lesson</div>
+            <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>See the new step-by-step format — teach, do, check.</div>
+          </div>
+        </button>
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 28 }}>
@@ -8603,6 +8668,48 @@ async function scanLocalLibrary(projectFolder: string): Promise<LibraryFile[]> {
 }
 
 /* ===== 6b. Learning Library ===== */
+// A small, friendly visual identity per course — a soft gradient + icon
+// derived from the subject, so each tile feels distinct and inviting at a
+// glance. Mirrors the extension's LearningLibrary identityFor.
+type CourseIdentity = { from: string; to: string; tint: string; icon: string };
+
+const COURSE_SUBJECT_IDENTITIES: { match: string[]; identity: CourseIdentity }[] = [
+  { match: ['prompt', 'ai', 'llm', 'agent', 'machine'], identity: { from: '#a855f7', to: '#7c3aed', tint: 'rgba(168,85,247,0.12)', icon: '✨' } },
+  { match: ['web', 'frontend', 'react', 'css', 'html', 'ui', 'design'], identity: { from: '#38bdf8', to: '#2563eb', tint: 'rgba(56,189,248,0.12)', icon: '🎨' } },
+  { match: ['python', 'data', 'analysis', 'science', 'ml'], identity: { from: '#34d399', to: '#0ea5e9', tint: 'rgba(52,211,153,0.12)', icon: '📊' } },
+  { match: ['security', 'crypto', 'network', 'cyber'], identity: { from: '#f87171', to: '#b91c1c', tint: 'rgba(248,113,113,0.12)', icon: '🔒' } },
+  { match: ['backend', 'server', 'api', 'database', 'sql', 'devops', 'cloud'], identity: { from: '#fbbf24', to: '#d97706', tint: 'rgba(251,191,36,0.12)', icon: '⚙️' } },
+  { match: ['game', 'graphics', '3d', 'shader'], identity: { from: '#f472b6', to: '#db2777', tint: 'rgba(244,114,182,0.12)', icon: '🎮' } },
+  { match: ['math', 'algorithm', 'logic'], identity: { from: '#818cf8', to: '#4f46e5', tint: 'rgba(129,140,248,0.12)', icon: '🧮' } },
+];
+
+const COURSE_DEFAULT_IDENTITY: CourseIdentity = { from: '#a855f7', to: '#7c3aed', tint: 'rgba(168,85,247,0.10)', icon: '📚' };
+
+function identityFor(subject?: string, title?: string): CourseIdentity {
+  const hay = `${subject || ''} ${title || ''}`.toLowerCase();
+  for (const { match, identity } of COURSE_SUBJECT_IDENTITIES) {
+    if (match.some(m => hay.includes(m))) return identity;
+  }
+  return COURSE_DEFAULT_IDENTITY;
+}
+
+const COURSE_TYPE_ICONS: Record<string, string> = {
+  concept: '📖', exercise: '💻', project: '🛠', quiz: '❓', recap: '🔄', challenge: '🏆',
+};
+
+// A small stat block for the course-detail hero — icon, bold value, quiet label.
+function CourseStat({ icon, label, sub }: { icon: string; label: string; sub: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 16, lineHeight: 1 }}>{icon}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{label}</span>
+        <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.4 }}>{sub}</span>
+      </div>
+    </div>
+  );
+}
+
 export function LearningLibraryPage() {
   useLocale();
   const { data, loading } = useApiData<{ paths: any[]; total: number }>('/learning/library?limit=30', { paths: [], total: 0 });
@@ -8659,53 +8766,148 @@ export function LearningLibraryPage() {
   if (selectedId && detail && detail.id === selectedId) {
     const lc = levelColors[detail.level] || levelColors.beginner;
     const modules = detail.content?.modules || [];
+    const id = identityFor(detail.subject, detail.title);
+    const moduleCount = modules.length;
+    const lessonCount = modules.reduce((s: number, m: any) => s + (m.lessons?.length || 0), 0);
+    const avgRating = detail.rating_count > 0 ? (detail.rating_sum / detail.rating_count).toFixed(1) : null;
     return (
       <div style={pageWrapper}>
-        <button onClick={() => { setSelectedId(null); setDetail(null); }} style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>
-          &larr; Back to Library
-        </button>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-          <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, color: detail.source === 'curated' ? '#a855f7' : '#60a5fa', background: detail.source === 'curated' ? 'rgba(168,85,247,0.1)' : 'rgba(96,165,250,0.1)' }}>
-            {detail.source === 'curated' ? 'Curated by Ava' : 'Community'}
-          </span>
-          <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, color: lc.color, background: lc.bg }}>{detail.level}</span>
-          {detail.estimated_hours && <span style={{ fontSize: 11, color: '#6c7086' }}>{detail.estimated_hours}h</span>}
-        </div>
-        <div style={{ ...pageTitle, marginBottom: 4 }}>{detail.title}</div>
-        {detail.author_name && <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 8 }}>by {detail.author_name}</div>}
-        <div style={{ fontSize: 13, color: '#a6adc8', lineHeight: 1.6, marginBottom: 16 }}>{detail.description}</div>
-        <div style={{ display: 'flex', gap: 16, marginBottom: 20, fontSize: 12, color: '#6c7086' }}>
-          <span>{detail.fork_count} learner{detail.fork_count !== 1 ? 's' : ''}</span>
-          {detail.rating_count > 0 && <span>{(detail.rating_sum / detail.rating_count).toFixed(1)}/5 rating</span>}
-          <span>{modules.length} modules</span>
-          <span>{modules.reduce((s: number, m: any) => s + (m.lessons?.length || 0), 0)} lessons</span>
-        </div>
-        {detail.learning_objectives?.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={sectionTitle}>What you will learn</div>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#a6adc8', lineHeight: 1.8 }}>
-              {detail.learning_objectives.map((obj: string, i: number) => <li key={i}>{obj}</li>)}
-            </ul>
-          </div>
-        )}
-        <div style={{ marginBottom: 20 }}>
-          <div style={sectionTitle}>Curriculum</div>
-          {modules.map((mod: any, mi: number) => (
-            <div key={mi} style={{ ...card, marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>Module {mi + 1}: {mod.title}</div>
-              {mod.description && <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 6 }}>{mod.description}</div>}
-              {(mod.lessons || []).map((l: any, li: number) => (
-                <div key={li} style={{ fontSize: 12, color: '#a6adc8', padding: '2px 0', display: 'flex', gap: 6 }}>
-                  <span>{l.type === 'concept' ? '\uD83D\uDCD6' : l.type === 'exercise' ? '\uD83D\uDCBB' : l.type === 'project' ? '\uD83D\uDEE0' : l.type === 'quiz' ? '\u2753' : '\uD83D\uDD04'}</span>
-                  <span>{l.title}</span>
+        <div style={{ width: '100%', maxWidth: 860, margin: '0 auto' }}>
+          <button onClick={() => { setSelectedId(null); setDetail(null); }} style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>
+            &larr; Back to Library
+          </button>
+
+          {/* Hero */}
+          <div style={{
+            position: 'relative', overflow: 'hidden', borderRadius: 16,
+            border: '1px solid rgba(168,85,247,0.12)',
+            background: `linear-gradient(135deg, ${id.tint}, transparent 60%), rgba(26,16,40,0.6)`,
+            padding: 24, marginBottom: 20,
+          }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div style={{
+                flexShrink: 0, width: 56, height: 56, borderRadius: 14, display: 'flex',
+                alignItems: 'center', justifyContent: 'center', fontSize: 28,
+                background: `linear-gradient(135deg, ${id.from}, ${id.to})`,
+                boxShadow: `0 6px 20px -6px ${id.from}`,
+              }}>
+                {id.icon}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <span style={{ padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5, color: detail.source === 'curated' ? '#a855f7' : '#60a5fa', background: detail.source === 'curated' ? 'rgba(168,85,247,0.1)' : 'rgba(96,165,250,0.1)' }}>
+                    {detail.source === 'curated' ? 'Curated by Ava' : 'Community'}
+                  </span>
+                  <span style={{ padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5, color: lc.color, background: lc.bg }}>
+                    {detail.level}
+                  </span>
+                  {detail.subject && (
+                    <span style={{ padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 500, color: '#a6adc8', background: 'rgba(49,34,68,0.5)', border: '1px solid rgba(168,85,247,0.12)' }}>
+                      {detail.subject}
+                    </span>
+                  )}
                 </div>
-              ))}
+                <h2 style={{ fontSize: 24, fontWeight: 700, color: '#fff', margin: '0 0 4px', lineHeight: 1.2 }}>{detail.title}</h2>
+                {detail.author_name && (
+                  <p style={{ fontSize: 12, color: '#6c7086', margin: '0 0 10px' }}>by {detail.author_name}</p>
+                )}
+                <p style={{ fontSize: 13, color: '#a6adc8', lineHeight: 1.65, margin: 0 }}>{detail.description}</p>
+              </div>
             </div>
-          ))}
+
+            {/* Stats row */}
+            <div style={{ display: 'flex', gap: 20, marginTop: 18, flexWrap: 'wrap' }}>
+              {detail.estimated_hours ? <CourseStat icon="\u23F1" label={`${detail.estimated_hours}h`} sub="estimated" /> : null}
+              <CourseStat icon="\uD83D\uDC65" label={String(detail.fork_count)} sub={`learner${detail.fork_count !== 1 ? 's' : ''}`} />
+              {avgRating ? <CourseStat icon="\u2B50" label={`${avgRating}/5`} sub="rating" /> : null}
+              {moduleCount > 0 ? <CourseStat icon="\uD83D\uDCE6" label={String(moduleCount)} sub={`module${moduleCount !== 1 ? 's' : ''}`} /> : null}
+              {lessonCount > 0 ? <CourseStat icon="\uD83D\uDCDD" label={String(lessonCount)} sub={`lesson${lessonCount !== 1 ? 's' : ''}`} /> : null}
+            </div>
+          </div>
+
+          {/* What you'll learn */}
+          {detail.learning_objectives?.length > 0 && (
+            <div style={{ marginBottom: 22, borderRadius: 14, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)', padding: 18 }}>
+              <h3 style={{ fontSize: 11, fontWeight: 700, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 12px' }}>What you&apos;ll learn</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px 18px' }}>
+                {detail.learning_objectives.map((obj: string, oi: number) => (
+                  <div key={oi} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, color: '#a6adc8', lineHeight: 1.5 }}>
+                    <span style={{ color: id.from, fontWeight: 700, flexShrink: 0 }}>\u2713</span>
+                    <span>{obj}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Curriculum \u2014 a visual learning path */}
+          {modules.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 11, fontWeight: 700, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 16px' }}>Your learning path</h3>
+              <div style={{ position: 'relative' }}>
+                {/* The vertical journey spine */}
+                <div style={{ position: 'absolute', left: 17, top: 8, bottom: 8, width: 2, background: 'linear-gradient(to bottom, #a855f7, #6366f1)', opacity: 0.4 }} />
+                {modules.map((mod: any, mi: number) => (
+                  <div key={mi} style={{ position: 'relative', paddingLeft: 48, marginBottom: mi === modules.length - 1 ? 0 : 18 }}>
+                    {/* Module node */}
+                    <div style={{
+                      position: 'absolute', left: 0, top: 0, width: 36, height: 36, borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700,
+                      color: '#fff', background: `linear-gradient(135deg, ${id.from}, ${id.to})`,
+                      boxShadow: '0 0 0 4px rgba(26,16,40,1)',
+                    }}>
+                      {mi + 1}
+                    </div>
+                    <div style={{ borderRadius: 14, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)', padding: 16 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: mod.description ? 2 : 8 }}>
+                        {mod.title}
+                      </div>
+                      {mod.description && (
+                        <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 10, lineHeight: 1.5 }}>{mod.description}</div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {(mod.lessons || []).map((l: any, li: number) => (
+                          <div key={li} style={{
+                            display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5,
+                            color: '#a6adc8', padding: '7px 10px', borderRadius: 8,
+                            background: 'rgba(49,34,68,0.4)',
+                          }}>
+                            <span style={{ fontSize: 15, lineHeight: 1 }}>{COURSE_TYPE_ICONS[l.type] || '\u25CB'}</span>
+                            <span style={{ flex: 1 }}>{l.title}</span>
+                            {l.difficulty && (
+                              <span style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.4 }}>{l.difficulty}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Start-learning CTA card */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+            borderRadius: 14, border: '1px solid rgba(168,85,247,0.12)',
+            background: `linear-gradient(135deg, ${id.tint}, transparent), rgba(26,16,40,0.6)`,
+            padding: 18,
+          }}>
+            <button onClick={() => handleFork(detail.id)} disabled={forking} style={{
+              padding: '11px 26px', borderRadius: 10, border: 'none', cursor: forking ? 'wait' : 'pointer',
+              background: `linear-gradient(135deg, ${id.from}, ${id.to})`, color: '#fff', fontSize: 14, fontWeight: 600,
+            }}>
+              {forking ? 'Starting...' : 'Start Learning'}
+            </button>
+          </div>
+
+          {detail.prerequisites && (
+            <p style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5, marginTop: 12 }}>
+              <strong style={{ color: '#a6adc8' }}>Prerequisites:</strong> {detail.prerequisites}
+            </p>
+          )}
         </div>
-        <button onClick={() => handleFork(detail.id)} disabled={forking} style={{ padding: '10px 24px', borderRadius: 8, border: 'none', cursor: forking ? 'wait' : 'pointer', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', fontSize: 14, fontWeight: 500 }}>
-          {forking ? 'Starting...' : 'Start Learning'}
-        </button>
       </div>
     );
   }
@@ -8783,34 +8985,81 @@ export function LearningLibraryPage() {
           <div style={{ fontSize: 11, marginTop: 4 }}>Try a different search or ask Ava to create a custom path.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
           {filtered.map((p: any) => {
             const lc = levelColors[p.level] || levelColors.beginner;
             const avgRating = p.rating_count > 0 ? (p.rating_sum / p.rating_count).toFixed(1) : null;
+            const id = identityFor(p.subject, p.title);
             return (
               <button
                 key={p.id}
                 onClick={() => handleSelect(p.id)}
-                style={{ ...card, textAlign: 'left' as const, cursor: 'pointer', border: '1px solid rgba(168,85,247,0.12)', transition: 'border-color 0.2s', display: 'flex', flexDirection: 'column' as const, height: '100%' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.12)')}
+                style={{
+                  textAlign: 'left' as const, padding: 0, borderRadius: 16, cursor: 'pointer', overflow: 'hidden',
+                  border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)',
+                  transition: 'transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease',
+                  display: 'flex', flexDirection: 'column' as const,
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = id.from;
+                  e.currentTarget.style.transform = 'translateY(-3px)';
+                  e.currentTarget.style.boxShadow = `0 12px 28px -14px ${id.from}`;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = 'rgba(168,85,247,0.12)';
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               >
-                <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' as const }}>
-                  <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 600, textTransform: 'uppercase' as const, color: p.source === 'curated' ? '#a855f7' : '#60a5fa', background: p.source === 'curated' ? 'rgba(168,85,247,0.1)' : 'rgba(96,165,250,0.1)' }}>
+                {/* Identity band */}
+                <div style={{
+                  height: 78, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '0 16px', position: 'relative',
+                  background: `linear-gradient(135deg, ${id.from}, ${id.to})`,
+                }}>
+                  <div style={{
+                    width: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 22, background: 'rgba(0,0,0,0.18)',
+                  }}>
+                    {id.icon}
+                  </div>
+                  <span style={{
+                    padding: '3px 9px', borderRadius: 999, fontSize: 9, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px',
+                    background: 'rgba(0,0,0,0.22)', color: '#fff',
+                  }}>
                     {p.source === 'curated' ? 'Curated' : 'Community'}
                   </span>
-                  <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 600, textTransform: 'uppercase' as const, color: lc.color, background: lc.bg }}>{p.level}</span>
-                  {p.subject && (
-                    <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 500, color: '#cdd6f4', background: 'rgba(205,214,244,0.08)', border: '1px solid rgba(205,214,244,0.1)' }}>{p.subject}</span>
-                  )}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{p.title}</div>
-                <div style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.5, marginBottom: 8 }}>{p.description?.slice(0, 120)}{(p.description?.length || 0) > 120 ? '...' : ''}</div>
-                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#6c7086' }}>
-                  {p.estimated_hours && <span>{p.estimated_hours}h</span>}
-                  <span>{p.fork_count} learner{p.fork_count !== 1 ? 's' : ''}</span>
-                  {avgRating && <span>{'\u2605'} {avgRating}/5</span>}
-                  {p.author_name && <span>by {p.author_name}</span>}
+
+                <div style={{ padding: 16, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                  {/* Level + subject pills */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' as const }}>
+                    <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 9, fontWeight: 600, textTransform: 'uppercase' as const, color: lc.color, background: lc.bg }}>
+                      {p.level}
+                    </span>
+                    {p.subject && (
+                      <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 9, fontWeight: 500, color: '#a6adc8', background: 'rgba(49,34,68,0.5)' }}>
+                        {p.subject}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Title */}
+                  <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 8, lineHeight: 1.3 }}>
+                    {p.title}
+                  </div>
+
+                  {/* Description */}
+                  <div style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.6, marginBottom: 12, flex: 1 }}>
+                    {p.description?.slice(0, 100)}{(p.description?.length || 0) > 100 ? '...' : ''}
+                  </div>
+
+                  {/* Footer stats */}
+                  <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#6c7086', borderTop: '1px solid rgba(168,85,247,0.12)', paddingTop: 10, marginTop: 'auto' }}>
+                    {p.estimated_hours && <span>\u23f1 {p.estimated_hours}h</span>}
+                    <span>\ud83d\udc65 {p.fork_count}</span>
+                    {avgRating && <span style={{ color: '#fbbf24' }}>\u2605 {avgRating}</span>}
+                  </div>
                 </div>
               </button>
             );
