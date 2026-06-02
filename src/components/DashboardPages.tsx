@@ -40,7 +40,8 @@ import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { Tooltip } from './Tooltip';
 import { LessonPlayer, SAMPLE_LESSON, type PlayableLesson, type LessonStep } from './LessonPlayer';
 import { readLocalLearning } from '../lib/learning-store';
-import IdeTasksPanel, { type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
+import IdeTasksPanel, { IdeTasksSpine, type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
+import { readLocalTasks, createLocalTask, toggleLocalTask } from '../lib/task-store';
 import { DocumentationPage } from './DocumentationPage';
 import { LibraryPapersPage } from './LibraryPapersPage';
 import { ContextBar } from './ContextBar';
@@ -2649,32 +2650,40 @@ export function AvaChatPage() {
   useEffect(() => { try { localStorage.setItem('ava-ide-tasks-completed', JSON.stringify(avaCompletedTasks)); } catch {} }, [avaCompletedTasks]);
 
   // ── Fetch user tasks when panel opens ───────────────────────────────────
+  // Local-first: reads the SAME ~/.ava/tasks.json (+ workspace store) the CLI
+  // and extension use, via Tauri fs. Works with no account. Cloud sync is
+  // additive and opt-in, handled at the platform layer — never required here.
   const fetchUserTasks = useCallback(async () => {
-    if (!checkConnected()) return;
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const data = await apiFetch(`/tasks?date=${today}`);
-      const arr = Array.isArray(data) ? data : (data?.tasks ?? data?.data ?? []);
-      const mapped = arr.map((t: any) => ({
-        id: t.id, title: t.title, priority: t.priority || 'medium',
-        status: t.status || 'todo', dueDate: t.due_date, category: t.category || 'general',
+      const entries = await readLocalTasks();
+      const mapped: TodayTaskUI[] = entries.map((t) => ({
+        id: t.id, title: t.title, priority: (t.priority || 'medium') as TodayTaskUI['priority'],
+        status: (t.status || 'todo') as TodayTaskUI['status'], dueDate: t.dueDate, category: t.category || 'general',
       }));
       setAllTasks(mapped);
-      setTodayTasks(mapped.filter((t: TodayTaskUI) => !t.dueDate || t.dueDate === today));
-    } catch { /* silently fail */ }
+      // Today = in-progress OR due today and not done (mirrors @ava/core getTodayTasks).
+      setTodayTasks(mapped.filter((t) => t.status === 'in-progress' || (t.dueDate === today && t.status !== 'done')));
+    } catch { /* local-first: empty board, never an error */ }
   }, []);
 
   useEffect(() => { if (tasksPanelOpen) fetchUserTasks(); }, [tasksPanelOpen, fetchUserTasks]);
+  // Preload on mount too — the collapsed spine shows a live active-count.
+  useEffect(() => { fetchUserTasks(); }, [fetchUserTasks]);
 
   const handleToggleTask = useCallback(async (taskId: string) => {
-    if (!checkConnected() || !cloudSyncEnabled()) return;
     try {
-      const task = allTasks.find(t => t.id === taskId);
-      const newStatus = task?.status === 'done' ? 'todo' : 'done';
-      await apiFetch(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
+      await toggleLocalTask(taskId);
       fetchUserTasks();
     } catch { /* */ }
-  }, [allTasks, fetchUserTasks]);
+  }, [fetchUserTasks]);
+
+  const handleCreateTask = useCallback(async (task: { title: string; priority?: string; category?: string; due_date?: string }) => {
+    try {
+      await createLocalTask(task);
+      fetchUserTasks();
+    } catch { /* */ }
+  }, [fetchUserTasks]);
 
   // ── Persist messages ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -4570,30 +4579,8 @@ export function AvaChatPage() {
               as a horizontal ContextBar (mirroring the VSCode extension's
               v0.39.0 UX). The old circular ring lived here and is gone. */}
 
-          {/* Tasks toggle */}
-          <Tooltip content={t('dash.chat.toggle_tasks')} placement="bottom">
-          <button
-            onClick={() => setTasksPanelOpen(!tasksPanelOpen)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
-              background: tasksPanelOpen ? 'rgba(168,85,247,0.2)' : 'rgba(168,85,247,0.05)',
-              border: `1px solid ${tasksPanelOpen ? 'rgba(168,85,247,0.4)' : 'rgba(168,85,247,0.15)'}`,
-              borderRadius: 8, color: tasksPanelOpen ? '#a855f7' : '#6c7086',
-              fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 3.5h8v1H6v-1Zm-2.25 5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 7.5h8v1H6v-1Zm-2.25 5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM6 11.5h8v1H6v-1Z"/>
-            </svg>
-            {t('dash.nav.tasks')}
-            {sessionTasks.length > 0 && (
-              <span style={{
-                fontSize: 9, padding: '1px 5px', borderRadius: 8,
-                background: 'rgba(168,85,247,0.25)', color: '#a855f7',
-              }}>{sessionTasks.length}</span>
-            )}
-          </button>
-          </Tooltip>
+          {/* Tasks toggle removed — the always-visible Tasks spine on the right
+              edge is the single control now (its grip expands/collapses). */}
 
           {/* New Chat button */}
           <Tooltip content={t('dash.chat.new_chat')} placement="bottom">
@@ -6164,8 +6151,9 @@ export function AvaChatPage() {
         </div>
       </div>
     </div>
-    {/* ── Tasks Panel (collapsible right sidebar) ───────────────────────── */}
-    {tasksPanelOpen && (
+    {/* ── Tasks — always present: full panel when open, self-advertising
+           spine when collapsed. ─────────────────────────────────────────── */}
+    {tasksPanelOpen ? (
       <IdeTasksPanel
         sessionTasks={sessionTasks}
         avaCompletedTasks={avaCompletedTasks}
@@ -6173,8 +6161,15 @@ export function AvaChatPage() {
         allTasks={allTasks}
         onClose={() => setTasksPanelOpen(false)}
         onToggleTask={handleToggleTask}
+        onCreateTask={handleCreateTask}
         width={tasksPanelWidth}
         onWidthChange={setTasksPanelWidth}
+      />
+    ) : (
+      <IdeTasksSpine
+        activeCount={allTasks.filter(t => t.status !== 'done').length}
+        sessionTasks={sessionTasks}
+        onExpand={() => setTasksPanelOpen(true)}
       />
     )}
 

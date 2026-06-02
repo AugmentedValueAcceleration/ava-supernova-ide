@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Tooltip } from './Tooltip';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -24,6 +23,19 @@ export interface TodayTaskUI {
   category: string;
 }
 
+/** Payload for a manually created task from the panel quick-add. */
+export interface CreateTaskInput {
+  title: string;
+  priority?: string;
+  category?: string;
+  due_date?: string;
+}
+
+/** Preset categories that seed the picker. Default is neutral, not coding —
+ *  and the field is free-form, so a user can type ANY label (fitness, garden…). */
+const CATEGORY_OPTIONS = ['personal', 'coding', 'admin', 'meeting', 'health', 'finance', 'errands', 'study', 'home'];
+const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
+
 interface Props {
   sessionTasks: SessionTaskUI[];
   avaCompletedTasks: AvaCompletedTaskUI[];
@@ -31,6 +43,7 @@ interface Props {
   allTasks: TodayTaskUI[];
   onClose: () => void;
   onToggleTask: (taskId: string) => void;
+  onCreateTask: (task: CreateTaskInput) => void;
   width: number;
   onWidthChange: (w: number) => void;
 }
@@ -61,7 +74,24 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: '#6c7086',
 };
 
-/* ── Sub-components ──────────────────────────────────────────────────────── */
+// Subtle per-category tint; unknown / user-defined categories fall back to slate.
+const CATEGORY_COLORS: Record<string, string> = {
+  personal: '#38bdf8',
+  coding: '#a855f7',
+  admin: '#f59e0b',
+  meeting: '#34d399',
+  custom: '#94a3b8',
+};
+function categoryColor(cat: string): string {
+  return CATEGORY_COLORS[cat] || '#94a3b8';
+}
+function formatDueShort(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/* ── Item rows ───────────────────────────────────────────────────────────── */
 
 function SessionItem({ task }: { task: SessionTaskUI }) {
   const s = STATUS_ICONS[task.status] || STATUS_ICONS.pending;
@@ -100,10 +130,14 @@ function CompletedItem({ task }: { task: AvaCompletedTaskUI }) {
 
 function TaskItem({ task, onToggle }: { task: TodayTaskUI; onToggle: (id: string) => void }) {
   const isDone = task.status === 'done';
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = !!task.dueDate && !isDone && task.dueDate < today;
+  const dueToday = !!task.dueDate && !isDone && task.dueDate === today;
+  const hasMeta = !isDone && (task.category || task.dueDate);
   return (
     <div
       style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer',
+        display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', cursor: 'pointer',
         opacity: isDone ? 0.5 : 1,
       }}
       onClick={() => onToggle(task.id)}
@@ -112,25 +146,50 @@ function TaskItem({ task, onToggle }: { task: TodayTaskUI; onToggle: (id: string
         width: 16, height: 16, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
         border: isDone ? '1.5px solid #a6e3a1' : '1.5px solid #585b70',
         background: isDone ? 'rgba(166,227,161,0.15)' : 'transparent',
-        fontSize: 10, color: isDone ? '#a6e3a1' : 'transparent',
+        fontSize: 10, color: isDone ? '#a6e3a1' : 'transparent', flexShrink: 0, marginTop: 1,
       }}>
         {isDone ? '✓' : ''}
       </span>
-      <span style={{
-        fontSize: 12, color: '#cdd6f4', flex: 1,
-        textDecoration: isDone ? 'line-through' : 'none',
-      }}>
-        {task.title}
-      </span>
-      {!isDone && task.priority !== 'medium' && task.priority !== 'low' && (
-        <span style={{
-          fontSize: 9, padding: '1px 5px', borderRadius: 4, fontWeight: 600,
-          background: `${PRIORITY_COLORS[task.priority]}20`,
-          color: PRIORITY_COLORS[task.priority],
-        }}>
-          {task.priority}
-        </span>
-      )}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 12, color: '#cdd6f4', flex: 1, minWidth: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            textDecoration: isDone ? 'line-through' : 'none',
+          }}>
+            {task.title}
+          </span>
+          {!isDone && task.priority !== 'medium' && task.priority !== 'low' && (
+            <span style={{
+              fontSize: 9, padding: '1px 5px', borderRadius: 4, fontWeight: 600, flexShrink: 0,
+              background: `${PRIORITY_COLORS[task.priority]}20`,
+              color: PRIORITY_COLORS[task.priority],
+            }}>
+              {task.priority}
+            </span>
+          )}
+        </div>
+        {hasMeta && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {task.category && (
+              <span style={{
+                fontSize: 9, padding: '1px 6px', borderRadius: 8, fontWeight: 600,
+                color: categoryColor(task.category), background: `${categoryColor(task.category)}1a`,
+              }}>
+                {task.category}
+              </span>
+            )}
+            {task.dueDate && (
+              <span style={{
+                fontSize: 9,
+                color: overdue ? '#ef4444' : dueToday ? '#f59e0b' : '#585b70',
+              }}>
+                {formatDueShort(task.dueDate)}{overdue ? ' · overdue' : ''}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -158,72 +217,166 @@ function CollapsibleSection({ title, count, defaultOpen = true, children }: {
   );
 }
 
-/* ── Tabs ─────────────────────────────────────────────────────────────── */
+/* ── Quick add ───────────────────────────────────────────────────────────── */
 
-function AvaTab({ sessionTasks, completedTasks }: { sessionTasks: SessionTaskUI[]; completedTasks: AvaCompletedTaskUI[] }) {
-  const done = sessionTasks.filter(t => t.status === 'completed').length;
-  const total = sessionTasks.length;
+const INPUT_STYLE: React.CSSProperties = {
+  background: 'rgba(49, 34, 68, 0.5)',
+  border: '1px solid rgba(168, 85, 247, 0.2)',
+  borderRadius: 6,
+  color: '#cdd6f4',
+  fontSize: 12,
+  padding: '6px 8px',
+  outline: 'none',
+};
+
+function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput) => void; defaultDueToday: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [priority, setPriority] = useState('medium');
+  const [category, setCategory] = useState('personal');
+  const [dueDate, setDueDate] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
+
+  const reset = () => { setTitle(''); setPriority('medium'); setCategory('personal'); setDueDate(''); };
+
+  const submit = () => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const due = dueDate || (defaultDueToday ? new Date().toISOString().slice(0, 10) : undefined);
+    onCreate({ title: trimmed, priority, category, due_date: due });
+    reset();
+    inputRef.current?.focus();
+  };
+
+  const cancel = () => { reset(); setOpen(false); };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+          padding: '7px 10px', borderRadius: 8,
+          border: '1px dashed rgba(168,85,247,0.3)', background: 'transparent',
+          color: '#a6adc8', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+        }}
+      >
+        <span style={{ color: '#a855f7', fontSize: 14, lineHeight: 1 }}>+</span>
+        Add a task
+      </button>
+    );
+  }
 
   return (
-    <div style={{ padding: '8px 12px', overflowY: 'auto', flex: 1 }}>
-      {sessionTasks.length > 0 && (
-        <CollapsibleSection title="Current" count={total} defaultOpen>
-          {/* Progress bar */}
-          {total > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ fontSize: 10, color: '#6c7086' }}>{done}/{total} done</span>
-                <span style={{ fontSize: 10, color: '#6c7086' }}>{total > 0 ? Math.round((done / total) * 100) : 0}%</span>
-              </div>
-              <div style={{ height: 4, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', borderRadius: 2,
-                  width: `${total > 0 ? (done / total) * 100 : 0}%`,
-                  background: 'linear-gradient(90deg, #a855f7, #6366f1)',
-                  transition: 'width 0.3s ease',
-                }} />
-              </div>
-            </div>
-          )}
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 8,
+      padding: 8, borderRadius: 8,
+      background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.15)',
+    }}>
+      <input
+        ref={inputRef}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') submit(); else if (e.key === 'Escape') cancel(); }}
+        placeholder="What needs doing?"
+        style={{ ...INPUT_STYLE, width: '100%' }}
+      />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <select value={priority} onChange={(e) => setPriority(e.target.value)} title="Priority" style={{ ...INPUT_STYLE, flex: 1, minWidth: 0, fontSize: 10, cursor: 'pointer' }}>
+          {PRIORITY_OPTIONS.map(p => <option key={p} value={p} style={{ background: '#1a1028' }}>{p}</option>)}
+        </select>
+        <input list="ide-quickadd-categories" value={category} onChange={(e) => setCategory(e.target.value)} title="Category" placeholder="Category" style={{ ...INPUT_STYLE, flex: 1, minWidth: 0, fontSize: 10 }} />
+        <datalist id="ide-quickadd-categories">
+          {CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}
+        </datalist>
+        <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} title="Due date" style={{ ...INPUT_STYLE, flex: 1, minWidth: 0, fontSize: 10, cursor: 'pointer' }} />
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          onClick={submit}
+          disabled={!title.trim()}
+          style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+            background: '#a855f7', color: 'white', cursor: title.trim() ? 'pointer' : 'default',
+            opacity: title.trim() ? 1 : 0.3,
+          }}
+        >
+          Add
+        </button>
+        <button
+          onClick={cancel}
+          style={{ padding: '5px 10px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, background: 'transparent', color: '#a6adc8', cursor: 'pointer' }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Ava band — sticky live-work indicator ───────────────────────────────── */
+
+function AvaBand({ sessionTasks }: { sessionTasks: SessionTaskUI[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const total = sessionTasks.length;
+  const done = sessionTasks.filter(t => t.status === 'completed').length;
+  const allDone = done === total;
+  const current = sessionTasks.find(t => t.status === 'in_progress') ?? sessionTasks.find(t => t.status !== 'completed');
+
+  return (
+    <div style={{
+      position: 'sticky', top: 0, zIndex: 10,
+      background: 'linear-gradient(180deg, rgba(40,22,58,0.97) 0%, rgba(26,16,40,0.97) 100%)',
+      backdropFilter: 'blur(6px)', borderBottom: '1px solid rgba(168,85,247,0.18)',
+    }}>
+      <button
+        onClick={() => setExpanded(e => !e)}
+        style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: allDone ? '#a6e3a1' : '#a855f7', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {!allDone && <span style={{ display: 'inline-block', animation: 'avaSpin 1.5s linear infinite' }}>⟳</span>}
+            Ava
+          </span>
+          <span style={{ fontSize: 10, color: '#6c7086', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {allDone ? 'All steps complete' : current?.title}
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: allDone ? '#a6e3a1' : '#a855f7', flexShrink: 0 }}>{done}/{total}</span>
+          <span style={{ fontSize: 8, color: '#585b70', transition: 'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+        </div>
+        <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'rgba(168,85,247,0.12)' }}>
+          <div style={{ height: '100%', borderRadius: 2, width: `${total > 0 ? (done / total) * 100 : 0}%`, background: allDone ? '#a6e3a1' : 'linear-gradient(90deg, #a855f7, #6366f1)', transition: 'width 0.4s ease' }} />
+        </div>
+      </button>
+      {expanded && (
+        <div style={{ padding: '0 12px 8px' }}>
           {sessionTasks.map(t => <SessionItem key={t.id} task={t} />)}
-        </CollapsibleSection>
-      )}
-
-      {completedTasks.length > 0 && (
-        <CollapsibleSection title="Completed" count={completedTasks.length} defaultOpen={sessionTasks.length === 0}>
-          {completedTasks.slice(0, 20).map(t => <CompletedItem key={t.id} task={t} />)}
-        </CollapsibleSection>
-      )}
-
-      {sessionTasks.length === 0 && completedTasks.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <div style={{ fontSize: 24, marginBottom: 8 }}>☆</div>
-          <div style={{ fontSize: 12, color: '#6c7086' }}>No tasks yet.</div>
-          <div style={{ fontSize: 11, color: '#585b70', marginTop: 4 }}>
-            Ava will show her progress here when working on multi-step tasks.
-          </div>
         </div>
       )}
     </div>
   );
 }
 
-function PersonalTab({ todayTasks, allTasks, onToggle }: {
-  todayTasks: TodayTaskUI[]; allTasks: TodayTaskUI[]; onToggle: (id: string) => void;
+/* ── Your tasks ──────────────────────────────────────────────────────────── */
+
+function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle }: {
+  todayTasks: TodayTaskUI[]; allTasks: TodayTaskUI[];
+  filter: 'today' | 'all'; onFilterChange: (f: 'today' | 'all') => void; onToggle: (id: string) => void;
 }) {
-  const [filter, setFilter] = useState<'today' | 'all'>('today');
   const tasks = filter === 'today' ? todayTasks : allTasks;
   const active = tasks.filter(t => t.status !== 'done');
   const done = tasks.filter(t => t.status === 'done');
 
   return (
-    <div style={{ padding: '8px 12px', overflowY: 'auto', flex: 1 }}>
+    <div style={{ padding: '8px 12px' }}>
       {/* Filter toggle */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 10 }}>
         {(['today', 'all'] as const).map(f => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => onFilterChange(f)}
             style={{
               padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500,
               border: 'none', cursor: 'pointer',
@@ -260,21 +413,100 @@ function PersonalTab({ todayTasks, allTasks, onToggle }: {
   );
 }
 
+/* ── Ava recent work — collapsible history at the bottom ──────────────────── */
+
+function AvaRecentWork({ avaCompletedTasks }: { avaCompletedTasks: AvaCompletedTaskUI[] }) {
+  return (
+    <div style={{ padding: '4px 12px 12px', borderTop: '1px solid rgba(168,85,247,0.08)' }}>
+      <CollapsibleSection title="Ava's recent work" count={avaCompletedTasks.length} defaultOpen={false}>
+        {avaCompletedTasks.slice(0, 20).map(t => <CompletedItem key={t.id} task={t} />)}
+      </CollapsibleSection>
+    </div>
+  );
+}
+
+/* ── Collapsed spine ─────────────────────────────────────────────────────── */
+
+function SpineRing({ done, total }: { done: number; total: number }) {
+  const r = 9;
+  const circ = 2 * Math.PI * r;
+  const pct = total > 0 ? done / total : 0;
+  const allDone = total > 0 && done === total;
+  const color = allDone ? '#a6e3a1' : '#a855f7';
+  return (
+    <span style={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg width="24" height="24" viewBox="0 0 24 24" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx="12" cy="12" r={r} fill="none" stroke="rgba(168,85,247,0.18)" strokeWidth="2.5" />
+        <circle cx="12" cy="12" r={r} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${pct * circ} ${circ}`} style={{ transition: 'stroke-dasharray 0.4s ease' }} />
+      </svg>
+      <span style={{ position: 'absolute', fontSize: 8, fontWeight: 600, color }}>{allDone ? '✓' : `${done}/${total}`}</span>
+    </span>
+  );
+}
+
+/** The always-visible Tasks rail shown when the panel is collapsed. */
+export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
+  activeCount: number; sessionTasks: SessionTaskUI[]; onExpand: () => void;
+}) {
+  const total = sessionTasks.length;
+  const done = sessionTasks.filter(t => t.status === 'completed').length;
+  const avaWorking = total > 0 && done < total;
+
+  return (
+    <div style={{
+      width: 34, flexShrink: 0, height: '100%', position: 'relative',
+      borderLeft: '1px solid rgba(168,85,247,0.12)',
+      background: 'radial-gradient(ellipse 120% 40% at 50% 0%, rgba(168,85,247,0.08) 0%, transparent 70%), linear-gradient(180deg, rgba(26,16,40,0.9) 0%, rgba(20,13,34,0.95) 100%)',
+      backdropFilter: 'blur(12px)',
+    }}>
+      {/* Grip — straddles the border at mid-height. */}
+      <button
+        onClick={onExpand}
+        title="Open tasks"
+        aria-label="Open tasks"
+        style={{
+          position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 10,
+          width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', background: '#0f0a1a', border: '1px solid rgba(168,85,247,0.35)', color: '#a855f7',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M10.354 3.646a.5.5 0 0 1 0 .708L6.707 8l3.647 3.646a.5.5 0 0 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 0 1 .708 0z" />
+        </svg>
+      </button>
+
+      {/* Rail body — also fully clickable. */}
+      <button
+        onClick={onExpand}
+        title="Open tasks"
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%', height: '100%', paddingTop: 12, background: 'transparent', border: 'none', cursor: 'pointer' }}
+      >
+        {avaWorking ? (
+          <SpineRing done={done} total={total} />
+        ) : activeCount > 0 ? (
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 600, background: 'rgba(168,85,247,0.15)', color: '#a855f7' }}>
+            {activeCount > 99 ? '99+' : activeCount}
+          </span>
+        ) : (
+          <span style={{ fontSize: 14, color: '#585b70' }}>☰</span>
+        )}
+        <span style={{ writingMode: 'vertical-rl', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086' }}>
+          Tasks
+        </span>
+      </button>
+    </div>
+  );
+}
+
 /* ── Main Panel ──────────────────────────────────────────────────────────── */
 
 export default function IdeTasksPanel({
   sessionTasks, avaCompletedTasks, todayTasks, allTasks,
-  onClose, onToggleTask, width, onWidthChange,
+  onClose, onToggleTask, onCreateTask, width, onWidthChange,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'ava' | 'personal'>('ava');
+  const [filter, setFilter] = useState<'today' | 'all'>('today');
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-
-  // Auto-switch to Ava tab when session tasks appear
-  useEffect(() => {
-    if (sessionTasks.length > 0 && activeTab === 'personal') {
-      setActiveTab('ava');
-    }
-  }, [sessionTasks.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Escape key closes
   useEffect(() => {
@@ -314,7 +546,9 @@ export default function IdeTasksPanel({
   return (
     <div style={{
       width, flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100%',
-      background: 'rgba(15, 10, 26, 0.95)', borderLeft: '1px solid rgba(168, 85, 247, 0.12)', position: 'relative',
+      background: 'radial-gradient(ellipse 90% 40% at 50% 0%, rgba(168,85,247,0.10) 0%, transparent 65%), linear-gradient(180deg, rgba(26,16,40,0.95) 0%, rgba(20,13,34,0.97) 100%)',
+      backdropFilter: 'blur(12px)',
+      borderLeft: '1px solid rgba(168, 85, 247, 0.12)', position: 'relative',
     }}>
       {/* Drag handle */}
       <div
@@ -327,63 +561,45 @@ export default function IdeTasksPanel({
         onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
       />
 
-      {/* Header */}
+      {/* Persistent grip — same spot as the spine's, points right to collapse. */}
+      <button
+        onClick={onClose}
+        title="Collapse"
+        aria-label="Collapse"
+        style={{
+          position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 20,
+          width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', background: '#0f0a1a', border: '1px solid rgba(168,85,247,0.35)', color: '#a855f7',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M5.646 3.646a.5.5 0 0 1 .708 0l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L9.293 8 5.646 4.354a.5.5 0 0 1 0-.708z" />
+        </svg>
+      </button>
+
+      {/* Header — title only; collapse is the persistent grip on the border. */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', gap: 8,
         padding: '8px 12px', borderBottom: '1px solid rgba(168, 85, 247, 0.12)', flexShrink: 0,
       }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
           Tasks
         </span>
-        <Tooltip content="Close (Esc)">
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#585b70', cursor: 'pointer', fontSize: 14, padding: 2, lineHeight: 1 }}
-          >
-            ✕
-          </button>
-        </Tooltip>
       </div>
 
-      {/* Tabs */}
-      <div style={{
-        display: 'flex', gap: 0, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', flexShrink: 0,
-      }}>
-        {([
-          { id: 'ava' as const, label: 'Ava', badge: sessionTasks.length },
-          { id: 'personal' as const, label: 'My Tasks', badge: todayTasks.filter(t => t.status !== 'done').length },
-        ]).map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              flex: 1, padding: '8px 0', fontSize: 11, fontWeight: 500,
-              border: 'none', cursor: 'pointer',
-              background: 'transparent',
-              color: activeTab === tab.id ? '#cdd6f4' : '#585b70',
-              borderBottom: activeTab === tab.id ? '2px solid #a855f7' : '2px solid transparent',
-            }}
-          >
-            {tab.label}
-            {tab.badge > 0 && (
-              <span style={{
-                marginLeft: 5, fontSize: 9, padding: '1px 5px', borderRadius: 8,
-                background: activeTab === tab.id ? 'rgba(168,85,247,0.2)' : 'rgba(49, 34, 68, 0.5)',
-                color: activeTab === tab.id ? '#a855f7' : '#6c7086',
-              }}>
-                {tab.badge}
-              </span>
-            )}
-          </button>
-        ))}
+      {/* Quick add — pinned under the header. */}
+      <div style={{ padding: '10px 12px 0', flexShrink: 0 }}>
+        <QuickAdd onCreate={onCreateTask} defaultDueToday={filter === 'today'} />
       </div>
 
-      {/* Tab content */}
-      {activeTab === 'ava' ? (
-        <AvaTab sessionTasks={sessionTasks} completedTasks={avaCompletedTasks} />
-      ) : (
-        <PersonalTab todayTasks={todayTasks} allTasks={allTasks} onToggle={onToggleTask} />
-      )}
+      {/* Body — your tasks fill it; Ava's live work pins to the top when she's
+          working; her recent work tucks away at the bottom. */}
+      <div style={{ flex: 1, overflowY: 'auto', marginTop: 8 }}>
+        {sessionTasks.length > 0 && <AvaBand sessionTasks={sessionTasks} />}
+        <YourTasks todayTasks={todayTasks} allTasks={allTasks} filter={filter} onFilterChange={setFilter} onToggle={onToggleTask} />
+        {avaCompletedTasks.length > 0 && <AvaRecentWork avaCompletedTasks={avaCompletedTasks} />}
+      </div>
     </div>
   );
 }
