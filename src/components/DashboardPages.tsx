@@ -6644,7 +6644,6 @@ function isMemoryStale(entry: any): boolean {
 
 export function MemoryPage() {
   useLocale();
-  const connected = checkConnected();
   const { data: rawMemories, loading, error } = useApiData<any[]>('/memories', []);
   const [memories, setMemories] = useState<any[]>([]);
   const [localMemories, setLocalMemories] = useState<any[]>([]);
@@ -6808,11 +6807,15 @@ export function MemoryPage() {
     } catch { /* best-effort */ }
   };
 
-  const handleDeleteAll = async (scope: 'local' | 'cloud' | 'both') => {
+  const handleDeleteAll = async () => {
     setDeletingAll(true);
     setConfirmDeleteAll(false);
-    if (scope === 'local' || scope === 'both') await deleteLocal();
-    if (scope === 'cloud' || scope === 'both') await deleteCloud();
+    // Wipe everything — local store + the cloud copy. deleteCloud() self-guards
+    // on the platform key (no account => no-op), so we always call it. Gating
+    // on a connection/sync flag let cloud memories survive and reappear on the
+    // next reload — the bug this fixes.
+    await deleteLocal();
+    await deleteCloud();
     setMemories([]);
     setLocalMemories([]);
     setDeletingAll(false);
@@ -6852,21 +6855,11 @@ export function MemoryPage() {
         {confirmDeleteAll && (
           <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)' }}>
             <p style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>Delete all memories?</p>
-            <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>This is permanent and cannot be undone.</p>
+            <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>This permanently deletes every memory — on this machine and any cloud copy. It cannot be undone.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={() => handleDeleteAll('local')} style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(166,227,161,0.15)', color: '#a6e3a1', fontSize: 12, border: '1px solid rgba(166,227,161,0.3)', cursor: 'pointer' }}>
-                Local Only
+              <button onClick={() => handleDeleteAll()} style={{ padding: '6px 14px', borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 12, border: 'none', cursor: 'pointer' }}>
+                Delete Everything
               </button>
-              {connected && (
-                <button onClick={() => handleDeleteAll('cloud')} style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(96,165,250,0.15)', color: '#60a5fa', fontSize: 12, border: '1px solid rgba(96,165,250,0.3)', cursor: 'pointer' }}>
-                  Cloud Only
-                </button>
-              )}
-              {connected && (
-                <button onClick={() => handleDeleteAll('both')} style={{ padding: '6px 14px', borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 12, border: 'none', cursor: 'pointer' }}>
-                  Both
-                </button>
-              )}
               <button onClick={() => setConfirmDeleteAll(false)} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.2)', background: 'transparent', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
                 Cancel
               </button>
