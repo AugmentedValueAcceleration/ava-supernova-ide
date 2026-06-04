@@ -55,14 +55,13 @@ import {
   type AvaMode as DCAvaMode,
   type DatasetName as DCDatasetName,
 } from '../lib/dataset-config';
-// Canonical plan, top-up, storage add-on data + website redirect helpers.
+// Canonical plan + top-up data + website redirect helpers.
 // Browser-safe subpath so we don't drag node-side tool code into the Tauri
 // renderer bundle. One source of truth across web, extension, and IDE —
 // any pricing change on the website automatically flows through here.
 import {
   PLANS,
   CREDIT_TOPUPS,
-  STORAGE_ADDONS,
   dashboardBillingUrl,
   creditsForTurn,
   type PlanTier as AvaPlanTier,
@@ -12745,7 +12744,7 @@ export function SettingsPage() {
 export function BillingPage() {
   useLocale();
   const connected = checkConnected();
-  const { data: usage, loading, refetch } = useApiData<any>('/usage/summary', null);
+  const { data: usage, loading } = useApiData<any>('/usage/summary', null);
   // Tier tracked as state so the panel re-renders when refreshTier() picks
   // up a platform upgrade (ava-tier-changed event from lib/api.ts).
   const [tier, setTier] = useState<string>(() => localStorage.getItem('ava-ide-tier') || 'free');
@@ -12758,17 +12757,6 @@ export function BillingPage() {
     window.addEventListener('ava-tier-changed', onChange);
     return () => window.removeEventListener('ava-tier-changed', onChange);
   }, []);
-
-  // Ask the server to recalculate storage on mount so the Billing panel
-  // shows a fresh number instead of whatever the nightly pg_cron last
-  // wrote. Fire-and-forget: if the call fails we just keep the cached
-  // value. Silent — no user-facing error on network blips.
-  useEffect(() => {
-    if (!connected) return;
-    apiFetch('/usage/recalculate-storage', { method: 'POST' })
-      .then(() => refetch())
-      .catch(() => { /* non-fatal */ });
-  }, [connected, refetch]);
 
   const tierConfig: Record<string, { label: string; color: string; bg: string; limit: string }> = {
     free:       { label: t('dash.billing.plan.free'), color: '#a6e3a1', bg: 'rgba(166,227,161,0.10)', limit: '300 credits' },
@@ -12785,25 +12773,13 @@ export function BillingPage() {
   const planLimit = usage?.period?.credits_limit || 0;
   const topUpBalance = usage?.period?.topup_tokens_remaining || 0;
 
-  // Storage allowance (from /usage/summary). Falls back to tier defaults if
-  // the endpoint hasn't been updated yet — keeps the panel useful on older
-  // platform deploys.
-  const storage = usage?.storage || {
-    used_gb: 0,
-    base_gb: tier === 'free' ? 2 : tier === 'pro' ? 25 : tier === 'ultra' ? 100 : tier === 'enterprise' ? 500 : 2,
-    addon_gb: 0,
-    total_gb: tier === 'free' ? 2 : tier === 'pro' ? 25 : tier === 'ultra' ? 100 : tier === 'enterprise' ? 500 : 2,
-    percent_used: 0,
-  };
-
-  const fmtStorage = (gb: number) => gb >= 1000 ? `${(gb / 1024).toFixed(2)} TB` : gb >= 10 ? `${Math.round(gb)} GB` : gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(gb * 1024)} MB`;
   const pct = (used: number, limit: number) => limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
-  // ── Live checkout handlers — plans, top-ups, storage add-ons ────────────
+  // ── Live checkout handlers — plans, top-ups ─────────────────────────────
   // Hits the platform's /api/billing/checkout (or /topup) endpoint with the
   // operator's platform key (apiFetch attaches it), receives a Stripe URL,
   // opens it in the system browser via the Tauri opener plugin. Mirrors the
-  // extension's openCheckout / openTopup / openStorageAddon in DashboardPanel.ts.
+  // extension's openCheckout / openTopup in DashboardPanel.ts.
   // [pending] state is per-card so the operator sees an accurate "Opening..."
   // label and can't double-click the same card while the round-trip is in flight.
   const [checkoutPending, setCheckoutPending] = useState<string | null>(null);
@@ -12835,18 +12811,6 @@ export function BillingPage() {
     try {
       const res: { url?: string } = await apiFetch('/billing/topup', {
         method: 'POST', body: JSON.stringify({ package: pkgId }),
-      });
-      if (res?.url) await openExternalUrl(res.url);
-    } catch { /* */ }
-    setCheckoutPending(null);
-  };
-
-  const startStorageCheckout = async (size: string) => {
-    if (checkoutPending) return;
-    setCheckoutPending(`storage:${size}`);
-    try {
-      const res: { url?: string } = await apiFetch('/billing/checkout', {
-        method: 'POST', body: JSON.stringify({ storage_addon: size }),
       });
       if (res?.url) await openExternalUrl(res.url);
     } catch { /* */ }
@@ -12929,71 +12893,6 @@ export function BillingPage() {
             );
           })()}
 
-          {/* Cloud Storage */}
-          <div style={{ ...card, marginTop: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div>
-                <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>Cloud Storage</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#cdd6f4' }}>
-                  {fmtStorage(storage.used_gb)} <span style={{ fontSize: 13, color: '#6c7086', fontWeight: 400 }}>of {fmtStorage(storage.total_gb)}</span>
-                </div>
-              </div>
-              <div style={{ fontSize: 11, color: '#45475a', textAlign: 'right' }}>
-                {fmtStorage(storage.base_gb)} plan
-                {storage.addon_gb > 0 && <> + {fmtStorage(storage.addon_gb)} add-ons</>}
-                <button
-                  onClick={() => {
-                    apiFetch('/usage/recalculate-storage', { method: 'POST' })
-                      .then(() => refetch())
-                      .catch(() => { /* non-fatal */ });
-                  }}
-                  title="Recalculate storage usage"
-                  style={{
-                    display: 'block', marginTop: 4, marginLeft: 'auto', padding: 0,
-                    fontSize: 10, color: '#6c7086', background: 'transparent',
-                    border: 'none', cursor: 'pointer',
-                  }}
-                >
-                  Refresh {'\u21bb'}
-                </button>
-              </div>
-            </div>
-            <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden', marginBottom: 10 }}>
-              <div style={{ height: '100%', width: `${storage.percent_used}%`, background: 'linear-gradient(90deg, #a855f7, #7c3aed)', borderRadius: 3, transition: 'width 0.5s' }} />
-            </div>
-            <div style={{ fontSize: 11, color: '#6c7086' }}>
-              Local files always work, even at cap. Cloud sync pauses on overflow — nothing is deleted.
-            </div>
-          </div>
-
-          {/* Storage Add-ons — unified purchase card shape. Canonical data
-              (label, subtitle, popular, effectiveRate) from @ava/core/billing.
-              Non-interactive state today; onClick slots in when checkout ships. */}
-          {tier !== 'admin' && (
-            <>
-              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Storage Add-ons</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                {STORAGE_ADDONS.map((addon) => {
-                  const isPending = checkoutPending === `storage:${addon.id}`;
-                  return (
-                    <IdePurchaseCard
-                      key={addon.id}
-                      title={addon.label}
-                      subtitle={addon.subtitle}
-                      price={`$${addon.price}`}
-                      priceSuffix="/mo"
-                      effectiveRate={addon.effectiveRate}
-                      popular={addon.popular}
-                      state="live"
-                      ctaLabel={isPending ? 'Opening checkout…' : 'Add storage'}
-                      onClick={() => startStorageCheckout(addon.id)}
-                    />
-                  );
-                })}
-              </div>
-            </>
-          )}
-
           {/* Top-Up Balance */}
           {topUpBalance > 0 && (
             <div style={{ ...card, marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -13006,9 +12905,9 @@ export function BillingPage() {
           )}
 
           {/* Token Top-Up Packages — unified purchase card shape.
-              Same visual language as Storage Add-ons above + the extension
-              + the website pricing page. Effective rate makes the 10M
-              "Best value" honest — 20-40% cheaper per token. */}
+              Same visual language as the extension + the website pricing
+              page. Effective rate makes the 10M "Best value" honest —
+              20-40% cheaper per token. */}
           <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Top-Up Packages</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             {CREDIT_TOPUPS.map((pkg) => {
