@@ -10890,23 +10890,27 @@ export function CloudSyncPage() {
           </div>
         )}
 
-        {/* GDPR full-account export — top of page so users see "everything
-            in one file" before the per-type sync rows underneath. */}
+        {/* GDPR full-account export — now also the cloud SUNSET notice: the
+            platform stops storing user data on 1 Jul 2026, so this is the
+            last-chance path to pull anything still in the cloud. Amber warning. */}
         {connected && (
-          <div style={{ ...card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ flexShrink: 0, color: '#a855f7', fontSize: 22 }}>📦</div>
+          <div style={{ ...card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.08)' }}>
+            <div style={{ flexShrink: 0, color: '#fbbf24', fontSize: 22 }}>⚠️</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>Download all my cloud data</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#fbbf24', marginBottom: 2 }}>{t('dash.portability.download_all')}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24', lineHeight: 1.5, marginBottom: 2 }}>
+                {t('dash.portability.cloud_sunset')}
+              </div>
               <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5 }}>
-                Everything the platform holds about you — memories, tasks, journal, learning paths, conversations, billing, settings, and more. GDPR Article 20 right of portability.
+                {t('dash.portability.download_all_desc')}
               </div>
             </div>
             <button
               onClick={exportFullAccountData}
               style={{
                 flexShrink: 0,
-                padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.3)',
-                background: 'rgba(168,85,247,0.12)', color: '#cdd6f4', fontSize: 12, fontWeight: 600,
+                padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(245,158,11,0.4)',
+                background: 'rgba(245,158,11,0.15)', color: '#fbbf24', fontSize: 12, fontWeight: 600,
                 cursor: 'pointer',
               }}
             >
