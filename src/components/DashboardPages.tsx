@@ -255,22 +255,6 @@ function LoadingSpinner() {
   );
 }
 
-function StorageBadge() {
-  const s = cloudSyncEnabled()
-    ? { bg: 'rgba(96,165,250,0.10)', fg: '#60a5fa', border: 'rgba(96,165,250,0.20)', label: 'Cloud sync' }
-    : { bg: 'rgba(166,227,161,0.10)', fg: '#a6e3a1', border: 'rgba(166,227,161,0.20)', label: 'Local only' };
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500,
-      padding: '2px 8px', borderRadius: 6,
-      background: s.bg, color: s.fg, border: `1px solid ${s.border}`,
-    }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.fg }} />
-      {s.label}
-    </span>
-  );
-}
-
 function NotConnectedBanner() {
   return (
     <div style={{
@@ -6802,7 +6786,6 @@ export function MemoryPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={pageTitle}>{t('dash.memory.title')}</div>
-              <StorageBadge />
             </div>
             <div style={pageSubtitle}>{t('dash.memory.subtitle')}</div>
           </div>
@@ -7301,7 +7284,6 @@ export function TasksPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={pageTitle}>{t('dash.tasks.title')}</div>
-            <StorageBadge />
           </div>
           <button
             onClick={() => { resetForm(); setShowForm(!showForm); }}
@@ -7781,7 +7763,6 @@ export function JournalPage() {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={pageTitle}>{t('dash.journal.title')}</div>
-          <StorageBadge />
         </div>
         <div style={pageSubtitle}>{t('dash.journal.subtitle')}</div>
 
@@ -8305,7 +8286,6 @@ export function LearningPage() {
       <div style={{ width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={pageTitle}>{t('dash.learning.title')}</div>
-          <StorageBadge />
         </div>
         <div style={pageSubtitle}>{t('dash.learning.subtitle')}</div>
 
