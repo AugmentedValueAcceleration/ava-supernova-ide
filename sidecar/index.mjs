@@ -89,6 +89,9 @@ const {
   resolveLocale,
   installDatasetConsumer,
   BudgetTracker,
+  exportEncryptedBackup,
+  importEncryptedBackup,
+  gatherBundle,
 } = core;
 
 // Install the dataset capture consumer once at sidecar boot. No-op for
@@ -1656,6 +1659,38 @@ rl.on('line', async (line) => {
         emit({ event: 'audit_export_ready', bundle });
       } catch (err) {
         emitError(`Audit export failed: ${err && err.message ? err.message : err}`);
+      }
+      break;
+    }
+    case 'export_backup': {
+      // Data sovereignty — seal everything under ~/.ava with a passphrase.
+      // Sidecar produces the opaque envelope; the IDE runs the Tauri save
+      // dialog (mirrors export_audit_log).
+      try {
+        const envelope = await exportEncryptedBackup(AVA_HOME, data?.passphrase ?? '', { source: 'ide' });
+        emit({ event: 'backup_ready', envelope });
+      } catch (err) {
+        emitError(`Backup failed: ${err && err.message ? err.message : err}`);
+      }
+      break;
+    }
+    case 'export_readable': {
+      // Plain JSON snapshot so the user can SEE what's on their machine.
+      try {
+        const bundle = await gatherBundle(AVA_HOME, { source: 'ide' });
+        emit({ event: 'readable_ready', json: JSON.stringify(bundle, null, 2) });
+      } catch (err) {
+        emitError(`Readable export failed: ${err && err.message ? err.message : err}`);
+      }
+      break;
+    }
+    case 'import_backup': {
+      // Restore an encrypted .ava-backup into ~/.ava (safe-merge by default).
+      try {
+        const { result } = await importEncryptedBackup(AVA_HOME, data?.content ?? '', data?.passphrase ?? '', { overwrite: !!data?.overwrite });
+        emit({ event: 'backup_imported', ok: true, written: result.written, skipped: result.skipped });
+      } catch (err) {
+        emit({ event: 'backup_imported', ok: false, message: err && err.message ? err.message : String(err) });
       }
       break;
     }

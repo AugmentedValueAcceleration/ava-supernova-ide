@@ -430,6 +430,22 @@ export class SidecarManager {
     await this.send({ cmd: 'clear_memory' });
   }
 
+  /** Data sovereignty — seal everything under ~/.ava. Result arrives as a
+   *  `backup_ready` event carrying the envelope, for the Tauri save dialog. */
+  async exportBackup(passphrase: string): Promise<void> {
+    await this.send({ cmd: 'export_backup', passphrase });
+  }
+
+  /** Plain-JSON snapshot of local data. Arrives as a `readable_ready` event. */
+  async exportReadable(): Promise<void> {
+    await this.send({ cmd: 'export_readable' });
+  }
+
+  /** Restore an encrypted .ava-backup. Result arrives as `backup_imported`. */
+  async importBackup(content: string, passphrase: string, overwrite?: boolean): Promise<void> {
+    await this.send({ cmd: 'import_backup', content, passphrase, overwrite: !!overwrite });
+  }
+
   /**
    * Update the sidecar's working directory when user opens a new project folder.
    */
