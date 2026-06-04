@@ -780,6 +780,14 @@ async function handleInit(data) {
     // to feature-parity with the extension's intent-shaped style notes.
     sharedState.intentClassifier = new IntentClassifier();
 
+    // Vision bridge — a vision-capable model (Qwen Omni) used to describe
+    // images when the active model is text-only (Supernova/DeepSeek, Aurora/
+    // Mistral). The Agent only uses it when its own model can't see images.
+    const visionResolved = providerRegistry.resolveModel('platform:qwen3.5-omni-plus')
+      || providerRegistry.resolveModel('qwen:qwen3.5-omni-plus')
+      || providerRegistry.resolveModel('platform:qwen3.5-omni-flash')
+      || providerRegistry.resolveModel('qwen:qwen3.5-omni-flash');
+
     // Build resilient provider with fallback
     const healthTracker = new ProviderHealthTracker();
     const fallbackChain = providerRegistry.buildFallbackChain(activeModel);
@@ -801,6 +809,8 @@ async function handleInit(data) {
     agent = new Agent({
       provider,
       model: resolved.model,
+      visionProvider: visionResolved?.provider,
+      visionModel: visionResolved?.model,
       toolRegistry,
       cwd,
       sharedState,
@@ -811,6 +821,8 @@ async function handleInit(data) {
     conductor = new Conductor({
       provider,
       model: resolved.model,
+      visionProvider: visionResolved?.provider,
+      visionModel: visionResolved?.model,
       toolRegistry,
       cwd,
       sharedState,
@@ -1534,9 +1546,17 @@ async function handleSetModel(data) {
     sharedState.activeModelId = resolved.model.id;
     globalThis._currentModel = resolved.model;
 
+    // Vision bridge for the newly-selected model (no-op if it sees images).
+    const visionResolved = providerRegistry.resolveModel('platform:qwen3.5-omni-plus')
+      || providerRegistry.resolveModel('qwen:qwen3.5-omni-plus')
+      || providerRegistry.resolveModel('platform:qwen3.5-omni-flash')
+      || providerRegistry.resolveModel('qwen:qwen3.5-omni-flash');
+
     agent = new Agent({
       provider: resolved.provider,
       model: resolved.model,
+      visionProvider: visionResolved?.provider,
+      visionModel: visionResolved?.model,
       toolRegistry,
       cwd,
       sharedState,
@@ -1546,6 +1566,8 @@ async function handleSetModel(data) {
     conductor = new Conductor({
       provider: resolved.provider,
       model: resolved.model,
+      visionProvider: visionResolved?.provider,
+      visionModel: visionResolved?.model,
       toolRegistry,
       cwd,
       sharedState,
