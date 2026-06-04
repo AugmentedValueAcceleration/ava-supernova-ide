@@ -8,7 +8,7 @@ The standalone AI-native development environment. Built with Tauri v2, React 19,
 - **Local mode** — Node.js sidecar runs @ava/core with all 60 tools, 6 modes, 24 personas, 5-layer memory
 - **Cloud mode** — Platform API with managed tokens, usage tracking, billing
 - **Toggle freely** — switch between Local and Cloud from the chat header
-- **Model picker** — Qwen 3.6 Plus, MiniMax M2.7, DeepSeek, Kimi, Zhipu, Mistral + BYOK
+- **Model picker** — Qwen 3.6 Plus, MiniMax M3, DeepSeek, Kimi, Zhipu, Mistral + BYOK
 - **Three orchestrated modes** — pick a routing strategy from the dropdown:
   - **Maestro** — tier-differentiated Qwen fleet (3.6 Plus coordinator + Builder + planning, 3.5 Flash chat + image-gen + intent gate, Omni Plus vision input, 3.5 Plus long-form), production-tuned
   - **Supernova** — polyglot ensemble (DeepSeek V4 Pro coordinator, V4 Flash chat + mid-tier review, Qwen 3.6 Plus Builder, Omni Plus vision, Omni Flash image-gen orchestration)

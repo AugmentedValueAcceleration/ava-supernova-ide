@@ -2042,7 +2042,7 @@ export function AvaChatPage() {
   const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
     Qwen: [{ id: 'qwen3.7-max', name: 'Qwen 3.7 Max' }, { id: 'qwen3.6-plus', name: 'Qwen 3.6 Plus' }, { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
-    MiniMax: [{ id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' }],
+    MiniMax: [{ id: 'MiniMax-M3', name: 'MiniMax M3' }, { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 HighSpeed' }],
     Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5.1', name: 'GLM-5.1' }, { id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4.7', name: 'GLM-4.7' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
     Mistral: [{ id: 'mistral-large-3', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
@@ -4135,7 +4135,7 @@ export function AvaChatPage() {
                     // Use model's actual context window for percentage
                     const MODEL_CTX: Record<string, number> = {
                       'qwen3.6-plus': 1048576, 'kimi-k2.6': 262144, 'kimi-k2.5': 262144,
-                      'MiniMax-M2.7': 204800, 'MiniMax-M2.5': 1048576,
+                      'MiniMax-M3': 1048576, 'MiniMax-M2.7': 204800, 'MiniMax-M2.7-highspeed': 204800,
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
                       'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
                       'claude-opus-4-7': 200000, 'claude-opus-4-6': 200000, 'claude-sonnet-4-6': 200000,
@@ -11201,8 +11201,9 @@ export function UsagePage() {
     'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
     'qwen3.5-plus': { input: 0.20, output: 1.20 },
     'qwen3.5-flash': { input: 0.05, output: 0.40 },
+    'MiniMax-M3': { input: 0.60, output: 2.40 },
     'MiniMax-M2.7': { input: 0.30, output: 1.20 },
-    'MiniMax-M2.5': { input: 0.15, output: 1.20 },
+    'MiniMax-M2.7-highspeed': { input: 0.60, output: 2.40 },
     'deepseek-chat': { input: 0.14, output: 0.28 },
   };
   const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
