@@ -81,7 +81,7 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 // governs the optional cloud copy. The binary "Cloud sync" toggle in
 // the chat header calls setCloudSync(); a single localStorage value is
 // the source of truth across the IDE.
-import { cloudSyncEnabled, setCloudSync } from '../lib/data-mode';
+import { cloudSyncEnabled } from '../lib/data-mode';
 import { useCreativeGallery, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
@@ -2345,9 +2345,7 @@ export function AvaChatPage() {
   });
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
-  // Cloud-sync toggle state (the data-backup axis) — independent of
-  // chatBackend. Mirrors the extension's binary "Cloud sync" toggle.
-  const [cloudSync, setCloudSyncState] = useState<boolean>(cloudSyncEnabled());
+  // Cloud-sync toggle removed — Ava is local-first (cloudSyncEnabled() is hard-off).
   const [pendingConfirm, setPendingConfirm] = useState<{
     id: string;
     toolName: string;
@@ -2829,17 +2827,6 @@ export function AvaChatPage() {
     };
     window.addEventListener('ava-chat-backend-changed', handler);
     return () => window.removeEventListener('ava-chat-backend-changed', handler);
-  }, []);
-
-  // Keep the header's cloud-sync toggle in step with changes from
-  // anywhere else (e.g. another surface broadcasting the change).
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const next = (e as CustomEvent<{ enabled: boolean }>).detail?.enabled;
-      if (typeof next === 'boolean') setCloudSyncState(next);
-    };
-    window.addEventListener('ava-cloud-sync-changed', handler);
-    return () => window.removeEventListener('ava-cloud-sync-changed', handler);
   }, []);
 
   // Ref to hold the latest event handler — set synchronously, never null after mount
@@ -4528,35 +4515,8 @@ export function AvaChatPage() {
                 : sidecarStatus === 'error' ? 'Model error' : 'Local model off'}
             </span>
           )}
-          {/* Cloud-sync toggle — data is always saved locally; this is
-              the optional cloud backup. Mirrors the extension exactly.
-              Shown only when connected (cloud sync needs an account);
-              chat-backend routing now lives in Settings. */}
-          {connected && (
-            <button
-              onClick={() => {
-                const next = !cloudSync;
-                setCloudSyncState(next);
-                setCloudSync(next);
-              }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                background: cloudSync ? 'rgba(96,165,250,0.1)' : 'rgba(166,227,161,0.1)',
-                border: `1px solid ${cloudSync ? 'rgba(96,165,250,0.3)' : 'rgba(166,227,161,0.3)'}`,
-                borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer',
-                color: cloudSync ? '#60a5fa' : '#a6e3a1',
-              }}
-              title={cloudSync
-                ? 'Cloud sync ON — a copy of your data is backed up to the platform. Click to turn off.'
-                : 'Cloud sync OFF — your data stays on this machine only. Click to turn on.'}
-            >
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: cloudSync ? '#60a5fa' : '#a6e3a1',
-              }} />
-              {cloudSync ? 'Cloud sync' : 'Local only'}
-            </button>
-          )}
+          {/* Cloud-sync toggle removed — Ava is local-first; nothing syncs
+              to the cloud (storage sunsets 1 Jul 2026). */}
 
           {/* Credit display — platform balance when signed in, or local
               session credit estimate (computed via creditsForTurn so the unit
@@ -13877,7 +13837,7 @@ function JournalPageInner() { return <JournalPage />; }
 function LearningPageInner() { return <LearningPage />; }
 
 export function AccountPage() {
-  const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality' | 'sync'>('settings');
+  const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality'>('settings');
   // Was reading 'ava-platform-key' — wrong storage key. The canonical
   // location is 'ava-ide-platform-key' (per getPlatformKey() in lib/api).
   // The mismatch meant the Billing tab was hidden even for signed-in
@@ -13896,7 +13856,7 @@ export function AccountPage() {
     ...(connected ? [{ key: 'billing' as const, label: 'Billing' }] : []),
     { key: 'connections' as const, label: 'Connections' },
     { key: 'personality' as const, label: "Ava's Style" },
-    ...(connected ? [{ key: 'sync' as const, label: 'Sync' }] : []),
+    // Sync tab removed — Ava is local-first; nothing syncs to the cloud.
   ];
   return (
     <div style={pageWrapper}>
@@ -13918,7 +13878,6 @@ export function AccountPage() {
       {tab === 'billing' && <BillingPage />}
       {tab === 'connections' && <ConnectionsPage />}
       {tab === 'personality' && <PersonalityPage />}
-      {tab === 'sync' && <CloudSyncPage />}
     </div>
   );
 }

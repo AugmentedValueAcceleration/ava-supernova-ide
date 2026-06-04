@@ -10,19 +10,12 @@
 
 const KEY = 'ava-cloud-sync';
 
-/** True when a cloud copy should also be written. Default OFF.
- *  Migrates the legacy three-value `ava-data-mode`: `cloud`/`both`
- *  -> on, `local` -> off. */
+/** Ava is LOCAL-FIRST: nothing syncs to the cloud (storage sunsets 1 Jul
+ *  2026). This is now hard-OFF — every `if (cloudSyncEnabled())` cloud-write
+ *  branch is a no-op. The chat-header toggle + Sync tab that flipped it are
+ *  removed. Kept as a function so the dozens of call sites don't churn. */
 export function cloudSyncEnabled(): boolean {
-  try {
-    const v = localStorage.getItem(KEY);
-    if (v === 'true') return true;
-    if (v === 'false') return false;
-    const legacy = localStorage.getItem('ava-data-mode');
-    return legacy === 'cloud' || legacy === 'both';
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 /** Persist the cloud-sync choice and broadcast it so other surfaces
