@@ -345,6 +345,15 @@ process.on('unhandledRejection', (err) => {
 async function handleInit(data) {
   initInFlight = true;
   try {
+    // If this init replaces an existing session (project / conversation
+    // switch from the IDE front-end), reflect the OUTGOING conversation into
+    // memory before we tear it down. Fire-and-forget; the outgoing memory
+    // agent holds its own memoryManager, so facts land in the project that's
+    // ending — not the one we're opening. No-op on first init (no prior
+    // conversation).
+    if (memoryAgentInstance && conversation) {
+      Promise.resolve(memoryAgentInstance.reflectOnSession(conversation.getMessages(), conversation.id)).catch(() => {});
+    }
     const config = data.config || {};
     // SECURITY: cwd must be a specific project folder, never fallback to home directory.
     // If no folder is set, use the process cwd (where the sidecar was launched from).
@@ -680,6 +689,31 @@ async function handleInit(data) {
         `\nCurrent time: ${fmt(now)}. User is ${isWorking ? 'currently working' : 'outside their set working hours'}.` +
         `\nNEVER suggest stopping, wrapping up, or taking breaks during working hours. The user decides when to stop.`
       );
+    }
+
+    // Warm-start: the sidecar deliberately doesn't BLOCK init on memory (the
+    // graph can be large). Fulfil the original "load memory in the background"
+    // intent here — once loaded, fold the Project Brain into the system prompt
+    // so jumping into a project starts warm rather than blank. The first turn
+    // may miss it; every turn after has it. Reads globalThis._systemPromptArgs
+    // fresh so a mode switch that lands first is preserved, and bails if a
+    // newer init has since swapped the conversation/manager out.
+    if (memoryManager && conversation) {
+      const mm = memoryManager;
+      const conv = conversation;
+      Promise.resolve(mm.loadAll?.(projectInstructions ?? undefined))
+        .then(() => {
+          if (conv !== conversation || mm !== memoryManager) return; // a newer init won
+          const brief = mm.getProjectBrain?.()?.brief;
+          if (brief && globalThis._systemPromptArgs) {
+            const newArgs = { ...globalThis._systemPromptArgs, projectBrainBrief: brief };
+            globalThis._systemPromptArgs = newArgs;
+            const suffix = globalThis._systemPromptUserInfoSuffix || '';
+            conversation.setSystemPrompt(buildSystemPrompt(newArgs) + suffix);
+            emit({ event: 'info', message: 'Project Brain loaded into system prompt' });
+          }
+        })
+        .catch(() => {});
     }
 
     // Journal manager (local-first, stored in ~/.ava/journal/)
