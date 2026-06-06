@@ -93,6 +93,7 @@ const {
   importEncryptedBackup,
   gatherBundle,
   haltIntent,
+  createEmbeddingServiceFromConfig,
 } = core;
 
 // Install the dataset capture consumer once at sidecar boot. No-op for
@@ -602,7 +603,17 @@ async function handleInit(data) {
     let memory = null;
     let projectInstructions = null;
     try {
-      memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot });
+      memoryManager = new MemoryManager({
+        globalDir: AVA_HOME,
+        projectRoot,
+        // Opt-in local semantic recall — dormant until the IDE front-end sends
+        // these prefs; off by default → keyword recall, no dependency.
+        embeddingService: createEmbeddingServiceFromConfig({
+          useLocalEmbeddings: config.useLocalEmbeddings,
+          embeddingModel: config.embeddingModel,
+          embeddingBaseUrl: config.embeddingBaseUrl,
+        }),
+      });
     } catch {
       memoryManager = null;
     }
