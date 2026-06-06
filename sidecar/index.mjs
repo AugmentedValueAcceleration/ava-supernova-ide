@@ -92,6 +92,7 @@ const {
   exportEncryptedBackup,
   importEncryptedBackup,
   gatherBundle,
+  haltIntent,
 } = core;
 
 // Install the dataset capture consumer once at sidecar boot. No-op for
@@ -880,11 +881,31 @@ async function handleMessage(data) {
     return;
   }
   if (isRunning) {
-    // Mid-run interjection — forward to whichever runner is currently
-    // executing. AutoCoordinator routes to its active sub-agent (planning
-    // task agent or current Builder); plain Agent queues into its own
-    // pendingInterjections array. Without this routing the inject lands in
-    // the wrong agent and the model never sees the user's message.
+    const halt = haltIntent(data.content);
+    // "stop / abort / leave it" — emergency brake. Abort now, even mid-step.
+    if (halt === 'stop') {
+      handleCancel();
+      emit({ event: 'stopped' });
+      return;
+    }
+    // "wait / pause / hold on" — gentle hold: let the current step finish,
+    // then stop cleanly at the next boundary (never mid-write). Graceful pause
+    // is wired on the plain Agent; in team mode fall back to the hard stop.
+    if (halt === 'pause') {
+      if (!autoCoordinator && agent) {
+        agent.requestPause();
+        emit({ event: 'pause_requested' });
+      } else {
+        handleCancel();
+        emit({ event: 'stopped' });
+      }
+      return;
+    }
+    // Otherwise it's added context — forward to whichever runner is currently
+    // executing. AutoCoordinator routes to its active sub-agent (planning task
+    // agent or current Builder); plain Agent queues into its own
+    // pendingInterjections array, drained at the next step boundary so it
+    // folds in without interrupting a mid-write.
     const runner = autoCoordinator || agent;
     if (runner) {
       runner.inject(data.content);
@@ -1375,6 +1396,14 @@ function handleClear() {
     handleCancel();
   }
   if (conversation) {
+    // End-of-session reflection over the outgoing conversation before it's
+    // cleared — distils durable user/project facts the per-turn capture may
+    // have missed. Fire-and-forget, off the hot path; the session is ending so
+    // it can't loop back. No-op if the conversation has < 2 user turns.
+    if (memoryAgentInstance) {
+      Promise.resolve(memoryAgentInstance.reflectOnSession(conversation.getMessages(), conversation.id))
+        .catch(() => {});
+    }
     // Preserve system prompt, clear messages
     const messages = conversation.getMessages();
     const systemMsg = messages.find((m) => m.role === 'system');
