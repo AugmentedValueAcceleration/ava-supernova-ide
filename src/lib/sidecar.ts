@@ -55,6 +55,13 @@ export interface SidecarConfig {
     apiKey?: string;
     modelLabel?: string;
   };
+  /** Opt-in local semantic recall (mirror of the extension's
+   *  preferences.useLocalEmbeddings). Off/undefined → keyword recall, no
+   *  dependency. When true the sidecar embeds memories on `embeddingModel`
+   *  via `embeddingBaseUrl` (Ollama's OpenAI-compatible endpoint). */
+  useLocalEmbeddings?: boolean;
+  embeddingModel?: string;
+  embeddingBaseUrl?: string;
 }
 
 export interface SidecarToolCall {

@@ -2898,6 +2898,10 @@ export function AvaChatPage() {
           generationLocalOnly,
           learningLocalOnly,
           local: localBlock,
+          // Opt-in local semantic recall — mirror of the extension setting.
+          useLocalEmbeddings: localStorage.getItem('ava-ide-embeddings-enabled') === '1',
+          embeddingModel: localStorage.getItem('ava-ide-embeddings-model') || undefined,
+          embeddingBaseUrl: localStorage.getItem('ava-ide-embeddings-baseurl') || undefined,
         } as SidecarConfig;
 
         await sidecar.start(config);
@@ -3669,6 +3673,9 @@ export function AvaChatPage() {
           _devPlatformFallback: true,
           generationLocalOnly: fallbackSyncPrefs.generations === false || !fallbackCloudAllowed,
           learningLocalOnly: fallbackSyncPrefs.learning === false || !fallbackCloudAllowed,
+          useLocalEmbeddings: localStorage.getItem('ava-ide-embeddings-enabled') === '1',
+          embeddingModel: localStorage.getItem('ava-ide-embeddings-model') || undefined,
+          embeddingBaseUrl: localStorage.getItem('ava-ide-embeddings-baseurl') || undefined,
         } as SidecarConfig).catch(() => {});
       }).catch(() => {});
     });
@@ -11675,6 +11682,123 @@ function LocalModelSettings() {
   );
 }
 
+/* ===== Local semantic recall — opt-in embeddings via Ollama =====
+ *
+ * Mirror of the VS Code extension's preferences.useLocalEmbeddings. Off by
+ * default → keyword (TF-IDF) recall, zero dependency. When on, memories are
+ * embedded on a local model (default nomic-embed-text via Ollama) and recall
+ * gains a meaning-based phase over the whole memory graph. Persists to
+ * localStorage; the IDE init path forwards it to the sidecar. Restart the
+ * chat panel after changing — the sidecar reads it at init only.
+ */
+function SemanticRecallSettings() {
+  const [enabled, setEnabled] = useState(() => localStorage.getItem('ava-ide-embeddings-enabled') === '1');
+  const [model, setModel] = useState(() => localStorage.getItem('ava-ide-embeddings-model') || 'nomic-embed-text');
+  const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('ava-ide-embeddings-baseurl') || 'http://localhost:11434/v1');
+  const [savedTick, setSavedTick] = useState(0);
+
+  const persist = (nextEnabled: boolean, nextModel: string, nextBaseUrl: string) => {
+    if (nextEnabled) localStorage.setItem('ava-ide-embeddings-enabled', '1');
+    else localStorage.removeItem('ava-ide-embeddings-enabled');
+    localStorage.setItem('ava-ide-embeddings-model', nextModel.trim() || 'nomic-embed-text');
+    localStorage.setItem('ava-ide-embeddings-baseurl', nextBaseUrl.trim() || 'http://localhost:11434/v1');
+    setSavedTick(t => t + 1);
+    setTimeout(() => setSavedTick(t => t + 1), 1800);
+  };
+
+  const toggle = () => {
+    const next = !enabled;
+    setEnabled(next);
+    persist(next, model, baseUrl);
+  };
+
+  const justSaved = savedTick % 2 === 1;
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '7px 10px', borderRadius: 6,
+    border: '1px solid rgba(168, 85, 247, 0.18)',
+    background: 'rgba(10, 6, 18, 0.8)', color: '#cdd6f4',
+    fontSize: 12, fontFamily: 'monospace', outline: 'none',
+  };
+
+  return (
+    <div style={{
+      background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
+      padding: '18px 20px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 14,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <span style={{ fontSize: 22 }}>🧠</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Local semantic recall</div>
+            {enabled && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
+                background: 'rgba(166, 227, 161, 0.10)', color: '#a6e3a1',
+                border: '1px solid rgba(166, 227, 161, 0.30)', letterSpacing: 0.4,
+              }}>ON</span>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2, lineHeight: 1.5 }}>
+            Recall memories by meaning, not just keywords — embeddings run on a local model (Ollama by default),
+            so nothing leaves your machine. Off → keyword recall, no dependency. Restart the chat panel after changing.
+          </div>
+        </div>
+        <button
+          onClick={toggle}
+          aria-pressed={enabled}
+          style={{
+            width: 42, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', flexShrink: 0,
+            background: enabled ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : 'rgba(108,112,134,0.3)',
+            position: 'relative', transition: 'background 0.15s',
+          }}
+        >
+          <span style={{
+            position: 'absolute', top: 3, left: enabled ? 21 : 3, width: 18, height: 18, borderRadius: '50%',
+            background: '#fff', transition: 'left 0.15s',
+          }} />
+        </button>
+      </div>
+
+      {enabled && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Embedding model</div>
+            <input
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              onBlur={() => persist(enabled, model, baseUrl)}
+              placeholder="nomic-embed-text"
+              style={inputStyle}
+              spellCheck={false}
+            />
+            <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
+              Pull it first: <code style={{ color: '#cdd6f4' }}>ollama pull nomic-embed-text</code>.
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Embeddings base URL</div>
+            <input
+              value={baseUrl}
+              onChange={e => setBaseUrl(e.target.value)}
+              onBlur={() => persist(enabled, model, baseUrl)}
+              placeholder="http://localhost:11434/v1"
+              style={inputStyle}
+              spellCheck={false}
+            />
+            <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
+              Ollama's OpenAI-compatible endpoint.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {justSaved && (
+        <div style={{ fontSize: 10, color: '#a6e3a1' }}>Saved ✓ — restart the chat panel to apply.</div>
+      )}
+    </div>
+  );
+}
+
 /** Settings control for chat-backend routing — where the chat runs:
  *  the local sidecar (your own API keys / BYOK) or the Ava platform.
  *  Independent of cloud sync (which is the data-backup axis). Persists
@@ -12396,6 +12520,12 @@ export function SettingsPage() {
             on-machine local servers. */}
         <div style={sLabel}>CUSTOM MODEL</div>
         <LocalModelSettings />
+
+        {/* Local semantic recall — opt-in embeddings (Ollama) so memory is
+            recalled by meaning, not just keywords. Mirror of the extension's
+            preferences.useLocalEmbeddings. Off by default. */}
+        <div style={sLabel}>SEMANTIC RECALL</div>
+        <SemanticRecallSettings />
 
         {/* 6. API Keys (collapsible) */}
         <div style={sLabel}>{t('dash.settings.section.api_keys')}</div>
