@@ -2118,6 +2118,14 @@ export function AvaChatPage() {
     ];
   });
   const [input, setInput] = useState('');
+  // "Ask Ava" from the docs page stashes the question and navigates here; pick
+  // it up on mount and prefill the composer (don't auto-send).
+  useEffect(() => {
+    try {
+      const ask = localStorage.getItem('ava-pending-ask');
+      if (ask) { localStorage.removeItem('ava-pending-ask'); setInput(ask); }
+    } catch { /* no storage */ }
+  }, []);
   const [model, setModel] = useState<string>(() => {
     const stored = localStorage.getItem('ava-ide-chat-model') || 'auto';
     // Migration: MiniMax is reserved for Creative Studio — never as chat coordinator.

@@ -325,6 +325,15 @@ export function DocumentationPage() {
     return { pages: all, sidebar: buildSidebar(all) };
   }, [locale]);
 
+  const [ask, setAsk] = useState('');
+  const submitAsk = () => {
+    const q = ask.trim();
+    if (!q) return;
+    try { localStorage.setItem('ava-pending-ask', q); } catch { /* no storage */ }
+    window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'ava-chat' }));
+    setAsk('');
+  };
+
   const data: FactsData = {
     tools: TOOLS, providers: PROVIDERS, modes: MODES, personas: PERSONAS,
     permissions: PERMISSION_MODES, shortcuts: SHORTCUTS,
@@ -343,6 +352,21 @@ export function DocumentationPage() {
         </div>
         <DocsDropdown sections={sidebar} />
       </div>
+
+      {/* Ask Ava — route a question into chat (prefilled); docs_lookup grounds
+          the surface-aware reply. */}
+      <form
+        onSubmit={(e) => { e.preventDefault(); submitAsk(); }}
+        style={{ display: 'flex', gap: 8, padding: '12px 32px', borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}
+      >
+        <input
+          value={ask}
+          onChange={(e) => setAsk(e.target.value)}
+          placeholder="Ask Ava anything…"
+          style={{ flex: 1, borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, padding: '8px 12px', fontSize: 13, color: HEADING, outline: 'none' }}
+        />
+        <button type="submit" style={{ flexShrink: 0, borderRadius: 8, border: 'none', background: ACCENT, color: '#fff', padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>Ask Ava</button>
+      </form>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 40px 40px' }}>
         {pages.map(page => {

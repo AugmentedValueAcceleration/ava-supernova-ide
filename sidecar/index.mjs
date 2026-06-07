@@ -862,6 +862,7 @@ async function handleInit(data) {
       cwd,
       sharedState,
       secretGranter: requestSecretGrant,
+      surface: 'ide',
     });
 
     // Conductor (persona orchestration)
@@ -874,6 +875,7 @@ async function handleInit(data) {
       cwd,
       sharedState,
       secretGranter: requestSecretGrant,
+      surface: 'ide',
     });
 
     // Auto Mode — detect available providers
@@ -1639,6 +1641,7 @@ async function handleSetModel(data) {
       cwd,
       sharedState,
       secretGranter: requestSecretGrant,
+      surface: 'ide',
     });
 
     conductor = new Conductor({
@@ -1650,6 +1653,7 @@ async function handleSetModel(data) {
       cwd,
       sharedState,
       secretGranter: requestSecretGrant,
+      surface: 'ide',
     });
 
     // Disable auto coordinator when specific model selected
