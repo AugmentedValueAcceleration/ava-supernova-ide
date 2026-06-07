@@ -130,6 +130,7 @@ function ExercisesGrid() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<'all' | HealthWorkoutType>('all');
+  const [view, setView] = useBrowseView();
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -166,7 +167,7 @@ function ExercisesGrid() {
 
   return (
     <div>
-      <SearchInput value={search} onChange={setSearch} placeholder={t('health.browse.search_exercises_placeholder')} />
+      <BrowseToolbar search={search} onSearch={setSearch} placeholder={t('health.browse.search_exercises_placeholder')} view={view} onView={setView} />
       <FilterRow>
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>{t('health.browse.filter.all')}</FilterChip>
         {WORKOUT_TYPES.map(w => (
@@ -182,38 +183,10 @@ function ExercisesGrid() {
         <CenterNote>{search ? t('health.browse.no_exercises_match_q', { q: search }) : t('health.browse.no_exercises_found')}</CenterNote>
       ) : (
         <>
-          <CardGrid>
-            {items.map(ex => {
-              const accent = WORKOUT_ACCENT[ex.workout_type];
-              return (
-                <Card key={ex.id} onClick={() => setModalSlug(ex.slug)}>
-                  {/* Hero image — per-exercise thumbnail from the catalog,
-                      mirrors the recipe card. Falls back to a workout-type
-                      tinted panel when an exercise has no image yet. */}
-                  <div style={{
-                    position: 'relative', aspectRatio: '4 / 3',
-                    background: `linear-gradient(135deg, ${accent}33 0%, ${accent}11 100%)`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    borderRadius: '8px 8px 0 0', overflow: 'hidden',
-                  }}>
-                    {ex.thumbnail_url
-                      ? <img src={ex.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <span style={{ fontSize: 26, opacity: 0.3 }}>🏋</span>}
-                    <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: accent }} />
-                  </div>
-                  <div style={{ padding: 14 }}>
-                    <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: accent, marginBottom: 4 }}>
-                      {workoutLabel(ex.workout_type)}
-                    </div>
-                    <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.3 }}>{ex.name}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                      <Dots value={ex.difficulty} accent={accent} />
-                      <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{exerciseTypeLabel(ex.exercise_type)}</span>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+          <CardGrid view={view}>
+            {items.map(ex => (
+              <ExerciseCardItem key={ex.id} ex={ex} view={view} onOpen={setModalSlug} />
+            ))}
           </CardGrid>
           <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />
         </>
@@ -231,6 +204,7 @@ function RecipesGrid() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<'all' | string>('all');
+  const [view, setView] = useBrowseView();
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -266,7 +240,7 @@ function RecipesGrid() {
 
   return (
     <div>
-      <SearchInput value={search} onChange={setSearch} placeholder={t('health.browse.search_recipes_placeholder')} />
+      <BrowseToolbar search={search} onSearch={setSearch} placeholder={t('health.browse.search_recipes_placeholder')} view={view} onView={setView} />
       <FilterRow>
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>{t('health.browse.filter.all')}</FilterChip>
         {COURSES.map(c => (
@@ -282,27 +256,9 @@ function RecipesGrid() {
         <CenterNote>{search ? t('health.browse.no_recipes_match_q', { q: search }) : t('health.browse.no_recipes_found')}</CenterNote>
       ) : (
         <>
-          <CardGrid>
+          <CardGrid view={view}>
             {items.map(r => (
-              <Card key={r.id} onClick={() => setModalSlug(r.slug)}>
-                <div style={{
-                  aspectRatio: '4 / 3', background: 'rgba(168,85,247,0.06)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: '8px 8px 0 0', overflow: 'hidden',
-                }}>
-                  {r.hero_image_url
-                    ? <img src={r.hero_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontSize: 26, opacity: 0.3 }}>🍽</span>}
-                </div>
-                <div style={{ padding: 14 }}>
-                  {r.cuisine_name && (
-                    <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: '#fbbf24', marginBottom: 4 }}>
-                      {r.cuisine_name}
-                    </div>
-                  )}
-                  <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.3 }}>{r.name}</div>
-                </div>
-              </Card>
+              <RecipeCardItem key={r.id} r={r} view={view} onOpen={setModalSlug} />
             ))}
           </CardGrid>
           <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />
@@ -323,12 +279,68 @@ const cardStyle: React.CSSProperties = {
   overflow: 'hidden',
 };
 
-function CardGrid({ children }: { children: React.ReactNode }) {
+// ── Browse view (grid/list) — shared + persisted across both tabs ──────────
+
+type View = 'grid' | 'list';
+const HEALTH_VIEW_KEY = 'ava-ide-health-view';
+
+/** Grid/list view, persisted to localStorage. The two browse grids mount one
+ *  at a time, so reading localStorage on mount keeps them in sync. */
+function useBrowseView(): [View, (v: View) => void] {
+  const [view, setView] = useState<View>(() => {
+    try { return localStorage.getItem(HEALTH_VIEW_KEY) === 'list' ? 'list' : 'grid'; } catch { return 'grid'; }
+  });
+  const change = (v: View) => {
+    setView(v);
+    try { localStorage.setItem(HEALTH_VIEW_KEY, v); } catch { /* unavailable */ }
+  };
+  return [view, change];
+}
+
+function ViewToggle({ view, onView }: { view: View; onView: (v: View) => void }) {
+  const btn = (v: View, title: string, icon: React.ReactNode) => {
+    const active = view === v;
+    return (
+      <button
+        type="button" onClick={() => onView(v)} aria-pressed={active} title={title}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28,
+          borderRadius: 6, cursor: 'pointer', transition: 'all 0.12s',
+          border: `1px solid ${active ? 'rgba(168,85,247,0.5)' : 'rgba(168,85,247,0.14)'}`,
+          background: active ? 'rgba(168,85,247,0.18)' : 'transparent',
+          color: active ? '#cdd6f4' : '#6c7086',
+        }}
+      >
+        {icon}
+      </button>
+    );
+  };
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {btn('grid', 'Grid view', <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.2" /><rect x="9" y="1" width="6" height="6" rx="1.2" /><rect x="1" y="9" width="6" height="6" rx="1.2" /><rect x="9" y="9" width="6" height="6" rx="1.2" /></svg>)}
+      {btn('list', 'List view', <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2.5" width="14" height="2.4" rx="1.2" /><rect x="1" y="6.8" width="14" height="2.4" rx="1.2" /><rect x="1" y="11.1" width="14" height="2.4" rx="1.2" /></svg>)}
+    </div>
+  );
+}
+
+/** Toolbar row: search (flex) + the grid/list toggle. */
+function BrowseToolbar({ search, onSearch, placeholder, view, onView }: { search: string; onSearch: (v: string) => void; placeholder: string; view: View; onView: (v: View) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ flex: 1 }}><SearchInput value={search} onChange={onSearch} placeholder={placeholder} /></div>
+      <div style={{ marginBottom: 12 }}><ViewToggle view={view} onView={onView} /></div>
+    </div>
+  );
+}
+
+function CardGrid({ view, children }: { view: View; children: React.ReactNode }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-      gap: 12,
+      gridTemplateColumns: view === 'list'
+        ? 'repeat(auto-fill, minmax(320px, 1fr))'
+        : 'repeat(auto-fill, minmax(165px, 1fr))',
+      gap: 10,
     }}>
       {children}
     </div>
@@ -355,6 +367,87 @@ function Card({ onClick, children }: { onClick: () => void; children: React.Reac
     >
       {children}
     </div>
+  );
+}
+
+// ── Browse cards (compact-hero grid + dense list variants) ─────────────────
+
+function ExerciseCardItem({ ex, view, onOpen }: { ex: HealthExerciseSummary; view: View; onOpen: (slug: string) => void }) {
+  const accent = WORKOUT_ACCENT[ex.workout_type];
+  const img = ex.thumbnail_url
+    ? <img src={ex.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    : <span style={{ fontSize: 22, opacity: 0.3 }}>🏋</span>;
+
+  if (view === 'list') {
+    return (
+      <Card onClick={() => onOpen(ex.slug)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8 }}>
+          <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: `linear-gradient(135deg, ${accent}33, ${accent}11)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {img}
+            <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 2, background: accent }} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.4, color: accent }}>{workoutLabel(ex.workout_type)}</div>
+            <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ex.name}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}><Dots value={ex.difficulty} accent={accent} /><span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{exerciseTypeLabel(ex.exercise_type)}</span></div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card onClick={() => onOpen(ex.slug)}>
+      <div style={{ position: 'relative', aspectRatio: '3 / 2', overflow: 'hidden', background: `linear-gradient(135deg, ${accent}33, ${accent}11)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {img}
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: accent }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '66%', background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.3) 50%, transparent)' }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 8 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: accent, marginBottom: 2 }}>{workoutLabel(ex.workout_type)}</div>
+          <div style={{ fontSize: 13, color: '#fff', lineHeight: 1.25 }}>{ex.name}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px' }}>
+        <Dots value={ex.difficulty} accent={accent} />
+        <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{exerciseTypeLabel(ex.exercise_type)}</span>
+      </div>
+    </Card>
+  );
+}
+
+function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: View; onOpen: (slug: string) => void }) {
+  const footer = r.course || r.origin_country || r.cuisine_name || '';
+  const img = r.hero_image_url
+    ? <img src={r.hero_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    : <span style={{ fontSize: 22, opacity: 0.3 }}>🍽</span>;
+
+  if (view === 'list') {
+    return (
+      <Card onClick={() => onOpen(r.slug)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8 }}>
+          <div style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: 'rgba(168,85,247,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{img}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            {r.cuisine_name && <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.4, color: '#fbbf24' }}>{r.cuisine_name}</div>}
+            <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+            {r.course && <div style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize', marginTop: 3 }}>{r.course}</div>}
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card onClick={() => onOpen(r.slug)}>
+      <div style={{ position: 'relative', aspectRatio: '3 / 2', overflow: 'hidden', background: 'rgba(168,85,247,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {img}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '66%', background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.3) 50%, transparent)' }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 8 }}>
+          {r.cuisine_name && <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: '#fbbf24', marginBottom: 2 }}>{r.cuisine_name}</div>}
+          <div style={{ fontSize: 13, color: '#fff', lineHeight: 1.25 }}>{r.name}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '7px 10px' }}>
+        <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{footer}</span>
+      </div>
+    </Card>
   );
 }
 

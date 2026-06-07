@@ -11,7 +11,7 @@
 import { readTextFile, writeTextFile, mkdir, exists } from '@tauri-apps/plugin-fs';
 import { homeDir } from '@tauri-apps/api/path';
 
-export type AvaMode = 'work' | 'plan' | 'chat' | 'teach' | 'security' | 'brainstorm';
+export type AvaMode = 'work' | 'write' | 'plan' | 'chat' | 'teach' | 'security' | 'brainstorm';
 
 export type DatasetName =
   | 'tool-trajectories'
@@ -25,7 +25,7 @@ export type DatasetName =
   | 'generation-effectiveness'
   | 'knowledge-pack-effectiveness';
 
-export const ALL_AVA_MODES: AvaMode[] = ['work', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
+export const ALL_AVA_MODES: AvaMode[] = ['work', 'write', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
 
 export const ALL_DATASETS: DatasetName[] = [
   'tool-trajectories', 'persona-handoffs', 'verification-pairs',

@@ -131,8 +131,8 @@ export default function App() {
   }, []);
 
   // Mode state — synced with chat via localStorage + events
-  const MODES = ['work', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
-  const MODE_LABELS: Record<string, string> = { work: 'Work', plan: 'Plan', chat: 'Chat', teach: 'Teach', security: 'Security', brainstorm: 'Brainstorm' };
+  const MODES = ['work', 'write', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
+  const MODE_LABELS: Record<string, string> = { work: 'Code', write: 'Write', plan: 'Plan', chat: 'Chat', teach: 'Teach', security: 'Security', brainstorm: 'Brainstorm' };
   const [currentMode, setCurrentMode] = useState(() => localStorage.getItem('ava-ide-chat-mode') || 'work');
 
   // i18n — init on mount, re-render on locale change
@@ -236,7 +236,7 @@ export default function App() {
         {sidebarPosition === 'right' && sidebar}
         {sidebarPosition === 'right' && activityBar}
       </div>
-      <StatusBar onToggleTerminal={toggleBottomPanel} mode={MODE_LABELS[currentMode] || 'Work'} onCycleMode={cycleMode} />
+      <StatusBar onToggleTerminal={toggleBottomPanel} mode={MODE_LABELS[currentMode] || 'Code'} onCycleMode={cycleMode} />
       <UpdateChecker />
       {showWelcome && (
         <WelcomeOverlay onComplete={(navigateTo) => {

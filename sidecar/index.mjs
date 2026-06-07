@@ -132,6 +132,7 @@ let isRunning = false;
 // Mistral (Aurora) spirals on tool-stuffed prompts. Prepending the tag
 // lets the agent shrink the schema list to the per-mode allowlist.
 const MODE_PREFIX_TAG = {
+  write:      '[Write Mode]',
   plan:       '[Plan Mode]',
   chat:       '[Chat Mode]',
   brainstorm: '[Brainstorm Mode]',

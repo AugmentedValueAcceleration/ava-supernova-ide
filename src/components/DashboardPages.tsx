@@ -1927,7 +1927,7 @@ export function CommandCentrePage() {
 export function AvaChatPage() {
   useLocale();
   // ── Types ──────────────────────────────────────────────────────────────────
-  type AvaMode = 'work' | 'plan' | 'chat' | 'teach' | 'security' | 'brainstorm' | 'desktop';
+  type AvaMode = 'work' | 'write' | 'plan' | 'chat' | 'teach' | 'security' | 'brainstorm' | 'desktop';
   interface ChatMessage {
     id: string;
     role: 'ava' | 'user' | 'error' | 'system';
@@ -1979,6 +1979,7 @@ export function AvaChatPage() {
   // ── Mode definitions ───────────────────────────────────────────────────────
   const MODES: { id: AvaMode; label: string; icon: string; prefix: string; placeholder: string }[] = [
     { id: 'work', label: t('mode.work'), icon: '>>', prefix: '', placeholder: t('mode.work.placeholder') },
+    { id: 'write', label: 'Write', icon: '<<', prefix: '[Write Mode] ', placeholder: 'What would you like to write?' },
     { id: 'plan', label: t('mode.plan'), icon: '::', prefix: '[Plan Mode] ', placeholder: t('mode.plan.placeholder') },
     { id: 'chat', label: t('mode.chat'), icon: '..', prefix: '[Chat Mode] ', placeholder: t('mode.chat.placeholder') },
     { id: 'teach', label: t('mode.teach'), icon: '??', prefix: '[Teach Mode] ', placeholder: t('mode.teach.placeholder') },

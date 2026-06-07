@@ -19,7 +19,8 @@ const PROVIDERS = [
 // else clicks. Shown as a 6-card picker that previews a real example
 // prompt per mode, instead of a generic welcome splash.
 const MODES = [
-  { id: 'code',       name: 'Work',       prefix: '>>', tagline: 'Builder. Ships code.',                  example: 'add a cancel button to the upload form' },
+  { id: 'code',       name: 'Code',       prefix: '>>', tagline: 'Builder. Ships code.',                  example: 'add a cancel button to the upload form' },
+  { id: 'write',      name: 'Write',      prefix: '<<', tagline: 'Author. Documents, not code.',          example: 'draft a project proposal for a new app' },
   { id: 'plan',       name: 'Plan',       prefix: '::', tagline: 'Architect. Read-only. Thinks first.',   example: 'should I extract this logic into a service?' },
   { id: 'chat',       name: 'Chat',       prefix: '..', tagline: 'Friend. Off the clock.',                example: 'how do I feel about this launch date?' },
   { id: 'teach',      name: 'Teach',      prefix: '??', tagline: 'Tutor, content writer, fact checker, quiz master.', example: 'teach me Rust async from zero' },
