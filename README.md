@@ -1,11 +1,11 @@
 # Ava Supernova IDE
 
-The standalone AI-native development environment. Built with Tauri v2, React 19, and a Node.js sidecar running `@ava/core` locally. Full 54-tool access, all 6 modes, 24 specialist personas — no VS Code required.
+The standalone AI-native development environment. Built with Tauri v2, React 19, and a Node.js sidecar running `@ava/core` locally. Full 54-tool access, all 7 modes, 24 specialist personas — no VS Code required.
 
 ## Features
 
 ### Chat with Full AI Power
-- **Local mode** — Node.js sidecar runs @ava/core with all 60 tools, 6 modes, 24 personas, 5-layer memory
+- **Local mode** — Node.js sidecar runs @ava/core with all 60 tools, 7 modes, 24 personas, 5-layer memory
 - **Cloud mode** — Platform API with managed tokens, usage tracking, billing
 - **Toggle freely** — switch between Local and Cloud from the chat header
 - **Model picker** — Qwen 3.6 Plus, MiniMax M3, DeepSeek, Kimi, Zhipu, Mistral + BYOK
@@ -14,7 +14,7 @@ The standalone AI-native development environment. Built with Tauri v2, React 19,
   - **Supernova** — polyglot ensemble (DeepSeek V4 Pro coordinator, V4 Flash chat + mid-tier review, Qwen 3.6 Plus Builder, Omni Plus vision, Omni Flash image-gen orchestration)
   - **Aurora** — European AI stack, three-tier (Mistral Large 3 coordinator + heavy specialists, Mistral Medium 3.5 for Builder + mid-tier + vision + long-form, Mistral Small 4 for chat + image-gen + intent gate). Never leaves European infrastructure. Open weights, sovereign by design.
 - **Knowledge packs** — toggle domain expertise on/off in the chat-bar dropdown. Live system-prompt rebuild — Ava picks up the extra context the moment you flip the switch, no restart.
-- **Mode selector** — Work (>>), Plan (::), Chat (..), Teach (??), Security (!!), Brainstorm (**)
+- **Mode selector** — Code (>>), Write (<<), Plan (::), Chat (..), Teach (??), Security (!!), Brainstorm (**)
 
 ### Collapsible Tasks Panel
 - **Ava tab** — live session tasks from `todo_write` with progress bar, auto-opens when Ava creates tasks
