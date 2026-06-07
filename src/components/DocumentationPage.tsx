@@ -16,11 +16,15 @@ import {
   PERMISSION_MODES,
   PERMISSION_LABELS,
   SHORTCUTS,
-  filterBySurface,
+  filterForSurface,
+  pageBadges,
   buildSidebar,
   anchorFor,
   getPages,
 } from '@ava/core/docs';
+
+// Friendly labels for "works on" surface badges (derived from the capability matrix).
+const SURFACE_LABELS: Record<string, string> = { ext: 'Extension', ide: 'IDE', companion: 'Companion', cli: 'CLI', web: 'Web' };
 
 // ── Palette (matches DashboardPages.tsx) ────────────────────────────────────
 
@@ -186,10 +190,26 @@ function makeAdapter(): RendererAdapter<React.ReactNode> {
       ])} />
     ),
 
-    page: (title, blocks, anchor) => (
+    page: (title, blocks, anchor, extras) => (
       <section key={anchor} id={`doc-${anchor}`} style={{ marginBottom: 48 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: ACCENT, marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${BORDER}` }}>{title}</h2>
+        <div style={{ marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${BORDER}` }}>
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: ACCENT, margin: 0 }}>{title}</h2>
+          {extras?.badges && extras.badges.length > 0 && (
+            <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: MUTED }}>Works on</span>
+              {extras.badges.map(s => (
+                <span key={s} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.05)', color: MUTED }}>{SURFACE_LABELS[s]}</span>
+              ))}
+            </div>
+          )}
+        </div>
         {blocks}
+        {extras?.deeper && extras.deeper.length > 0 && (
+          <details style={{ marginTop: 16, borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD }}>
+            <summary style={{ cursor: 'pointer', userSelect: 'none', padding: '8px 12px', fontSize: 12, fontWeight: 500, color: ACCENT }}>Show me the details</summary>
+            <div style={{ padding: '4px 12px 12px' }}>{extras.deeper}</div>
+          </details>
+        )}
       </section>
     ),
 
@@ -301,7 +321,7 @@ export function DocumentationPage() {
     // every page available on this surface, every time. Operator wanted
     // the docs sidebar fixed. Content localizes to the active locale
     // (English fallback per block).
-    const all = filterBySurface(getPages(locale), 'ide');
+    const all = filterForSurface(getPages(locale), 'ide');
     return { pages: all, sidebar: buildSidebar(all) };
   }, [locale]);
 
@@ -327,7 +347,8 @@ export function DocumentationPage() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 40px 40px' }}>
         {pages.map(page => {
           const blocks = page.body.map(b => renderBlock(b, adapter, data));
-          return adapter.page(page.title, blocks, anchorFor(page.id));
+          const deeper = page.deeper?.length ? page.deeper.map(b => renderBlock(b, adapter, data)) : undefined;
+          return adapter.page(page.title, blocks, anchorFor(page.id), { deeper, badges: pageBadges(page) });
         })}
       </div>
     </div>
