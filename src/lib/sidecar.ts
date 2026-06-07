@@ -86,6 +86,7 @@ export interface SidecarEvent {
   args?: Record<string, unknown>;
   result?: string;
   success?: boolean;
+  metadata?: Record<string, unknown>;
   data?: string;
   // confirmation
   id?: string;

@@ -3314,6 +3314,14 @@ export function AvaChatPage() {
 
       case 'tool_call_end':
         trackToolCall();
+        // Live document preview: when Ava authors/edits a .md, open it in the
+        // editor (FileViewer renders markdown). App listens for this event.
+        if (event.success && event.toolName === 'document_author') {
+          const docPath = (event.metadata as { path?: string } | undefined)?.path;
+          if (typeof docPath === 'string' && /\.(md|markdown)$/i.test(docPath)) {
+            try { window.dispatchEvent(new CustomEvent('ava-open-document', { detail: { path: docPath } })); } catch { /* no window */ }
+          }
+        }
         setMessages((prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
@@ -6444,9 +6452,10 @@ export function ChatHistoryPage() {
             )}
 
             {/* Daily Usage Chart */}
-            {connected && daily.length > 0 && (
+            {connected && (
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Daily Usage (Last 14 Days)</div>
+                {daily.length > 0 ? (
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80 }}>
                     {daily.map((d: any) => {
@@ -6468,13 +6477,19 @@ export function ChatHistoryPage() {
                     <span style={{ fontSize: 9, color: '#585b70' }}>{daily[daily.length - 1]?.date?.slice(5)}</span>
                   </div>
                 </div>
+                ) : (
+                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: '#6c7086' }}>No usage data for this period.</div>
+                </div>
+                )}
               </div>
             )}
 
             {/* Most Used Models */}
-            {connected && models.length > 0 && (
+            {connected && (
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Most Used Models</div>
+                {models.length > 0 ? (
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {models.slice(0, 5).map((m: any) => {
                     const v = modelValue(m);
@@ -6491,11 +6506,16 @@ export function ChatHistoryPage() {
                     );
                   })}
                 </div>
+                ) : (
+                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: '#6c7086' }}>No usage data for this period.</div>
+                </div>
+                )}
               </div>
             )}
 
             {!connected && (
-              <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '48px 20px', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '48px 20px', textAlign: 'center' }}>
                 <div style={{ fontSize: 13, color: '#6c7086' }}>Connect your account to see usage analytics.</div>
               </div>
             )}
@@ -6520,7 +6540,7 @@ export function ChatHistoryPage() {
 
         {filtered.length === 0 ? (
           <div style={{
-            background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed rgba(168, 85, 247, 0.12)', borderRadius: 12,
+            background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
             padding: '48px 20px', textAlign: 'center',
           }}>
             <div style={{ fontSize: 28, marginBottom: 12 }}>💬</div>
@@ -6547,8 +6567,8 @@ export function ChatHistoryPage() {
                     window.dispatchEvent(new CustomEvent('ava-load-conversation'));
                     window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'ava-chat' }));
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)')}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(168,85,247,0.45)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(168,85,247,0.16)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; e.currentTarget.style.boxShadow = 'none'; }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{conv.title || 'Untitled'}</div>
@@ -10293,6 +10313,48 @@ export function PersonalityPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // ── Avatar (user) — Ava's identity lives here now; moved from Settings.
+  // Ava's own avatar stays brand-locked (packages/core/assets/ava-avatar.jpeg).
+  const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
+
+  // Resize image to max 128x128 and compress as JPEG for storage efficiency.
+  const resizeAvatar = useCallback((dataUri: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const size = 128;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = () => resolve(dataUri);
+      img.src = dataUri;
+    });
+  }, []);
+
+  const saveAvatar = useCallback(async (dataUri: string) => {
+    const resized = await resizeAvatar(dataUri);
+    localStorage.setItem('ava-ide-user-avatar', resized);
+    setUserAvatar(resized);
+    if (connected && cloudSyncEnabled()) {
+      apiFetch('/settings', { method: 'POST', body: JSON.stringify({ user_avatar: resized }) }).catch(() => {});
+    }
+  }, [connected, resizeAvatar]);
+
+  const removeAvatar = useCallback(() => {
+    localStorage.removeItem('ava-ide-user-avatar');
+    setUserAvatar('');
+    if (connected && cloudSyncEnabled()) {
+      apiFetch('/settings', { method: 'POST', body: JSON.stringify({ user_avatar: null }) }).catch(() => {});
+    }
+  }, [connected]);
+
   const TONES = [
     { value: 'warm', label: t('dash.personality.tone.warm'), desc: t('dash.personality.tone.warm_desc') },
     { value: 'direct', label: t('dash.personality.tone.direct'), desc: t('dash.personality.tone.direct_desc') },
@@ -10335,6 +10397,8 @@ export function PersonalityPage() {
         if (p.energy) setEnergy(p.energy);
         if (p.style || p.communication_style) setStyle(p.style || p.communication_style);
         if (p.description) setDescription(p.description);
+        // User avatar rides on the same /settings payload (overrides local).
+        if (data.user_avatar) { setUserAvatar(data.user_avatar); localStorage.setItem('ava-ide-user-avatar', data.user_avatar); }
         setLoading(false);
       })
       .catch(() => { setLoading(false); });
@@ -10415,6 +10479,57 @@ export function PersonalityPage() {
         </div>
 
         {!connected && <NotConnectedBanner />}
+
+        {/* Avatar — moved here from Settings; Ava's avatar stays brand-locked. */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={sectionLabelStyle}>{t('dash.settings.section.avatars')}</div>
+          <div style={{
+            background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
+            padding: '18px 20px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>{t('dash.settings.avatar_you')}</div>
+                <div
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = () => {
+                      const file = input.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => saveAvatar(reader.result as string);
+                      reader.readAsDataURL(file);
+                    };
+                    input.click();
+                  }}
+                  style={{
+                    width: 64, height: 64, borderRadius: '50%', cursor: 'pointer',
+                    border: '2px dashed rgba(168,85,247,0.3)',
+                    background: userAvatar ? 'transparent' : 'rgba(10, 6, 18, 0.8)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    overflow: 'hidden', position: 'relative',
+                  }}
+                  title={t('dash.settings.avatar_upload_hint')}
+                >
+                  {userAvatar ? (
+                    <img src={userAvatar} alt={t('dash.settings.avatar_you')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
+                    </svg>
+                  )}
+                </div>
+                {userAvatar && (
+                  <button onClick={() => removeAvatar()}
+                    style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>{t('dash.settings.remove')}</button>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: '#45475a' }}>{t('dash.settings.avatar_stored_locally')}</div>
+            </div>
+          </div>
+        </div>
 
         {/* Tone */}
         <div style={{ marginBottom: 24 }}>
@@ -11865,8 +11980,6 @@ export function SettingsPage() {
     const handler = () => {
       if (!checkConnected()) {
         setSettings(defaultSettings);
-        setPersonality(null);
-        setUserAvatar('');
         setProviderKeys({});
       }
       setAuthKey(k => k + 1);
@@ -11894,7 +12007,6 @@ export function SettingsPage() {
     setSettingsTab(t);
     try { localStorage.setItem('ava-ide-settings-tab', t); } catch { /* */ }
   };
-  const [personality, setPersonality] = useState<any>(null);
   // Dataset capture config — separate from `settings` because it lives in
   // its own file (~/.ava/datasets/config.json) with its own granular schema
   // and is read directly by the sidecar's dataset consumer.
@@ -11936,56 +12048,7 @@ export function SettingsPage() {
     });
   }, [datasetCfg, writeDatasetCfg]);
 
-  const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
-
-  // Resize image to max 128x128 and compress as JPEG for storage efficiency
-  const resizeAvatar = useCallback((dataUri: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const size = 128;
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d')!;
-        // Center crop
-        const scale = Math.max(size / img.width, size / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.onerror = () => resolve(dataUri);
-      img.src = dataUri;
-    });
-  }, []);
-
-  // Avatar mutators are now user-only — Ava's avatar is brand-locked
-  // (sourced from packages/core/assets/ava-avatar.jpeg) and operators
-  // can no longer override it.
-  const saveAvatar = useCallback(async (_type: 'user', dataUri: string) => {
-    const resized = await resizeAvatar(dataUri);
-    localStorage.setItem('ava-ide-user-avatar', resized);
-    setUserAvatar(resized);
-    if (connected && cloudSyncEnabled()) {
-      apiFetch('/settings', {
-        method: 'POST',
-        body: JSON.stringify({ user_avatar: resized }),
-      }).catch(() => {});
-    }
-    return resized;
-  }, [connected, resizeAvatar]);
-
-  const removeAvatar = useCallback((_type: 'user') => {
-    localStorage.removeItem('ava-ide-user-avatar');
-    setUserAvatar('');
-    if (connected && cloudSyncEnabled()) {
-      apiFetch('/settings', {
-        method: 'POST',
-        body: JSON.stringify({ user_avatar: null }),
-      }).catch(() => {});
-    }
-  }, [connected]);
+  // Avatar moved to the Ava's Style (Personality) page — identity lives there.
   const [providerKeys, setProviderKeys] = useState<Record<string, boolean>>({});
   const [providerInputs, setProviderInputs] = useState<Record<string, string>>({});
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
@@ -12019,12 +12082,8 @@ export function SettingsPage() {
       .then((data: any) => {
         if (data) {
           setSettings((prev: any) => ({ ...prev, ...data }));
-          if (data.personality) setPersonality(data.personality);
           if (data.providerKeys) setProviderKeys(data.providerKeys);
-          // Load user avatar from platform (overrides local if present).
-          // Ava avatar is brand-locked — `data.ai_avatar` from the
-          // platform is intentionally ignored.
-          if (data.user_avatar) { setUserAvatar(data.user_avatar); localStorage.setItem('ava-ide-user-avatar', data.user_avatar); }
+          // User avatar now loads on the Ava's Style (Personality) page.
         }
       })
       .catch(() => {});
@@ -12151,90 +12210,9 @@ export function SettingsPage() {
           })}
         </div>
 
-        {/* ── Group: General (sec 1+2) ──────────────────────────── */}
-        <div style={{ display: settingsTab === 'general' ? 'contents' : 'none' }}>
-        {/* 1. Your AI */}
-        <div style={sLabel}>{t('dash.settings.section.your_ai')}</div>
-        <div style={{
-          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
-          padding: '18px 20px', marginBottom: 16,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: '50%',
-                background: 'rgba(168,85,247,0.20)', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#a855f7',
-              }}>
-                {(personality?.name || 'A')[0].toUpperCase()}
-              </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Ava</div>
-                <div style={{ fontSize: 11, color: '#6c7086' }}>
-                  {personality ? `${personality.tone} / ${personality.energy} / ${personality.style}` : t('dash.settings.default_personality')}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Avatars */}
-        <div style={sLabel}>{t('dash.settings.section.avatars')}</div>
-        <div style={{
-          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
-          padding: '18px 20px', marginBottom: 16,
-        }}>
-          <div style={{ display: 'flex', gap: 32 }}>
-            {/* User Avatar */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>{t('dash.settings.avatar_you')}</div>
-              <div
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.onchange = () => {
-                    const file = input.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => saveAvatar('user', reader.result as string);
-                    reader.readAsDataURL(file);
-                  };
-                  input.click();
-                }}
-                style={{
-                  width: 64, height: 64, borderRadius: '50%', cursor: 'pointer',
-                  border: '2px dashed rgba(168,85,247,0.3)',
-                  background: userAvatar ? 'transparent' : 'rgba(10, 6, 18, 0.8)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  overflow: 'hidden', position: 'relative',
-                }}
-                title={t('dash.settings.avatar_upload_hint')}
-              >
-                {userAvatar ? (
-                  <img src={userAvatar} alt={t('dash.settings.avatar_you')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-                  </svg>
-                )}
-              </div>
-              {userAvatar && (
-                <button onClick={() => removeAvatar('user')}
-                  style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>{t('dash.settings.remove')}</button>
-              )}
-            </div>
-
-            {/* AI (Ava) avatar upload removed — Ava's image is brand-locked
-                to packages/core/assets/ava-avatar.jpeg. Operator can set
-                their own avatar above; Ava's avatar is fixed across all
-                surfaces so the brand reads consistently in chat. */}
-          </div>
-          <div style={{ fontSize: 11, color: '#45475a', marginTop: 10 }}>{t('dash.settings.avatar_stored_locally')}</div>
-        </div>
-
-
-        </div>{/* /General-1 */}
+        {/* "Your AI" summary + Avatars moved to the Ava's Style (Personality)
+            page — identity now lives in one place. The General tab keeps the
+            Language section below. */}
 
         {/* ── Group: Privacy (sec 3+4) ──────────────────────────── */}
         <div style={{ display: settingsTab === 'privacy' ? 'contents' : 'none' }}>
@@ -13864,7 +13842,8 @@ export function AccountPage() {
   const tabs = [
     { key: 'settings' as const, label: 'Settings' },
     ...(connected ? [{ key: 'billing' as const, label: 'Billing' }] : []),
-    { key: 'connections' as const, label: 'Connections' },
+    // Connections tab hidden for now — being reworked later this week.
+    // Re-enable by restoring: { key: 'connections' as const, label: 'Connections' },
     { key: 'personality' as const, label: "Ava's Style" },
     // Sync tab removed — Ava is local-first; nothing syncs to the cloud.
   ];

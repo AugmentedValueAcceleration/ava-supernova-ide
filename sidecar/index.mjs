@@ -1205,6 +1205,9 @@ async function handleMessage(data) {
               toolCallId: agentEvent.toolCall.id,
               result: truncateResult(agentEvent.result),
               success: agentEvent.success,
+              // Forward metadata so the front-end can act on it — e.g. open the
+              // authored .md in the editor for a live document preview.
+              metadata: agentEvent.metadata,
             });
             break;
           case 'usage':

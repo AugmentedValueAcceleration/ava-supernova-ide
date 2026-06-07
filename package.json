@@ -1,7 +1,7 @@
 {
   "name": "ava-supernova-ide",
   "private": true,
-  "version": "0.22.0",
+  "version": "0.23.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port 1430",
@@ -13,20 +13,22 @@
   },
   "dependencies": {
     "@ava/core": "workspace:*",
+    "@phosphor-icons/react": "^2.1.7",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-deep-link": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-fs": "^2.5.0",
-    "@tauri-apps/plugin-deep-link": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-shell": "^2",
     "@tauri-apps/plugin-updater": "^2.10.0",
     "docx": "^9.5.0",
     "exceljs": "^4.4.0",
-    "@phosphor-icons/react": "^2.1.7",
     "pdf-lib": "^1.17.1",
     "playwright": "^1.58.2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

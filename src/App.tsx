@@ -60,6 +60,17 @@ export default function App() {
     });
   }, [activeFilePath]);
 
+  // Live document preview — the chat dispatches this when Ava authors/edits a
+  // .md (document_author). Open it in the editor; FileViewer renders markdown.
+  useEffect(() => {
+    const onOpenDoc = (e: Event) => {
+      const path = (e as CustomEvent<{ path?: string }>).detail?.path;
+      if (typeof path === 'string') handleFileOpen(path);
+    };
+    window.addEventListener('ava-open-document', onOpenDoc);
+    return () => window.removeEventListener('ava-open-document', onOpenDoc);
+  }, [handleFileOpen]);
+
   const toggleActivity = useCallback((item: ActivityItem) => {
     // Keep dashboard page visible — activity bar only controls the sidebar panel
 
