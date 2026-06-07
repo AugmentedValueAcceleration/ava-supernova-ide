@@ -4414,7 +4414,7 @@ export function AvaChatPage() {
                   // them up the moment the right keys are present
                   // (Maestro=Qwen, Supernova=DeepSeek+Qwen, Aurora=Mistral).
                   const orchestrated = [
-                    { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: 'Aurora — Mistral-only three-tier EU stack. Large 3 coordinator + heavy specialists, Medium 3.5 for Builder + mid-tier + vision + long-form, Small 4 at the intent gate. Stays inside European infrastructure.' },
+                    { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: 'Aurora — Mistral-only three-tier EU stack. Medium 3.5 leads (coordinator + Builder + vision + deep specialists), Small 4 carries the volume (chat, long-context, brainstorm, intent gate), Large 3 is the heavy reserve. Stays inside European infrastructure.' },
                     { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova', enabled: modeAvailability.supernova, title: 'Supernova — DeepSeek V4 Pro coordinator + V4 Flash specialists with Qwen builders. Heavy multi-step work.' },
                     { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   enabled: modeAvailability.maestro,   title: 'Maestro — single Qwen 3.6 Plus conductor. Daily work, predictable cost.' },
                   ].map(o => ({ ...o, subtitle: modeSubtitle(o.modeId, modeAvailability, modeState) }));

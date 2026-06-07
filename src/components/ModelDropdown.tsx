@@ -41,7 +41,7 @@ const ORCHESTRATED: { id: string; modeId: ModeId; label: string; title: string }
     id: 'aurora',
     modeId: 'aurora',
     label: '✦ Aurora',
-    title: 'Aurora — Mistral-only EU stack. Three-tier fleet: Mistral Large 3 coordinator + heavy specialists, Mistral Medium 3.5 for Builder + mid-tier + vision + long-form, Mistral Small 4 at the intent gate. EU-only data residency, GDPR-strict, open weights.',
+    title: 'Aurora — Mistral-only EU stack. Three-tier fleet: Mistral Medium 3.5 leads (coordinator + Builder + vision + deep specialists), Mistral Small 4 carries the volume (chat, long-context, brainstorm, intent gate), Mistral Large 3 is the heavy reserve. EU-only data residency, GDPR-strict, open weights.',
   },
   {
     id: 'supernova',

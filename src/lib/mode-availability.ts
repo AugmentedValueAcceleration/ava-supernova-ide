@@ -9,11 +9,12 @@
 //   Supernova → DeepSeek + Qwen ensemble (DeepSeek V4 Pro coordinator
 //               + V4 Flash mid-tier; Qwen builder + light + vision +
 //               long-form).
-//   Aurora    → Mistral-only EU stack (Mistral Large 3 + Small 4).
+//   Aurora    → Mistral-only EU stack (Medium 3.5 lead + Small 4
+//               workhorse + Large 3 reserve).
 //
-// Plan users get Maestro live everywhere; Aurora + Supernova are
-// admin-gated until DeepSeek/Mistral enterprise pricing finalises.
-// BYOK users unlock each mode the moment they have the relevant keys.
+// All three modes are public (admin gate retired). Any signed-in
+// platform user gets all three; BYOK users unlock each mode the
+// moment they have the relevant keys.
 
 import { useEffect, useState } from 'react';
 import { getPlatformKey } from './api';
