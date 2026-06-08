@@ -57,6 +57,16 @@ try {
   const healthPath = join(__dirname, '..', '..', 'core', 'dist', 'health', 'index.js');
   healthCore = await import(`file://${healthPath.replace(/\\/g, '/')}`);
 }
+
+// Desktop subpath — the five-persona conductor (runDesktopTrajectory) lives
+// here. Drives Desktop Automation Mode turns instead of the regular agent loop.
+let desktopCore;
+try {
+  desktopCore = await import('@ava/core/desktop');
+} catch {
+  const desktopPath = join(__dirname, '..', '..', 'core', 'dist', 'desktop', 'index.js');
+  desktopCore = await import(`file://${desktopPath.replace(/\\/g, '/')}`);
+}
 const { NodeHealthPlanStore } = healthCore;
 
 const {
@@ -903,6 +913,7 @@ async function handleInit(data) {
     globalThis._cwd = cwd;
     globalThis._sharedState = sharedState;
     globalThis._currentModel = resolved.model;
+    globalThis._activeProvider = resolved.provider;
 
     emit({ event: 'ready', model: resolved.model.id, provider: resolved.provider.name });
   } catch (err) {
@@ -910,6 +921,114 @@ async function handleInit(data) {
   } finally {
     initInFlight = false;
   }
+}
+
+// ── Desktop Automation conductor turn ──────────────────────────────────────
+// In Desktop Automation Mode the turn is driven by the five-persona conductor
+// (Scout → Planner → Actor → Verifier → Narrator) instead of the regular agent
+// loop. Narrator lines stream as Ava's message (stream_start/delta/end → done);
+// gated actions reuse the confirm_required card; the turn's abort signal (which
+// the pause / Ctrl+Alt+K interrupt fires) stops it cleanly. isRunning /
+// currentAbort are owned by the caller (handleMessage) and cleared on return.
+async function runDesktopConductorTurn(task, signal) {
+  const provider = globalThis._activeProvider;
+  const model = globalThis._currentModel;
+  if (!provider || !model) {
+    emitError('No model available for Desktop Automation Mode.');
+    emit({ event: 'done', content: '' });
+    return;
+  }
+
+  const ss = globalThis._sharedState || {};
+  const providers = {
+    uia: ss.uiaProvider,
+    input: ss.inputProvider,
+    browser: ss.browserProvider,
+    appLauncher: ss.appLauncherProvider,
+  };
+
+  // Planner + Verifier are one-shot completions on the active model.
+  const callModel = async ({ systemPrompt, userContent }) => {
+    const resp = await provider.createCompletion({
+      model: model.id,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+      temperature: 0.2,
+      max_tokens: 1500,
+    }, signal);
+    return {
+      text: resp?.choices?.[0]?.message?.content ?? '',
+      tokensIn: resp?.usage?.prompt_tokens ?? 0,
+      tokensOut: resp?.usage?.completion_tokens ?? 0,
+    };
+  };
+
+  // Reuse the existing confirm card + pendingConfirmations resolution.
+  const requestApproval = ({ action, classification, element }) => {
+    const id = crypto.randomUUID().slice(0, 8);
+    emit({
+      event: 'confirm_required',
+      id,
+      toolName: 'desktop_action',
+      toolCategory: 'desktop',
+      args: {
+        kind: action.kind,
+        target: element?.name || action.target || '',
+        risk: classification.riskClass,
+        reasoning: action.reasoning,
+      },
+    });
+    return new Promise((resolve) => {
+      pendingConfirmations.set(id, { resolve: (v) => resolve(!!v), toolName: 'desktop_action' });
+    });
+  };
+
+  // Narrator lines + per-step lines stream as Ava's message content.
+  let fullContent = '';
+  const pushLine = (line) => {
+    if (!line) return;
+    const chunk = `${line}\n`;
+    fullContent += chunk;
+    emit({ event: 'stream_delta', content: chunk });
+  };
+  const conductorEmit = (ev) => {
+    if (ev.type === 'narrate') pushLine(ev.line);
+    else if (ev.type === 'step') {
+      pushLine(ev.step?.userUpdate?.line);
+      if (ev.header) emit({ event: 'desktop_budget', header: ev.header });
+    } else if (ev.type === 'error') {
+      emit({ event: 'agent_error', message: ev.message });
+    }
+  };
+
+  emit({ event: 'stream_start' });
+  try {
+    await desktopCore.runDesktopTrajectory({
+      task,
+      permissionLevel: ss.desktopPermissionLevel ?? 'ask',
+      whitelist: Array.isArray(ss.desktopWhitelist) ? ss.desktopWhitelist : [],
+      privilegedOptIn: !!ss.desktopPrivilegedOptIn,
+      providers,
+      callModel,
+      requestApproval,
+      emit: conductorEmit,
+      signal,
+    });
+  } catch (err) {
+    emit({ event: 'agent_error', message: err?.message || String(err) });
+  }
+  emit({ event: 'stream_end' });
+
+  const finalContent = fullContent.trim() || 'Done.';
+  emit({ event: 'done', content: finalContent });
+
+  // Keep chat history coherent for the next turn (best-effort).
+  try {
+    conversation?.addUserMessage?.(task);
+    conversation?.addAssistantMessage?.(finalContent);
+  } catch { /* conversation API mismatch — non-fatal */ }
 }
 
 async function handleMessage(data) {
@@ -984,6 +1103,11 @@ async function handleMessage(data) {
   // the user see the first result?") burning hundreds of thinking tokens
   // per turn on state she could just be told. Kept outside the main
   // try/catch so a UIA hiccup never blocks the agent.
+  // NOTE: the five-persona conductor (runDesktopConductorTurn) is built + smoke-
+  // tested but NOT wired live yet — it crashed walking the IDE's own window and
+  // lacks an app-launch action. Desktop mode falls back to the existing agent
+  // flow until the conductor is completed + tested. Re-enable the branch here.
+
   let desktopStatePrefix = '';
   if (currentMode === 'desktop' && typeof data.content === 'string') {
     desktopStatePrefix = await captureDesktopContext();
@@ -1625,6 +1749,7 @@ async function handleSetModel(data) {
 
     sharedState.activeModelId = resolved.model.id;
     globalThis._currentModel = resolved.model;
+    globalThis._activeProvider = resolved.provider;
 
     // Vision bridge for the newly-selected model (no-op if it sees images).
     const visionResolved = providerRegistry.resolveModel('platform:qwen3.5-omni-plus')

@@ -2151,6 +2151,18 @@ export function AvaChatPage() {
   // each mutative tool (default), 'drive' = run reversible plan steps
   // silently after one approval; irreversibles always re-prompt regardless.
   const [desktopPermLevel, setDesktopPermLevel] = useDesktopPermLevel();
+  // Desktop control-deck collapse — collapsed shows just Permission (left) +
+  // local label (right); expanded adds the meaning line, quick-starts, and the
+  // kill-switch hint. Persisted so it remembers the operator's preference.
+  const [deckCollapsed, setDeckCollapsed] = useState<boolean>(() => {
+    // Collapsed by default; only expanded if the operator has explicitly opened it before.
+    try { const v = localStorage.getItem('ava-ide-desktop-deck-collapsed'); return v === null ? true : v === '1'; } catch { return true; }
+  });
+  const toggleDeck = () => setDeckCollapsed(c => {
+    const next = !c;
+    try { localStorage.setItem('ava-ide-desktop-deck-collapsed', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
   // Desktop-mode model-capability warning — set on entering desktop mode
   // while the active coordinator isn't desktop-capable. The modal offers
   // one-click switch to a recommended coordinator; no silent autoswitch.
@@ -5741,6 +5753,119 @@ export function AvaChatPage() {
             )}
           </div>
 
+          {/* Usage warning banner — top of the composer, below the header, so a
+             credit / quota notice never inflates the input box height. */}
+          {usageWarning.level !== 'none' && usageWarning.message && (
+            <div style={{
+              marginBottom: 8, padding: '6px 10px', borderRadius: 8, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6,
+              background: usageWarning.level === 'exhausted' ? 'rgba(239,68,68,0.12)' : usageWarning.level === 'critical' ? 'rgba(249,115,22,0.12)' : 'rgba(234,179,8,0.08)',
+              color: usageWarning.level === 'exhausted' ? '#f38ba8' : usageWarning.level === 'critical' ? '#fab387' : '#f9e2af',
+              border: `1px solid ${usageWarning.level === 'exhausted' ? 'rgba(239,68,68,0.2)' : usageWarning.level === 'critical' ? 'rgba(249,115,22,0.2)' : 'rgba(234,179,8,0.15)'}`,
+            }}>
+              <span>{usageWarning.level === 'exhausted' ? '⛔' : usageWarning.level === 'critical' ? '⚠' : '○'}</span>
+              <span style={{ flex: 1 }}>{usageWarning.message}</span>
+            </div>
+          )}
+
+          {/* Desktop Automation control deck — a purpose-built surface for
+             driving the machine: trust posture, always-visible permission
+             meaning, quick-starts, and the kill-switch. Stacks above the input
+             instead of cramming everything into the strip. */}
+          {mode === 'desktop' && (() => {
+            const LEVELS: Array<{ id: 'watch' | 'ask' | 'drive'; label: string }> = [
+              { id: 'watch', label: 'Watch' },
+              { id: 'ask', label: 'Ask' },
+              { id: 'drive', label: 'Drive' },
+            ];
+            const MEANING: Record<string, string> = {
+              watch: 'Watch · she describes each step — you stay on the mouse and keyboard. Nothing clicks, types, or launches.',
+              ask: 'Ask · she acts, but every click, keystroke and app launch waits for your OK.',
+              drive: 'Drive · reversible steps run after one approval; irreversibles (Send, Pay, Delete…) always ask.',
+            };
+            const QUICK: Array<{ label: string; fill: string }> = [
+              { label: 'Open an app', fill: 'Open Notepad' },
+              { label: 'Fill a form', fill: 'Fill in the form on screen: ' },
+              { label: 'Tidy my files', fill: 'Organise the files in this folder: ' },
+              { label: 'Research → paste', fill: 'Search the web and paste a short summary into the open document: ' },
+            ];
+            const labelStyle: React.CSSProperties = { fontSize: 10, color: '#7f849c', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, flexShrink: 0 };
+            return (
+              <div style={{
+                marginBottom: 8, padding: '9px 12px', borderRadius: 12,
+                background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.16)',
+                display: 'flex', flexDirection: 'column', gap: 9,
+              }}>
+                {/* Top bar — ALWAYS visible: Permission (left) · local label + collapse toggle (right) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={labelStyle}>Permission</span>
+                    <div style={{ display: 'flex', gap: 0, padding: 2, borderRadius: 8, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(168,85,247,0.18)' }}>
+                      {LEVELS.map(l => {
+                        const active = desktopPermLevel === l.id;
+                        return (
+                          <button key={l.id} onClick={() => setDesktopPermLevel(l.id)}
+                            style={{
+                              padding: '3px 12px',
+                              background: active ? (l.id === 'drive' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, #a855f7, #7c3aed)') : 'transparent',
+                              border: 'none', borderRadius: 6, color: active ? '#fff' : '#9399b2',
+                              fontSize: 10, fontWeight: active ? 700 : 500, cursor: 'pointer',
+                              letterSpacing: 0.3, textTransform: 'uppercase', transition: 'background 0.15s, color 0.15s',
+                            }}>
+                            {l.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 10, color: '#7f849c', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                      <span>🔒</span> local · stays on this device
+                    </span>
+                    <button onClick={toggleDeck} title={deckCollapsed ? 'Show options' : 'Collapse'}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, padding: 0, borderRadius: 5, border: '1px solid rgba(168,85,247,0.2)', background: 'rgba(168,85,247,0.08)', color: '#9399b2', cursor: 'pointer', flexShrink: 0 }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+                        style={{ transform: deckCollapsed ? 'none' : 'rotate(180deg)', transition: 'transform 0.2s' }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {!deckCollapsed && (
+                  <>
+                    {/* Active permission meaning — always visible while expanded */}
+                    <span style={{ fontSize: 11, color: desktopPermLevel === 'drive' ? '#fab387' : '#9399b2', lineHeight: 1.4 }}>
+                      {MEANING[desktopPermLevel]}
+                    </span>
+
+                    {/* Quick-starts — kill the blank-box problem */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={labelStyle}>Try</span>
+                      {QUICK.map(q => (
+                        <button key={q.label} onClick={() => { setInput(q.fill); textareaRef.current?.focus(); }}
+                          style={{
+                            padding: '3px 10px', borderRadius: 999, fontSize: 11, cursor: 'pointer',
+                            background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)', color: '#cdd6f4',
+                            transition: 'background 0.15s',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.2)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}>
+                          {q.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Kill-switch — the brake, on the dashboard */}
+                    <div style={{ fontSize: 10, color: '#6c7086', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <kbd style={{ fontFamily: 'monospace', fontSize: 9, padding: '1px 5px', borderRadius: 4, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(168,85,247,0.2)', color: '#9399b2' }}>Ctrl+Alt+K</kbd>
+                      stops her instantly
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Input container with mode selector inside */}
           <div style={{
             display: 'flex', alignItems: 'flex-end', gap: 8,
@@ -5810,74 +5935,13 @@ export function AvaChatPage() {
               )}
             </div>
 
-            {/* Desktop permission-level picker — visible only in desktop mode.
-               Three-state pill (Watch · Ask · Drive). Drives sharedState on
-               the sidecar, which in turn drives the safety gate's approval
-               decision and the system-prompt block Ava reads. The operator
-               always sees what level they're in; switching is one click. */}
-            {mode === 'desktop' && (() => {
-              const LEVELS: Array<{ id: 'watch' | 'ask' | 'drive'; label: string; tip: string }> = [
-                { id: 'watch', label: 'Watch', tip: 'Ava describes what she would do. You stay in control of the mouse and keyboard. Safest mode.' },
-                { id: 'ask',   label: 'Ask',   tip: 'Ava acts. You approve every click, keystroke, and app launch before it fires. Default.' },
-                { id: 'drive', label: 'Drive', tip: 'Reversible plan steps run silently after one approval. Irreversibles (Send, Pay, Delete, destructive combos) still ask each time.' },
-              ];
-              return (
-                <div
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0, alignSelf: 'center',
-                    padding: 2, borderRadius: 8, background: 'rgba(168,85,247,0.06)',
-                    border: '1px solid rgba(168,85,247,0.18)',
-                  }}
-                >
-                  {LEVELS.map(l => {
-                    const active = desktopPermLevel === l.id;
-                    return (
-                      <Tooltip key={l.id} content={l.tip}>
-                        <button
-                          onClick={() => setDesktopPermLevel(l.id)}
-                          style={{
-                            padding: '3px 10px',
-                            background: active
-                              ? (l.id === 'drive'
-                                  ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-                                  : 'linear-gradient(135deg, #a855f7, #7c3aed)')
-                              : 'transparent',
-                            border: 'none',
-                            borderRadius: 6,
-                            color: active ? '#fff' : '#9399b2',
-                            fontSize: 10,
-                            fontWeight: active ? 700 : 500,
-                            cursor: 'pointer',
-                            letterSpacing: 0.3,
-                            textTransform: 'uppercase',
-                            transition: 'background 0.15s, color 0.15s',
-                          }}
-                        >
-                          {l.label}
-                        </button>
-                      </Tooltip>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+            {/* Desktop permission picker moved into the control deck above. */}
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
             >
-              {/* Usage warning banner */}
-              {usageWarning.level !== 'none' && usageWarning.message && (
-                <div style={{
-                  marginBottom: 6, padding: '6px 10px', borderRadius: 8, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6,
-                  background: usageWarning.level === 'exhausted' ? 'rgba(239,68,68,0.12)' : usageWarning.level === 'critical' ? 'rgba(249,115,22,0.12)' : 'rgba(234,179,8,0.08)',
-                  color: usageWarning.level === 'exhausted' ? '#f38ba8' : usageWarning.level === 'critical' ? '#fab387' : '#f9e2af',
-                  border: `1px solid ${usageWarning.level === 'exhausted' ? 'rgba(239,68,68,0.2)' : usageWarning.level === 'critical' ? 'rgba(249,115,22,0.2)' : 'rgba(234,179,8,0.15)'}`,
-                }}>
-                  <span>{usageWarning.level === 'exhausted' ? '\u26D4' : usageWarning.level === 'critical' ? '\u26A0' : '\u25CB'}</span>
-                  <span style={{ flex: 1 }}>{usageWarning.message}</span>
-                </div>
-              )}
+              {/* Usage warning banner moved to the top of the composer (below the header). */}
               {/* Pending attachments preview */}
               {pendingAttachments.length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
