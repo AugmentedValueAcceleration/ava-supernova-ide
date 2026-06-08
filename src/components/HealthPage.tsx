@@ -204,6 +204,10 @@ function RecipesGrid() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<'all' | string>('all');
+  // "From Scratch" — the curated `unprocessed` collection (made entirely from
+  // fresh ingredients, nothing processed). A separate dimension that composes
+  // with the course chips.
+  const [fromScratch, setFromScratch] = useState(false);
   const [view, setView] = useBrowseView();
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -218,6 +222,7 @@ function RecipesGrid() {
         limit: PAGE_SIZE,
         offset: off,
         course: filter === 'all' ? undefined : filter,
+        collection: fromScratch ? 'unprocessed' : undefined,
         q: search.trim() || undefined,
       });
       setItems(r.recipes);
@@ -230,17 +235,36 @@ function RecipesGrid() {
     } finally {
       setLoading(false);
     }
-  }, [filter, search]);
+  }, [filter, fromScratch, search]);
 
   useEffect(() => {
     const timer = setTimeout(() => { void fetchPage(0); }, search ? 300 : 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, search]);
+  }, [filter, fromScratch, search]);
 
   return (
     <div>
       <BrowseToolbar search={search} onSearch={setSearch} placeholder={t('health.browse.search_recipes_placeholder')} view={view} onView={setView} />
+      {/* From Scratch — curated `unprocessed` collection, a separate dimension
+          (rounded pill) that composes with the course chips below. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <button
+          type="button"
+          onClick={() => setFromScratch(v => !v)}
+          title={t('health.browse.from_scratch_hint')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+            padding: '4px 12px', fontSize: 11, fontWeight: 500, borderRadius: 999,
+            border: `1px solid ${fromScratch ? '#a855f7' : '#313244'}`,
+            background: fromScratch ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+            color: fromScratch ? '#c084fc' : '#6c7086',
+            transition: 'all 0.15s',
+          }}
+        >
+          <span aria-hidden>✦</span>{t('health.browse.from_scratch')}
+        </button>
+      </div>
       <FilterRow>
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>{t('health.browse.filter.all')}</FilterChip>
         {COURSES.map(c => (
@@ -414,6 +438,24 @@ function ExerciseCardItem({ ex, view, onOpen }: { ex: HealthExerciseSummary; vie
   );
 }
 
+/** "From Scratch" badge — marks a recipe in the curated `unprocessed`
+ *  collection. `floating` is the absolute variant for the grid card photo. */
+function FromScratchBadge({ floating }: { floating?: boolean }) {
+  const label = t('health.browse.from_scratch');
+  if (floating) {
+    return (
+      <div style={{ position: 'absolute', left: 6, top: 6, zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#a855f7', color: '#fff', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+        <span aria-hidden>✦</span>{label}
+      </div>
+    );
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 999, background: 'rgba(168,85,247,0.15)', color: '#c084fc', fontSize: 9, fontWeight: 500 }}>
+      <span aria-hidden>✦</span>{label}
+    </span>
+  );
+}
+
 function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: View; onOpen: (slug: string) => void }) {
   const footer = r.course || r.origin_country || r.cuisine_name || '';
   const img = r.hero_image_url
@@ -428,7 +470,10 @@ function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: Vie
           <div style={{ minWidth: 0, flex: 1 }}>
             {r.cuisine_name && <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.4, color: '#fbbf24' }}>{r.cuisine_name}</div>}
             <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
-            {r.course && <div style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize', marginTop: 3 }}>{r.course}</div>}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 3 }}>
+              {r.course && <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{r.course}</span>}
+              {r.from_scratch && <FromScratchBadge />}
+            </div>
           </div>
         </div>
       </Card>
@@ -438,6 +483,7 @@ function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: Vie
     <Card onClick={() => onOpen(r.slug)}>
       <div style={{ position: 'relative', aspectRatio: '3 / 2', overflow: 'hidden', background: 'rgba(168,85,247,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {img}
+        {r.from_scratch && <FromScratchBadge floating />}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '66%', background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.3) 50%, transparent)' }} />
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 8 }}>
           {r.cuisine_name && <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: '#fbbf24', marginBottom: 2 }}>{r.cuisine_name}</div>}

@@ -83,6 +83,9 @@ export interface HealthRecipeSummary {
   origin_country: string | null;
   course: string | null;
   hero_image_url: string | null;
+  /** Member of the curated "From Scratch" collection (made entirely from
+   *  fresh ingredients, nothing processed). Drives the filter + card badge. */
+  from_scratch?: boolean;
   status?: HealthSubmissionStatus;
 }
 
@@ -279,6 +282,8 @@ export interface RecipeListParams {
   limit?: number;
   offset?: number;
   course?: string;
+  /** Curated collection slug, e.g. 'unprocessed' (the "From Scratch" filter). */
+  collection?: string;
   q?: string;
 }
 
@@ -292,6 +297,7 @@ export async function loadRecipes(
     offset: String(p.offset ?? 0),
   });
   if (p.course) params.set('course', p.course);
+  if (p.collection) params.set('collection', p.collection);
   if (p.q && p.q.trim()) params.set('q', p.q.trim());
   { const l = getLocale(); if (l && l !== 'en') params.set('locale', l); }
   const data = await healthRequest<{ recipes?: HealthRecipeSummary[]; total?: number }>(
