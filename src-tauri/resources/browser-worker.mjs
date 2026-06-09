@@ -34,9 +34,12 @@ async function ensureChromium() {
   if (browser) { try { await browser.close(); } catch {} browser = null; }
   browser = await chromium.launch({
     headless: false,
-    args: ['--window-size=1280,800', '--no-first-run', '--no-default-browser-check'],
+    // Maximised, and viewport:null below lets the page fill the real window
+    // instead of a letterboxed 1280x800 — Ava's browser should look like a
+    // browser, not a preview pane.
+    args: ['--start-maximized', '--no-first-run', '--no-default-browser-check'],
   });
-  context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  context = await browser.newContext({ viewport: null });
   page = await context.newPage();
 }
 
@@ -77,38 +80,45 @@ async function handle(cmd) {
 
       case 'snapshot': {
         await ensureChromium();
-        // Structured DOM snapshot Ava can reason about — selectors included
-        // so browser_click can target the exact element without re-querying.
+        // A click may have started a navigation — wait for the new document
+        // before reading it, or the snapshot captures a half-loaded (often
+        // empty) DOM. Best-effort: a page that never settles still snapshots.
+        await page.waitForLoadState('domcontentloaded', { timeout: 8_000 }).catch(() => {});
+        // Structured DOM snapshot Ava can reason about. Each element is
+        // tagged with data-ava-id at capture time and the selector targets
+        // that tag — exact and unambiguous. (The old `a:nth-of-type(i)`
+        // selectors were wrong CSS: nth-of-type counts within the PARENT,
+        // not the document, so they routinely pointed at nothing.)
         const snapshot = await page.evaluate(() => {
           const snip = (s, n = 120) => (s || '').trim().slice(0, n);
+          let nextId = 0;
+          const tag = (el) => {
+            el.setAttribute('data-ava-id', String(nextId));
+            return `[data-ava-id="${nextId++}"]`;
+          };
           const links = Array.from(document.querySelectorAll('a'))
+            .filter(a => snip(a.textContent))
             .slice(0, 30)
-            .map((a, i) => ({
-              selector: `a:nth-of-type(${i + 1})`,
+            .map(a => ({
+              selector: tag(a),
               text: snip(a.textContent),
               href: a.getAttribute('href') ?? '',
-            }))
-            .filter(l => l.text);
+            }));
           const buttons = Array.from(document.querySelectorAll('button'))
             .slice(0, 30)
-            .map((b, i) => ({
-              selector: b.id ? `#${b.id}` : `button:nth-of-type(${i + 1})`,
+            .map(b => ({
+              selector: tag(b),
               text: snip(b.textContent),
               name: b.getAttribute('name') ?? '',
             }));
           const inputs = Array.from(document.querySelectorAll('input, textarea'))
             .slice(0, 30)
-            .map((inp, i) => {
-              const name = inp.getAttribute('name') ?? '';
-              const id = inp.getAttribute('id') ?? '';
-              const selector = id ? `#${id}` : name ? `${inp.tagName.toLowerCase()}[name=${JSON.stringify(name)}]` : `${inp.tagName.toLowerCase()}:nth-of-type(${i + 1})`;
-              return {
-                selector,
-                type: inp.getAttribute('type') ?? inp.tagName.toLowerCase(),
-                name,
-                placeholder: inp.getAttribute('placeholder') ?? '',
-              };
-            });
+            .map(inp => ({
+              selector: tag(inp),
+              type: inp.getAttribute('type') ?? inp.tagName.toLowerCase(),
+              name: inp.getAttribute('name') ?? '',
+              placeholder: inp.getAttribute('placeholder') ?? '',
+            }));
           return {
             title: document.title,
             url: window.location.href,
@@ -119,6 +129,18 @@ async function handle(cmd) {
           };
         });
         return { id: cmd.id, ok: true, result: snapshot, elapsedMs: elapsed() };
+      }
+
+      case 'scroll': {
+        await ensureChromium();
+        const direction = String(cmd.params?.direction ?? 'down');
+        const amount = Number(cmd.params?.amount) || 600;
+        const [dx, dy] = direction === 'up' ? [0, -amount]
+          : direction === 'left' ? [-amount, 0]
+          : direction === 'right' ? [amount, 0]
+          : [0, amount];
+        await page.mouse.wheel(dx, dy);
+        return { id: cmd.id, ok: true, result: { direction, amount }, elapsedMs: elapsed() };
       }
 
       case 'screenshot': {

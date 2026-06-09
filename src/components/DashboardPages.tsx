@@ -2008,7 +2008,7 @@ export function AvaChatPage() {
     // Platform Mistral (Aurora's fleet, available on platform)
     'mistral-large-3-platform', 'mistral-small-4-platform',
     // Anthropic
-    'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+    'claude-fable-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
     // Kimi
     'kimi-k2.6', 'kimi-k2.5',
     // Mistral
@@ -2030,7 +2030,7 @@ export function AvaChatPage() {
     Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5.1', name: 'GLM-5.1' }, { id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4.7', name: 'GLM-4.7' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
     Mistral: [{ id: 'mistral-large-3', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
-    Anthropic: [{ id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
+    Anthropic: [{ id: 'claude-fable-5', name: 'Claude Fable 5' }, { id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
   };
 
   const [platformModels, setPlatformModels] = useState<Record<string, { id: string; name: string }[]> | null>(null);
@@ -5225,13 +5225,34 @@ export function AvaChatPage() {
             case 'browser_click':          return `Click ${(args.target_text as string) || (args.selector as string) || '?'}`;
             case 'browser_type':           return `Type into field: "${String(args.text || '').slice(0, 80)}"`;
             case 'browser_close':          return 'Close the browser';
+            // Conductor cards (the five-persona desktop wave) — args are
+            // {kind, target, risk, reasoning}. Spoken in plain words; the
+            // technical detail stays in the collapsed "details" section.
+            case 'desktop_action': {
+              const target = String(args.target || '').slice(0, 120);
+              switch (String(args.kind || '')) {
+                case 'run_task':     return `Do this for you: "${target}"`;
+                case 'click':        return `Click ${target ? `"${target}"` : 'an element'}`;
+                case 'double_click': return `Double-click ${target ? `"${target}"` : 'an element'}`;
+                case 'right_click':  return `Right-click ${target ? `"${target}"` : 'an element'}`;
+                case 'type':         return `Type ${target ? `into "${target}"` : 'on the keyboard'}`;
+                case 'key':          return `Press a key${target ? ` (${target})` : ''}`;
+                case 'scroll':       return 'Scroll the page';
+                case 'navigate':     return `Open ${target || 'a web page'} in Ava's browser`;
+                case 'launch':       return `Open the app ${target ? `"${target}"` : ''}`;
+                default:             return target ? `${String(args.kind || 'Act')} — ${target}` : String(args.kind || 'Act on your screen');
+              }
+            }
             default:                       return null;
           }
         })();
         // Risk badge colour by class — irreversible / privileged are the
-        // ones the user really needs to notice.
+        // ones the user really needs to notice. Conductor cards carry the
+        // class in args.risk (no cls object).
+        const conductorRisk = pendingConfirm.toolName === 'desktop_action'
+          ? (pendingConfirm.args?.risk as string | undefined) : undefined;
         const riskColour = (() => {
-          switch (cls?.riskClass) {
+          switch (cls?.riskClass ?? conductorRisk) {
             case 'mutative-irreversible': return { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.45)', fg: '#f87171' };
             case 'privileged':            return { bg: 'rgba(239,68,68,0.18)', border: 'rgba(239,68,68,0.6)',  fg: '#ef4444' };
             case 'mutative-reversible':   return { bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.35)', fg: '#eab308' };
@@ -5293,6 +5314,19 @@ export function AvaChatPage() {
               )}
             </div>
           </div>
+
+          {/* Conductor card body — why, in plain words. Techy detail stays
+              in the collapsed details section below. */}
+          {pendingConfirm.toolName === 'desktop_action' && !!pendingConfirm.args?.reasoning && (
+            <div style={{ fontSize: 12.5, color: '#bac2de', lineHeight: 1.55, marginBottom: 8 }}>
+              {String(pendingConfirm.args.reasoning)}
+              {conductorRisk === 'mutative-irreversible' && (
+                <div style={{ marginTop: 6, color: '#f87171', fontWeight: 600 }}>
+                  This can't be undone once it's done — that's why Ava is asking.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Plan card body — summary + numbered steps */}
           {isPlanCard && (
@@ -5778,9 +5812,9 @@ export function AvaChatPage() {
               { id: 'drive', label: 'Drive' },
             ];
             const MEANING: Record<string, string> = {
-              watch: 'Watch · she describes each step — you stay on the mouse and keyboard. Nothing clicks, types, or launches.',
-              ask: 'Ask · she acts, but every click, keystroke and app launch waits for your OK.',
-              drive: 'Drive · reversible steps run after one approval; irreversibles (Send, Pay, Delete…) always ask.',
+              watch: 'Watch · approve the task once, then watch Ava work it step by step, narrated as she goes. Anything that can\'t be undone (Send, Pay, Delete…) still asks.',
+              ask: 'Ask · approve the task once, then Ava handles the steps herself. Anything that can\'t be undone (Send, Pay, Delete…) still asks.',
+              drive: 'Drive · Ava just goes — no upfront card. Anything that can\'t be undone still always asks.',
             };
             const QUICK: Array<{ label: string; fill: string }> = [
               { label: 'Open an app', fill: 'Open Notepad' },
@@ -12841,9 +12875,9 @@ export function SettingsPage() {
               })}
             </div>
             <div style={{ fontSize: 11, color: '#9399b2', marginTop: 8, lineHeight: 1.5 }}>
-              {desktopPermLevel === 'watch' && 'Ava describes what she would do — you stay in control of the mouse and keyboard. She never clicks, types, or launches anything.'}
-              {desktopPermLevel === 'ask'   && 'Ava acts on your screen; every click, keystroke, and app launch waits for your confirmation.'}
-              {desktopPermLevel === 'drive' && 'Reversible plan steps run silently after one approval. Irreversible actions still ask each time.'}
+              {desktopPermLevel === 'watch' && 'Approve the task once, then watch Ava work it step by step — every action narrated as it happens. Anything that can\'t be undone (Send, Pay, Delete…) still asks individually.'}
+              {desktopPermLevel === 'ask'   && 'Approve the task once up front, then Ava handles the steps without interrupting you. Anything that can\'t be undone (Send, Pay, Delete…) still asks individually.'}
+              {desktopPermLevel === 'drive' && 'Ava just goes — no upfront card. Anything that can\'t be undone still always asks.'}
             </div>
           </div>
 

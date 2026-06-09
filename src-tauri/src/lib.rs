@@ -760,6 +760,11 @@ fn focus_window(name: String) -> Result<String, String> {
 /// Click a UI element by name — finds it via UIA and clicks its centre.
 #[tauri::command]
 fn click_element(name: String) -> Result<UIElementInfo, String> {
+    // Same focus-restore as type_text/key_press: an approval card pulls the
+    // IDE to the foreground, and both the element search and the click below
+    // operate on the foreground window — without this, post-approval clicks
+    // hunt for the element inside the IDE instead of the target app.
+    restore_last_target();
     let element = find_ui_element(name)?;
 
     // Click the centre of the element

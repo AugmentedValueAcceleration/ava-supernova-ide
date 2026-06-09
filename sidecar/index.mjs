@@ -17,6 +17,7 @@ import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { appendFile } from 'node:fs/promises';
 
 // ─── Resolve @ava/core ──────────────────────────────────────────────────────
 // In monorepo: workspace link. Standalone: relative path fallback.
@@ -249,13 +250,26 @@ function substituteSecretHandles(args) {
  * response. The frontend calls the Tauri Rust command and sends back the
  * result.
  */
+// Per-action timeout envelopes. Browser lifecycle actions are cold-start
+// heavy: browser_launch spawns node + imports Playwright (~100MB of JS),
+// and the first navigate boots Chromium itself — on a loaded machine that
+// chain legitimately takes 20-40s. A flat 15s made the sidecar give up while
+// the launch was still succeeding underneath it. Quick UIA actions keep the
+// tight envelope so a genuinely-hung action still fails fast.
+const DESKTOP_TIMEOUTS = {
+  browser_launch: 60000,
+  browser_send: 45000,   // navigate/snapshot ride this — page loads + first Chromium boot
+  browser_close: 20000,
+};
+
 function desktopRequest(action, args = {}) {
   return new Promise((resolve, reject) => {
     const requestId = `du_${++desktopRequestId}`;
+    const timeoutMs = DESKTOP_TIMEOUTS[action] ?? 15000;
     const timeout = setTimeout(() => {
       pendingDesktop.delete(requestId);
       reject(new Error(`Desktop automation request timed out: ${action}`));
-    }, 15000); // 15s timeout for any single action
+    }, timeoutMs);
 
     pendingDesktop.set(requestId, {
       resolve: (result) => { clearTimeout(timeout); resolve(result); },
@@ -577,8 +591,12 @@ async function handleInit(data) {
         return { url: raw?.url ?? '', title: raw?.title ?? '', elements };
       },
       async click(selector) { await browserSend('click', { selector }); },
-      async type(text) { await browserSend('type', { text }); },
+      async type(text, selector) { await browserSend('type', selector ? { text, selector } : { text }); },
       async key(key) { await browserSend('key', { key }); },
+      async scroll(direction, amount) { await browserSend('scroll', { direction, amount }); },
+      // Perception must only snapshot an ALREADY-open browser — snapshot()
+      // would otherwise launch Chromium as a side effect of looking.
+      isLive() { return browserLaunched; },
       async close() {
         try { await desktopRequest('browser_close'); }
         catch (err) {
@@ -974,9 +992,14 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
   // Fold Path B (standing rules + learned patterns) into the task the Planner
   // reasons over, so it obeys the machine's rules and reuses what worked. The
   // live screen state is NOT folded in — Scout re-captures it fresh each step.
+  // CRITICAL framing: recalled memories describe PAST sessions. Without the
+  // banner below, the Planner reads a recalled failure log as if it were the
+  // current trajectory's history and declares "stuck" before acting (observed:
+  // it cited the previous turn's steps as "three consecutive steps with no
+  // progress" on step 1 of a fresh task).
   const cleanTask = cleanDesktopTask(task);
   const conductorTask = contextPrefix
-    ? `${contextPrefix}\n\n[Your task]\n${cleanTask}`
+    ? `[Notes from PREVIOUS sessions — background knowledge only. These are NOT steps of the current task. The current trajectory starts fresh: zero actions have been taken yet. Any element ids or selectors mentioned in these notes are EXPIRED snapshots — never reuse them; always target elements from the CURRENT screen list.]\n\n${contextPrefix}\n\n[Your task — starting now, from step 1]\n${cleanTask}`
     : cleanTask;
 
   const ss = globalThis._sharedState || {};
@@ -1015,7 +1038,10 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
       toolCategory: 'desktop',
       args: {
         kind: action.kind,
-        target: element?.name || action.target || '',
+        // Non-targeted actions still deserve a subject on the card: navigate
+        // shows its URL, launch its app, type its text, key its key.
+        target: element?.name || action.target
+          || String(action.params?.url ?? action.params?.app ?? action.params?.text ?? action.params?.key ?? ''),
         risk: classification.riskClass,
         reasoning: action.reasoning,
       },
@@ -1044,11 +1070,46 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
   };
 
   emit({ event: 'stream_start' });
+
+  // Chain approval — Watch and Ask confirm the TASK once, up front. NO mode
+  // asks per step: mid-run approval cards steal foreground from the very
+  // window being automated, breaking the trajectory they're gating. After
+  // the chain is approved, reversible actions flow; irreversible actions
+  // STILL confirm individually in EVERY mode — that gate never graduates.
+  // Declining stops before anything is touched. Drive skips the upfront card.
+  let permissionLevel = ss.desktopPermissionLevel ?? 'ask';
+  if (permissionLevel !== 'drive') {
+    const chainId = crypto.randomUUID().slice(0, 8);
+    emit({
+      event: 'confirm_required',
+      id: chainId,
+      toolName: 'desktop_action',
+      toolCategory: 'desktop',
+      args: {
+        kind: 'run_task',
+        target: cleanTask.slice(0, 160),
+        risk: 'mutative-reversible',
+        reasoning: 'Approve this desktop task as a whole — Ava then runs the steps without interrupting you. Anything irreversible (send, pay, delete…) will still ask individually.',
+      },
+    });
+    const approved = await new Promise((resolve) => {
+      pendingConfirmations.set(chainId, { resolve: (v) => resolve(!!v), toolName: 'desktop_action' });
+    });
+    if (!approved) {
+      const declineMsg = 'Understood — leaving the desktop untouched.';
+      emit({ event: 'stream_delta', content: declineMsg });
+      emit({ event: 'stream_end' });
+      emit({ event: 'done', content: declineMsg });
+      return null;
+    }
+    permissionLevel = 'drive';
+  }
+
   let trajectory = null;
   try {
     trajectory = await desktopCore.runDesktopTrajectory({
       task: conductorTask,
-      permissionLevel: ss.desktopPermissionLevel ?? 'ask',
+      permissionLevel,
       whitelist: Array.isArray(ss.desktopWhitelist) ? ss.desktopWhitelist : [],
       privilegedOptIn: !!ss.desktopPrivilegedOptIn,
       providers,
@@ -1056,7 +1117,13 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
       requestApproval,
       emit: conductorEmit,
       signal,
-      log: (line) => console.error(`[desktop-conductor] ${line}`),
+      // Trace to a real file — the sidecar's stderr doesn't surface in the
+      // Tauri dev output, so console.error alone leaves us blind on WHY a
+      // trajectory chose what it chose. Fire-and-forget append; never blocks.
+      log: (line) => {
+        console.error(`[desktop-conductor] ${line}`);
+        appendFile(join(AVA_HOME, 'desktop-conductor.log'), `${new Date().toISOString()} ${line}\n`).catch(() => {});
+      },
     });
   } catch (err) {
     emit({ event: 'agent_error', message: err?.message || String(err) });
@@ -1087,10 +1154,21 @@ async function distilDesktopTrajectory(trajectory, rawContent) {
     const cleanTask = cleanDesktopTask(rawContent);
     const launchStep = trajectory.steps.find(s => s.proposedAction?.kind === 'launch');
     const appName = launchStep?.proposedAction?.params?.app || 'the machine';
+    // Memories must store INTENT, never selectors: element ids are snapshot-
+    // scoped and recalling them poisons future runs (observed: the Planner
+    // clicking a dead [data-ava-id] from memory while live elements sat in
+    // front of it). Resolve to the element's human name; drop unresolvable
+    // selector-ish targets entirely.
+    const selectorLike = /^\[|^#|^\./i;
+    const isSelectorish = (t) => selectorLike.test(t) || /data-ava-id|^web-\d+$|nth-of-type/i.test(t);
     const sequence = trajectory.steps.map((s, i) => {
       const a = s.proposedAction || {};
       const p = a.params || {};
-      const target = a.target || p.app || p.text || p.key || p.url || '';
+      let target = a.target || p.app || p.text || p.key || p.url || '';
+      if (target && isSelectorish(String(target))) {
+        const el = (s.screenState?.elements || []).find((e) => e.id === a.target);
+        target = (el?.name || '').trim() || 'an on-screen element';
+      }
       const line = `${i + 1}. ${a.kind}${target ? ` → ${String(target).slice(0, 60)}` : ''}`;
       const ok = s.executionResult?.ok && s.verificationResult?.status === 'verified';
       if (!ok) {
