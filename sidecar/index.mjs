@@ -150,6 +150,18 @@ const MODE_PREFIX_TAG = {
   security:   '[Security Audit Mode]',
   desktop:    '[Desktop Automation Mode]',
 };
+
+// Strip the mode tag + any leaked [Desktop state] / [What Ava knows] prefix
+// blocks from a desktop message, leaving the clean user intent — so stored
+// procedural memories and recall queries aren't polluted with scaffolding.
+function cleanDesktopTask(content) {
+  return String(content || '')
+    .replace(/^\s*\[Desktop Automation Mode\]\s*/i, '')
+    .replace(/^\s*\[What Ava knows about this machine\][\s\S]*?\n\n/i, '')
+    .replace(/^\s*\[Desktop state\][\s\S]*?\n\n/i, '')
+    .trim();
+}
+
 // Module-scoped so the handleMessage finally block can auto-close the
 // Ava browser at end of turn. Toggled by the browserBridge inside
 // handleInit.
@@ -1134,7 +1146,7 @@ async function handleMessage(data) {
   let desktopMemoryPrefix = '';
   if (currentMode === 'desktop' && memoryManager && typeof data.content === 'string' && data.content.length > 3) {
     try {
-      const learned = await memoryManager.recall({ query: data.content, scope: 'global', category: 'pattern', limit: 3 });
+      const learned = await memoryManager.recall({ query: cleanDesktopTask(data.content), scope: 'global', category: 'pattern', limit: 3 });
       const blocks = (learned || [])
         .filter(r => ((r.entry?.tags || r.tags || []).includes('desktop')))
         .map(r => (r.entry?.content || r.content || '').trim())
@@ -1466,16 +1478,25 @@ async function handleMessage(data) {
 
     conversation.setMessages(updated);
 
-    // Path B (distil) — after a successful desktop turn, capture the desktop_*
-    // action sequence that worked and save it as a global 'pattern' so the next
-    // similar task recalls the learned path (paired with the recall block before
-    // the run). Hybrid: deterministic action capture now; an LLM intent-summary
-    // can layer on later. Fail-safe — a distil error never breaks the turn.
+    // Path B (distil) — after a desktop turn, capture the desktop_* action
+    // sequence AND how each step went (worked / tried-but-failed), saved as a
+    // global 'pattern' so the next similar task recalls the learned path —
+    // including what NOT to do again (the compounding flywheel: learn from
+    // failures, not just wins). Paired with the recall block before the run.
+    // Fail-safe — a distil error never breaks the turn.
     if (currentMode === 'desktop' && memoryManager && typeof data.content === 'string') {
       try {
         // This turn's messages = everything after the last user message.
         const lastUserIdx = updated.map(m => m.role).lastIndexOf('user');
         const turnMsgs = lastUserIdx >= 0 ? updated.slice(lastUserIdx + 1) : updated;
+        // Index tool results by call id so each action can be marked worked/failed.
+        const resultById = {};
+        for (const m of turnMsgs) {
+          if (m.role === 'tool') {
+            const id = m.tool_call_id || m.toolCallId;
+            if (id) resultById[id] = typeof m.content === 'string' ? m.content : '';
+          }
+        }
         const steps = [];
         for (const m of turnMsgs) {
           if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
@@ -1484,21 +1505,31 @@ async function handleMessage(data) {
               if (name.startsWith('desktop_')) {
                 let args = {};
                 try { args = JSON.parse(tc.function?.arguments || '{}'); } catch { /* keep {} */ }
-                steps.push({ tool: name, args });
+                const result = resultById[tc.id] || '';
+                // Tool result strings surface failures plainly — heuristic classify.
+                const failed = /\b(fail|failed|error|errored|cannot|blocked|breach|denied|not permitted|no approved plan)\b/i.test(result);
+                steps.push({ tool: name, args, failed, result });
               }
             }
           }
         }
         if (steps.length > 0) {
-          const appName = steps.find(s => s.tool === 'desktop_launch_app')?.args?.app
-            || steps.find(s => s.args?.window)?.args?.window
-            || 'the machine';
+          const cleanTask = cleanDesktopTask(data.content);
+          const appName = steps.find(s => s.tool === 'desktop_launch_app')?.args?.app || 'the machine';
           const sequence = steps.map((s, i) => {
             const a = s.args || {};
-            const target = a.name || a.window || a.app || a.text || a.key || '';
-            return `${i + 1}. ${s.tool.replace('desktop_', '')}${target ? ` → ${String(target).slice(0, 60)}` : ''}`;
+            const target = a.name || a.window || a.app || a.text || a.key || a.title || '';
+            const line = `${i + 1}. ${s.tool.replace('desktop_', '')}${target ? ` → ${String(target).slice(0, 60)}` : ''}`;
+            if (s.failed) {
+              const reason = String(s.result).replace(/\s+/g, ' ').slice(0, 90);
+              return `${line}  ✗ tried, failed: ${reason}`;
+            }
+            return `${line}  ✓`;
           }).join('\n');
-          const content = `**Desktop task:** ${data.content.slice(0, 200)}\n\n**On this machine, the steps that worked:**\n${sequence}`;
+          const anyFailed = steps.some((s) => s.failed);
+          const content = `**Desktop task:** ${cleanTask.slice(0, 200)}\n\n`
+            + `**On this machine — what was tried and how it went:**\n${sequence}`
+            + (anyFailed ? `\n\n_✗ = tried and failed; informative, not a hard rule — conditions change, so weigh it, don't blindly avoid it._` : '');
           await memoryManager.saveEntry({
             scope: 'global',
             category: 'pattern',
@@ -1507,7 +1538,7 @@ async function handleMessage(data) {
             tags: ['desktop', String(appName).toLowerCase().slice(0, 40)],
             content,
           });
-          emit({ event: 'info', message: `Learned the desktop steps for "${data.content.slice(0, 40)}" (${steps.length} action${steps.length === 1 ? '' : 's'})` });
+          emit({ event: 'info', message: `Learned the desktop steps for "${cleanTask.slice(0, 40)}" (${steps.length} action${steps.length === 1 ? '' : 's'}${anyFailed ? ', incl. failures' : ''})` });
         }
       } catch (err) {
         emit({ event: 'info', message: `Desktop memory distil skipped: ${err.message}` });
