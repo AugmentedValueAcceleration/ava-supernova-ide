@@ -507,6 +507,9 @@ export class SidecarManager {
         case 'get_foreground_window_title':
           result = await invoke('get_foreground_window_title');
           break;
+        case 'list_windows':
+          result = await invoke('list_windows');
+          break;
         case 'find_ui_element':
           result = await invoke('find_ui_element', { name: event.name ?? event.text });
           break;

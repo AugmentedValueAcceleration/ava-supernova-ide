@@ -303,6 +303,10 @@ const uiaBridge = {
     const result = await desktopRequest('get_foreground_window_title');
     return typeof result?.data === 'string' ? result.data : '';
   },
+  async listWindows() {
+    const result = await desktopRequest('list_windows');
+    return Array.isArray(result?.data) ? result.data : [];
+  },
 };
 
 /**
@@ -316,10 +320,12 @@ const uiaBridge = {
  */
 async function captureDesktopContext() {
   try {
-    const [title, elementsRaw] = await Promise.all([
+    const [title, elementsRaw, windowsRaw] = await Promise.all([
       uiaBridge.foregroundWindowTitle().catch(() => ''),
       uiaBridge.listElements().catch(() => []),
+      uiaBridge.listWindows().catch(() => []),
     ]);
+    const windows = Array.isArray(windowsRaw) ? windowsRaw : [];
 
     const elements = Array.isArray(elementsRaw) ? elementsRaw : [];
     // Trim to the highest-signal subset: interactable controls, named
@@ -333,13 +339,22 @@ async function captureDesktopContext() {
     };
     const interesting = elements.filter(isInteresting).slice(0, 12);
 
-    if (!title && interesting.length === 0) return '';
+    if (!title && interesting.length === 0 && windows.length === 0) return '';
 
     const lines = [];
     if (title) lines.push(`Foreground window: "${title}"`);
     if (interesting.length > 0) {
       const bits = interesting.map((e) => `${e.control_type}: "${e.name}"`);
       lines.push(`Visible controls: ${bits.join(' · ')}`);
+    }
+    // Other open top-level windows — so Ava reuses an existing one (focus/restore)
+    // instead of relaunching, and knows what's still open after a task finishes.
+    const otherWindows = windows
+      .filter((w) => w && w.title && w.title !== title)
+      .slice(0, 15)
+      .map((w) => `"${w.title}"${w.minimized ? ' (minimised)' : ''}`);
+    if (otherWindows.length > 0) {
+      lines.push(`Other open windows (reuse with desktop_focus_window instead of relaunching): ${otherWindows.join(', ')}`);
     }
     return `[Desktop state] ${lines.join(' — ')}`;
   } catch {

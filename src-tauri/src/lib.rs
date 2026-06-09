@@ -795,6 +795,69 @@ fn get_foreground_window_title() -> Result<String, String> {
     }
 }
 
+/// One visible top-level window — title + whether it's minimised.
+#[derive(serde::Serialize)]
+struct WindowInfo {
+    title: String,
+    minimized: bool,
+}
+
+/// All visible top-level windows (title + minimised state). Gives Ava awareness
+/// of what's ALREADY open so she focuses/maximises an existing window instead of
+/// relaunching, and knows what's still open after a task. Pure Win32 EnumWindows
+/// — no UIA cost and no thread-mode hazard (unlike list_ui_elements).
+#[tauri::command]
+fn list_windows() -> Result<Vec<WindowInfo>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, GetWindow, GetWindowTextLengthW, GetWindowTextW, IsIconic,
+            IsWindowVisible, GW_OWNER,
+        };
+
+        // SAFETY: Win32 EnumWindows callback. `lparam` carries a &mut Vec<WindowInfo>
+        // we own for the whole synchronous enumeration. Every Win32 call tolerates a
+        // stale/invalid HWND by returning 0/null — no dereference of window memory.
+        unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let out = unsafe { &mut *(lparam as *mut Vec<WindowInfo>) };
+            if unsafe { IsWindowVisible(hwnd) } == 0 {
+                return 1;
+            }
+            // Top-level only — skip owned popups/tooltips.
+            let owner = unsafe { GetWindow(hwnd, GW_OWNER) };
+            if !owner.is_null() {
+                return 1;
+            }
+            let len = unsafe { GetWindowTextLengthW(hwnd) };
+            if len <= 0 {
+                return 1; // untitled window — skip
+            }
+            let mut buf: Vec<u16> = vec![0u16; (len as usize) + 1];
+            let n = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };
+            if n <= 0 {
+                return 1;
+            }
+            let title = String::from_utf16_lossy(&buf[..(n as usize).min(buf.len())]);
+            let minimized = unsafe { IsIconic(hwnd) } != 0;
+            out.push(WindowInfo { title, minimized });
+            1
+        }
+
+        let mut windows: Vec<WindowInfo> = Vec::new();
+        // SAFETY: EnumWindows runs enum_cb synchronously per top-level window on
+        // this thread, then returns; the pointer to our local Vec stays valid.
+        unsafe {
+            EnumWindows(Some(enum_cb), &mut windows as *mut Vec<WindowInfo> as LPARAM);
+        }
+        Ok(windows)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(Vec::new())
+    }
+}
+
 /// Deactivate desktop mode — disables the panic kill hotkey.
 #[tauri::command]
 fn desktop_mode_stop() -> Result<(), String> {
@@ -1714,6 +1777,7 @@ pub fn run() {
             desktop_mode_stop,
             desktop_kill,
             get_foreground_window_title,
+            list_windows,
             browser_launch,
             browser_send,
             browser_close,
