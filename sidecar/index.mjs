@@ -104,6 +104,8 @@ const {
   gatherBundle,
   haltIntent,
   createEmbeddingServiceFromConfig,
+  loadMachineRules,
+  appendMachineRule,
 } = core;
 
 // Install the dataset capture consumer once at sidecar boot. No-op for
@@ -768,6 +770,9 @@ async function handleInit(data) {
     // Shared state
     const sharedState = {
       memoryManager,
+      // Machine-global dir (AVA_HOME) — lets record_machine_rule persist a
+      // standing rule to <AVA_HOME>/Decisions/machine-rules.md.
+      globalDir: AVA_HOME,
       journalManager,
       taskManager,
       // Surface-injected health plan store — Node-fs impl pointed at
@@ -1159,8 +1164,20 @@ async function handleMessage(data) {
       emit({ event: 'info', message: `Desktop memory recall skipped: ${err.message}` });
     }
   }
-  // Learned machine-knowledge first, then live screen state, then the task.
-  const combinedDesktopPrefix = [desktopMemoryPrefix, desktopStatePrefix].filter(Boolean).join('\n\n');
+  // Path B3 (recall) — standing machine RULES Ava must obey, from the machine-
+  // global Decisions store (<AVA_HOME>/Decisions/machine-rules.md). Loaded first
+  // so they frame the whole turn. These are constraints ("never auto-send"),
+  // distinct from memory's how-to. Fail-safe — no rules file just means none.
+  let desktopRulesPrefix = '';
+  if (currentMode === 'desktop' && loadMachineRules) {
+    try {
+      const rules = await loadMachineRules(AVA_HOME);
+      if (rules) desktopRulesPrefix = `[Standing rules for this machine — obey these]\n${rules}`;
+    } catch { /* no rules — skip */ }
+  }
+  // Standing rules first (they frame everything), then learned how-to, then the
+  // live screen state, then the task.
+  const combinedDesktopPrefix = [desktopRulesPrefix, desktopMemoryPrefix, desktopStatePrefix].filter(Boolean).join('\n\n');
 
   // Mode-prefix tag — see MODE_PREFIX_TAG comment above. Empty for work
   // (no tag → agent defaults to work). When a desktop snapshot is also
