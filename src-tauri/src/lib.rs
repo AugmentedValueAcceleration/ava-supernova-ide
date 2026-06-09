@@ -464,6 +464,28 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
             // returns NULL when no window has focus. Null is checked below.
             let foreground_hwnd =
                 unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+
+            // NEVER walk our OWN window (the IDE). Querying this process's UIA
+            // tree from a background thread requires the IDE's UI thread to
+            // answer — which can DEADLOCK/freeze the IDE. There's nothing to
+            // automate in the IDE anyway, so return empty: Ava sees no controls
+            // for the IDE, focuses the target app (changing the foreground), and
+            // the next list walks THAT app. This is the conductor's "skip own
+            // window" rule, enforced at the source so every caller is safe.
+            if !foreground_hwnd.is_null() {
+                let our_pid = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcessId() };
+                let mut fg_pid: u32 = 0;
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
+                        foreground_hwnd,
+                        &mut fg_pid,
+                    );
+                }
+                if fg_pid == our_pid {
+                    return Ok(Vec::new());
+                }
+            }
+
             let start_element = if !foreground_hwnd.is_null() {
                 automation
                     .element_from_handle(uiautomation::types::Handle::from(foreground_hwnd as isize))
