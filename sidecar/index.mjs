@@ -962,14 +962,22 @@ async function handleInit(data) {
 // gated actions reuse the confirm_required card; the turn's abort signal (which
 // the pause / Ctrl+Alt+K interrupt fires) stops it cleanly. isRunning /
 // currentAbort are owned by the caller (handleMessage) and cleared on return.
-async function runDesktopConductorTurn(task, signal) {
+async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
   const provider = globalThis._activeProvider;
   const model = globalThis._currentModel;
   if (!provider || !model) {
     emitError('No model available for Desktop Automation Mode.');
     emit({ event: 'done', content: '' });
-    return;
+    return null;
   }
+
+  // Fold Path B (standing rules + learned patterns) into the task the Planner
+  // reasons over, so it obeys the machine's rules and reuses what worked. The
+  // live screen state is NOT folded in — Scout re-captures it fresh each step.
+  const cleanTask = cleanDesktopTask(task);
+  const conductorTask = contextPrefix
+    ? `${contextPrefix}\n\n[Your task]\n${cleanTask}`
+    : cleanTask;
 
   const ss = globalThis._sharedState || {};
   const providers = {
@@ -1036,9 +1044,10 @@ async function runDesktopConductorTurn(task, signal) {
   };
 
   emit({ event: 'stream_start' });
+  let trajectory = null;
   try {
-    await desktopCore.runDesktopTrajectory({
-      task,
+    trajectory = await desktopCore.runDesktopTrajectory({
+      task: conductorTask,
       permissionLevel: ss.desktopPermissionLevel ?? 'ask',
       whitelist: Array.isArray(ss.desktopWhitelist) ? ss.desktopWhitelist : [],
       privilegedOptIn: !!ss.desktopPrivilegedOptIn,
@@ -1047,6 +1056,7 @@ async function runDesktopConductorTurn(task, signal) {
       requestApproval,
       emit: conductorEmit,
       signal,
+      log: (line) => console.error(`[desktop-conductor] ${line}`),
     });
   } catch (err) {
     emit({ event: 'agent_error', message: err?.message || String(err) });
@@ -1058,9 +1068,54 @@ async function runDesktopConductorTurn(task, signal) {
 
   // Keep chat history coherent for the next turn (best-effort).
   try {
-    conversation?.addUserMessage?.(task);
+    conversation?.addUserMessage?.(cleanTask);
     conversation?.addAssistantMessage?.(finalContent);
   } catch { /* conversation API mismatch — non-fatal */ }
+
+  return trajectory;
+}
+
+/**
+ * Path B (distil) for the conductor — turn a completed trajectory into a
+ * global 'pattern' memory: the action sequence, how each step verified, and
+ * the outcome. Mirrors the agent-flow distil but reads ProposedAction steps
+ * instead of tool_calls. Fail-safe — a distil error never breaks the turn.
+ */
+async function distilDesktopTrajectory(trajectory, rawContent) {
+  if (!trajectory || !memoryManager || !Array.isArray(trajectory.steps) || trajectory.steps.length === 0) return;
+  try {
+    const cleanTask = cleanDesktopTask(rawContent);
+    const launchStep = trajectory.steps.find(s => s.proposedAction?.kind === 'launch');
+    const appName = launchStep?.proposedAction?.params?.app || 'the machine';
+    const sequence = trajectory.steps.map((s, i) => {
+      const a = s.proposedAction || {};
+      const p = a.params || {};
+      const target = a.target || p.app || p.text || p.key || p.url || '';
+      const line = `${i + 1}. ${a.kind}${target ? ` → ${String(target).slice(0, 60)}` : ''}`;
+      const ok = s.executionResult?.ok && s.verificationResult?.status === 'verified';
+      if (!ok) {
+        const reason = s.executionResult?.error || s.verificationResult?.deviation || s.verificationResult?.detail || s.verificationResult?.status || 'did not verify';
+        return `${line}  ✗ ${String(reason).replace(/\s+/g, ' ').slice(0, 90)}`;
+      }
+      return `${line}  ✓`;
+    }).join('\n');
+    const anyFailed = trajectory.steps.some(s => !(s.executionResult?.ok && s.verificationResult?.status === 'verified'));
+    const content = `**Desktop task:** ${cleanTask.slice(0, 200)}\n\n`
+      + `**On this machine — what was tried and how it went:**\n${sequence}`
+      + `\n\n_Outcome: ${trajectory.outcome}._`
+      + (anyFailed ? `\n\n_✗ = tried and didn't verify; informative, not a hard rule — conditions change, so weigh it, don't blindly avoid it._` : '');
+    await memoryManager.saveEntry({
+      scope: 'global',
+      category: 'pattern',
+      layer: 'workflow',
+      source: 'auto-extract',
+      tags: ['desktop', String(appName).toLowerCase().slice(0, 40)],
+      content,
+    });
+    emit({ event: 'info', message: `Learned the desktop steps for "${cleanTask.slice(0, 40)}" (${trajectory.steps.length} action${trajectory.steps.length === 1 ? '' : 's'}${anyFailed ? ', incl. failures' : ''})` });
+  } catch (err) {
+    emit({ event: 'info', message: `Desktop trajectory distil skipped: ${err.message}` });
+  }
 }
 
 async function handleMessage(data) {
@@ -1135,15 +1190,12 @@ async function handleMessage(data) {
   // the user see the first result?") burning hundreds of thinking tokens
   // per turn on state she could just be told. Kept outside the main
   // try/catch so a UIA hiccup never blocks the agent.
-  // NOTE: the five-persona conductor (runDesktopConductorTurn) is built + smoke-
-  // tested but NOT wired live yet — it crashed walking the IDE's own window and
-  // lacks an app-launch action. Desktop mode falls back to the existing agent
-  // flow until the conductor is completed + tested. Re-enable the branch here.
-
+  // Desktop Automation Mode is now driven by the five-persona conductor
+  // (runDesktopConductorTurn), routed below inside the try block. The
+  // conductor's Scout re-perceives the screen every step, so we do NOT take a
+  // static state snapshot here for desktop — only the standing rules + learned
+  // patterns (Path B, computed below) are folded into the conductor task.
   let desktopStatePrefix = '';
-  if (currentMode === 'desktop' && typeof data.content === 'string') {
-    desktopStatePrefix = await captureDesktopContext();
-  }
 
   // Reset the desktop budget per turn. The BudgetTracker caps (5-min wall-clock,
   // 30 steps, 500K tokens) are meant to bound a SINGLE task ("per-trajectory"),
@@ -1201,6 +1253,20 @@ async function handleMessage(data) {
   const modeTag = MODE_PREFIX_TAG[currentMode] || '';
 
   try {
+    // ── Desktop Automation Mode → the five-persona conductor ──────────────
+    // Desktop turns run the Scout→Planner→Actor→Verifier→Narrator wave
+    // (runDesktopConductorTurn) instead of the regular agent loop. Path B
+    // (standing rules + learned patterns — NOT the stale state snapshot;
+    // Scout re-perceives each step) is folded into the conductor task, and
+    // the resulting trajectory is distilled back into memory. The finally
+    // block clears isRunning + auto-closes the browser, same as any turn.
+    if (currentMode === 'desktop' && typeof data.content === 'string') {
+      const conductorContext = [desktopRulesPrefix, desktopMemoryPrefix].filter(Boolean).join('\n\n');
+      const trajectory = await runDesktopConductorTurn(data.content, abortController.signal, conductorContext);
+      await distilDesktopTrajectory(trajectory, data.content);
+      return; // finally handles cleanup
+    }
+
     // Sync conversation from UI history if provided (ensures sidecar sees full chat window)
     if (data.history && Array.isArray(data.history) && data.history.length > 0) {
       const currentMessages = conversation.getMessages();
