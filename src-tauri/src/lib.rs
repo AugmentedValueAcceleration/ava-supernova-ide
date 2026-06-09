@@ -676,7 +676,39 @@ fn focus_window(name: String) -> Result<String, String> {
 
             let child = walker.get_first_child(&root).map_err(|e| format!("Walk failed: {e}"))?;
             let mut current = child;
+            let our_pid = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcessId() };
             loop {
+                // Skip our OWN window (the IDE). Reading its name from a background
+                // COM thread needs the IDE's UI thread to answer — slow under load
+                // (e.g. local-model inference) and risks the request timing out —
+                // and we never want to focus the IDE anyway. Check the cheap
+                // HWND->PID first, before the slower get_name().
+                let is_own_window = current
+                    .get_native_window_handle()
+                    .ok()
+                    .map(|h| {
+                        let hwnd_isize: isize = h.into();
+                        let mut win_pid: u32 = 0;
+                        // SAFETY: GetWindowThreadProcessId writes into an owned
+                        // &mut u32; tolerates a stale HWND by returning 0.
+                        unsafe {
+                            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
+                                hwnd_isize as windows_sys::Win32::Foundation::HWND,
+                                &mut win_pid,
+                            );
+                        }
+                        win_pid == our_pid
+                    })
+                    .unwrap_or(false);
+                if is_own_window {
+                    match walker.get_next_sibling(&current) {
+                        Ok(next) => {
+                            current = next;
+                            continue;
+                        }
+                        Err(_) => break,
+                    }
+                }
                 let win_name = current.get_name().unwrap_or_default();
                 if !win_name.is_empty() && win_name.to_lowercase().contains(&name_lower) {
                     // Try to grab an HWND and call SetForegroundWindow directly —
