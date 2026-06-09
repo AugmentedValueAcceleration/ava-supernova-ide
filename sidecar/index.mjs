@@ -1113,6 +1113,18 @@ async function handleMessage(data) {
     desktopStatePrefix = await captureDesktopContext();
   }
 
+  // Reset the desktop budget per turn. The BudgetTracker caps (5-min wall-clock,
+  // 30 steps, 500K tokens) are meant to bound a SINGLE task ("per-trajectory"),
+  // but sharedState builds the tracker once at session start — so its wall-clock
+  // measured TOTAL session age (idle time between turns included) and blocked
+  // EVERY desktop action once the IDE had been open ~5 min (observed: 611s breach
+  // on a 2-step task). A fresh tracker per desktop turn restores the intended
+  // per-task budget. The safety gate reads state.desktopBudget dynamically, so
+  // reassigning here propagates.
+  if (currentMode === 'desktop' && BudgetTracker && globalThis._sharedState) {
+    globalThis._sharedState.desktopBudget = new BudgetTracker();
+  }
+
   // Path B (recall) — surface what Ava has LEARNED about this machine. Global
   // 'pattern' memories tagged 'desktop' are procedural know-how distilled from
   // past successful turns (see the distil block after the run). Injected as a
