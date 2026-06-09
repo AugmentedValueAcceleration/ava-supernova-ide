@@ -1113,6 +1113,31 @@ async function handleMessage(data) {
     desktopStatePrefix = await captureDesktopContext();
   }
 
+  // Path B (recall) — surface what Ava has LEARNED about this machine. Global
+  // 'pattern' memories tagged 'desktop' are procedural know-how distilled from
+  // past successful turns (see the distil block after the run). Injected as a
+  // [What Ava knows about this machine] block beside the live [Desktop state],
+  // so she reuses the path that worked instead of rediscovering it each time.
+  // Fail-safe: any error here just means no recall block — never blocks a turn.
+  let desktopMemoryPrefix = '';
+  if (currentMode === 'desktop' && memoryManager && typeof data.content === 'string' && data.content.length > 3) {
+    try {
+      const learned = await memoryManager.recall({ query: data.content, scope: 'global', category: 'pattern', limit: 3 });
+      const blocks = (learned || [])
+        .filter(r => ((r.entry?.tags || r.tags || []).includes('desktop')))
+        .map(r => (r.entry?.content || r.content || '').trim())
+        .filter(Boolean);
+      if (blocks.length > 0) {
+        desktopMemoryPrefix = `[What Ava knows about this machine]\n${blocks.join('\n\n')}`;
+        emit({ event: 'info', message: `Recalled ${blocks.length} learned desktop pattern${blocks.length === 1 ? '' : 's'} for this task` });
+      }
+    } catch (err) {
+      emit({ event: 'info', message: `Desktop memory recall skipped: ${err.message}` });
+    }
+  }
+  // Learned machine-knowledge first, then live screen state, then the task.
+  const combinedDesktopPrefix = [desktopMemoryPrefix, desktopStatePrefix].filter(Boolean).join('\n\n');
+
   // Mode-prefix tag — see MODE_PREFIX_TAG comment above. Empty for work
   // (no tag → agent defaults to work). When a desktop snapshot is also
   // being prepended, the mode tag goes FIRST so detectModeFromMessages
@@ -1148,8 +1173,8 @@ async function handleMessage(data) {
         emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.6 Plus or Qwen 3.5 Omni Flash to analyse images.` });
       }
       const parts = [];
-      const baseContent = desktopStatePrefix && data.content
-        ? `${desktopStatePrefix}\n\n${data.content}`
+      const baseContent = combinedDesktopPrefix && data.content
+        ? `${combinedDesktopPrefix}\n\n${data.content}`
         : data.content;
       const prefixedContent = modeTag && baseContent
         ? `${modeTag} ${baseContent}`
@@ -1182,8 +1207,8 @@ async function handleMessage(data) {
       }
       conversation.addUserMessage(parts.length > 0 ? parts : (prefixedContent ?? data.content));
     } else {
-      const baseContent = desktopStatePrefix && data.content
-        ? `${desktopStatePrefix}\n\n${data.content}`
+      const baseContent = combinedDesktopPrefix && data.content
+        ? `${combinedDesktopPrefix}\n\n${data.content}`
         : data.content;
       const userContent = modeTag && baseContent
         ? `${modeTag} ${baseContent}`
@@ -1428,6 +1453,54 @@ async function handleMessage(data) {
     );
 
     conversation.setMessages(updated);
+
+    // Path B (distil) — after a successful desktop turn, capture the desktop_*
+    // action sequence that worked and save it as a global 'pattern' so the next
+    // similar task recalls the learned path (paired with the recall block before
+    // the run). Hybrid: deterministic action capture now; an LLM intent-summary
+    // can layer on later. Fail-safe — a distil error never breaks the turn.
+    if (currentMode === 'desktop' && memoryManager && typeof data.content === 'string') {
+      try {
+        // This turn's messages = everything after the last user message.
+        const lastUserIdx = updated.map(m => m.role).lastIndexOf('user');
+        const turnMsgs = lastUserIdx >= 0 ? updated.slice(lastUserIdx + 1) : updated;
+        const steps = [];
+        for (const m of turnMsgs) {
+          if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+            for (const tc of m.tool_calls) {
+              const name = tc.function?.name || '';
+              if (name.startsWith('desktop_')) {
+                let args = {};
+                try { args = JSON.parse(tc.function?.arguments || '{}'); } catch { /* keep {} */ }
+                steps.push({ tool: name, args });
+              }
+            }
+          }
+        }
+        if (steps.length > 0) {
+          const appName = steps.find(s => s.tool === 'desktop_launch_app')?.args?.app
+            || steps.find(s => s.args?.window)?.args?.window
+            || 'the machine';
+          const sequence = steps.map((s, i) => {
+            const a = s.args || {};
+            const target = a.name || a.window || a.app || a.text || a.key || '';
+            return `${i + 1}. ${s.tool.replace('desktop_', '')}${target ? ` → ${String(target).slice(0, 60)}` : ''}`;
+          }).join('\n');
+          const content = `**Desktop task:** ${data.content.slice(0, 200)}\n\n**On this machine, the steps that worked:**\n${sequence}`;
+          await memoryManager.saveEntry({
+            scope: 'global',
+            category: 'pattern',
+            layer: 'workflow',
+            source: 'auto-extract',
+            tags: ['desktop', String(appName).toLowerCase().slice(0, 40)],
+            content,
+          });
+          emit({ event: 'info', message: `Learned the desktop steps for "${data.content.slice(0, 40)}" (${steps.length} action${steps.length === 1 ? '' : 's'})` });
+        }
+      } catch (err) {
+        emit({ event: 'info', message: `Desktop memory distil skipped: ${err.message}` });
+      }
+    }
 
     // Auto-journal: every 5th user message, Ava writes a brief observation
     const userMsgCount = updated.filter(m => m.role === 'user').length;
