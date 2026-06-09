@@ -447,31 +447,40 @@ struct UIElementInfo {
 fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
     #[cfg(target_os = "windows")]
     {
-        use uiautomation::UIAutomation;
+        // Run UIA on a dedicated COM thread (see `with_uia`) so it never trips
+        // over the apartment state inherited from the Tauri worker pool — the
+        // "Cannot change thread mode after it is set" (RPC_E_CHANGED_MODE) error
+        // that was failing every desktop_list_elements call. Same proven pattern
+        // focus_window already uses.
+        with_uia("list_elements", move |automation| {
+            let walker = automation
+                .get_control_view_walker()
+                .map_err(|e| format!("Walker failed: {e}"))?;
 
-        let automation = UIAutomation::new().map_err(|e| format!("UIA init failed: {e}"))?;
-        let walker = automation.get_control_view_walker().map_err(|e| format!("Walker failed: {e}"))?;
+            // Prefer the actual foreground window (what the user is looking at).
+            // Fall back to the desktop root only if we can't resolve it (e.g.
+            // Start menu is open, or no window has focus).
+            // SAFETY: GetForegroundWindow is a parameter-free Win32 query that
+            // returns NULL when no window has focus. Null is checked below.
+            let foreground_hwnd =
+                unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+            let start_element = if !foreground_hwnd.is_null() {
+                automation
+                    .element_from_handle(uiautomation::types::Handle::from(foreground_hwnd as isize))
+                    .ok()
+            } else {
+                None
+            };
+            let root = automation
+                .get_root_element()
+                .map_err(|e| format!("Root failed: {e}"))?;
+            let start = start_element.as_ref().unwrap_or(&root);
 
-        // Prefer the actual foreground window (what the user is looking at).
-        // Fall back to the desktop root only if we can't resolve it (e.g.
-        // Start menu is open, or no window has focus).
-        // SAFETY: GetForegroundWindow is a parameter-free Win32 query
-        // that returns NULL when no window has focus. Null is checked
-        // below before the handle is used.
-        let foreground_hwnd = unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
-        let start_element = if !foreground_hwnd.is_null() {
-            automation.element_from_handle(uiautomation::types::Handle::from(foreground_hwnd as isize))
-                .ok()
-        } else {
-            None
-        };
-        let root = automation.get_root_element().map_err(|e| format!("Root failed: {e}"))?;
-        let start = start_element.as_ref().unwrap_or(&root);
+            let mut elements = Vec::new();
+            collect_elements(&walker, start, &mut elements, 0, 8);
 
-        let mut elements = Vec::new();
-        collect_elements(&walker, start, &mut elements, 0, 8);
-
-        Ok(elements)
+            Ok(elements)
+        })
     }
 
     #[cfg(not(target_os = "windows"))]
