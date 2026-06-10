@@ -37,6 +37,7 @@ import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAcco
 import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
+import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
 import { Tooltip } from './Tooltip';
 import { LessonPlayer, SAMPLE_LESSON, type PlayableLesson, type LessonStep } from './LessonPlayer';
 import { readLocalLearning } from '../lib/learning-store';
@@ -2151,6 +2152,8 @@ export function AvaChatPage() {
   // each mutative tool (default), 'drive' = run reversible plan steps
   // silently after one approval; irreversibles always re-prompt regardless.
   const [desktopPermLevel, setDesktopPermLevel] = useDesktopPermLevel();
+  // Perception (vision) setting — pushed to the sidecar on desktop-mode entry.
+  const [desktopVisionMode] = useDesktopVisionMode();
   // Desktop control-deck collapse — collapsed shows just Permission (left) +
   // local label (right); expanded adds the meaning line, quick-starts, and the
   // kill-switch hint. Persisted so it remembers the operator's preference.
@@ -3067,6 +3070,8 @@ export function AvaChatPage() {
         // sidecar's sharedState matches the IDE's saved choice instead
         // of falling back to whatever was set at sidecar init.
         sidecar.setDesktopPermissionLevel(desktopPermLevel).catch(() => {});
+        // Same for the perception (vision) setting — Phase C3.
+        sidecar.setDesktopVisionMode(desktopVisionMode).catch(() => {});
         // Capability check — if the active coordinator isn't on the
         // desktop-capable list, warn before the operator fires off a
         // click on a model that drops tool-call args under load.
@@ -12101,6 +12106,36 @@ export function SettingsPage() {
   // here propagate there and vice versa. Hook handles localStorage + sidecar
   // push internally.
   const [desktopPermLevel, setDesktopPermLevel] = useDesktopPermLevel();
+  // Perception (vision) setting — Phase C3. Same shared-hook pattern.
+  const [desktopVisionMode, setDesktopVisionMode] = useDesktopVisionMode();
+  // Transparency: always show whether the on-device model is actually
+  // installed, whatever mode is selected. Re-checked every few seconds while
+  // the panel is open so the line never shows stale state.
+  const [localVision, setLocalVision] = useState<{ installed: boolean; size_mb: number; model_dir: string } | null>(null);
+  const [visionDownload, setVisionDownload] = useState<{ pct: number; error?: string } | null>(null);
+  useEffect(() => {
+    const check = () =>
+      invoke<{ installed: boolean; size_mb: number; model_dir: string }>('local_vision_status')
+        .then(setLocalVision)
+        .catch(() => setLocalVision(null));
+    check();
+    const t = setInterval(check, 5000);
+    return () => clearInterval(t);
+  }, [desktopVisionMode]);
+  useEffect(() => {
+    const sidecar = getSidecar();
+    const onProgress = (e: SidecarEvent) => setVisionDownload({ pct: (e as unknown as { pct?: number }).pct ?? 0 });
+    const onDone = () => setVisionDownload(null);
+    const onError = (e: SidecarEvent) => setVisionDownload({ pct: 0, error: (e as unknown as { message?: string }).message || 'download failed' });
+    sidecar.on('local_vision_download_progress', onProgress);
+    sidecar.on('local_vision_download_done', onDone);
+    sidecar.on('local_vision_download_error', onError);
+    return () => {
+      sidecar.off('local_vision_download_progress', onProgress);
+      sidecar.off('local_vision_download_done', onDone);
+      sidecar.off('local_vision_download_error', onError);
+    };
+  }, []);
   // Inner-tab grouping for the Settings page. Sections render in source
   // order, filtered by tab membership — so the file's top-to-bottom flow
   // is preserved within each tab and we don't have to physically reorder.
@@ -12881,6 +12916,95 @@ export function SettingsPage() {
             </div>
           </div>
 
+          {/* Perception (vision) — Phase C3. Governs whether Ava may LOOK at
+              the screen with a vision model when the accessibility tree and
+              browser can't see a window. The toggle IS the consent. */}
+          <div style={{
+            padding: '10px 12px', background: 'rgba(10, 6, 18, 0.6)',
+            border: '1px solid rgba(168,85,247,0.12)', borderRadius: 8,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#cdd6f4', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: '#89b4fa' }}>◉</span>
+              Vision — how Ava sees windows the system can't read
+            </div>
+            {/* Vision is FREE on every lane — these options are about the
+                trade the user actually feels: privacy vs speed. No silent
+                switching between lanes; the choice IS the consent. */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              {([
+                { id: 'off' as const,   label: 'Off' },
+                { id: 'local' as const, label: 'Private' },
+                { id: 'cloud' as const, label: 'Fast' },
+              ]).map((opt) => {
+                const active = desktopVisionMode === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => setDesktopVisionMode(opt.id)}
+                    style={{
+                      padding: '5px 14px',
+                      background: active ? 'linear-gradient(135deg, #89b4fa, #739df2)' : 'transparent',
+                      border: active ? 'none' : '1px solid #45475a',
+                      borderRadius: 6,
+                      color: active ? '#11111b' : '#9399b2',
+                      fontSize: 11, fontWeight: active ? 700 : 500,
+                      cursor: 'pointer', letterSpacing: 0.3, textTransform: 'uppercase',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: '#9399b2', lineHeight: 1.5 }}>
+              {desktopVisionMode === 'off' &&
+                'Ava never takes screenshots. If a window can\'t be read (games, canvas apps, custom UIs), she tells you so instead of guessing. Most tasks don\'t need vision — the accessibility tree and browser cover them for free.'}
+              {desktopVisionMode === 'local' &&
+                'Everything stays on this machine — screenshots never leave your computer. Slower: roughly half a minute per look on a typical laptop, a couple of seconds on a gaming PC. Free forever, works offline. Requires a one-time model download.'}
+              {desktopVisionMode === 'cloud' &&
+                'A couple of seconds per look. Free with your Ava account (no key needed) — or use your own H Company key if you prefer. Screenshots are sent to H Company\'s Holo model only when a window can\'t be read — never for every action.'}
+            </div>
+            {/* Always-visible install state + download button — transparency
+                over guesswork. The button never hides: active when the model
+                is missing, inactive (labelled Installed) once it's on disk. */}
+            <div style={{ fontSize: 11, marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  if (localVision?.installed || visionDownload) return;
+                  setVisionDownload({ pct: 0 });
+                  getSidecar().downloadLocalVisionModel().catch(() => {});
+                }}
+                disabled={!!localVision?.installed || (!!visionDownload && !visionDownload.error)}
+                style={{
+                  padding: '5px 14px',
+                  background: localVision?.installed ? 'rgba(166,227,161,0.10)' : (visionDownload && !visionDownload.error) ? 'transparent' : 'linear-gradient(135deg, #a6e3a1, #94d990)',
+                  border: localVision?.installed ? '1px solid rgba(166,227,161,0.35)' : '1px solid #45475a',
+                  borderRadius: 6,
+                  color: localVision?.installed ? '#a6e3a1' : (visionDownload && !visionDownload.error) ? '#9399b2' : '#11111b',
+                  fontSize: 11, fontWeight: 600,
+                  cursor: localVision?.installed || (visionDownload && !visionDownload.error) ? 'default' : 'pointer',
+                }}
+              >
+                {localVision?.installed
+                  ? 'Installed ✓'
+                  : visionDownload && !visionDownload.error
+                    ? `Downloading… ${visionDownload.pct}%`
+                    : 'Download local model (≈840 MB)'}
+              </button>
+              {localVision?.installed ? (
+                <span style={{ color: '#a6e3a1' }}>
+                  ● {localVision.size_mb} MB on disk — {localVision.model_dir}
+                </span>
+              ) : visionDownload?.error ? (
+                <span style={{ color: '#f87171' }}>✗ {visionDownload.error}</span>
+              ) : (
+                <span style={{ color: '#9399b2' }}>
+                  ○ Not installed — Private stays unavailable until the one-time download completes.
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Audit log — purely informational, no toggle */}
           <div style={{
             padding: '10px 12px', background: 'rgba(10, 6, 18, 0.6)',
@@ -13357,6 +13481,33 @@ export function RemoteDevicesPage() {
 }
 
 /* ===== 13. Support (Live Chat) ===== */
+// Map ticket status -> label + IDE-palette colours. Unknown statuses fall back
+// to a neutral mauve chip so a new backend status never renders blank. Mirrors
+// the web dashboard's statusChip() so all three surfaces read identically.
+function supportStatusChip(status: string): { label: string; color: string; bg: string; border: string; dot: string } {
+  const s = (status || '').toLowerCase();
+  if (s === 'open' || s === 'active') return { label: 'Open', color: '#a6e3a1', bg: 'rgba(166,227,161,0.1)', border: 'rgba(166,227,161,0.3)', dot: '#a6e3a1' };
+  if (s === 'pending' || s === 'waiting') return { label: 'Waiting on us', color: '#fab387', bg: 'rgba(250,179,135,0.1)', border: 'rgba(250,179,135,0.3)', dot: '#fab387' };
+  if (s === 'resolved' || s === 'closed') return { label: 'Resolved', color: '#6c7086', bg: 'rgba(108,112,134,0.12)', border: 'rgba(108,112,134,0.3)', dot: '#6c7086' };
+  return { label: status || 'Open', color: '#a855f7', bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.3)', dot: '#a855f7' };
+}
+
+// Intent-based ticket reasons (migration 317) — mirrors the web dashboard.
+// Evergreen: they describe what the user needs, not which feature.
+const SUPPORT_CATEGORIES = [
+  { slug: 'bug', label: 'Bug or broken', icon: '🐞', placeholder: 'What broke, and what were you doing when it happened?' },
+  { slug: 'question', label: 'Question / how-to', icon: '❓', placeholder: 'What are you trying to do?' },
+  { slug: 'feature', label: 'Feature request', icon: '✨', placeholder: 'What would you love Ava to do?' },
+  { slug: 'billing', label: 'Billing & payments', icon: '💳', placeholder: 'Tell us about the billing or payment issue…' },
+  { slug: 'account', label: 'Account & login', icon: '👤', placeholder: 'What is happening with your account or sign-in?' },
+  { slug: 'feedback', label: 'Feedback', icon: '💬', placeholder: 'What is on your mind?' },
+  { slug: 'other', label: 'Something else', icon: '💭', placeholder: 'How can we help?' },
+] as const;
+
+function supportCategoryMeta(slug?: string | null) {
+  return SUPPORT_CATEGORIES.find(c => c.slug === slug) || null;
+}
+
 export function SupportPage() {
   useLocale();
   const [, setAuthKey] = useState(0);
@@ -13375,6 +13526,8 @@ export function SupportPage() {
   const [input, setInput] = useState('');
   const [, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [newCategory, setNewCategory] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load conversations on mount (and re-fetch on auth change)
@@ -13432,10 +13585,11 @@ export function SupportPage() {
         setTimeout(() => loadMessages(activeConvId), 1500);
       } else {
         const data: any = await apiFetch('/support/conversations', {
-          method: 'POST', body: JSON.stringify({ message: text, platform: 'ide' }),
+          method: 'POST', body: JSON.stringify({ message: text, platform: 'ide', category: newCategory }),
         });
         if (data?.conversation) {
           setActiveConvId(data.conversation.id);
+          setNewCategory(null);
           setTimeout(() => loadMessages(data.conversation.id), 1500);
           // Refresh list
           apiFetch('/support/conversations').then((d: any) => setConversations(d?.conversations || [])).catch(() => {});
@@ -13443,7 +13597,7 @@ export function SupportPage() {
       }
     } catch { /* */ }
     setSending(false);
-  }, [input, sending, activeConvId, loadMessages]);
+  }, [input, sending, activeConvId, loadMessages, newCategory]);
 
   if (!connected) {
     const openExternal = (url: string) => {
@@ -13487,103 +13641,186 @@ export function SupportPage() {
     );
   }
 
+  const activeConv = conversations.find((c: any) => c.id === activeConvId) || null;
+  const hasThread = !!activeConvId || messages.length > 0;
+  const isNewTicket = !activeConvId && messages.length === 0;
+  const newCatMeta = supportCategoryMeta(newCategory);
+
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      {/* Conversation list */}
-      <div style={{ width: 200, borderRight: '1px solid rgba(168,85,247,0.12)', overflowY: 'auto', padding: 8 }}>
-        <button
-          onClick={() => { setActiveConvId(null); setMessages([]); }}
-          style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.2)', background: 'transparent', color: '#a855f7', fontSize: 11, cursor: 'pointer', marginBottom: 8 }}
-        >+ New chat</button>
-        {conversations.map((conv: any) => (
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', borderRadius: 16, border: '1px solid rgba(168,85,247,0.12)' }}>
+      {/* ── Ticket list ─────────────────────────────────────────── */}
+      <div style={{ display: 'flex', width: 256, flexShrink: 0, flexDirection: 'column', borderRight: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.25)' }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(168,85,247,0.12)', padding: '14px 16px' }}>
+          <span style={{ fontSize: 13, fontWeight: 300, color: '#cdd6f4' }}>Support tickets</span>
           <button
-            key={conv.id}
-            onClick={() => loadMessages(conv.id)}
-            style={{
-              width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', marginBottom: 4,
-              background: activeConvId === conv.id ? 'rgba(168,85,247,0.1)' : 'transparent',
-              borderLeft: activeConvId === conv.id ? '2px solid #a855f7' : '2px solid transparent',
-            }}
-          >
-            <div style={{ fontSize: 10, color: '#585b70', marginBottom: 2 }}>
-              {new Date(conv.last_message_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-              {conv.unread_user > 0 && (
-                <span style={{ float: 'right', background: '#a855f7', color: '#fff', borderRadius: '50%', width: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700 }}>{conv.unread_user}</span>
-              )}
-            </div>
-            <div style={{ fontSize: 11, color: '#a6adc8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {conv.lastMessage?.preview || conv.summary || 'New conversation'}
-            </div>
-          </button>
-        ))}
+            onClick={() => setMenuOpen(o => !o)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 8, border: '1px solid rgba(168,85,247,0.2)', background: 'transparent', padding: '4px 10px', fontSize: 11, color: '#a6adc8', cursor: 'pointer' }}
+          >+ New</button>
+          {menuOpen && (
+            <>
+              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+              <div style={{ position: 'absolute', right: 12, top: 48, zIndex: 50, width: 220, borderRadius: 12, border: '1px solid rgba(168,85,247,0.2)', background: '#1a1028', padding: 4, boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
+                <div style={{ padding: '6px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>New ticket — pick a reason</div>
+                {SUPPORT_CATEGORIES.map(c => (
+                  <button
+                    key={c.slug}
+                    onClick={() => { setActiveConvId(null); setMessages([]); setNewCategory(c.slug); setMenuOpen(false); }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168,85,247,0.1)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                    style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10, borderRadius: 8, border: 'none', background: 'transparent', padding: '8px 10px', textAlign: 'left', fontSize: 12, color: '#a6adc8', cursor: 'pointer' }}
+                  >
+                    <span style={{ fontSize: 14 }}>{c.icon}</span>{c.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+          {conversations.map((conv: any) => {
+            const chip = supportStatusChip(conv.status);
+            const active = activeConvId === conv.id;
+            return (
+              <button
+                key={conv.id}
+                onClick={() => loadMessages(conv.id)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left', marginBottom: 4, borderRadius: 12, cursor: 'pointer', padding: 12,
+                  border: active ? '1px solid rgba(168,85,247,0.3)' : '1px solid transparent',
+                  background: active ? 'rgba(168,85,247,0.06)' : 'transparent',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#6c7086' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: chip.dot }} />
+                    {chip.label}
+                  </span>
+                  {conv.unread_user > 0 && (
+                    <span style={{ display: 'flex', height: 16, minWidth: 16, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: '#a855f7', padding: '0 4px', fontSize: 8, fontWeight: 700, color: '#fff' }}>{conv.unread_user}</span>
+                  )}
+                </div>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: '#a6adc8' }}>
+                  {conv.summary || conv.lastMessage?.preview || 'New conversation'}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: 10, color: '#6c7086' }}>
+                  {supportCategoryMeta(conv.category) && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, borderRadius: 4, border: '1px solid rgba(168,85,247,0.12)', padding: '1px 5px' }}>
+                      <span>{supportCategoryMeta(conv.category)!.icon}</span>{supportCategoryMeta(conv.category)!.label}
+                    </span>
+                  )}
+                  <span>{new Date(conv.last_message_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                </div>
+              </button>
+            );
+          })}
+          {conversations.length === 0 && (
+            <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 11, color: '#6c7086' }}>No tickets yet</div>
+          )}
+        </div>
       </div>
 
-      {/* Chat area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {activeConvId || messages.length > 0 ? (
-          <>
-            {/* Messages */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* ── Conversation — unified shell: header · messages · composer ──
+          Composer is ALWAYS pinned to the bottom (real-chat behaviour); the
+          empty state is a centred hint inside the message area, not a control
+          floating in the void. Mirrors the web dashboard support page. */}
+      <div style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column', background: 'rgba(10,6,18,0.4)' }}>
+        {/* Header bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid rgba(168,85,247,0.12)', padding: '14px 20px' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: '#cdd6f4' }}>
+              {activeConv?.summary || (messages[0]?.body ? messages[0].body.slice(0, 60) : 'New ticket')}
+            </div>
+            <div style={{ marginTop: 2, fontSize: 11, color: '#6c7086' }}>
+              {activeConv
+                ? `Opened ${new Date(activeConv.last_message_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}${messages.some((m: any) => m.is_ava) ? ' · Ava is helping' : ''}`
+                : 'Ava answers first — instantly'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 8 }}>
+            {(() => { const m = supportCategoryMeta(activeConv?.category) || (isNewTicket ? newCatMeta : null); return m ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 999, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.5)', color: '#a6adc8', padding: '4px 12px', fontSize: 10 }}>
+                <span>{m.icon}</span>{m.label}
+              </span>
+            ) : null; })()}
+            {activeConv && (() => { const c = supportStatusChip(activeConv.status); return (
+              <span style={{ borderRadius: 999, border: `1px solid ${c.border}`, background: c.bg, color: c.color, padding: '4px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{c.label}</span>
+            ); })()}
+          </div>
+        </div>
+
+        {/* Message area — fills the space, scrolls internally */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+          {messages.length > 0 ? (
+            <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
               {messages.map((msg: any) => {
                 const isUser = msg.sender_type === 'user';
                 const time = new Date(msg.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                 return (
                   <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
                     <div style={{
-                      maxWidth: '75%', borderRadius: 12, padding: '10px 14px',
-                      background: isUser ? '#a855f7' : 'rgba(49, 34, 68, 0.5)',
+                      maxWidth: '80%', borderRadius: 16, padding: '10px 14px',
+                      borderBottomRightRadius: isUser ? 4 : 16, borderBottomLeftRadius: isUser ? 16 : 4,
+                      background: isUser ? '#a855f7' : 'rgba(49,34,68,0.5)',
+                      border: isUser ? 'none' : '1px solid rgba(168,85,247,0.12)',
                       color: isUser ? '#fff' : '#a6adc8',
                     }}>
                       {!isUser && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: '#cdd6f4' }}>{msg.sender_name}</span>
+                          <span style={{ fontSize: 11, color: '#cdd6f4' }}>{msg.sender_name}</span>
                           {msg.is_ava && (
-                            <span style={{ fontSize: 7, fontWeight: 700, color: '#a855f7', background: 'rgba(168,85,247,0.15)', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Ava</span>
+                            <span style={{ borderRadius: 4, background: 'rgba(168,85,247,0.15)', padding: '1px 5px', fontSize: 8, color: '#a855f7', textTransform: 'uppercase', letterSpacing: 1 }}>Ava</span>
                           )}
                         </div>
                       )}
-                      <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{msg.body}</div>
-                      <div style={{ fontSize: 9, marginTop: 4, opacity: 0.5 }}>{time}</div>
+                      <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.6 }}>{msg.body}</div>
+                      <div style={{ marginTop: 4, fontSize: 9, opacity: 0.5 }}>{time}</div>
                     </div>
                   </div>
                 );
               })}
               <div ref={messagesEndRef} />
             </div>
-            {/* Input */}
-            <div style={{ borderTop: '1px solid rgba(168,85,247,0.12)', padding: 12, display: 'flex', gap: 8 }}>
-              <textarea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="Type a message..."
-                rows={1}
-                style={{ flex: 1, padding: '8px 14px', background: 'rgba(10,6,18,0.8)', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 8, color: '#cdd6f4', fontSize: 13, outline: 'none', resize: 'none', fontFamily: 'inherit' }}
-              />
-              <button onClick={handleSend} disabled={!input.trim() || sending} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, background: '#a855f7', color: '#fff', cursor: 'pointer', opacity: !input.trim() || sending ? 0.3 : 1 }}>Send</button>
+          ) : (
+            <div style={{ display: 'flex', height: '100%', maxWidth: 480, margin: '0 auto', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(168,85,247,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20, fontSize: 26 }}>💬</div>
+              {newCatMeta ? (
+                <>
+                  <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>{newCatMeta.icon} {newCatMeta.label}</div>
+                  <div style={{ maxWidth: 360, fontSize: 13, color: '#6c7086', lineHeight: 1.6 }}>
+                    Tell us what&apos;s going on below — Ava answers first, instantly. If she can&apos;t solve it, the team picks up the same thread.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>How can we help?</div>
+                  <div style={{ maxWidth: 360, fontSize: 13, color: '#6c7086', lineHeight: 1.6 }}>
+                    Hit <span style={{ color: '#a6adc8' }}>+ New</span> up top and pick a reason to open a ticket. Ava answers first — instantly.
+                  </div>
+                </>
+              )}
             </div>
-          </>
-        ) : (
-          /* Empty state */
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(168,85,247,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, fontSize: 24 }}>💬</div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Need a hand?</div>
-            <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 20, maxWidth: 280, textAlign: 'center' }}>
-              Just type your question below. Ava will try to help first — and if she can't, the team will jump in.
-            </div>
-            <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 360 }}>
-              <textarea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="What's up?"
-                rows={1}
-                style={{ flex: 1, padding: '8px 14px', background: 'rgba(10,6,18,0.8)', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 8, color: '#cdd6f4', fontSize: 13, outline: 'none', resize: 'none', fontFamily: 'inherit' }}
-              />
-              <button onClick={handleSend} disabled={!input.trim() || sending} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, background: '#a855f7', color: '#fff', cursor: 'pointer', opacity: !input.trim() || sending ? 0.3 : 1 }}>Send</button>
-            </div>
+          )}
+        </div>
+
+        {/* Composer — always at the bottom */}
+        <div style={{ borderTop: '1px solid rgba(168,85,247,0.12)', padding: 16 }}>
+          <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              disabled={isNewTicket && !newCategory}
+              placeholder={isNewTicket ? (newCatMeta ? newCatMeta.placeholder : 'Pick a reason above to start…') : 'Reply to this ticket…'}
+              rows={1}
+              style={{ flex: 1, resize: 'none', borderRadius: 12, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(10,6,18,0.8)', padding: '10px 16px', fontSize: 13, color: '#cdd6f4', outline: 'none', fontFamily: 'inherit', opacity: isNewTicket && !newCategory ? 0.5 : 1 }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || sending || (isNewTicket && !newCategory)}
+              style={{ flexShrink: 0, borderRadius: 12, border: 'none', background: '#a855f7', padding: '10px 20px', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', opacity: !input.trim() || sending || (isNewTicket && !newCategory) ? 0.3 : 1 }}
+            >{sending ? 'Sending…' : 'Send'}</button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -13990,8 +14227,13 @@ export function HelpPage() {
     { key: 'releases' as const, label: 'Releases' },
     { key: 'roadmap' as const, label: 'Roadmap' },
   ];
+  // Support is a full-bleed app shell (its own panes scroll); the other tabs
+  // are scrollable content. So on the support tab, turn this wrapper into a
+  // clipped flex column — the support page fills the remaining height and only
+  // its inner panes scroll, with no outer page scrollbar.
+  const isSupport = tab === 'support';
   return (
-    <div style={pageWrapper}>
+    <div style={isSupport ? { ...pageWrapper, display: 'flex', flexDirection: 'column', overflowY: 'hidden' } : pageWrapper}>
       <div style={{ marginBottom: 16 }}>
         <h2 style={pageTitle}>Help</h2>
         <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Support, documentation, release notes, and roadmap</p>
