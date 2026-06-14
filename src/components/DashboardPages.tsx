@@ -2008,8 +2008,8 @@ export function AvaChatPage() {
     'deepseek-v4-pro-platform', 'deepseek-v4-pro',
     // Platform Mistral (Aurora's fleet, available on platform)
     'mistral-large-3-platform', 'mistral-small-4-platform',
-    // Anthropic
-    'claude-fable-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+    // Anthropic ('claude-fable-5' DISABLED 2026-06-14, US-gov restriction — re-add to re-enable)
+    'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
     // Kimi
     'kimi-k2.6', 'kimi-k2.5',
     // Mistral
@@ -2031,7 +2031,8 @@ export function AvaChatPage() {
     Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5.1', name: 'GLM-5.1' }, { id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4.7', name: 'GLM-4.7' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
     Mistral: [{ id: 'mistral-large-3', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
-    Anthropic: [{ id: 'claude-fable-5', name: 'Claude Fable 5' }, { id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
+    // Anthropic: 'claude-fable-5' DISABLED 2026-06-14 (US-gov restriction) — re-add { id: 'claude-fable-5', name: 'Claude Fable 5' } to re-enable
+    Anthropic: [{ id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
   };
 
   const [platformModels, setPlatformModels] = useState<Record<string, { id: string; name: string }[]> | null>(null);
@@ -13642,7 +13643,6 @@ export function SupportPage() {
   }
 
   const activeConv = conversations.find((c: any) => c.id === activeConvId) || null;
-  const hasThread = !!activeConvId || messages.length > 0;
   const isNewTicket = !activeConvId && messages.length === 0;
   const newCatMeta = supportCategoryMeta(newCategory);
 
