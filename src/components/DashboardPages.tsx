@@ -2009,7 +2009,7 @@ export function AvaChatPage() {
     // Platform Mistral (Aurora's fleet, available on platform)
     'mistral-large-3-platform', 'mistral-small-4-platform',
     // Anthropic ('claude-fable-5' DISABLED 2026-06-14, US-gov restriction — re-add to re-enable)
-    'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+    'claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
     // Kimi
     'kimi-k2.6', 'kimi-k2.5',
     // Mistral
@@ -2032,7 +2032,7 @@ export function AvaChatPage() {
     Zhipu: [{ id: 'glm-5.1', name: 'GLM-5.1' }, { id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4.7', name: 'GLM-4.7' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
     Mistral: [{ id: 'mistral-large-3', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
     // Anthropic: 'claude-fable-5' DISABLED 2026-06-14 (US-gov restriction) — re-add { id: 'claude-fable-5', name: 'Claude Fable 5' } to re-enable
-    Anthropic: [{ id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-opus-4-7', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
+    Anthropic: [{ id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
   };
 
   const [platformModels, setPlatformModels] = useState<Record<string, { id: string; name: string }[]> | null>(null);
@@ -4150,7 +4150,7 @@ export function AvaChatPage() {
                       'MiniMax-M3': 1048576, 'MiniMax-M2.7': 204800, 'MiniMax-M2.7-highspeed': 204800,
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
                       'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
-                      'claude-opus-4-7': 200000, 'claude-opus-4-6': 200000, 'claude-sonnet-4-6': 200000,
+                      'claude-opus-4-8': 200000, 'claude-sonnet-4-6': 200000,
                       'claude-haiku-4-5-20251001': 200000, 'glm-5': 200000,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
@@ -12199,7 +12199,7 @@ export function SettingsPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const PROVIDERS = [
-    { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.6, Sonnet 4.6, Haiku 4.5' },
+    { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.8, Sonnet 4.6, Haiku 4.5' },
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4 Pro and V4 Flash \u2014 1M context, MIT open-weight' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.5 \u2014 best multi-step tool calling' },
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M2.7 self-evolving, M2.5 best tool calling' },
