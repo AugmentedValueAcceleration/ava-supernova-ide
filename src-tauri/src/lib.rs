@@ -778,6 +778,40 @@ fn click_element(name: String) -> Result<UIElementInfo, String> {
     Ok(element)
 }
 
+/// Report whether the on-device vision model (Private lane) is installed.
+/// Transparency rule: the Vision setting always shows this state plainly,
+/// whatever mode is selected — the user should never have to guess what's
+/// on their machine.
+#[derive(Serialize)]
+struct LocalVisionStatus {
+    installed: bool,
+    size_mb: u64,
+    model_dir: String,
+}
+
+#[tauri::command]
+fn local_vision_status() -> Result<LocalVisionStatus, String> {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .map_err(|_| "no home directory".to_string())?;
+    let dir = std::path::PathBuf::from(home).join(".ava").join("models");
+    let model = dir.join("holo-3.1-08b-Q4_K_M.gguf");
+    let mmproj = dir.join("mmproj-holo-3.1-08b-f16.gguf");
+    let installed = model.exists() && mmproj.exists();
+    let size_mb = if installed {
+        let m = std::fs::metadata(&model).map(|m| m.len()).unwrap_or(0);
+        let p = std::fs::metadata(&mmproj).map(|m| m.len()).unwrap_or(0);
+        (m + p) / (1024 * 1024)
+    } else {
+        0
+    };
+    Ok(LocalVisionStatus {
+        installed,
+        size_mb,
+        model_dir: dir.to_string_lossy().to_string(),
+    })
+}
+
 /// Get the primary monitor's DPI scale factor (e.g., 1.25 for 125% scaling).
 #[tauri::command]
 fn get_dpi_scale() -> Result<f64, String> {
@@ -1830,6 +1864,7 @@ pub fn run() {
             click,
             double_click,
             right_click,
+            local_vision_status,
             type_text,
             key_press,
             scroll,

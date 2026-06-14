@@ -120,6 +120,9 @@ export interface SidecarEvent {
   // browser automation — browser_send forwarding
   browserAction?: string;
   params?: Record<string, unknown>;
+  // vision lane — coordinate click for visually-located elements
+  x?: number;
+  y?: number;
   // desktop safety gate — richer payload on confirm_required events
   toolCategory?: string;
   desktopClassification?: {
@@ -411,6 +414,18 @@ export class SidecarManager {
     await this.send({ cmd: 'set_desktop_permission_level', level });
   }
 
+  /** Perception setting (Phase C3): off = never capture the screen; local =
+   *  on-device vision only (Private); cloud = account/BYOK Holo (Fast). */
+  async setDesktopVisionMode(mode: 'off' | 'local' | 'cloud'): Promise<void> {
+    await this.send({ cmd: 'set_desktop_vision_mode', mode });
+  }
+
+  /** One-time download of the on-device vision model (Private lane).
+   *  Progress arrives as local_vision_download_progress/_done/_error events. */
+  async downloadLocalVisionModel(): Promise<void> {
+    await this.send({ cmd: 'download_local_vision_model' });
+  }
+
   /**
    * Update the enabled knowledge pack list mid-session. Triggers a
    * system prompt rebuild on the sidecar so Ava picks up newly-enabled
@@ -518,6 +533,14 @@ export class SidecarManager {
           break;
         case 'focus_window':
           result = await invoke('focus_window', { name: event.name ?? event.text });
+          break;
+        // ── Vision lane (Phase C3) — screenshot for visual grounding +
+        // coordinate click for visually-located elements.
+        case 'capture_screen':
+          result = await invoke('capture_screen');
+          break;
+        case 'click':
+          result = await invoke('click', { x: event.x, y: event.y });
           break;
 
         // ── Browser automation — Playwright-backed headed Chromium driven

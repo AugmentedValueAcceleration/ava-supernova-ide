@@ -280,12 +280,229 @@ function desktopRequest(action, args = {}) {
   });
 }
 
-/** Input bridge — text + key. No pixel-coordinate input; UIA name-based
- *  targeting is the only stable selector path. */
+/** Input bridge — text + key, plus coordinate click for the vision lane
+ *  (UIA name-based targeting stays the primary path; coordinates are only
+ *  used when an element was grounded visually). */
 const inputBridge = {
   async typeText(text) { await desktopRequest('type_text', { text }); },
   async keyPress(key) { await desktopRequest('key_press', { key }); },
+  async click(x, y) { await desktopRequest('click', { x, y }); },
 };
+
+/**
+ * Vision bridge (Phase C3) — visual grounding for windows the accessibility
+ * tree and DOM can't see. Cloud lane: screenshot → Holo (H Company, OpenAI-
+ * compatible) → {x,y} in [0,1000] → screen pixels. The user's perception
+ * setting gates everything: 'off' = never capture; the local lane lands when
+ * the packaged small models ship. A screenshot ONLY leaves the machine on
+ * the cloud lane the user explicitly enabled.
+ */
+const visionBridge = {
+  // Modes are CONSENT, not preference (decision 2026-06-10 — vision is FREE
+  // on every lane):
+  //   'off'   — never capture the screen.
+  //   'local' — Private: on-device model ONLY. Never falls through to cloud;
+  //             a screenshot leaving the machine under "Private" would be a
+  //             broken promise, not a fallback.
+  //   'cloud' — Fast: user's own H Company key if present, else the free
+  //             platform proxy (signed-in).
+  isAvailable() {
+    const ss = globalThis._sharedState || {};
+    const mode = ss.desktopVisionMode || 'off';
+    if (mode === 'off') return false;
+    if (mode === 'local') return !!ss.localVisionEndpoint; // set when the on-device model is installed
+    return !!(ss.hcompanyApiKey || ss.platformKey);
+  },
+  async localize(targetDescription) {
+    const ss = globalThis._sharedState || {};
+    if (!this.isAvailable()) return null;
+    const shot = await desktopRequest('capture_screen');
+    const { image, width, height } = shot?.data ?? shot ?? {};
+    if (!image) return null;
+
+    // Normalized [0,1000] from the ONE lane the user consented to.
+    const mode = ss.desktopVisionMode || 'off';
+    let norm = null;
+    if (mode === 'local') {
+      norm = await holoLocalizeLocal(ss.localVisionEndpoint, image, targetDescription);
+    } else if (ss.hcompanyApiKey) {
+      norm = await holoLocalizeDirect(ss.hcompanyApiKey, image, targetDescription);
+    } else {
+      norm = await holoLocalizePlatform(ss.platformKey, image, targetDescription);
+    }
+    if (!norm) return null;
+    return {
+      x: Math.round((norm.x / 1000) * (width || 0)),
+      y: Math.round((norm.y / 1000) * (height || 0)),
+    };
+  },
+};
+
+/**
+ * Private-lane engine management. When the user picks Private and the model
+ * is installed, the sidecar runs llama-server on localhost and registers the
+ * endpoint. Idempotent; killed with the sidecar so nothing lingers.
+ */
+let localVisionProc = null;
+async function ensureLocalVisionServer() {
+  const ss = globalThis._sharedState || {};
+  if (ss.localVisionEndpoint) return ss.localVisionEndpoint;
+  const { existsSync } = await import('node:fs');
+  const { spawn } = await import('node:child_process');
+  const model = join(AVA_HOME, 'models', 'holo-3.1-08b-Q4_K_M.gguf');
+  const mmproj = join(AVA_HOME, 'models', 'mmproj-holo-3.1-08b-f16.gguf');
+  const bin = join(AVA_HOME, 'bin', 'llama-server.exe');
+  if (!existsSync(model) || !existsSync(mmproj) || !existsSync(bin)) return null;
+  const port = 8123;
+  localVisionProc = spawn(bin, [
+    '-m', model, '--mmproj', mmproj,
+    '--port', String(port), '--host', '127.0.0.1', '-c', '8192', '--jinja',
+  ], { stdio: 'ignore', detached: false });
+  localVisionProc.on('exit', () => {
+    localVisionProc = null;
+    if (globalThis._sharedState) globalThis._sharedState.localVisionEndpoint = null;
+  });
+  // Wait for the model to load (~15-30s on first start).
+  const base = `http://127.0.0.1:${port}`;
+  for (let i = 0; i < 45; i++) {
+    try {
+      const r = await fetch(`${base}/health`);
+      if (r.ok) {
+        ss.localVisionEndpoint = base;
+        emit({ event: 'info', message: 'Private vision: on-device model loaded.' });
+        return base;
+      }
+    } catch { /* not up yet */ }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  emit({ event: 'info', message: 'Private vision: local engine failed to start.' });
+  try { localVisionProc?.kill(); } catch { /* already dead */ }
+  return null;
+}
+process.on('exit', () => { try { localVisionProc?.kill(); } catch { /* gone */ } });
+
+// Where the packaged model files are hosted. Overridable for testing;
+// the public host is decided by the operator (publishing is held) — until
+// it exists the download button reports an honest error instead of working
+// by accident.
+const LOCAL_VISION_BASE_URL = process.env.AVA_VISION_MODEL_BASE
+  || 'https://github.com/AugmentedValueAcceleration/ava-models/releases/download/holo-vision-v1';
+const LOCAL_VISION_FILES = [
+  { name: 'holo-3.1-08b-Q4_K_M.gguf', bytes: 673_000_000 },
+  { name: 'mmproj-holo-3.1-08b-f16.gguf', bytes: 207_000_000 },
+];
+
+/** One-time Private-lane model download with progress events. */
+async function handleDownloadLocalVisionModel() {
+  const { mkdir, rename } = await import('node:fs/promises');
+  const { createWriteStream, existsSync } = await import('node:fs');
+  const dir = join(AVA_HOME, 'models');
+  await mkdir(dir, { recursive: true });
+  const totalBytes = LOCAL_VISION_FILES.reduce((s, f) => s + f.bytes, 0);
+  let doneBytes = 0;
+  try {
+    for (const f of LOCAL_VISION_FILES) {
+      const dest = join(dir, f.name);
+      if (existsSync(dest)) { doneBytes += f.bytes; continue; }
+      const resp = await fetch(`${LOCAL_VISION_BASE_URL}/${f.name}`);
+      if (!resp.ok || !resp.body) throw new Error(`download failed (${resp.status}) for ${f.name}`);
+      const tmp = `${dest}.part`;
+      const out = createWriteStream(tmp);
+      const reader = resp.body.getReader();
+      let lastPct = -1;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        out.write(Buffer.from(value));
+        doneBytes += value.byteLength;
+        const pct = Math.min(99, Math.floor((doneBytes / totalBytes) * 100));
+        if (pct !== lastPct) { lastPct = pct; emit({ event: 'local_vision_download_progress', pct }); }
+      }
+      await new Promise((res, rej) => out.end((err) => err ? rej(err) : res()));
+      await rename(tmp, dest);
+    }
+    emit({ event: 'local_vision_download_done' });
+    emit({ event: 'info', message: 'Private vision: model downloaded and installed.' });
+    // If the user is already on Private, bring the engine up now.
+    if ((globalThis._sharedState?.desktopVisionMode || 'off') === 'local') {
+      ensureLocalVisionServer().catch(() => {});
+    }
+  } catch (err) {
+    emit({ event: 'local_vision_download_error', message: err?.message || String(err) });
+  }
+}
+
+/** Private lane — on-device llama-server (OpenAI-compatible), localhost only. */
+async function holoLocalizeLocal(endpoint, imageB64, targetDescription) {
+  const resp = await fetch(`${endpoint}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'holo',
+      max_tokens: 128,
+      chat_template_kwargs: { enable_thinking: false },
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:image/png;base64,${imageB64}` } },
+          { type: 'text', text: `Localize this element on the screenshot: ${targetDescription}\nReturn ONLY the coordinates as JSON {"x": <0-1000>, "y": <0-1000>} (normalized to the image). No prose.` },
+        ],
+      }],
+    }),
+  });
+  if (!resp.ok) throw new Error(`Local vision failed (${resp.status})`);
+  const data = await resp.json();
+  return parseHoloCoords(data?.choices?.[0]?.message?.content);
+}
+
+/** Tolerant coordinate parse: {"x":512,"y":340} | Click(512, 340) | (512, 340) */
+function parseHoloCoords(text) {
+  const m = String(text ?? '').match(/"x"\s*:\s*(\d+(?:\.\d+)?)\s*,\s*"y"\s*:\s*(\d+(?:\.\d+)?)/)
+    || String(text ?? '').match(/\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*\)/);
+  if (!m) return null;
+  const x = Number(m[1]); const y = Number(m[2]);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+/** BYOK lane — the user's own H Company key, straight to the API. */
+async function holoLocalizeDirect(apiKey, imageB64, targetDescription) {
+  const resp = await fetch('https://api.hcompany.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'holo3-1-35b-a3b',
+      max_tokens: 128,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:image/png;base64,${imageB64}` } },
+          { type: 'text', text: `Localize this element on the screenshot: ${targetDescription}\nReturn ONLY the coordinates as JSON {"x": <0-1000>, "y": <0-1000>} (normalized to the image). No prose.` },
+        ],
+      }],
+    }),
+  });
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    throw new Error(`Holo vision request failed (${resp.status}): ${errText.slice(0, 160)}`);
+  }
+  const data = await resp.json();
+  return parseHoloCoords(data?.choices?.[0]?.message?.content);
+}
+
+/** Platform free lane — signed-in users, no key, no charge. */
+async function holoLocalizePlatform(platformKey, imageB64, targetDescription) {
+  const resp = await fetch('https://ava-supernova.com/api/desktop/vision', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${platformKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: imageB64, target: targetDescription }),
+  });
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    throw new Error(`Platform vision request failed (${resp.status}): ${errText.slice(0, 160)}`);
+  }
+  const data = await resp.json();
+  return data?.found ? { x: Number(data.x), y: Number(data.y) } : null;
+}
 
 /** App launcher bridge — narrow scoped replacement for `bash` in desktop mode. */
 const appLauncherBridge = {
@@ -828,6 +1045,12 @@ async function handleInit(data) {
       uiaProvider: uiaBridge,
       appLauncherProvider: appLauncherBridge,
       browserProvider: browserBridge,
+      // Phase C3 — visual grounding. Gated by desktopVisionMode ('off' until
+      // the user opts in via the perception setting); cloud lane uses the
+      // H Company key (BYOK config or HAI_API_KEY env).
+      visionProvider: visionBridge,
+      desktopVisionMode: config.desktopVisionMode || 'off',
+      hcompanyApiKey: config.providers?.hcompany?.apiKey || process.env.HAI_API_KEY,
       // Desktop safety gate — the @ava/core tools call these on every
       // mutative action. Permission level and budget are read per call;
       // the approval handler emits a confirm_required NDJSON event and
@@ -1008,6 +1231,7 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
     input: ss.inputProvider,
     browser: ss.browserProvider,
     appLauncher: ss.appLauncherProvider,
+    vision: ss.visionProvider,
   };
 
   // Planner + Verifier are one-shot completions on the active model.
@@ -1896,6 +2120,19 @@ function handleInject(data) {
   emitError('Cannot inject — no active run.');
 }
 
+function handleSetDesktopVisionMode(data) {
+  const VALID = new Set(['off', 'local', 'cloud']);
+  const mode = VALID.has(data?.mode) ? data.mode : 'off';
+  const sharedState = globalThis._sharedState || {};
+  sharedState.desktopVisionMode = mode;
+  emit({ event: 'desktop_vision_mode_changed', mode });
+  // Private: bring the on-device engine up in the background so the first
+  // look doesn't pay the ~20s model-load on top of inference.
+  if (mode === 'local') {
+    ensureLocalVisionServer().catch(() => { /* reported via info event */ });
+  }
+}
+
 function handleSetDesktopPermissionLevel(data) {
   const VALID = new Set(['watch', 'ask', 'drive']);
   const level = VALID.has(data?.level) ? data.level : 'ask';
@@ -2226,6 +2463,12 @@ rl.on('line', async (line) => {
       break;
     case 'set_desktop_permission_level':
       handleSetDesktopPermissionLevel(data);
+      break;
+    case 'set_desktop_vision_mode':
+      handleSetDesktopVisionMode(data);
+      break;
+    case 'download_local_vision_model':
+      handleDownloadLocalVisionModel();
       break;
     case 'set_knowledge_packs':
       handleSetKnowledgePacks(data).catch((err) => emitError(err.message));
