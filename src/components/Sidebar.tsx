@@ -913,6 +913,21 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
   const [showKeys, setShowKeys] = useState(false);
   const [usePlatform, setUsePlatform] = useState(true);
 
+  // Re-read account state whenever sign-in/out fires anywhere — e.g. the
+  // onboarding overlay's own SignInPanel. Without this the sidebar holds the
+  // stale logged-out state it read on mount, so onboarding login looks ignored.
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        setPlatformKey(localStorage.getItem('ava-ide-platform-key') || '');
+        setEmail(getStoredEmail() || '');
+        setTier(getStoredTier() || 'free');
+      } catch { /* non-fatal */ }
+    };
+    window.addEventListener('ava-auth-changed', refresh);
+    return () => window.removeEventListener('ava-auth-changed', refresh);
+  }, []);
+
   const isConnected = platformKey.startsWith('sk-ava-');
 
   // Collapsed rail: just the avatar (or initial) at the bottom of the
