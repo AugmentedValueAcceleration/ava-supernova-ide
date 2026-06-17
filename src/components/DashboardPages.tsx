@@ -40,6 +40,13 @@ import { LessonPlayer, SAMPLE_LESSON, type PlayableLesson, type LessonStep } fro
 import { readLocalLearning } from '../lib/learning-store';
 import IdeTasksPanel, { IdeTasksSpine, type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
 import { readLocalTasks, createLocalTask, toggleLocalTask } from '../lib/task-store';
+import {
+  readMonth as readJournalMonth, addEntry as addJournalEntry, updateEntry as updateJournalEntry,
+  deleteEntry as deleteJournalEntry, searchJournal, listKinds as listJournalKinds, kindOf,
+  addKind as addJournalKind, deleteKind as deleteJournalKind, readYearSummaries,
+  BUILTIN_KINDS, KIND_COLORS,
+  type JournalMonthEntry, type JournalKind, type JournalSearchHit, type JournalAuthor, type JournalDaySummary,
+} from '../lib/journal-store';
 import { DocumentationPage } from './DocumentationPage';
 import { LibraryPapersPage } from './LibraryPapersPage';
 import { ContextBar } from './ContextBar';
@@ -219,16 +226,6 @@ const btnSecondary: React.CSSProperties = {
   color: '#cdd6f4',
   cursor: 'pointer',
 };
-
-const badge = (color: string): React.CSSProperties => ({
-  display: 'inline-block',
-  fontSize: 10,
-  fontWeight: 600,
-  color,
-  background: `${color}18`,
-  padding: '2px 8px',
-  borderRadius: 4,
-});
 
 /* ===== Shared Components ===== */
 
@@ -7785,399 +7782,424 @@ const MOOD_EMOJIS = ['', '\uD83D\uDE14', '\uD83D\uDE15', '\uD83D\uDE10', '\uD83D
 const MOOD_LABEL_KEYS = ['', 'dash.journal.mood_rough', 'dash.journal.mood_low', 'dash.journal.mood_okay', 'dash.journal.mood_good', 'dash.journal.mood_great'];
 const MOOD_COLORS_MAP = ['', '#ef4444', '#f59e0b', '#6b7280', '#3b82f6', '#34d399'];
 
-type JournalTab = 'user' | 'ava';
+interface JournalDraft {
+  id?: string;
+  date: string;
+  kind: string;
+  title: string;
+  content: string;
+  mood?: number;
+  tags: string;
+}
+
+/** Dark month calendar mirroring the sidebar look — replaces the native date input. */
+function JournalDatePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
+  const base = value ? new Date(`${value}T00:00:00`) : new Date();
+  const [view, setView] = useState({ y: base.getFullYear(), m: base.getMonth() });
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
+  const firstDay = new Date(view.y, view.m, 1).getDay();
+  const label = new Date(view.y, view.m, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const step = (delta: number) => setView((v) => { const d = new Date(v.y, v.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
+  return (
+    <div style={{ width: 220, background: 'rgba(26,16,40,0.97)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 10, padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <button onClick={() => step(-1)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13 }}>{'◀'}</button>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#cdd6f4' }}>{label}</span>
+        <button onClick={() => step(1)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13 }}>{'▶'}</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, textAlign: 'center', marginBottom: 4 }}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i} style={{ fontSize: 9, color: '#45475a' }}>{d}</span>)}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+        {days.map((day) => {
+          const iso = `${view.y}-${String(view.m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const isToday = iso === todayStr;
+          const isSel = iso === value;
+          return (
+            <button key={day} onClick={() => onChange(iso)} style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer', margin: '0 auto', fontSize: 11, background: isSel ? '#a855f7' : isToday ? 'rgba(168,85,247,0.2)' : 'transparent', color: isSel ? '#fff' : isToday ? '#a855f7' : '#a6adc8' }}>{day}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const journalMonthName = (y: number, m: number) => new Date(y, m - 1, 1).toLocaleString(undefined, { month: 'short' });
+const journalFmtDate = (iso: string) => { const [yy, mm, dd] = iso.split('-'); return `${dd}/${mm}/${yy}`; };
+const JOURNAL_LAST_KIND_KEY = 'ava-journal-last-kind';
+const readJournalLastKind = () => { try { return localStorage.getItem(JOURNAL_LAST_KIND_KEY) || 'personal'; } catch { return 'personal'; } };
+
+function journalHeatColor(s: JournalDaySummary | undefined): string {
+  if (!s || s.count === 0) return 'rgba(255,255,255,0.04)';
+  if (s.avgMood == null) return 'rgba(168,85,247,0.22)';
+  return MOOD_COLORS_MAP[Math.max(1, Math.min(5, Math.round(s.avgMood)))];
+}
+
+function JournalYearHeatmap({ year, summaries, onJump }: { year: number; summaries: JournalDaySummary[]; onJump: (iso: string) => void }) {
+  const byDate = useMemo(() => { const m = new Map<string, JournalDaySummary>(); for (const s of summaries) m.set(s.date, s); return m; }, [summaries]);
+  const weeks = useMemo(() => {
+    const start = new Date(year, 0, 1);
+    start.setDate(start.getDate() - start.getDay());
+    const end = new Date(year, 11, 31);
+    const out: Date[][] = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      const week: Date[] = [];
+      for (let d = 0; d < 7; d++) { week.push(new Date(cur)); cur.setDate(cur.getDate() + 1); }
+      out.push(week);
+    }
+    return out;
+  }, [year]);
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 3 }}>
+        {weeks.map((week, wi) => (
+          <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {week.map((d, di) => {
+              const inYear = d.getFullYear() === year;
+              const s = inYear ? byDate.get(iso(d)) : undefined;
+              return <button key={di} title={inYear ? `${iso(d)}${s ? ` · ${s.count}` : ''}` : ''} onClick={() => { if (inYear) onJump(iso(d)); }} style={{ width: 11, height: 11, borderRadius: 2, border: 'none', background: inYear ? journalHeatColor(s) : 'transparent', cursor: inYear ? 'pointer' : 'default', padding: 0 }} />;
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function JournalKindManager({ kinds, onChange, onClose }: { kinds: JournalKind[]; onChange: (k: JournalKind[]) => void; onClose: () => void }) {
+  const [label, setLabel] = useState('');
+  const [color, setColor] = useState(KIND_COLORS[0]);
+  const [tracksMood, setTracksMood] = useState(false);
+  const [err, setErr] = useState('');
+  const add = async () => {
+    const l = label.trim();
+    if (!l) return;
+    try {
+      const next = await addJournalKind({ id: l.toLowerCase().replace(/\s+/g, '-'), label: l, color, tracksMood });
+      onChange(next);
+      setLabel('');
+      setErr('');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+  const remove = async (id: string) => { try { onChange(await deleteJournalKind(id)); } catch { /* ignore */ } };
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(3px)' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, margin: '0 16px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', background: 'rgba(26,16,40,0.98)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 16, boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 10px' }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.journal.manage_kinds')}</span>
+          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', color: '#a6adc8', fontSize: 16 }}>{'✕'}</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px', minHeight: 0 }}>
+          {kinds.map((k) => (
+            <div key={k.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid rgba(168,85,247,0.08)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: '50%', background: k.color }} />
+              <span style={{ fontSize: 13, color: '#a6adc8', flex: 1 }}>{k.label}</span>
+              {k.tracksMood && <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.journal.tracks_mood')}</span>}
+              {k.builtin ? (
+                <span style={{ fontSize: 10, color: '#6c7086', opacity: 0.6 }}>{t('dash.journal.builtin')}</span>
+              ) : (
+                <button onClick={() => void remove(k.id)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 12 }} title={t('dash.journal.delete')}>{'🗑'}</button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(168,85,247,0.12)' }}>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); }} placeholder={t('dash.journal.kind_name')} style={{ ...inputStyle, marginBottom: 8, fontSize: 13 }} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {KIND_COLORS.map((c) => (
+              <button key={c} onClick={() => setColor(c)} style={{ width: 24, height: 24, borderRadius: '50%', cursor: 'pointer', background: c, border: color === c ? '2px solid #fff' : '2px solid transparent' }} />
+            ))}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 12, color: '#6c7086', cursor: 'pointer' }}>
+            <input type="checkbox" checked={tracksMood} onChange={(e) => setTracksMood(e.target.checked)} />
+            {t('dash.journal.tracks_mood_hint')}
+          </label>
+          {err && <div style={{ fontSize: 11, color: '#f38ba8', marginBottom: 8 }}>{err}</div>}
+          <button onClick={() => void add()} disabled={!label.trim()} style={{ ...btnPrimary, width: '100%', padding: '8px', fontSize: 12, opacity: label.trim() ? 1 : 0.4 }}>+ {t('dash.journal.add_kind')}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function JournalPage() {
   useLocale();
-  const [dateOffset, setDateOffset] = useState(0);
-  const [tab, setTab] = useState<JournalTab>('user');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [pickerDate, setPickerDate] = useState('');
-  const connected = checkConnected();
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1); // 1-12
+  const [entries, setEntries] = useState<JournalMonthEntry[]>([]);
+  const [kinds, setKinds] = useState<JournalKind[]>(BUILTIN_KINDS);
+  const [loading, setLoading] = useState(true);
+  const [filterKind, setFilterKind] = useState<string | null>(null);
+  const [filterAuthor, setFilterAuthor] = useState<JournalAuthor | null>(null);
+  const [query, setQuery] = useState('');
+  const [searchHits, setSearchHits] = useState<JournalSearchHit[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<JournalDraft | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showCal, setShowCal] = useState(false);
+  const [showKinds, setShowKinds] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [yearSummaries, setYearSummaries] = useState<JournalDaySummary[]>([]);
 
-  const targetDate = new Date();
-  targetDate.setDate(targetDate.getDate() + dateOffset);
-  const yyyy = targetDate.getFullYear();
-  const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
-  const dd = String(targetDate.getDate()).padStart(2, '0');
-  const isoDate = `${yyyy}-${mm}-${dd}`;
-  const dateStr = targetDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const isToday = dateOffset === 0;
+  const reload = useCallback(async () => {
+    setLoading(true);
+    const [m, k, y] = await Promise.all([readJournalMonth(year, month), listJournalKinds(), readYearSummaries(year)]);
+    setEntries(m);
+    setKinds(k);
+    setYearSummaries(y);
+    setLoading(false);
+  }, [year, month]);
 
-  const { data: journalData, loading } = useApiData<any>(`/journal?date=${isoDate}`, null);
+  useEffect(() => { void reload(); }, [reload]);
 
-  // Extract user/ava entries — handle both { user_entry, ava_entry } and flat formats
-  const userEntry = journalData?.user_entry || (journalData?.content ? journalData : null);
-  const avaEntry = journalData?.ava_entry || (journalData?.ava_observation ? { content: journalData.ava_observation } : null);
+  const years = useMemo(() => {
+    const cy = new Date().getFullYear();
+    const s = new Set<number>([cy, year]);
+    for (let y = cy; y >= cy - 4; y--) s.add(y);
+    return [...s].sort((a, b) => b - a);
+  }, [year]);
 
-  const [entry, setEntry] = useState('');
-  const [mood, setMood] = useState<number | undefined>(undefined);
-  const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState('');
+  const visible = useMemo(() => {
+    let rows = [...entries];
+    if (filterKind) rows = rows.filter((e) => e.kind === filterKind);
+    if (filterAuthor) rows = rows.filter((e) => e.author === filterAuthor);
+    return rows.sort((a, b) => (a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)));
+  }, [entries, filterKind, filterAuthor]);
 
-  // Local-first: load from localStorage, merge with cloud if available
-  useEffect(() => {
-    // Cloud data takes priority if available, otherwise load local
-    const cloudContent = userEntry?.content || journalData?.content || journalData?.entry || '';
-    const cloudMood = userEntry?.mood || journalData?.mood || undefined;
-    if (cloudContent) {
-      setEntry(cloudContent);
-      setMood(cloudMood);
+  const openEntry = openId ? entries.find((e) => e.id === openId) ?? null : null;
+  const todayIso = () => new Date().toISOString().slice(0, 10);
+
+  const startNew = () => { setShowCal(false); setDraft({ date: todayIso(), kind: readJournalLastKind(), title: '', content: '', mood: undefined, tags: '' }); };
+  const startEdit = (e: JournalMonthEntry) => { setOpenId(null); setShowCal(false); setDraft({ id: e.id, date: e.date, kind: e.kind, title: e.title ?? '', content: e.content, mood: e.mood, tags: (e.tags ?? []).join(', ') }); };
+
+  const saveDraft = async () => {
+    if (!draft || !draft.content.trim()) return;
+    try { localStorage.setItem(JOURNAL_LAST_KIND_KEY, draft.kind); } catch { /* ignore */ }
+    const tags = draft.tags.split(',').map((s) => s.trim()).filter(Boolean);
+    const tracksMood = kindOf(kinds, draft.kind).tracksMood;
+    const mood = tracksMood ? draft.mood : undefined;
+    const [yy, mm] = draft.date.split('-').map(Number);
+    if (draft.id) {
+      await updateJournalEntry(draft.date, draft.id, { kind: draft.kind, title: draft.title, content: draft.content, mood: mood ?? null, tags });
     } else {
-      // Load from localStorage
-      try {
-        const local = localStorage.getItem(`ava-ide-journal-${isoDate}`);
-        if (local) {
-          const parsed = JSON.parse(local);
-          setEntry(parsed.content || '');
-          setMood(parsed.mood || undefined);
-        } else {
-          setEntry('');
-          setMood(undefined);
-        }
-      } catch { setEntry(''); setMood(undefined); }
+      await addJournalEntry(draft.date, { author: 'user', kind: draft.kind, title: draft.title, content: draft.content, mood, tags });
     }
-  }, [journalData, isoDate]);
-
-  const saveEntry = async () => {
-    // Always save locally first
-    try { localStorage.setItem(`ava-ide-journal-${isoDate}`, JSON.stringify({ content: entry, mood, date: isoDate })); } catch {}
-
-    setSaving(true);
-    setSaveMsg('');
-    // Cloud write only when Data Mode allows it. Local mode keeps
-    // the localStorage write above and skips the /journal POST
-    // entirely, so the entry stays on device.
-    if (connected && cloudSyncEnabled()) {
-      try {
-        await apiFetch('/journal', {
-          method: 'POST',
-          body: JSON.stringify({ date: isoDate, content: entry, mood }),
-        });
-        setSaveMsg(t('dash.journal.saved'));
-      } catch (err: any) {
-        setSaveMsg(t('dash.journal.saved') + ' (local)');
-      }
-    } else {
-      setSaveMsg(t('dash.journal.saved') + ' (local)');
-    }
-    setTimeout(() => setSaveMsg(''), 2000);
-    setSaving(false);
+    setDraft(null);
+    if (yy !== year || mm !== month) { setYear(yy); setMonth(mm); } else { void reload(); }
   };
 
-  const handleDatePickerChange = (val: string) => {
-    setPickerDate(val);
-    setShowDatePicker(false);
-    if (!val) return;
-    const picked = new Date(val + 'T00:00:00');
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const diffMs = picked.getTime() - now.getTime();
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-    setDateOffset(diffDays);
-  };
+  const removeEntry = async (e: JournalMonthEntry) => { await deleteJournalEntry(e.date, e.id); setOpenId(null); setConfirmDelete(false); void reload(); };
+  const submitSearch = async () => { const q = query.trim(); if (!q) return; setSearchHits(await searchJournal(q, { kind: filterKind ?? undefined, author: filterAuthor ?? undefined })); };
+  const clearSearch = () => { setSearchHits(null); setQuery(''); };
 
-  // Mini calendar state
-  const calendarMonth = targetDate.getMonth();
-  const calendarYear = targetDate.getFullYear();
-  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-  const firstDayOfWeek = new Date(calendarYear, calendarMonth, 1).getDay();
-  const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const monthLabel = new Date(calendarYear, calendarMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const draftKind = draft ? kindOf(kinds, draft.kind) : null;
 
   return (
-    <div style={{ ...pageWrapper, display: 'flex', gap: 24 }}>
-      {/* Main content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={pageWrapper}>
+      <div style={{ width: '100%' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
           <div style={pageTitle}>{t('dash.journal.title')}</div>
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ ...inputStyle, width: 'auto', height: 30, padding: '0 8px', fontSize: 12, colorScheme: 'dark' }}>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <button onClick={() => setShowHeatmap((s) => !s)} title={t('dash.journal.year_view')} style={{ padding: '6px 11px', borderRadius: 6, fontSize: 11, cursor: 'pointer', border: '1px solid rgba(168,85,247,0.15)', background: showHeatmap ? 'rgba(168,85,247,0.15)' : 'transparent', color: showHeatmap ? '#cdd6f4' : '#6c7086' }}>{t('dash.journal.year_view')}</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={startNew} style={{ ...btnPrimary, padding: '8px 16px', fontSize: 13 }}>+ {t('dash.journal.write_entry')}</button>
         </div>
         <div style={pageSubtitle}>{t('dash.journal.subtitle')}</div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 20 }}>
-          <button
-            onClick={() => setTab('user')}
-            style={{
-              padding: '10px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-              background: 'transparent', border: 'none',
-              borderBottom: tab === 'user' ? '2px solid #a855f7' : '2px solid transparent',
-              color: tab === 'user' ? '#cdd6f4' : '#6c7086',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            {t('dash.journal.your_entries')}
-            {userEntry && (
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%', background: '#cdd6f4', display: 'inline-block',
-              }} />
-            )}
-          </button>
-          <button
-            onClick={() => setTab('ava')}
-            style={{
-              padding: '10px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-              background: 'transparent', border: 'none',
-              borderBottom: tab === 'ava' ? '2px solid #a855f7' : '2px solid transparent',
-              color: tab === 'ava' ? '#a855f7' : '#6c7086',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            {t('dash.journal.ava_entries')}
-            {avaEntry && (
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%', background: '#a855f7', display: 'inline-block',
-              }} />
-            )}
-          </button>
-          <div style={{ flex: 1 }} />
-          <span style={{ alignSelf: 'center', fontSize: 11, color: '#6c7086', paddingRight: 4 }}>
-            {dd}/{mm}/{yyyy}
-          </span>
-        </div>
-
-        {/* Date navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <button
-            onClick={() => setDateOffset((d) => d - 1)}
-            style={{ ...btnSecondary, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12 }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#45475a'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            {t('dash.journal.prev')}
-          </button>
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => { setPickerDate(isoDate); setShowDatePicker(!showDatePicker); }}
-              style={{
-                background: 'transparent', border: 'none', cursor: 'pointer',
-                fontSize: 14, fontWeight: 500, color: '#cdd6f4',
-                display: 'flex', alignItems: 'center', gap: 8,
-              }}
-            >
-              {dateStr}
-              {isToday && <span style={{ ...badge('#a855f7'), marginLeft: 4 }}>{t('dash.journal.today')}</span>}
-            </button>
-            {showDatePicker && (
-              <div style={{
-                position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-                marginTop: 8, zIndex: 10,
-                background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
-                padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-              }}>
-                <input
-                  type="date"
-                  value={pickerDate}
-                  onChange={(e) => handleDatePickerChange(e.target.value)}
-                  style={{ ...inputStyle, height: 32, colorScheme: 'dark' }}
-                  autoFocus
-                />
-              </div>
-            )}
+        {/* Year heatmap */}
+        {showHeatmap && (
+          <div style={{ ...card, padding: 12, marginBottom: 14 }}>
+            <JournalYearHeatmap year={year} summaries={yearSummaries} onJump={(iso) => { const [yy, mm] = iso.split('-').map(Number); setYear(yy); setMonth(mm); }} />
           </div>
-          <button
-            onClick={() => setDateOffset((d) => Math.min(d + 1, 0))}
-            style={{
-              ...btnSecondary, display: 'flex', alignItems: 'center', gap: 6,
-              padding: '7px 14px', fontSize: 12,
-              opacity: isToday ? 0.4 : 1, pointerEvents: isToday ? 'none' : 'auto',
-            }}
-            onMouseEnter={(e) => { if (!isToday) e.currentTarget.style.background = '#45475a'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
-          >
-            {t('dash.journal.next')}
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
-
-        {loading ? <LoadingSpinner /> : (
-          <>
-            {/* Tab: Your Journal */}
-            {tab === 'user' && (
-              <div style={{ ...card, padding: 24 }}>
-                {/* Mood selector */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 16 }}>
-                  <span style={{ fontSize: 11, color: '#6c7086', marginRight: 8 }}>{t('dash.journal.mood')}</span>
-                  {[1, 2, 3, 4, 5].map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setMood(mood === m ? undefined : m)}
-                      style={{
-                        width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
-                        border: mood === m ? `2px solid ${MOOD_COLORS_MAP[m]}` : '2px solid transparent',
-                        background: mood === m ? `${MOOD_COLORS_MAP[m]}18` : 'transparent',
-                        fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.15s',
-                        filter: mood === m ? 'none' : 'grayscale(0.5)',
-                        opacity: mood === m ? 1 : 0.6,
-                      }}
-                      title={t(MOOD_LABEL_KEYS[m])}
-                    >
-                      {MOOD_EMOJIS[m]}
-                    </button>
-                  ))}
-                  {mood && (
-                    <span style={{
-                      fontSize: 11, fontWeight: 600, marginLeft: 8,
-                      color: MOOD_COLORS_MAP[mood],
-                    }}>
-                      {t(MOOD_LABEL_KEYS[mood])}
-                    </span>
-                  )}
-                </div>
-
-                {/* Textarea */}
-                <textarea
-                  value={entry}
-                  onChange={(e) => setEntry(e.target.value)}
-                  placeholder={t('dash.journal.write')}
-                  style={{
-                    width: '100%', minHeight: 200, background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(168,85,247,0.15)',
-                    borderRadius: 8, padding: 16, fontSize: 14, color: '#cdd6f4', outline: 'none',
-                    resize: 'vertical', lineHeight: 1.7, fontFamily: 'inherit',
-                  }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168,85,247,0.15)'; }}
-                />
-
-                {/* Save button */}
-                {connected && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-                    <button
-                      onClick={saveEntry}
-                      disabled={saving}
-                      style={{
-                        ...btnPrimary, padding: '8px 20px', fontSize: 13,
-                        opacity: saving ? 0.6 : 1,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
-                    >
-                      {saving ? t('dash.journal.saving') : t('dash.journal.save_entry')}
-                    </button>
-                    {saveMsg && (
-                      <span style={{
-                        fontSize: 12,
-                        color: saveMsg.startsWith('Error') ? '#f38ba8' : '#a6e3a1',
-                      }}>
-                        {saveMsg}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab: Ava's Journal */}
-            {tab === 'ava' && (
-              <div style={{
-                ...card, padding: 24,
-                borderColor: 'rgba(168,85,247,0.2)',
-              }}>
-                {avaEntry ? (
-                  <>
-                    <div style={{
-                      fontSize: 14, color: '#a6adc8', lineHeight: 1.8,
-                      fontStyle: 'italic', whiteSpace: 'pre-wrap',
-                      borderLeft: '3px solid rgba(168,85,247,0.3)',
-                      paddingLeft: 16,
-                    }}>
-                      {avaEntry.content || avaEntry}
-                    </div>
-                    {avaEntry.tags && avaEntry.tags.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 16 }}>
-                        {avaEntry.tags.map((tag: string) => (
-                          <span key={tag} style={{
-                            fontSize: 10, fontWeight: 500,
-                            color: '#a855f7', background: 'rgba(168,85,247,0.1)',
-                            padding: '2px 8px', borderRadius: 4,
-                          }}>
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '32px 20px' }}>
-                    <div style={{ marginBottom: 12 }}>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="1.5" style={{ opacity: 0.3 }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
-                      </svg>
-                    </div>
-                    <div style={{ fontSize: 14, color: '#6c7086' }}>
-                      {t('dash.journal.ava_no_entry')}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#6c7086', marginTop: 6, opacity: 0.6 }}>
-                      {t('dash.journal.ava_session_note')}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
         )}
-      </div>
 
-      {/* Mini Calendar */}
-      <div style={{ width: 220, flexShrink: 0 }}>
-        <div style={{ ...card, padding: 14 }}>
-          {/* Month nav */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <button onClick={() => setDateOffset((d) => d - 30)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 14 }}>{'\u25C0'}</button>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4' }}>{monthLabel}</span>
-            <button onClick={() => setDateOffset((d) => d + 30)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 14 }}>{'\u25B6'}</button>
-          </div>
-          {/* Day headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', marginBottom: 4 }}>
-            {[t('dash.journal.day_su'), t('dash.journal.day_mo'), t('dash.journal.day_tu'), t('dash.journal.day_we'), t('dash.journal.day_th'), t('dash.journal.day_fr'), t('dash.journal.day_sa')].map((d) => (
-              <span key={d} style={{ fontSize: 9, color: '#45475a', fontWeight: 600 }}>{d}</span>
-            ))}
-          </div>
-          {/* Day grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-            {/* Empty cells for offset */}
-            {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`e-${i}`} />)}
-            {calendarDays.map((day) => {
-              const isSelected = day === targetDate.getDate();
-              const todayDate = new Date();
-              const isCurrentDay = day === todayDate.getDate() && calendarMonth === todayDate.getMonth() && calendarYear === todayDate.getFullYear();
+        {/* Month tabs */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <button key={m} onClick={() => setMonth(m)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500, background: m === month ? '#a855f7' : 'rgba(49,34,68,0.5)', color: m === month ? '#fff' : '#6c7086' }}>
+              {journalMonthName(year, m)}
+            </button>
+          ))}
+        </div>
+
+        {/* Filters + search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          <button onClick={() => setFilterKind(null)} style={{ padding: '4px 10px', borderRadius: 999, fontSize: 11, cursor: 'pointer', background: 'transparent', border: `1px solid ${filterKind === null ? '#a855f7' : 'rgba(168,85,247,0.15)'}`, color: filterKind === null ? '#cdd6f4' : '#6c7086' }}>{t('dash.journal.all_kinds')}</button>
+          {kinds.map((k) => (
+            <button key={k.id} onClick={() => setFilterKind(filterKind === k.id ? null : k.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, fontSize: 11, cursor: 'pointer', background: 'transparent', border: `1px solid ${filterKind === k.id ? k.color : 'rgba(168,85,247,0.15)'}`, color: filterKind === k.id ? '#cdd6f4' : '#6c7086' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: k.color }} />{k.label}
+            </button>
+          ))}
+          <button onClick={() => setShowKinds(true)} title={t('dash.journal.manage_kinds')} style={{ padding: '4px 9px', borderRadius: 999, fontSize: 12, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(168,85,247,0.15)', color: '#6c7086' }}>{'⚙'}</button>
+          <span style={{ width: 1, height: 16, background: 'rgba(168,85,247,0.15)', margin: '0 4px' }} />
+          {(['user', 'ava'] as const).map((a) => (
+            <button key={a} onClick={() => setFilterAuthor(filterAuthor === a ? null : a)} style={{ padding: '4px 10px', borderRadius: 999, fontSize: 11, cursor: 'pointer', background: 'transparent', border: `1px solid ${filterAuthor === a ? '#a855f7' : 'rgba(168,85,247,0.15)'}`, color: filterAuthor === a ? '#cdd6f4' : '#6c7086' }}>{a === 'user' ? t('dash.journal.filter_you') : t('dash.journal.filter_ava')}</button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void submitSearch(); }} placeholder={t('dash.journal.search_placeholder')} style={{ ...inputStyle, width: 180, height: 30, fontSize: 12 }} />
+        </div>
+
+        {/* Body */}
+        {loading ? <LoadingSpinner /> : searchHits ? (
+          <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid rgba(168,85,247,0.12)' }}>
+              <span style={{ fontSize: 12, color: '#6c7086' }}>{searchHits.length} {t('dash.journal.results')}</span>
+              <button onClick={clearSearch} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 11 }}>{t('dash.journal.clear_search')}</button>
+            </div>
+            {searchHits.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: '#6c7086', fontSize: 13 }}>{t('dash.journal.no_results')}</div>
+            ) : searchHits.map((h) => {
+              const k = kindOf(kinds, h.kind);
               return (
-                <button
-                  key={day}
-                  onClick={() => {
-                    const clicked = new Date(calendarYear, calendarMonth, day);
-                    const now = new Date(); now.setHours(0, 0, 0, 0);
-                    setDateOffset(Math.round((clicked.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-                  }}
-                  style={{
-                    width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer',
-                    background: isSelected ? '#a855f7' : isCurrentDay ? 'rgba(168,85,247,0.2)' : 'transparent',
-                    color: isSelected ? '#fff' : isCurrentDay ? '#a855f7' : '#a6adc8',
-                    fontSize: 11, fontWeight: isSelected || isCurrentDay ? 600 : 400,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >{day}</button>
+                <button key={h.entryId} onClick={() => { const [yy, mm] = h.date.split('-').map(Number); setYear(yy); setMonth(mm); clearSearch(); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 16px', border: 'none', borderBottom: '1px solid rgba(168,85,247,0.08)', background: 'transparent', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, color: '#6c7086' }}>{h.date}</span>
+                    <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: `${k.color}22`, color: k.color }}>{k.label}</span>
+                  </div>
+                  {h.title && <div style={{ fontSize: 13, fontWeight: 500, color: '#cdd6f4' }}>{h.title}</div>}
+                  <div style={{ fontSize: 12, color: '#6c7086' }}>{'…'}{h.snippet}{'…'}</div>
+                </button>
               );
             })}
           </div>
-          {/* Legend */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 10, justifyContent: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6c7086' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#cdd6f4' }} /> {t('dash.journal.your_entry_legend')}
+        ) : visible.length === 0 ? (
+          <div style={{ ...card, padding: 40, textAlign: 'center' }}>
+            <div style={{ fontSize: 14, color: '#6c7086', marginBottom: 14 }}>{t('dash.journal.no_entries')}</div>
+            <button onClick={startNew} style={{ ...btnPrimary, padding: '8px 20px', fontSize: 13 }}>+ {t('dash.journal.write_entry')}</button>
+          </div>
+        ) : (
+          <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+            {visible.map((e, i) => {
+              const k = kindOf(kinds, e.kind);
+              return (
+                <button key={e.id} onClick={() => setOpenId(e.id)} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%', textAlign: 'left', padding: '12px 16px', border: 'none', borderTop: i === 0 ? 'none' : '1px solid rgba(168,85,247,0.08)', background: 'transparent', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 36, flexShrink: 0 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: '#a6adc8', lineHeight: 1 }}>{e.date.split('-')[2]}</span>
+                    <span style={{ fontSize: 9, color: '#6c7086', marginTop: 2 }}>{journalMonthName(year, month)}</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: `${k.color}22`, color: k.color }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: k.color }} />{k.label}
+                      </span>
+                      {e.author === 'ava' && <span style={{ fontSize: 10, color: '#a855f7' }}>{t('dash.journal.ava_label')}</span>}
+                      {e.mood ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: MOOD_COLORS_MAP[e.mood] }} title={t(MOOD_LABEL_KEYS[e.mood])} /> : null}
+                    </div>
+                    {e.title && <div style={{ fontSize: 13, fontWeight: 500, color: '#cdd6f4', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title}</div>}
+                    <div style={{ fontSize: 12, color: '#6c7086', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.content.split('\n')[0]}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Entry viewer overlay */}
+      {openEntry && !draft && (() => {
+        const k = kindOf(kinds, openEntry.kind);
+        return (
+          <div onClick={() => { setOpenId(null); setConfirmDelete(false); }} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(3px)' }}>
+            <div onClick={(ev) => ev.stopPropagation()} style={{ width: '100%', maxWidth: 560, margin: '0 16px', maxHeight: '82vh', display: 'flex', flexDirection: 'column', background: 'rgba(26,16,40,0.98)', border: `1px solid ${k.color}33`, borderRadius: 16, boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, padding: '3px 9px', borderRadius: 999, background: `${k.color}22`, color: k.color }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: k.color }} />{k.label}</span>
+                  <span style={{ fontSize: 11, color: '#6c7086' }}>{openEntry.date}</span>
+                  {openEntry.author === 'ava' && <span style={{ fontSize: 11, color: '#a855f7' }}>{t('dash.journal.ava_label')}</span>}
+                  {openEntry.mood ? <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, color: '#fff', background: MOOD_COLORS_MAP[openEntry.mood] }}>{t(MOOD_LABEL_KEYS[openEntry.mood])}</span> : null}
+                </div>
+                <button onClick={() => { setOpenId(null); setConfirmDelete(false); }} style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', color: '#a6adc8', fontSize: 16 }}>{'✕'}</button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 12px', minHeight: 0 }}>
+                {openEntry.title && <div style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{openEntry.title}</div>}
+                <div style={{ fontSize: 14, color: '#a6adc8', lineHeight: 1.7 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(openEntry.content) }} />
+                {openEntry.tags && openEntry.tags.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 16 }}>
+                    {openEntry.tags.map((tag) => <span key={tag} style={{ fontSize: 10, color: '#6c7086', background: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 999 }}>#{tag}</span>)}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, padding: '8px 20px 18px' }}>
+                {openEntry.author === 'user' && <button onClick={() => startEdit(openEntry)} style={{ ...btnPrimary, padding: '8px 16px', fontSize: 12 }}>{t('dash.journal.edit_entry')}</button>}
+                {confirmDelete ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: '#f38ba8' }}>{t('dash.journal.delete_confirm')}</span>
+                    <button onClick={() => void removeEntry(openEntry)} style={{ fontSize: 11, padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(243,139,168,0.3)', background: 'rgba(243,139,168,0.15)', color: '#f38ba8', cursor: 'pointer' }}>{t('dash.journal.yes')}</button>
+                    <button onClick={() => setConfirmDelete(false)} style={{ fontSize: 11, padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.15)', background: 'transparent', color: '#6c7086', cursor: 'pointer' }}>{t('dash.journal.no')}</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDelete(true)} style={{ ...btnSecondary, padding: '8px 16px', fontSize: 12 }}>{t('dash.journal.delete')}</button>
+                )}
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6c7086' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }} /> {t('dash.journal.ava_entry_legend')}
+          </div>
+        );
+      })()}
+
+      {/* Composer / editor overlay */}
+      {draft && draftKind && (
+        <div onClick={() => setDraft(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(3px)' }}>
+          <div onClick={(ev) => ev.stopPropagation()} style={{ width: '100%', maxWidth: 560, margin: '0 16px', maxHeight: '88vh', display: 'flex', flexDirection: 'column', background: 'rgba(26,16,40,0.98)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 16, boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 10px' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{draft.id ? t('dash.journal.edit_entry') : t('dash.journal.write_entry')}</span>
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setShowCal((s) => !s)} style={{ ...inputStyle, width: 'auto', height: 30, padding: '0 10px', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+                  {journalFmtDate(draft.date)}
+                </button>
+                {showCal && (
+                  <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 6, zIndex: 20 }}>
+                    <JournalDatePicker value={draft.date} onChange={(iso) => { setDraft({ ...draft, date: iso }); setShowCal(false); }} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px', minHeight: 0 }}>
+              {/* Kind picker */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {kinds.map((k) => (
+                  <button key={k.id} onClick={() => setDraft({ ...draft, kind: k.id, mood: k.tracksMood ? draft.mood : undefined })} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, fontSize: 11, cursor: 'pointer', background: draft.kind === k.id ? `${k.color}22` : 'transparent', border: `1px solid ${draft.kind === k.id ? k.color : 'rgba(168,85,247,0.15)'}`, color: draft.kind === k.id ? k.color : '#6c7086' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: k.color }} />{k.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Mood — reflective kinds only */}
+              {draftKind.tracksMood && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: '#6c7086', marginRight: 6 }}>{t('dash.journal.mood')}</span>
+                  {[1, 2, 3, 4, 5].map((m) => (
+                    <button key={m} onClick={() => setDraft({ ...draft, mood: draft.mood === m ? undefined : m })} title={t(MOOD_LABEL_KEYS[m])} style={{ width: 34, height: 34, borderRadius: '50%', cursor: 'pointer', fontSize: 16, border: draft.mood === m ? `2px solid ${MOOD_COLORS_MAP[m]}` : '2px solid transparent', background: draft.mood === m ? `${MOOD_COLORS_MAP[m]}18` : 'transparent', filter: draft.mood === m ? 'none' : 'grayscale(0.5)', opacity: draft.mood === m ? 1 : 0.6 }}>{MOOD_EMOJIS[m]}</button>
+                  ))}
+                </div>
+              )}
+
+              <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder={t('dash.journal.title_placeholder')} style={{ ...inputStyle, marginBottom: 8, fontSize: 14 }} />
+              <textarea value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} placeholder={t('dash.journal.write')} style={{ width: '100%', minHeight: 200, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(168,85,247,0.15)', borderRadius: 8, padding: 14, fontSize: 14, color: '#cdd6f4', outline: 'none', resize: 'vertical', lineHeight: 1.7, fontFamily: 'inherit' }} autoFocus />
+              <input value={draft.tags} onChange={(e) => setDraft({ ...draft, tags: e.target.value })} placeholder={t('dash.journal.tags_placeholder')} style={{ ...inputStyle, marginTop: 8, fontSize: 12 }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, padding: '12px 20px 18px' }}>
+              <button onClick={() => void saveDraft()} disabled={!draft.content.trim()} style={{ ...btnPrimary, flex: 1, padding: '10px', fontSize: 13, opacity: draft.content.trim() ? 1 : 0.4 }}>{t('dash.journal.save_entry')}</button>
+              <button onClick={() => setDraft(null)} style={{ ...btnSecondary, padding: '10px 20px', fontSize: 13 }}>{t('dash.journal.cancel')}</button>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {showKinds && <JournalKindManager kinds={kinds} onChange={setKinds} onClose={() => setShowKinds(false)} />}
     </div>
   );
 }
@@ -10854,7 +10876,7 @@ export function CloudSyncPage() {
   const DATA_TYPES = [
     { key: 'memory',      label: t('dash.sync.memory'),           icon: '\uD83E\uDDE0', description: t('dash.sync.memory_desc'),    endpoint: '/memories' },
     { key: 'tasks',       label: t('dash.sync.tasks'),            icon: '\u2713',       description: t('dash.sync.tasks_desc'),     endpoint: '/tasks' },
-    { key: 'journal',     label: t('dash.sync.journal'),          icon: '\uD83D\uDCD6', description: t('dash.sync.journal_desc'), endpoint: '/journal' },
+    // Journal is local-only \u2014 it never syncs to the cloud, so it's not listed here.
     { key: 'learning',    label: t('dash.nav.learning'),         icon: '\uD83C\uDF93', description: t('dash.nav.learning_desc'),              endpoint: '/learning' },
     { key: 'settings',    label: t('dash.sync.settings'),         icon: '\u2699',       description: t('dash.sync.settings_desc'),           endpoint: '/settings' },
     { key: 'personality', label: t('dash.sync.personality'),      icon: '\uD83C\uDFAD', description: t('dash.sync.personality_desc'),       endpoint: '/settings' },
