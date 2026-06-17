@@ -20,7 +20,6 @@ import {
   RoadmapPage,
   PlannerPage,
   AccountPage,
-  ModelsPage,
   HelpPage,
 } from './DashboardPages';
 import { DocumentationPage } from './DocumentationPage';
@@ -56,7 +55,6 @@ export type DashboardPageId =
   | 'roadmap'
   | 'planner'
   | 'account'
-  | 'models'
   | 'help';
 
 interface Props {
@@ -93,7 +91,6 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'planner': '\uD83D\uDCCB',
   'account': '\u2699\uFE0F',
   'help': '\u2753',
-  'models': '🧠',
 };
 
 // Map stable IDs to i18n keys for tab labels
@@ -121,7 +118,6 @@ const dashboardLabelKeys: Record<DashboardPageId, string> = {
   'roadmap': 'dash.nav.roadmap',
   'planner': 'dash.nav.planner',
   'account': 'dash.nav.account',
-  'models': 'dash.nav.models',
   'help': 'dash.nav.help',
 };
 
@@ -149,7 +145,6 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'roadmap': RoadmapPage,
   'planner': PlannerPage,
   'account': AccountPage,
-  'models': ModelsPage,
   'help': HelpPage,
 };
 

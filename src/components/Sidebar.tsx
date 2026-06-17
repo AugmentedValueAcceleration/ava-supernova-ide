@@ -11,7 +11,6 @@ import {
   Palette as PhCreative,
   Brain as PhMemory,
   ChartLineUp as PhHistory,
-  Cpu as PhModels,
   GearSix as PhAccount,
   Question as PhHelp,
 } from '@phosphor-icons/react';
@@ -1117,7 +1116,6 @@ const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string }[]
   { id: 'creative-studio', Icon: PhCreative, label: 'Creative Studio', desc: 'Images, music, video, voice' },
   { id: 'memory',          Icon: PhMemory,   label: 'Memory',         desc: 'Patterns, preferences, decisions' },
   { id: 'chat-history',    Icon: PhHistory,  label: 'History',        desc: 'Credits, sessions, models' },
-  { id: 'models',          Icon: PhModels,   label: 'Models',         desc: 'Public benchmark · auditable receipts' },
   { id: 'account',         Icon: PhAccount,  label: 'Account',        desc: 'Settings, billing, personalisation' },
   { id: 'help',            Icon: PhHelp,     label: 'Help',           desc: 'Support, releases, roadmap' },
 ];
