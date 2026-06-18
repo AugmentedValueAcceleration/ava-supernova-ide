@@ -12327,6 +12327,23 @@ export function SettingsPage() {
           </div>
         </div>
 
+        {/* Welcome tour — replay it or toggle whether it shows on startup. */}
+        <div style={{ ...card, padding: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('onboarding.replay')}</div>
+            <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('onboarding.identity.cta')}</div>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#a6adc8', cursor: 'pointer' }}>
+            <input type="checkbox" defaultChecked={localStorage.getItem('ava-ide-welcome-on-startup') !== 'false'}
+              onChange={(e) => { try { localStorage.setItem('ava-ide-welcome-on-startup', e.target.checked ? 'true' : 'false'); } catch { /* non-fatal */ } }} />
+            {t('onboarding.show_on_startup')}
+          </label>
+          <button onClick={() => window.dispatchEvent(new CustomEvent('ava-open-welcome'))}
+            style={{ padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.25)', color: '#a855f7' }}>
+            {t('onboarding.replay')}
+          </button>
+        </div>
+
         {/* ── Inner tab bar — underline-tab pattern matching Library / Models pages */}
         <div style={{
           display: 'flex', gap: 4, marginBottom: 20,

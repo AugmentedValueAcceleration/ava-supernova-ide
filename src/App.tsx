@@ -27,7 +27,10 @@ function save(key: string, value: unknown) {
 }
 
 export default function App() {
-  const [showWelcome, setShowWelcome] = useState(() => localStorage.getItem('ava-ide-onboarded') !== 'true');
+  // Show on every startup while the "show on startup" preference is on (default
+  // true) — for everyone, signed in or not. The overlay's checkbox + the
+  // Settings toggle write `ava-ide-welcome-on-startup`.
+  const [showWelcome, setShowWelcome] = useState(() => localStorage.getItem('ava-ide-welcome-on-startup') !== 'false');
   const [activeActivity, setActiveActivity] = useState<ActivityItem>(() => load('activity', 'dashboard'));
   const [sidebarOpen, setSidebarOpen] = useState(() => load('sidebarOpen', true));
   const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => load('sidebarPos', 'left'));
@@ -154,6 +157,13 @@ export default function App() {
     const handler = () => setCurrentMode(localStorage.getItem('ava-ide-chat-mode') || 'work');
     window.addEventListener('ava-mode-changed', handler);
     return () => window.removeEventListener('ava-mode-changed', handler);
+  }, []);
+
+  // Replay the welcome tour (from Settings) — non-destructive.
+  useEffect(() => {
+    const handler = () => setShowWelcome(true);
+    window.addEventListener('ava-open-welcome', handler);
+    return () => window.removeEventListener('ava-open-welcome', handler);
   }, []);
 
   // Re-fetch tier from the platform on launch and whenever the IDE
