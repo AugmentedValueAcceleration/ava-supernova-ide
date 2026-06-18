@@ -188,12 +188,21 @@ export interface HealthTaxonomyDietaryFlag {
   sort_order: number;
 }
 
+/** Curated collection (Unprocessed, …) — the operator-driven filter axis. */
+export interface HealthTaxonomyCollection {
+  slug: string;
+  name: string;
+  description?: string | null;
+  sort_order: number;
+}
+
 export interface HealthTaxonomies {
   allergens: HealthTaxonomyAllergen[];
   contraindications: HealthTaxonomyContraindication[];
   cuisines: HealthTaxonomyCuisine[];
   diets: HealthTaxonomyDiet[];
   dietary_flags: HealthTaxonomyDietaryFlag[];
+  collections: HealthTaxonomyCollection[];
 }
 
 // ── Fetch helper ──────────────────────────────────────────────────────────
@@ -282,13 +291,23 @@ export interface RecipeListParams {
   limit?: number;
   offset?: number;
   course?: string;
-  /** Curated collection slug, e.g. 'unprocessed' (the "From Scratch" filter). */
+  /** Curated collection slug, e.g. 'unprocessed' (the "From Scratch" filter).
+   *  Kept for back-compat; `collections` is the multi-select form. */
   collection?: string;
+  /** Structured filters — slugs. Within an axis they OR; across axes they AND.
+   *  `flags` covers "free from" (gluten_free, dairy_free, …). `maxTime` keeps
+   *  recipes with a version at/under that many total minutes. */
+  collections?: string[];
+  diets?: string[];
+  flags?: string[];
+  cuisines?: string[];
+  maxTime?: number;
+  sort?: 'curated' | 'name';
   q?: string;
 }
 
-/** Browse recipes — paginated, optionally filtered by course and
- *  search query. */
+/** Browse recipes — paginated, filtered by course, curated collections,
+ *  diet / dietary-flag / cuisine taxonomies, max cook time, and search. */
 export async function loadRecipes(
   p: RecipeListParams = {},
 ): Promise<{ recipes: HealthRecipeSummary[]; total: number }> {
@@ -297,7 +316,15 @@ export async function loadRecipes(
     offset: String(p.offset ?? 0),
   });
   if (p.course) params.set('course', p.course);
-  if (p.collection) params.set('collection', p.collection);
+  // Collections fold the back-compat single `collection` into the list; the
+  // backend reads `collection` as a comma-separated multi-select.
+  const collectionSlugs = [...(p.collection ? [p.collection] : []), ...(p.collections ?? [])];
+  if (collectionSlugs.length) params.set('collection', collectionSlugs.join(','));
+  if (p.diets?.length) params.set('diet', p.diets.join(','));
+  if (p.flags?.length) params.set('flag', p.flags.join(','));
+  if (p.cuisines?.length) params.set('cuisine', p.cuisines.join(','));
+  if (p.maxTime != null) params.set('max_time', String(p.maxTime));
+  if (p.sort) params.set('sort', p.sort);
   if (p.q && p.q.trim()) params.set('q', p.q.trim());
   { const l = getLocale(); if (l && l !== 'en') params.set('locale', l); }
   const data = await healthRequest<{ recipes?: HealthRecipeSummary[]; total?: number }>(
@@ -327,10 +354,20 @@ export async function loadRecipeDetail(slug: string): Promise<HealthRecipeDetail
   return data.recipe ?? null;
 }
 
-/** The taxonomy lists (allergens, cuisines, diets, …) — public,
- *  used to populate the contribution flow's pickers. */
+/** The taxonomy lists (allergens, cuisines, diets, collections, …) — public,
+ *  used to populate the contribution flow's pickers + the recipe filters.
+ *  Every axis is normalised to an array so a missing field (older API builds
+ *  don't return `collections`) can never crash a `.length` read downstream. */
 export async function loadTaxonomies(): Promise<HealthTaxonomies> {
-  return healthRequest<HealthTaxonomies>('/health/taxonomies');
+  const raw = await healthRequest<Partial<HealthTaxonomies>>('/health/taxonomies');
+  return {
+    allergens: raw.allergens ?? [],
+    contraindications: raw.contraindications ?? [],
+    cuisines: raw.cuisines ?? [],
+    diets: raw.diets ?? [],
+    dietary_flags: raw.dietary_flags ?? [],
+    collections: raw.collections ?? [],
+  };
 }
 
 // ── Contribution / submission flow ────────────────────────────────────────

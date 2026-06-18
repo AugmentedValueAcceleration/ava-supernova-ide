@@ -166,7 +166,7 @@ function ExercisesGrid() {
   }, [filter, search]);
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <BrowseToolbar search={search} onSearch={setSearch} placeholder={t('health.browse.search_exercises_placeholder')} view={view} onView={setView} />
       <FilterRow>
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>{t('health.browse.filter.all')}</FilterChip>
@@ -175,22 +175,22 @@ function ExercisesGrid() {
         ))}
       </FilterRow>
 
-      {loading ? (
-        <CenterNote>{t('health.browse.loading_exercises')}</CenterNote>
-      ) : failed ? (
-        <LoadError noun={t('health.browse.noun.exercises')} onRetry={() => void fetchPage(0)} />
-      ) : items.length === 0 ? (
-        <CenterNote>{search ? t('health.browse.no_exercises_match_q', { q: search }) : t('health.browse.no_exercises_found')}</CenterNote>
-      ) : (
-        <>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {loading ? (
+          <CenterNote>{t('health.browse.loading_exercises')}</CenterNote>
+        ) : failed ? (
+          <LoadError noun={t('health.browse.noun.exercises')} onRetry={() => void fetchPage(0)} />
+        ) : items.length === 0 ? (
+          <CenterNote>{search ? t('health.browse.no_exercises_match_q', { q: search }) : t('health.browse.no_exercises_found')}</CenterNote>
+        ) : (
           <CardGrid view={view}>
             {items.map(ex => (
               <ExerciseCardItem key={ex.id} ex={ex} view={view} onOpen={setModalSlug} />
             ))}
           </CardGrid>
-          <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />
-        </>
-      )}
+        )}
+      </div>
+      {items.length > 0 && <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />}
 
       {modalSlug && <ExerciseDetailModal slug={modalSlug} onClose={() => setModalSlug(null)} />}
     </div>
@@ -203,16 +203,31 @@ function RecipesGrid() {
   const [items, setItems] = useState<HealthRecipeSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [filter, setFilter] = useState<'all' | string>('all');
-  // "From Scratch" — the curated `unprocessed` collection (made entirely from
-  // fresh ingredients, nothing processed). A separate dimension that composes
-  // with the course chips.
-  const [fromScratch, setFromScratch] = useState(false);
+  const [course, setCourse] = useState<'all' | string>('all');
+  // Structured filter selections. Collections + course live in the always-on
+  // Tier-1 strip; diets / dietary-flags (free-from) / cuisines / max-time / sort
+  // live in the Tier-2 "Filters" panel. All slugs; multi-select OR within an
+  // axis, AND across axes — the backend resolves and intersects them.
+  const [collections, setCollections] = useState<Set<string>>(new Set());
+  const [diets, setDiets] = useState<Set<string>>(new Set());
+  const [flags, setFlags] = useState<Set<string>>(new Set());
+  const [cuisines, setCuisines] = useState<Set<string>>(new Set());
+  const [maxTime, setMaxTime] = useState<number | null>(null);
+  const [sort, setSort] = useState<'curated' | 'name'>('curated');
+  const [tax, setTax] = useState<HealthTaxonomies | null>(null);
   const [view, setView] = useBrowseView();
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [modalSlug, setModalSlug] = useState<string | null>(null);
+
+  // Taxonomies (collections / diets / flags / cuisines) load once to populate
+  // the filter chips. Silent on failure — filters just stay empty.
+  useEffect(() => {
+    let alive = true;
+    loadTaxonomies().then((tx) => { if (alive) setTax(tx); }).catch(() => { /* filters degrade gracefully */ });
+    return () => { alive = false; };
+  }, []);
 
   const fetchPage = useCallback(async (off: number) => {
     setLoading(true);
@@ -221,8 +236,13 @@ function RecipesGrid() {
       const r = await loadRecipes({
         limit: PAGE_SIZE,
         offset: off,
-        course: filter === 'all' ? undefined : filter,
-        collection: fromScratch ? 'unprocessed' : undefined,
+        course: course === 'all' ? undefined : course,
+        collections: collections.size ? [...collections] : undefined,
+        diets: diets.size ? [...diets] : undefined,
+        flags: flags.size ? [...flags] : undefined,
+        cuisines: cuisines.size ? [...cuisines] : undefined,
+        maxTime: maxTime ?? undefined,
+        sort: sort === 'curated' ? undefined : sort,
         q: search.trim() || undefined,
       });
       setItems(r.recipes);
@@ -235,61 +255,154 @@ function RecipesGrid() {
     } finally {
       setLoading(false);
     }
-  }, [filter, fromScratch, search]);
+  }, [course, collections, diets, flags, cuisines, maxTime, sort, search]);
 
   useEffect(() => {
     const timer = setTimeout(() => { void fetchPage(0); }, search ? 300 : 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, fromScratch, search]);
+  }, [course, collections, diets, flags, cuisines, maxTime, sort, search]);
+
+  // Toggle a slug in a multi-select axis (immutable Set so React re-renders).
+  const toggleIn = (set: Set<string>, setSet: (s: Set<string>) => void) => (slug: string) => {
+    const next = new Set(set);
+    if (next.has(slug)) next.delete(slug); else next.add(slug);
+    setSet(next);
+  };
+  const tier2Count = collections.size + diets.size + flags.size + cuisines.size + (maxTime != null ? 1 : 0) + (sort !== 'curated' ? 1 : 0);
+  const clearAll = () => { setCollections(new Set()); setDiets(new Set()); setFlags(new Set()); setCuisines(new Set()); setMaxTime(null); setSort('curated'); };
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <BrowseToolbar search={search} onSearch={setSearch} placeholder={t('health.browse.search_recipes_placeholder')} view={view} onView={setView} />
-      {/* From Scratch — curated `unprocessed` collection, a separate dimension
-          (rounded pill) that composes with the course chips below. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <button
-          type="button"
-          onClick={() => setFromScratch(v => !v)}
-          title={t('health.browse.from_scratch_hint')}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-            padding: '4px 12px', fontSize: 11, fontWeight: 500, borderRadius: 999,
-            border: `1px solid ${fromScratch ? '#a855f7' : '#313244'}`,
-            background: fromScratch ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-            color: fromScratch ? '#c084fc' : '#6c7086',
-            transition: 'all 0.15s',
-          }}
-        >
-          <span aria-hidden>✦</span>{t('health.browse.from_scratch')}
-        </button>
-      </div>
+
+      {/* Course — the meal-type tabs (single-select), kept inline. */}
       <FilterRow>
-        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>{t('health.browse.filter.all')}</FilterChip>
-        {COURSES.map(c => (
-          <FilterChip key={c} active={filter === c} onClick={() => setFilter(c)}>{courseLabel(c)}</FilterChip>
+        <FilterChip active={course === 'all'} onClick={() => setCourse('all')}>{t('health.browse.filter.all')}</FilterChip>
+        {COURSES.map((c) => (
+          <FilterChip key={c} active={course === c} onClick={() => setCourse(c)}>{courseLabel(c)}</FilterChip>
         ))}
       </FilterRow>
 
-      {loading ? (
-        <CenterNote>{t('health.browse.loading_recipes')}</CenterNote>
-      ) : failed ? (
-        <LoadError noun={t('health.browse.noun.recipes')} onRetry={() => void fetchPage(0)} />
-      ) : items.length === 0 ? (
-        <CenterNote>{search ? t('health.browse.no_recipes_match_q', { q: search }) : t('health.browse.no_recipes_found')}</CenterNote>
-      ) : (
-        <>
+      {/* Filter categories — one compact multi-select dropdown each, inline.
+          Keeps every axis visible without a wall of chips, no hidden overlay. */}
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+        {tax && tax.collections.length > 0 && (
+          <RecipeFilterDropdown label="Collections" options={tax.collections} selected={collections} onToggle={toggleIn(collections, setCollections)} />
+        )}
+        {tax && tax.diets.length > 0 && (
+          <RecipeFilterDropdown label="Diet" options={tax.diets} selected={diets} onToggle={toggleIn(diets, setDiets)} />
+        )}
+        {tax && tax.dietary_flags.length > 0 && (
+          <RecipeFilterDropdown label="Dietary needs" options={tax.dietary_flags} selected={flags} onToggle={toggleIn(flags, setFlags)} />
+        )}
+        {tax && tax.cuisines.length > 0 && (
+          <RecipeFilterDropdown label="Cuisine" options={tax.cuisines} selected={cuisines} onToggle={toggleIn(cuisines, setCuisines)} />
+        )}
+        <RecipeFilterDropdown
+          label="Time"
+          options={[15, 30, 45, 60].map((m) => ({ slug: String(m), name: `≤ ${m} min` }))}
+          selected={new Set(maxTime != null ? [String(maxTime)] : [])}
+          onToggle={(s) => setMaxTime(maxTime === Number(s) ? null : Number(s))}
+          valueLabel={maxTime != null ? `≤ ${maxTime} min` : undefined}
+        />
+        <RecipeFilterDropdown
+          label="Sort"
+          options={[{ slug: 'curated', name: 'Curated' }, { slug: 'name', name: 'A–Z' }]}
+          selected={new Set([sort])}
+          onToggle={(s) => setSort(s as 'curated' | 'name')}
+          valueLabel={sort === 'name' ? 'A–Z' : 'Curated'}
+        />
+        {tier2Count > 0 && (
+          <button onClick={clearAll} style={{ marginLeft: 4, background: 'transparent', border: 'none', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>Clear filters</button>
+        )}
+      </div>
+
+      {/* Results fill the remaining height so pagination is pushed to the foot
+          of the page even when only a few cards land. */}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {loading ? (
+          <CenterNote>{t('health.browse.loading_recipes')}</CenterNote>
+        ) : failed ? (
+          <LoadError noun={t('health.browse.noun.recipes')} onRetry={() => void fetchPage(0)} />
+        ) : items.length === 0 ? (
+          <CenterNote>{search ? t('health.browse.no_recipes_match_q', { q: search }) : t('health.browse.no_recipes_found')}</CenterNote>
+        ) : (
           <CardGrid view={view}>
-            {items.map(r => (
+            {items.map((r) => (
               <RecipeCardItem key={r.id} r={r} view={view} onOpen={setModalSlug} />
             ))}
           </CardGrid>
-          <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />
-        </>
-      )}
+        )}
+      </div>
+      {items.length > 0 && <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />}
 
       {modalSlug && <RecipeDetailModal slug={modalSlug} onClose={() => setModalSlug(null)} />}
+    </div>
+  );
+}
+
+/** One filter axis as a compact multi-select dropdown — replaces the old modal
+ *  so every axis stays visible inline without a wall of chips or a hidden
+ *  overlay. Opaque popover (solid bg, not the translucent card token); closes
+ *  on outside-click or Escape. `valueLabel` shows a single value (time / sort)
+ *  instead of a selected count. */
+function RecipeFilterDropdown({ label, options, selected, onToggle, valueLabel }: {
+  label: string;
+  options: { slug: string; name: string }[];
+  selected: Set<string>;
+  onToggle: (slug: string) => void;
+  valueLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  const count = selected.size;
+  const active = valueLabel ? valueLabel !== 'Curated' : count > 0;
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+          padding: '4px 11px', fontSize: 11, fontWeight: 500, borderRadius: 999,
+          border: `1px solid ${active ? '#a855f7' : '#313244'}`,
+          background: active ? 'rgba(168,85,247,0.15)' : 'transparent',
+          color: active ? '#c084fc' : '#6c7086',
+        }}
+      >
+        {valueLabel ? `${label}: ${valueLabel}` : `${label}${count > 0 ? ` · ${count}` : ''}`}
+        <span aria-hidden style={{ fontSize: 8, opacity: 0.7 }}>&#9662;</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', left: 0, zIndex: 50, marginTop: 6, maxHeight: 288, width: 240, overflowY: 'auto', borderRadius: 12, border: '1px solid rgba(168,85,247,0.2)', background: '#1a1028', padding: 6, boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
+          {options.map((o) => {
+            const on = selected.has(o.slug);
+            return (
+              <button
+                key={o.slug}
+                onClick={() => onToggle(o.slug)}
+                style={{
+                  display: 'flex', width: '100%', alignItems: 'center', gap: 10,
+                  borderRadius: 8, border: 'none', background: 'transparent',
+                  padding: '6px 10px', textAlign: 'left', fontSize: 12, cursor: 'pointer',
+                  color: on ? '#c084fc' : '#9b8caa',
+                }}
+              >
+                <span style={{ display: 'flex', width: 14, height: 14, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontSize: 8, color: '#fff', border: `1px solid ${on ? '#a855f7' : '#45475a'}`, background: on ? '#a855f7' : 'transparent' }}>{on ? '✓' : ''}</span>
+                {o.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -363,7 +476,7 @@ function CardGrid({ view, children }: { view: View; children: React.ReactNode })
       display: 'grid',
       gridTemplateColumns: view === 'list'
         ? 'repeat(auto-fill, minmax(320px, 1fr))'
-        : 'repeat(auto-fill, minmax(165px, 1fr))',
+        : 'repeat(auto-fill, minmax(220px, 1fr))',
       gap: 10,
     }}>
       {children}
