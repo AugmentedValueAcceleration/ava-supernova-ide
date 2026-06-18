@@ -8,6 +8,7 @@ import {
   type HealthExerciseDetail,
   type HealthRecipeSummary,
   type HealthRecipeDetail,
+  type HealthRecipeNutrition,
   type HealthRecipeSkillLevel,
   type HealthExerciseType,
   type HealthWorkoutType,
@@ -476,7 +477,9 @@ function CardGrid({ view, children }: { view: View; children: React.ReactNode })
       display: 'grid',
       gridTemplateColumns: view === 'list'
         ? 'repeat(auto-fill, minmax(320px, 1fr))'
-        : 'repeat(auto-fill, minmax(220px, 1fr))',
+        // Fixed 6 columns so a 24-per-page load fills evenly (4 rows), and
+        // cards stay a readable size instead of packing 9 across.
+        : 'repeat(6, minmax(0, 1fr))',
       gap: 10,
     }}>
       {children}
@@ -725,7 +728,7 @@ function Pagination({ total, offset, loading, onPage }: {
 
 // ── Detail modals ─────────────────────────────────────────────────────────
 
-function ModalShell({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+function ModalShell({ onClose, children, fillHeight }: { onClose: () => void; children: React.ReactNode; fillHeight?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -745,9 +748,15 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          position: 'relative', width: '100%', maxWidth: 640, maxHeight: '85vh', overflowY: 'auto',
+          position: 'relative', width: '100%', maxWidth: 640,
           background: 'linear-gradient(160deg, #0f0f17, #1a1625)',
           border: '1px solid rgba(168, 85, 247, 0.25)', borderRadius: 16,
+          // fillHeight: a consistent modal size (so detail overlays don't
+          // resize per tab) with the body flexing + scrolling inside. Otherwise
+          // the modal grows to fit its content up to 85vh.
+          ...(fillHeight
+            ? { height: 'min(760px, 86vh)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+            : { maxHeight: '85vh', overflowY: 'auto' }),
         }}
       >
         <button
@@ -792,15 +801,22 @@ function ExerciseDetailModal({ slug, onClose }: { slug: string; onClose: () => v
   }, [slug]);
 
   return (
-    <ModalShell onClose={onClose}>
-      <div style={{ padding: '28px 28px 32px' }}>
-        {loading
-          ? <CenterNote>{t('health.browse.loading_exercise')}</CenterNote>
-          : failed || !detail
-            ? <CenterNote>{t('health.browse.couldnt_load_exercise')}</CenterNote>
-            : <ExerciseDetailBody ex={detail} />}
-      </div>
+    <ModalShell onClose={onClose} fillHeight>
+      {loading
+        ? <DetailCentered>{t('health.browse.loading_exercise')}</DetailCentered>
+        : failed || !detail
+          ? <DetailCentered>{t('health.browse.couldnt_load_exercise')}</DetailCentered>
+          : <ExerciseDetailBody ex={detail} />}
     </ModalShell>
+  );
+}
+
+/** Centred loading / error state that fills the fixed-height detail modal. */
+function DetailCentered({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+      <CenterNote>{children}</CenterNote>
+    </div>
   );
 }
 
@@ -815,90 +831,108 @@ function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
   const primaries = ex.muscles.filter(m => m.role === 'primary');
   const secondaries = ex.muscles.filter(m => m.role === 'secondary');
 
+  type ExTab = 'overview' | 'howto' | 'routine' | 'muscles';
+  const hasRoutine = routine.length > 0 || !!ex.routine.progression;
+  const hasMuscles = primaries.length > 0 || secondaries.length > 0 || ex.equipment.length > 0;
+  const tabs: { key: ExTab; label: string }[] = [
+    { key: 'overview', label: 'Overview' },
+    ...(ex.steps.length > 0 ? [{ key: 'howto' as ExTab, label: 'How-to' }] : []),
+    ...(hasRoutine ? [{ key: 'routine' as ExTab, label: 'Routine' }] : []),
+    ...(hasMuscles ? [{ key: 'muscles' as ExTab, label: 'Muscles & kit' }] : []),
+  ];
+  const [tab, setTab] = useState<ExTab>('overview');
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <div>
-        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: accent, marginBottom: 6 }}>
-          {workoutLabel(ex.workout_type)}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div style={{ flexShrink: 0, padding: '24px 28px 0' }}>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: accent, marginBottom: 6 }}>
+            {workoutLabel(ex.workout_type)}
+          </div>
+          <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{ex.name}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
+            <span style={{ textTransform: 'capitalize', background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
+            <Dots value={ex.difficulty} accent={accent} />
+            <span>{t('health.browse.difficulty_n', { n: ex.difficulty })}</span>
+          </div>
         </div>
-        <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{ex.name}</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
-          <span style={{ textTransform: 'capitalize', background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
-          <Dots value={ex.difficulty} accent={accent} />
-          <span>{t('health.browse.difficulty_n', { n: ex.difficulty })}</span>
-        </div>
+        <DetailTabBar tabs={tabs} active={tab} onChange={setTab} />
       </div>
 
-      {ex.description && (
-        <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{ex.description}</p>
-      )}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 28px 26px' }}>
+        {tab === 'overview' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {ex.description && <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{ex.description}</p>}
+            {ex.beginner_detail && (
+              <div>
+                {sectionLabel(t('health.browse.if_youre_new'))}
+                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.beginner_detail}</p>
+              </div>
+            )}
+            {ex.common_mistakes && (
+              <div>
+                {sectionLabel(t('health.browse.common_mistakes'))}
+                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.common_mistakes}</p>
+              </div>
+            )}
+            {!ex.description && !ex.beginner_detail && !ex.common_mistakes && (
+              <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>Nothing here yet.</p>
+            )}
+          </div>
+        )}
 
-      {ex.steps.length > 0 && (
-        <div>
-          {sectionLabel(t('health.browse.how_to_do_it'))}
+        {tab === 'howto' && (
           <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {ex.steps.map((s, i) => (
               <li key={i} style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4' }}>{s}</li>
             ))}
           </ol>
-        </div>
-      )}
+        )}
 
-      {routine.length > 0 && (
-        <div>
-          {sectionLabel(t('health.browse.how_to_use_it'))}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
-            {routine.map(([k, v]) => (
-              <div key={k}>
-                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{k}</div>
-                <div style={{ fontSize: 14, color: '#cdd6f4', marginTop: 2 }}>{v}</div>
+        {tab === 'routine' && (
+          <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+              {routine.map(([k, val]) => (
+                <div key={k}>
+                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{k}</div>
+                  <div style={{ fontSize: 14, color: '#cdd6f4', marginTop: 2 }}>{val}</div>
+                </div>
+              ))}
+            </div>
+            {ex.routine.progression && (
+              <p style={{ fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 14, marginBottom: 0 }}>{ex.routine.progression}</p>
+            )}
+          </div>
+        )}
+
+        {tab === 'muscles' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {(primaries.length > 0 || secondaries.length > 0) && (
+              <div>
+                {sectionLabel(t('health.browse.muscles'))}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {primaries.map(m => (
+                    <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: `${accent}26`, color: accent }}>{m.name}</span>
+                  ))}
+                  {secondaries.map(m => (
+                    <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.08)', color: '#9b8caa' }}>{m.name}</span>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
+            {ex.equipment.length > 0 && (
+              <div>
+                {sectionLabel(t('health.browse.equipment'))}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {ex.equipment.map(e => (
+                    <span key={e.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.08)', color: '#9b8caa', textTransform: 'capitalize' }}>{e.name}</span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          {ex.routine.progression && (
-            <p style={{ fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 10, marginBottom: 0 }}>{ex.routine.progression}</p>
-          )}
-        </div>
-      )}
-
-      {ex.beginner_detail && (
-        <div>
-          {sectionLabel(t('health.browse.if_youre_new'))}
-          <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.beginner_detail}</p>
-        </div>
-      )}
-
-      {ex.common_mistakes && (
-        <div>
-          {sectionLabel(t('health.browse.common_mistakes'))}
-          <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.common_mistakes}</p>
-        </div>
-      )}
-
-      {(primaries.length > 0 || secondaries.length > 0) && (
-        <div>
-          {sectionLabel(t('health.browse.muscles'))}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {primaries.map(m => (
-              <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: `${accent}26`, color: accent }}>{m.name}</span>
-            ))}
-            {secondaries.map(m => (
-              <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.08)', color: '#9b8caa' }}>{m.name}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {ex.equipment.length > 0 && (
-        <div>
-          {sectionLabel(t('health.browse.equipment'))}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {ex.equipment.map(e => (
-              <span key={e.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.08)', color: '#9b8caa', textTransform: 'capitalize' }}>{e.name}</span>
-            ))}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -922,14 +956,12 @@ function RecipeDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
   }, [slug]);
 
   return (
-    <ModalShell onClose={onClose}>
-      <div style={{ padding: '28px 28px 32px' }}>
-        {loading
-          ? <CenterNote>{t('health.browse.loading_recipe')}</CenterNote>
-          : failed || !detail
-            ? <CenterNote>{t('health.browse.couldnt_load_recipe')}</CenterNote>
-            : <RecipeDetailBody r={detail} />}
-      </div>
+    <ModalShell onClose={onClose} fillHeight>
+      {loading
+        ? <DetailCentered>{t('health.browse.loading_recipe')}</DetailCentered>
+        : failed || !detail
+          ? <DetailCentered>{t('health.browse.couldnt_load_recipe')}</DetailCentered>
+          : <RecipeDetailBody r={detail} />}
     </ModalShell>
   );
 }
@@ -1280,35 +1312,112 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/** Tab bar for the detail overlays — separates the sections that used to
+ *  stack in one long scroll. Underline-style, matching the page's chrome. */
+function DetailTabBar<T extends string>({ tabs, active, onChange }: { tabs: { key: T; label: string }[]; active: T; onChange: (k: T) => void }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid rgba(168,85,247,0.12)' }}>
+      {tabs.map(tb => (
+        <button key={tb.key} onClick={() => onChange(tb.key)} style={{
+          padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+          background: 'transparent', border: 'none', marginBottom: -1,
+          color: active === tb.key ? '#cdd6f4' : '#6c7086',
+          borderBottom: active === tb.key ? '2px solid #a855f7' : '2px solid transparent',
+        }}>{tb.label}</button>
+      ))}
+    </div>
+  );
+}
+
+type NutritionDisplayKey = 'calories' | 'protein_g' | 'carbs_g' | 'fat_g' | 'fibre_g' | 'sugar_g' | 'sodium_mg' | 'saturated_fat_g';
+const NUTRITION_DISPLAY: Array<[NutritionDisplayKey, string]> = [
+  ['calories', 'Calories (kcal)'], ['protein_g', 'Protein (g)'], ['carbs_g', 'Carbs (g)'], ['fat_g', 'Fat (g)'],
+  ['fibre_g', 'Fibre (g)'], ['sugar_g', 'Sugar (g)'], ['sodium_mg', 'Sodium (mg)'], ['saturated_fat_g', 'Saturated fat (g)'],
+];
+
+function NutritionGrid({ n }: { n: HealthRecipeNutrition }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 14 }}>
+        Per serving{n.source === 'estimated' ? ' · estimated by Ava' : n.source === 'verified' ? ' · verified' : ''}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        {NUTRITION_DISPLAY.map(([k, label]) => (
+          <div key={k}>
+            <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{label}</div>
+            <div style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', marginTop: 4 }}>{typeof n[k] === 'number' ? n[k] : '—'}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
   const levels = r.versions.map(v => v.level);
   const [level, setLevel] = useState<HealthRecipeSkillLevel>(levels[0] ?? 'beginner');
   const v = r.versions.find(vv => vv.level === level) ?? r.versions[0];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <div>
-        {r.cuisine_name && (
-          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#fbbf24', marginBottom: 6 }}>
-            {r.cuisine_name}
-          </div>
-        )}
-        <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{r.name}</h2>
-        {(r.origin_country || r.course) && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
-            {r.origin_country && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{r.origin_country}</span>}
-            {r.course && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6, textTransform: 'capitalize' }}>{courseLabel(r.course)}</span>}
-          </div>
-        )}
-      </div>
+  type RTab = 'overview' | 'ingredients' | 'method' | 'nutrition';
+  const hasNutrition = !!v && NUTRITION_DISPLAY.some(([k]) => typeof v.nutrition?.[k] === 'number');
+  const tabs: { key: RTab; label: string }[] = [
+    { key: 'overview', label: 'Overview' },
+    ...(r.ingredients.length > 0 ? [{ key: 'ingredients' as RTab, label: 'Ingredients' }] : []),
+    ...(r.versions.length > 0 ? [{ key: 'method' as RTab, label: 'Method' }] : []),
+    ...(hasNutrition ? [{ key: 'nutrition' as RTab, label: 'Nutrition' }] : []),
+  ];
+  const [tab, setTab] = useState<RTab>('overview');
 
-      {r.overview && (
-        <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{r.overview}</p>
+  const levelPills = (
+    <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
+      {(['beginner', 'intermediate', 'expert'] as HealthRecipeSkillLevel[]).filter(l => levels.includes(l)).map(l => (
+        <button key={l} onClick={() => setLevel(l)} style={{
+          padding: '3px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer',
+          borderRadius: 6, border: 'none',
+          background: l === level ? 'rgba(251,191,36,0.18)' : 'transparent',
+          color: l === level ? '#fbbf24' : '#6c7086',
+        }}>{t(`health.browse.level.${l}`)}</button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {/* Hero image — leads the overlay, bleeds to the modal edges. */}
+      {r.hero_image_url && (
+        <div style={{ flexShrink: 0, height: 184, overflow: 'hidden', background: 'rgba(168,85,247,0.06)' }}>
+          <img src={r.hero_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        </div>
       )}
 
-      {r.ingredients.length > 0 && (
-        <div>
-          {sectionLabel(t('health.browse.ingredients'))}
+      {/* Fixed header + tabs. */}
+      <div style={{ flexShrink: 0, padding: '20px 28px 0' }}>
+        <div style={{ marginBottom: 14 }}>
+          {r.cuisine_name && (
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#fbbf24', marginBottom: 6 }}>
+              {r.cuisine_name}
+            </div>
+          )}
+          <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{r.name}</h2>
+          {(r.origin_country || r.course) && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
+              {r.origin_country && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{r.origin_country}</span>}
+              {r.course && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6, textTransform: 'capitalize' }}>{courseLabel(r.course)}</span>}
+            </div>
+          )}
+        </div>
+        <DetailTabBar tabs={tabs} active={tab} onChange={setTab} />
+      </div>
+
+      {/* Content — flexes to fill the consistent modal height, scrolls. */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 28px 26px' }}>
+        {tab === 'overview' && (
+          r.overview
+            ? <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{r.overview}</p>
+            : <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>No overview yet.</p>
+        )}
+
+        {tab === 'ingredients' && (
           <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {r.ingredients.map((ing, i) => (
               <li key={i} style={{ fontSize: 13, color: '#cdd6f4' }}>
@@ -1319,47 +1428,42 @@ function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
 
-      {r.versions.length > 0 && v && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            {sectionLabel(t('health.browse.method'))}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-              {(['beginner', 'intermediate', 'expert'] as HealthRecipeSkillLevel[]).filter(l => levels.includes(l)).map(l => (
-                <button key={l} onClick={() => setLevel(l)} style={{
-                  padding: '3px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer',
-                  borderRadius: 6, border: 'none',
-                  background: l === level ? 'rgba(251,191,36,0.18)' : 'transparent',
-                  color: l === level ? '#fbbf24' : '#6c7086',
-                }}>{t(`health.browse.level.${l}`)}</button>
+        {tab === 'method' && v && (
+          <div>
+            {levelPills}
+            {v.description && (
+              <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', marginTop: 0, marginBottom: 12 }}>{v.description}</p>
+            )}
+            <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {v.steps.map((s, i) => (
+                <li key={i} style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4' }}>
+                  {s.action}
+                  {s.notes && <span style={{ display: 'block', fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 2 }}>{s.notes}</span>}
+                </li>
               ))}
-            </div>
+            </ol>
+            {((v.diets && v.diets.length > 0) || (v.dietary_flags && v.dietary_flags.length > 0)) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
+                {v.diets.map(d => (
+                  <span key={`d-${d}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(168,85,247,0.3)', color: '#c084fc' }}>{d}</span>
+                ))}
+                {v.dietary_flags.map(f => (
+                  <span key={`f-${f}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>{f}</span>
+                ))}
+              </div>
+            )}
           </div>
-          {v.description && (
-            <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', marginTop: 0, marginBottom: 12 }}>{v.description}</p>
-          )}
-          <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {v.steps.map((s, i) => (
-              <li key={i} style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4' }}>
-                {s.action}
-                {s.notes && <span style={{ display: 'block', fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 2 }}>{s.notes}</span>}
-              </li>
-            ))}
-          </ol>
-          {((v.diets && v.diets.length > 0) || (v.dietary_flags && v.dietary_flags.length > 0)) && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-              {v.diets.map(d => (
-                <span key={`d-${d}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(168,85,247,0.3)', color: '#c084fc' }}>{d}</span>
-              ))}
-              {v.dietary_flags.map(f => (
-                <span key={`f-${f}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>{f}</span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        )}
+
+        {tab === 'nutrition' && v && (
+          <div>
+            {levelPills}
+            <NutritionGrid n={v.nutrition} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
