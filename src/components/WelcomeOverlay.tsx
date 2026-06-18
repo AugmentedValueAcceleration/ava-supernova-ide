@@ -48,9 +48,19 @@ export default function WelcomeOverlay({ onComplete }: Props) {
   const [idx, setIdx] = useState(0);
   const [consentChecked, setConsentChecked] = useState(false);
   const [pathId, setPathId] = useState<string | null>(null);
-  const [platformStatus, setPlatformStatus] = useState<'idle' | 'valid'>('idle');
-  const [platformEmail, setPlatformEmail] = useState('');
-  const [userName, setUserName] = useState('');
+  // Seed from an existing platform login on mount so the connect step shows
+  // "Connected ✓ / Signed in as …" instead of the sign-in buttons when the
+  // user is already signed in. Mirrors isConnected() — platform-key presence
+  // is the connected signal; email + name pre-fill from their cached values.
+  const [platformStatus, setPlatformStatus] = useState<'idle' | 'valid'>(() => {
+    try { return localStorage.getItem('ava-ide-platform-key') ? 'valid' : 'idle'; } catch { return 'idle'; }
+  });
+  const [platformEmail, setPlatformEmail] = useState(() => {
+    try { return localStorage.getItem('ava-ide-email') || ''; } catch { return ''; }
+  });
+  const [userName, setUserName] = useState(() => {
+    try { return localStorage.getItem('ava-ide-user-name') || ''; } catch { return ''; }
+  });
   const [byokProvider, setByokProvider] = useState('Qwen');
   const [byokKey, setByokKey] = useState('');
   const [byokSaved, setByokSaved] = useState(false);

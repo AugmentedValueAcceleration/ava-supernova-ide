@@ -27,6 +27,9 @@ import {
   CloudSun as PhWeather,
   Clock as PhClock,
   Rocket as PhRocket,
+  GearSix as PhGear,
+  Paperclip as PhPaperclip,
+  X as PhX,
 } from '@phosphor-icons/react';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
@@ -78,10 +81,21 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 // the chat header calls setCloudSync(); a single localStorage value is
 // the source of truth across the IDE.
 import { cloudSyncEnabled } from '../lib/data-mode';
-import { useCreativeGallery, type GalleryItem } from '../lib/creative-gallery';
+import { useCreativeGallery, downloadGalleryItem, copyGalleryPrompt, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
-import { CreativeGalleryStrip } from './CreativeOutputCard';
+// Creative Studio shared source — single source of truth with the extension
+// (registries, voices, AVA_VOICE_ID, compose helpers, cost estimators,
+// suggestions). Browser-safe leaf, no node deps. Mirror of the extension's
+// `@ava/core/creative` import so the two Creative Studios can't drift.
+import {
+  type CreativeMode, type VideoMotionId,
+  HIDDEN_MODES, AVA_VOICE_ID,
+  VOICES, IMAGE_STYLES, MUSIC_MOODS, VOICE_EMOTIONS, VIDEO_CAMERAS, VIDEO_MOTION,
+  composeImagePrompt, composeMusicPrompt, composeVideoPrompt,
+  estimateImageCredits, estimateMusicCredits, estimateVoiceCredits, estimateVideoCredits,
+  SUGGESTIONS, pickRandom,
+} from '@ava/core/creative';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -1513,16 +1527,11 @@ export function CommandCentrePage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t('dash.cc.greeting_morning') : hour < 18 ? t('dash.cc.greeting_afternoon') : t('dash.cc.greeting_evening');
 
-  // Inner tab state — persists so the user lands back on whichever lens
-  // they last had open instead of always hitting Daily.
-  const [tab, setTab] = useState<CcTab>(() => {
-    try { const stored = localStorage.getItem('ava-ide-cc-tab'); return (stored === 'briefing' || stored === 'reflect' || stored === 'health') ? stored : 'daily'; }
-    catch { return 'daily'; }
-  });
-  const switchTab = (next: CcTab) => {
-    setTab(next);
-    try { localStorage.setItem('ava-ide-cc-tab', next); } catch { /* quota / disabled */ }
-  };
+  // Inner tab state — always opens on the first tab (Daily) for a clean load.
+  // The page remounts on each sidebar navigation, so a plain default resets
+  // every visit; we deliberately don't restore the last-used tab.
+  const [tab, setTab] = useState<CcTab>('daily');
+  const switchTab = (next: CcTab) => setTab(next);
 
   // Working-hours readout for the hero pill — same localStorage keys
   // WorkingHoursClock writes to so the pill and the full widget stay
@@ -12152,14 +12161,10 @@ export function SettingsPage() {
   // order, filtered by tab membership — so the file's top-to-bottom flow
   // is preserved within each tab and we don't have to physically reorder.
   type SettingsTab = 'general' | 'models' | 'behavior' | 'desktop' | 'privacy';
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => {
-    const saved = localStorage.getItem('ava-ide-settings-tab');
-    return (saved === 'models' || saved === 'behavior' || saved === 'desktop' || saved === 'privacy') ? saved : 'general';
-  });
-  const setTab = (t: SettingsTab) => {
-    setSettingsTab(t);
-    try { localStorage.setItem('ava-ide-settings-tab', t); } catch { /* */ }
-  };
+  // Always opens on the first tab (General) for a clean load — the page
+  // remounts on each navigation, so we don't restore the last-used tab.
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
+  const setTab = (t: SettingsTab) => setSettingsTab(t);
   // Dataset capture config — separate from `settings` because it lives in
   // its own file (~/.ava/datasets/config.json) with its own granular schema
   // and is read directly by the sidecar's dataset consumer.
@@ -14443,188 +14448,120 @@ function AvaAudioPlayer({ src }: { src: string }) {
 }
 
 /* ===== Creative Studio ===== */
-
-const csCard: React.CSSProperties = {
-  background: 'rgba(26, 16, 40, 0.6)',
-  border: '1px solid rgba(168, 85, 247, 0.12)',
-  borderRadius: 12,
-  padding: 16,
-};
-
-const csInput: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: 8,
-  border: '1px solid rgba(168,85,247,0.12)',
-  background: 'rgba(49,34,68,0.5)',
-  color: '#cdd6f4',
-  fontSize: 13,
-  fontWeight: 300,
-  outline: 'none',
-  resize: 'vertical' as const,
-  fontFamily: 'inherit',
-  boxSizing: 'border-box' as const,
-};
-
-const csLabel: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 600,
-  letterSpacing: 1.5,
-  textTransform: 'uppercase' as const,
-  color: '#6c7086',
-  margin: '0 0 8px 0',
-};
-
-const csPrimaryBtn: React.CSSProperties = {
-  width: '100%',
-  padding: '12px 16px',
-  borderRadius: 10,
-  border: 'none',
-  background: '#a855f7',
-  color: '#fff',
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: 'pointer',
-  transition: 'opacity 0.15s',
-};
-
-const csPrimaryBtnDisabled: React.CSSProperties = {
-  ...csPrimaryBtn,
-  opacity: 0.5,
-  cursor: 'not-allowed',
-};
+// csCard / csInput / csLabel / CSTokenBar retired — the rewritten Creative
+// Studio owns its styles inline and renders the credit-balance card directly
+// (matching the extension). Removed to satisfy noUnusedLocals.
 
 const PLATFORM_API = 'https://ava-supernova.com/api';
-
-function CSTokenBar({ refreshKey }: { refreshKey: number }) {
-  const [bal, setBal] = useState<{ used: number; limit: number; isUnlimited: boolean } | null>(null);
-  const [authKey, setAuthKey] = useState(0);
-  const connected = checkConnected();
-
-  // Clear on logout
-  useEffect(() => {
-    const handler = () => { if (!checkConnected()) setBal(null); setAuthKey(k => k + 1); };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-
-  useEffect(() => {
-    if (!connected) return;
-    apiFetch('/usage/summary').then((res: any) => {
-      if (res?.period) {
-        const freeUsed = res.period.free_credits_used || 0;
-        const freeLimit = res.period.free_credits_limit || 300;
-        const subUsed = res.period.credits_used || 0;
-        const subLimit = res.period.credits_limit || 0;
-        const isUnlimited = res.isUnlimited || false;
-        const hasSub = subLimit > 0 && (res.tier || 'free') !== 'free';
-        setBal({ used: hasSub ? subUsed : freeUsed, limit: hasSub ? subLimit : freeLimit, isUnlimited });
-      }
-    }).catch(() => {});
-  }, [connected, refreshKey, authKey]);
-  if (!connected) return (
-    <div style={{ fontSize: 10, color: '#585b70' }}>Connect account for token tracking</div>
-  );
-  if (!bal) return null;
-  if (bal.isUnlimited) return (
-    <div style={{ width: 180, flexShrink: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6c7086', marginBottom: 4 }}>
-        <span>Tokens</span><span style={{ color: '#a855f7', fontWeight: 600 }}>Unlimited</span>
-      </div>
-      <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49,34,68,0.5)' }}>
-        <div style={{ height: '100%', borderRadius: 3, width: '100%', background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
-      </div>
-    </div>
-  );
-  const rem = Math.max(0, bal.limit - bal.used);
-  const pct = bal.limit > 0 ? (rem / bal.limit) * 100 : 0;
-  // Exact credit count with locale-grouped digits — operator wants the
-  // precise number, not "5K" / "1.2M" rounded buckets, so they can see
-  // exactly how many credits a generation actually cost.
-  const fmt = (n: number) => n.toLocaleString();
-  return (
-    <div style={{ width: 180, flexShrink: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6c7086', marginBottom: 4 }}>
-        <span>Credits Remaining</span><span>{fmt(rem)}</span>
-      </div>
-      <div style={{ height: 6, borderRadius: 3, background: 'rgba(168,85,247,0.08)', overflow: 'hidden' }}>
-        <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${pct}%`,
-          background: pct < 10 ? '#ef4444' : pct < 30 ? '#eab308' : '#a855f7' }} />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#585b70', marginTop: 2 }}>
-        <span>{fmt(bal.used)} used</span><span>{fmt(bal.limit)} limit</span>
-      </div>
-    </div>
-  );
-}
 
 export function CreativeStudioPage() {
   useLocale();
 
-  // Library tab removed — browsing generated assets now lives in the
-  // top-level Library page. Creative Studio stays as a pure creation
-  // surface (images / audio / voice / video). Matches the extension's
-  // v0.48.4 restructure.
-  const [tab, setTab] = useState<'images' | 'audio' | 'voice' | 'sfx' | 'video'>('images');
+  // Registries, voices, cost estimators, AVA_VOICE_ID and the empty-state
+  // SUGGESTIONS all come from the shared `@ava/core/creative` leaf — the single
+  // source of truth with the extension's Creative Studio, so the two surfaces
+  // can't drift. Audio + voice are hidden via the shared HIDDEN_MODES (MiniMax
+  // provider pending); images + video are live. SFX is dropped to match.
+  // Always opens on the first mode (Images) for a clean load — the page
+  // remounts on each navigation, so we don't restore the last-used tab.
+  const [tab, setTab] = useState<CreativeMode>('images');
+
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Per-medium gallery hooks — replace the old single-slot lastX state.
-  // Each hook handles persistence (disk + cloud per data-mode) and
-  // exposes saveGenerated/deleteItem operations the form handlers call.
-  // gallery.items[0] is the most recent generation, used by the strip.
+  // Per-medium gallery hooks — each persists to disk + cloud per data-mode
+  // (lib/creative-gallery.ts). Kept; only the surface around them changes.
   const imageGallery = useCreativeGallery('image');
   const musicGallery = useCreativeGallery('music');
   const voiceGallery = useCreativeGallery('voice');
-  const sfxGallery   = useCreativeGallery('sfx');
   const videoGallery = useCreativeGallery('video');
 
-  // Session start — anchors the per-medium strips to "things made this
-  // session". Library is the canonical archive; Creative Studio is for
-  // creation only. Reload = empty right panel; new generations stack.
+  // Session start — anchors the feed to "things made this session". Library is
+  // the canonical archive; reload = empty feed; new generations stack.
   const sessionStart = useMemo(() => new Date().toISOString(), []);
-  const inSession = useCallback(
-    (i: GalleryItem) => (i.createdAt || '') >= sessionStart,
-    [sessionStart],
-  );
+  const inSession = useCallback((i: GalleryItem) => (i.createdAt || '') >= sessionStart, [sessionStart]);
   const sessionImages = useMemo(() => imageGallery.items.filter(inSession), [imageGallery.items, inSession]);
   const sessionMusic  = useMemo(() => musicGallery.items.filter(inSession), [musicGallery.items, inSession]);
   const sessionVoice  = useMemo(() => voiceGallery.items.filter(inSession), [voiceGallery.items, inSession]);
-  const sessionSfx    = useMemo(() => sfxGallery.items.filter(inSession), [sfxGallery.items, inSession]);
   const sessionVideo  = useMemo(() => videoGallery.items.filter(inSession), [videoGallery.items, inSession]);
 
-  // Images state
-  const [imagePrompt, setImagePrompt] = useState('');
-  const [imageSize, setImageSize] = useState<'1:1' | '3:4' | '4:3'>('1:1');
+  // Unified chronological feed across every mode — oldest-top / newest-bottom,
+  // same shape as the extension (and Ava chat). The composer sits below it.
+  const feed = useMemo(() => {
+    const all = [...sessionImages, ...sessionMusic, ...sessionVoice, ...sessionVideo];
+    return all.slice().sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  }, [sessionImages, sessionMusic, sessionVoice, sessionVideo]);
 
-  // Audio state
+  const galleryForKind = (kind: string) =>
+    kind === 'image' ? imageGallery : kind === 'music' ? musicGallery : kind === 'voice' ? voiceGallery : videoGallery;
+
+  // Images
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [imageSize, setImageSize] = useState('1280*1280');
+  const [imageStyle, setImageStyle] = useState('auto');
+  const [imageNegative, setImageNegative] = useState('');
+  const [imageVariations, setImageVariations] = useState<1 | 2 | 4>(1);
+
+  // Audio
   const [musicPrompt, setMusicPrompt] = useState('');
   const [musicLyrics, setMusicLyrics] = useState('');
+  const [musicMood, setMusicMood] = useState('auto');
+  const [musicDuration, setMusicDuration] = useState<30 | 60 | 90 | 120>(60);
 
-  // Voice state
+  // Voice — avaVoice hard-locks voice_id to AVA_VOICE_ID (MiniMax
+  // English_radiant_girl) per the brand identity. See project_ava_voice_identity.
   const [voiceText, setVoiceText] = useState('');
   const [voiceId, setVoiceId] = useState('Calm_Woman');
+  const [avaVoice, setAvaVoice] = useState(false);
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
+  const [voicePitch, setVoicePitch] = useState(0);
+  const [voiceEmotion, setVoiceEmotion] = useState('neutral');
 
-  // SFX state
-  const [sfxPrompt, setSfxPrompt] = useState('');
-
-  // Video state
+  // Video
   const [videoPrompt, setVideoPrompt] = useState('');
-  const [videoDuration, setVideoDuration] = useState<6 | 10>(6);
+  const [videoDuration, setVideoDuration] = useState<5 | 10>(5);
+  const [videoResolution, setVideoResolution] = useState<'720P' | '1080P'>('720P');
+  const [videoCamera, setVideoCamera] = useState('auto');
+  const [videoMotion, setVideoMotion] = useState<VideoMotionId>('dynamic');
+  const [videoReference, setVideoReference] = useState<{ name: string; dataUrl: string } | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
 
-  // Persistence — formerly saveToLocal — moved into the
-  // useCreativeGallery hook (lib/creative-gallery.ts). The hook honours
-  // the operator's Data Mode (local / cloud / both) and writes to disk +
-  // ~/.ava/creative/metadata.json + Supabase as appropriate. Each handler
-  // calls gallery.saveGenerated({ prompt, title, url }) with the result.
+  // Credit balance card — four states, mirroring the extension's header card.
+  const [card, setCard] = useState<{ connected: boolean; isUnlimited: boolean; used: number; limit: number; hasUsage: boolean }>(
+    { connected: checkConnected(), isUnlimited: false, used: 0, limit: 0, hasUsage: false },
+  );
+  useEffect(() => {
+    const connected = checkConnected();
+    if (!connected) { setCard({ connected: false, isUnlimited: false, used: 0, limit: 0, hasUsage: false }); return; }
+    apiFetch('/usage/summary').then((res: any) => {
+      if (!res?.period) { setCard(c => ({ ...c, connected: true })); return; }
+      const freeUsed = res.period.free_credits_used || 0;
+      const freeLimit = res.period.free_credits_limit || 300;
+      const subUsed = res.period.credits_used || 0;
+      const subLimit = res.period.credits_limit || 0;
+      const hasSub = subLimit > 0 && (res.tier || 'free') !== 'free';
+      setCard({
+        connected: true,
+        isUnlimited: !!res.isUnlimited,
+        used: hasSub ? subUsed : freeUsed,
+        limit: hasSub ? subLimit : freeLimit,
+        hasUsage: true,
+      });
+    }).catch(() => setCard(c => ({ ...c, connected: true })));
+  }, [refreshKey]);
 
-  // Clear error when switching tabs
-  useEffect(() => { setError(null); }, [tab]);
+  const tokensRemaining = card.isUnlimited ? Number.POSITIVE_INFINITY : Math.max(0, card.limit - card.used);
+  const remainPct = card.limit > 0 ? Math.min((tokensRemaining / card.limit) * 100, 100) : 0;
+  const fmt = (n: number) => n.toLocaleString();
+
+  // Clear error / close settings when switching tabs
+  useEffect(() => { setError(null); setSettingsOpen(false); }, [tab]);
 
   // Elapsed timer for video generation
   useEffect(() => {
@@ -14638,52 +14575,65 @@ export function CreativeStudioPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [generating, tab]);
 
+  // Auto-scroll the feed to the newest card when it grows / generation starts.
+  useEffect(() => {
+    const el = feedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [feed.length, generating]);
+
+  // Close settings modal on Escape.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSettingsOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [settingsOpen]);
+
   function authHeaders(): Record<string, string> {
     const key = getPlatformKey();
-    return {
-      'Content-Type': 'application/json',
-      ...(key ? { Authorization: `Bearer ${key}` } : {}),
-    };
+    return { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
   }
-
   function requiresAuth(): boolean {
-    const key = getPlatformKey();
-    if (!key) {
+    if (!getPlatformKey()) {
       setError('Creative Studio requires a platform account or MiniMax API key. Connect your account in Settings or add a MiniMax key under BYOK.');
       return false;
     }
     return true;
   }
 
+  const handleUploadVideoReference = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => setVideoReference({ name: file.name, dataUrl: String(reader.result || '') });
+    reader.readAsDataURL(file);
+  }, []);
+
   /* ---------- Image generation ---------- */
+  // No model field → server defaults to Wan (wan2.6-t2i). Variations fire N
+  // parallel calls (no native batch endpoint) so one failure still lets the
+  // others land. Suffix + negative_prompt mirror the extension exactly.
   const handleGenerateImage = async () => {
     if (!imagePrompt.trim() || generating) return;
     if (!requiresAuth()) return;
-    setGenerating(true);
-    setError(null);
+    setGenerating(true); setError(null);
     try {
-      const sizeMap: Record<string, string> = { '1:1': '1280*1280', '3:4': '768*1280', '4:3': '1280*768' };
-      // No model field → server defaults to Wan (DashScope wan2.6-t2i).
-      // Wan handles vector / graphic-design output materially better than
-      // MiniMax image-01 — the previous default — which renders every
-      // prompt as soft painterly illustration.
-      const res = await fetch(`${PLATFORM_API}/generate-image`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ prompt: imagePrompt.trim(), size: sizeMap[imageSize] }),
-      });
-      if (!res.ok) throw new Error(`Image generation failed (${res.status})`);
-      const data = await res.json();
-      if (data.url) {
-        await imageGallery.saveGenerated({
-          prompt: imagePrompt,
-          title: imagePrompt.slice(0, 60),
-          url: data.url,
-        });
-      } else throw new Error(data.error || 'No image URL returned');
-    } catch (e: any) {
-      setError(e.message || 'Image generation failed');
-    }
+      const finalPrompt = composeImagePrompt(imagePrompt, imageStyle);
+      const negative = imageNegative.trim() || undefined;
+      const calls = Array.from({ length: imageVariations }).map(() =>
+        fetch(`${PLATFORM_API}/generate-image`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ prompt: finalPrompt, size: imageSize, negative_prompt: negative }),
+        }).then(async res => {
+          if (!res.ok) throw new Error(`Image generation failed (${res.status})`);
+          const data = await res.json();
+          if (data.url) await imageGallery.saveGenerated({ prompt: imagePrompt, title: imagePrompt.slice(0, 60), url: data.url });
+          else throw new Error(data.error || 'No image URL returned');
+        }),
+      );
+      const results = await Promise.allSettled(calls);
+      const failures = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+      if (failures.length === results.length) throw new Error(failures[0]?.reason?.message || failures[0]?.reason || 'Image generation failed');
+      setImagePrompt('');
+    } catch (e: any) { setError(e.message || 'Image generation failed'); }
     setGenerating(false); setRefreshKey(k => k + 1);
   };
 
@@ -14691,26 +14641,19 @@ export function CreativeStudioPage() {
   const handleGenerateMusic = async () => {
     if (!musicPrompt.trim() || generating) return;
     if (!requiresAuth()) return;
-    setGenerating(true);
-    setError(null);
+    setGenerating(true); setError(null);
     try {
       const res = await fetch(`${PLATFORM_API}/generate-music`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ prompt: musicPrompt.trim(), lyrics: musicLyrics.trim() || undefined }),
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ prompt: composeMusicPrompt(musicPrompt, musicMood), lyrics: musicLyrics.trim() || undefined, duration: musicDuration }),
       });
       if (!res.ok) throw new Error(`Music generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        await musicGallery.saveGenerated({
-          prompt: musicPrompt,
-          title: musicPrompt.slice(0, 60),
-          url: data.url,
-        });
+        await musicGallery.saveGenerated({ prompt: musicPrompt, title: musicPrompt.slice(0, 60), url: data.url });
+        setMusicPrompt(''); setMusicLyrics('');
       } else throw new Error(data.error || 'No audio URL returned');
-    } catch (e: any) {
-      setError(e.message || 'Music generation failed');
-    }
+    } catch (e: any) { setError(e.message || 'Music generation failed'); }
     setGenerating(false); setRefreshKey(k => k + 1);
   };
 
@@ -14720,399 +14663,472 @@ export function CreativeStudioPage() {
     if (!requiresAuth()) return;
     setGenerating(true); setError(null);
     try {
-      const headers = authHeaders();
+      const effectiveVoice = avaVoice ? AVA_VOICE_ID : voiceId;
       const res = await fetch(`${PLATFORM_API}/generate-voice`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ text: voiceText, voice_id: voiceId, speed: voiceSpeed }),
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ text: voiceText.trim(), voice_id: effectiveVoice, speed: voiceSpeed, pitch: voicePitch, emotion: voiceEmotion }),
       });
       if (!res.ok) throw new Error(`Voice generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        await voiceGallery.saveGenerated({
-          prompt: voiceText,
-          title: voiceText.slice(0, 60),
-          url: data.url,
-        });
+        await voiceGallery.saveGenerated({ prompt: voiceText, title: voiceText.slice(0, 60), url: data.url });
+        setVoiceText('');
       } else throw new Error(data.error || 'No voice URL returned');
-    } catch (e: any) {
-      setError(e.message || 'Voice generation failed');
-    }
-    setGenerating(false); setRefreshKey(k => k + 1);
-  };
-
-  /* ---------- SFX generation ---------- */
-  const handleGenerateSfx = async () => {
-    if (!sfxPrompt.trim() || generating) return;
-    if (!requiresAuth()) return;
-    setGenerating(true); setError(null);
-    try {
-      const headers = authHeaders();
-      const res = await fetch(`${PLATFORM_API}/generate-music`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ prompt: `[SFX] ${sfxPrompt}. CRITICAL: This is a sound effect, NOT a song. Maximum 3 seconds. One single isolated sound only. No melody, no beat, no rhythm, no music, no vocals, no loops. Just the raw sound effect once, then silence.` }),
-      });
-      if (!res.ok) throw new Error(`SFX generation failed (${res.status})`);
-      const data = await res.json();
-      if (data.url) {
-        await sfxGallery.saveGenerated({
-          prompt: sfxPrompt,
-          title: sfxPrompt.slice(0, 60),
-          url: data.url,
-        });
-      } else throw new Error(data.error || 'No SFX URL returned');
-    } catch (e: any) {
-      setError(e.message || 'SFX generation failed');
-    }
+    } catch (e: any) { setError(e.message || 'Voice generation failed'); }
     setGenerating(false); setRefreshKey(k => k + 1);
   };
 
   /* ---------- Video generation ---------- */
+  // Wan supports an optional first-frame image-to-video input — the server
+  // expects `first_frame_image` exactly. Resolution is separate from duration.
   const handleGenerateVideo = async () => {
     if (!videoPrompt.trim() || generating) return;
     if (!requiresAuth()) return;
-    setGenerating(true);
-    setError(null);
+    setGenerating(true); setError(null);
     try {
       const res = await fetch(`${PLATFORM_API}/generate-video`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ prompt: videoPrompt.trim(), duration: videoDuration }),
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          prompt: composeVideoPrompt(videoPrompt, videoCamera, videoMotion),
+          duration: videoDuration,
+          resolution: videoResolution,
+          first_frame_image: videoReference?.dataUrl,
+        }),
       });
       if (!res.ok) throw new Error(`Video generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        await videoGallery.saveGenerated({
-          prompt: videoPrompt,
-          title: videoPrompt.slice(0, 60),
-          url: data.url,
-        });
+        await videoGallery.saveGenerated({ prompt: videoPrompt, title: videoPrompt.slice(0, 60), url: data.url });
+        setVideoPrompt(''); setVideoReference(null);
       } else throw new Error(data.error || 'No video URL returned');
-    } catch (e: any) {
-      setError(e.message || 'Video generation failed');
-    }
+    } catch (e: any) { setError(e.message || 'Video generation failed'); }
     setGenerating(false); setRefreshKey(k => k + 1);
   };
 
-  /* ---------- Shared UI helpers ---------- */
-  const sizeBtn = (_value: string, active: boolean): React.CSSProperties => ({
-    flex: 1,
-    padding: '7px 0',
-    borderRadius: 8,
-    fontSize: 12,
-    fontWeight: 500,
-    border: 'none',
-    cursor: 'pointer',
-    background: active ? '#a855f7' : 'rgba(49,34,68,0.5)',
-    color: active ? '#fff' : '#6c7086',
-    transition: 'all 0.15s',
+  /* ---------- Unified composer routing ---------- */
+  const currentPrompt =
+    tab === 'images' ? imagePrompt :
+    tab === 'audio'  ? musicPrompt :
+    tab === 'voice'  ? voiceText :
+                       videoPrompt;
+  const setCurrentPrompt = (v: string) => {
+    if (tab === 'images') setImagePrompt(v);
+    else if (tab === 'audio') setMusicPrompt(v);
+    else if (tab === 'voice') setVoiceText(v);
+    else setVideoPrompt(v);
+  };
+  const currentSend = () => {
+    if (tab === 'images') void handleGenerateImage();
+    else if (tab === 'audio') void handleGenerateMusic();
+    else if (tab === 'voice') void handleGenerateVoice();
+    else void handleGenerateVideo();
+  };
+  const currentCredits =
+    tab === 'images' ? estimateImageCredits(imageVariations) :
+    tab === 'audio'  ? estimateMusicCredits(musicDuration) :
+    tab === 'voice'  ? estimateVoiceCredits(voiceText.length) :
+                       estimateVideoCredits(videoResolution);
+  const currentPlaceholder =
+    tab === 'images' ? t('dash.creative.placeholder_image') :
+    tab === 'audio'  ? t('dash.creative.placeholder_music') :
+    tab === 'voice'  ? t('dash.creative.placeholder_voice') :
+                       t('dash.creative.placeholder_video');
+  const overBalance = card.hasUsage && Number.isFinite(tokensRemaining) && currentCredits > tokensRemaining;
+  const composerAcceptsReference = tab === 'video';
+
+  /* ---------- Cross-mode "send to" ---------- */
+  const sendImageToVideo = (item: GalleryItem) => { setTab('video'); setVideoPrompt(item.prompt || ''); if (item.url) setVideoReference({ name: 'reference.png', dataUrl: item.url }); };
+  const sendImageToVoice = (item: GalleryItem) => { setTab('voice'); if (item.prompt) setVoiceText(item.prompt); };
+  const sendMusicToVideo = (item: GalleryItem) => { setTab('video'); if (!videoPrompt.trim() && item.prompt) setVideoPrompt(item.prompt); };
+
+  const regenerateFromItem = (item: GalleryItem) => {
+    if (item.kind === 'image') { setTab('images'); setImagePrompt(item.prompt); }
+    else if (item.kind === 'music') { setTab('audio'); setMusicPrompt(item.prompt); }
+    else if (item.kind === 'voice') { setTab('voice'); setVoiceText(item.prompt); }
+    else { setTab('video'); setVideoPrompt(item.prompt); }
+  };
+
+  /* ---------- Settings summary (collapsed strip) ---------- */
+  const modeLabel = tab === 'images' ? t('dash.creative.mode_image') : tab === 'audio' ? t('dash.creative.mode_music') : tab === 'voice' ? t('dash.creative.mode_voice') : t('dash.creative.mode_video');
+  const settingsSummary = (() => {
+    if (tab === 'images') {
+      const style = IMAGE_STYLES.find(s => s.id === imageStyle);
+      const styleLabel = style ? t(style.labelKey) : t('dash.creative.style_auto');
+      const size = imageSize === '1280*1280' ? t('dash.creative.size_square') : imageSize === '768*1280' ? t('dash.creative.size_portrait') : t('dash.creative.size_landscape');
+      const count = imageVariations === 1 ? t('dash.creative.one_image') : t('dash.creative.n_variations', { n: imageVariations });
+      return `${styleLabel} · ${size} · ${count}`;
+    }
+    if (tab === 'audio') {
+      const mood = MUSIC_MOODS.find(m => m.id === musicMood);
+      const moodLabel = mood ? t(mood.labelKey) : t('dash.creative.mood_auto');
+      return `${moodLabel} · ${musicDuration}s${musicLyrics ? ` · ${t('dash.creative.with_lyrics')}` : ''}`;
+    }
+    if (tab === 'voice') {
+      const v = VOICES.find(x => x.id === voiceId);
+      const voiceLabel = avaVoice ? t('dash.creative.voice_ava') : (v ? t(v.labelKey) : t('dash.creative.voice_calm_woman'));
+      const emo = VOICE_EMOTIONS.find(e => e.id === voiceEmotion);
+      const emoLabel = emo ? t(emo.labelKey) : t('dash.creative.emotion_neutral');
+      return `${voiceLabel} · ${emoLabel} · ${voiceSpeed}x`;
+    }
+    const cam = VIDEO_CAMERAS.find(c => c.id === videoCamera);
+    const camLabel = cam ? t(cam.labelKey) : t('dash.creative.camera_auto');
+    const mot = VIDEO_MOTION.find(m => m.id === videoMotion);
+    const motLabel = mot ? t(mot.labelKey) : t('dash.creative.motion_dynamic');
+    return `${camLabel} · ${motLabel} · ${videoDuration}s`;
+  })();
+
+  /* ---------- Inline chip helpers (settings modal) ---------- */
+  const chipStyle = (active: boolean): React.CSSProperties => ({
+    padding: '5px 11px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 500,
+    cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s',
+    background: active ? '#a855f7' : 'rgba(49,34,68,0.6)',
+    color: active ? '#fff' : '#9b8caa',
   });
-
-  const tabBtn = (_value: string, active: boolean): React.CSSProperties => ({
-    padding: '6px 12px',
-    fontSize: 12,
-    fontWeight: 500,
-    border: 'none',
-    cursor: 'pointer',
-    background: 'transparent',
-    color: active ? '#cdd6f4' : '#585b70',
-    borderBottom: active ? '2px solid #a855f7' : '2px solid transparent',
-    transition: 'all 0.15s',
-  });
-
-  const errorBox = error ? (
-    <div style={{
-      padding: '10px 12px', borderRadius: 8,
-      background: 'rgba(243,139,168,0.08)', border: '1px solid rgba(243,139,168,0.2)',
-      fontSize: 12, color: '#f38ba8', lineHeight: 1.5,
-    }}>
-      {error}
-    </div>
-  ) : null;
-
-  /* ---------- Images tab ---------- */
-  const renderImagesGenerate = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={csCard}>
-        <div style={csLabel}>Prompt</div>
-        <textarea
-          value={imagePrompt}
-          onChange={e => setImagePrompt(e.target.value)}
-          placeholder="Describe the image you want to create..."
-          rows={5}
-          style={{ ...csInput, height: 120, resize: 'vertical' as const }}
-        />
+  const chipRow = (label: string, options: { id: string; label: string }[], value: string, onChange: (v: string) => void) => (
+    <div style={{ marginBottom: 14 }}>
+      {label && <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: '#6c7086', marginBottom: 6 }}>{label}</div>}
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+        {options.map(o => <button key={o.id} onClick={() => onChange(o.id)} style={chipStyle(value === o.id)}>{o.label}</button>)}
       </div>
-      <div style={csCard}>
-        <div style={csLabel}>Size</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['1:1', '3:4', '4:3'] as const).map(s => (
-            <button key={s} onClick={() => setImageSize(s)} style={sizeBtn(s, imageSize === s)}>
-              {s === '1:1' ? 'Square 1:1' : s === '3:4' ? 'Portrait 3:4' : 'Landscape 4:3'}
-            </button>
-          ))}
+    </div>
+  );
+  const fieldLabel: React.CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: '#6c7086', marginBottom: 6 };
+  const fieldInput: React.CSSProperties = { width: '100%', borderRadius: 8, border: '1px solid rgba(168,85,247,0.16)', background: 'rgba(49,34,68,0.5)', color: '#cdd6f4', fontSize: 12, padding: '8px 10px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' };
+
+  const renderSettingsBody = () => {
+    if (tab === 'images') return (
+      <>
+        {chipRow(t('dash.creative.label_style'), IMAGE_STYLES.map(s => ({ id: s.id, label: t(s.labelKey) })), imageStyle, setImageStyle)}
+        {chipRow(t('dash.creative.label_size'), [
+          { id: '1280*1280', label: t('dash.creative.size_square') },
+          { id: '768*1280', label: t('dash.creative.size_portrait') },
+          { id: '1280*768', label: t('dash.creative.size_landscape') },
+        ], imageSize, setImageSize)}
+        {chipRow(t('dash.creative.label_variations'), [{ id: '1', label: '1' }, { id: '2', label: '2' }, { id: '4', label: '4' }], String(imageVariations), v => setImageVariations(Number(v) as 1 | 2 | 4))}
+        <div>
+          <div style={fieldLabel}>{t('dash.creative.label_avoid')}</div>
+          <input value={imageNegative} onChange={e => setImageNegative(e.target.value)} placeholder={t('dash.creative.avoid_placeholder')} style={fieldInput} />
         </div>
-      </div>
-      {errorBox}
-      <button
-        onClick={handleGenerateImage}
-        disabled={!imagePrompt.trim() || generating}
-        style={!imagePrompt.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}
-      >
-        {generating ? 'Generating...' : 'Generate Image'}
-      </button>
-    </div>
-  );
+      </>
+    );
+    if (tab === 'audio') return (
+      <>
+        {chipRow(t('dash.creative.label_mood'), MUSIC_MOODS.map(m => ({ id: m.id, label: t(m.labelKey) })), musicMood, setMusicMood)}
+        {chipRow(t('dash.creative.label_duration'), [30, 60, 90, 120].map(n => ({ id: String(n), label: `${n}s` })), String(musicDuration), v => setMusicDuration(Number(v) as 30 | 60 | 90 | 120))}
+        <div>
+          <div style={fieldLabel}>{t('dash.creative.label_lyrics')}</div>
+          <textarea value={musicLyrics} onChange={e => setMusicLyrics(e.target.value)} placeholder={t('dash.creative.lyrics_placeholder')} rows={2} style={{ ...fieldInput, resize: 'vertical' }} />
+        </div>
+      </>
+    );
+    if (tab === 'voice') return (
+      <>
+        <div style={{ marginBottom: 14 }}>
+          <div style={fieldLabel}>{t('dash.creative.label_voice')}</div>
+          <button onClick={() => setAvaVoice(v => !v)} style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 10px', borderRadius: 8, fontSize: 11, fontWeight: 500, cursor: 'pointer', marginBottom: 8, transition: 'all 0.15s',
+            border: avaVoice ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(168,85,247,0.16)',
+            background: avaVoice ? 'rgba(168,85,247,0.15)' : 'rgba(49,34,68,0.5)',
+            color: avaVoice ? '#a855f7' : '#9b8caa',
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: avaVoice ? '#a855f7' : '#6c7086' }} />
+              {t('dash.creative.avas_voice')}
+            </span>
+            <span style={{ fontSize: 10, opacity: 0.7 }}>{avaVoice ? t('dash.creative.voice_locked') : t('dash.creative.voice_pick_character')}</span>
+          </button>
+          {!avaVoice && chipRow('', VOICES.map(v => ({ id: v.id, label: t(v.labelKey) })), voiceId, setVoiceId)}
+        </div>
+        {chipRow(t('dash.creative.label_emotion'), VOICE_EMOTIONS.map(e => ({ id: e.id, label: t(e.labelKey) })), voiceEmotion, setVoiceEmotion)}
+        {chipRow(t('dash.creative.label_speed'), [0.8, 1.0, 1.2, 1.5].map(n => ({ id: String(n), label: `${n}x` })), String(voiceSpeed), v => setVoiceSpeed(Number(v)))}
+        <div>
+          <div style={{ ...fieldLabel, display: 'flex', justifyContent: 'space-between' }}>
+            <span>{t('dash.creative.label_pitch')}</span>
+            <span style={{ opacity: 0.9 }}>{voicePitch >= 0 ? '+' : ''}{voicePitch} st</span>
+          </div>
+          <input type="range" min={-12} max={12} step={1} value={voicePitch} onChange={e => setVoicePitch(Number(e.target.value))} style={{ width: '100%', accentColor: '#a855f7' }} />
+        </div>
+      </>
+    );
+    // video
+    return (
+      <>
+        {chipRow(t('dash.creative.label_camera'), VIDEO_CAMERAS.map(c => ({ id: c.id, label: t(c.labelKey) })), videoCamera, setVideoCamera)}
+        {chipRow(t('dash.creative.label_motion'), VIDEO_MOTION.map(m => ({ id: m.id, label: t(m.labelKey) })), videoMotion, v => setVideoMotion(v as VideoMotionId))}
+        {chipRow(t('dash.creative.label_duration'), [{ id: '5', label: '5s' }, { id: '10', label: '10s' }], String(videoDuration), v => setVideoDuration(Number(v) as 5 | 10))}
+        {chipRow('Resolution', [
+          { id: '720P', label: `720p · ${estimateVideoCredits('720P')} cr` },
+          { id: '1080P', label: `1080p · ${estimateVideoCredits('1080P')} cr` },
+        ], videoResolution, v => setVideoResolution(v as '720P' | '1080P'))}
+      </>
+    );
+  };
 
-  // Regenerate handlers — drop the previous gallery item's prompt back
-  // into the form and trigger the generation handler. Operator can edit
-  // first if they want a variation; one click + Generate is the fast path.
-  const onRegenerateImage = (item: GalleryItem) => { setImagePrompt(item.prompt); };
-  const onRegenerateMusic = (item: GalleryItem) => { setMusicPrompt(item.prompt); };
-  const onRegenerateVoice = (item: GalleryItem) => { setVoiceText(item.prompt); };
-  const onRegenerateSfx   = (item: GalleryItem) => { setSfxPrompt(item.prompt); };
-  const onRegenerateVideo = (item: GalleryItem) => { setVideoPrompt(item.prompt); };
-
-  const renderImagesResults = () => (
-    <CreativeGalleryStrip
-      items={sessionImages}
-      onRegenerate={onRegenerateImage}
-      onDelete={imageGallery.deleteItem}
-      emptyHint="Generate an image — it'll appear here for this session, then live in your Library."
-    />
-  );
-
-  /* ---------- Audio tab ---------- */
-  const renderAudioGenerate = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={csCard}>
-        <div style={csLabel}>Prompt</div>
-        <textarea
-          value={musicPrompt}
-          onChange={e => setMusicPrompt(e.target.value)}
-          placeholder="Describe the music — genre, mood, instruments..."
-          rows={4}
-          style={{ ...csInput, height: 100, resize: 'vertical' as const }}
-        />
-      </div>
-      <div style={csCard}>
-        <div style={csLabel}>Lyrics (optional)</div>
-        <textarea
-          value={musicLyrics}
-          onChange={e => setMusicLyrics(e.target.value)}
-          placeholder="Add lyrics for a vocal track (optional)"
-          rows={4}
-          style={{ ...csInput, height: 100, resize: 'vertical' as const }}
-        />
-      </div>
-      {errorBox}
-      <button
-        onClick={handleGenerateMusic}
-        disabled={!musicPrompt.trim() || generating}
-        style={!musicPrompt.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}
-      >
-        {generating ? 'Generating...' : 'Generate Music'}
-      </button>
-    </div>
-  );
-
-  const renderAudioResults = () => (
-    <CreativeGalleryStrip
-      items={sessionMusic}
-      onRegenerate={onRegenerateMusic}
-      onDelete={musicGallery.deleteItem}
-      emptyHint="Generate music — it'll appear here for this session, then live in your Library."
-    />
-  );
-
-  /* ---------- Voice tab ---------- */
-  const VOICES = [
-    { id: 'Calm_Woman', label: 'Calm Woman' },
-    { id: 'Wise_Woman', label: 'Wise Woman' },
-    { id: 'Friendly_Person', label: 'Friendly' },
-    { id: 'Inspirational_girl', label: 'Inspirational' },
-    { id: 'Deep_Voice_Man', label: 'Deep Voice' },
-    { id: 'Calm_Man', label: 'Calm Man' },
-    { id: 'Newsman', label: 'Newscaster' },
-    { id: 'Lively_Girl', label: 'Lively' },
-    { id: 'Patient_Man', label: 'Patient' },
-    { id: 'Determined_Man', label: 'Determined' },
+  // Mode glyph dock — images + video live; audio + voice hidden via shared list.
+  const allGlyphs: { key: CreativeMode; icon: React.ReactNode; label: string }[] = [
+    { key: 'images', icon: <PhImage weight="duotone" size={16} />, label: t('dash.creative.mode_image') },
+    { key: 'audio',  icon: <PhMusic weight="duotone" size={16} />, label: t('dash.creative.mode_music') },
+    { key: 'voice',  icon: <PhVoice weight="duotone" size={16} />, label: t('dash.creative.mode_voice') },
+    { key: 'video',  icon: <PhVideo weight="duotone" size={16} />, label: t('dash.creative.mode_video') },
   ];
+  const glyphs = allGlyphs.filter(g => !HIDDEN_MODES.has(g.key));
 
-  const renderVoiceGenerate = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={csCard}>
-        <div style={csLabel}>Text</div>
-        <textarea
-          placeholder="Enter text to speak..."
-          value={voiceText}
-          onChange={e => setVoiceText(e.target.value)}
-          rows={5}
-          style={{ ...csInput, height: 120, resize: 'vertical' as const }}
-        />
+  const creditCard = (() => {
+    if (card.isUnlimited) return (
+      <div style={{ flexShrink: 0, minWidth: 200, borderRadius: 16, border: '1px solid rgba(168,85,247,0.30)', background: 'linear-gradient(135deg, #0f0f17, #1a1625)', padding: '10px 16px' }}>
+        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, color: '#6c7086', display: 'block', marginBottom: 6 }}>{t('dash.creative.credit_balance')}</span>
+        <div style={{ fontSize: 18, fontWeight: 600, color: '#a855f7', lineHeight: 1 }}>{t('dash.creative.unlimited')}</div>
+        <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>{t('dash.creative.admin_no_caps')}</div>
       </div>
-      <div style={csCard}>
-        <div style={csLabel}>Voice</div>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {VOICES.map(v => (
-            <button key={v.id} onClick={() => setVoiceId(v.id)} style={{
-              padding: '4px 10px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 500, cursor: 'pointer',
-              background: voiceId === v.id ? '#a855f7' : 'rgba(49,34,68,0.5)',
-              color: voiceId === v.id ? '#fff' : '#6c7086', transition: 'all 0.15s',
-            }}>{v.label}</button>
-          ))}
+    );
+    if (card.hasUsage) return (
+      <div style={{ flexShrink: 0, minWidth: 200, borderRadius: 16, border: '1px solid rgba(168,85,247,0.20)', background: 'linear-gradient(135deg, #0f0f17, #1a1625)', padding: '10px 16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+          <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, color: '#6c7086' }}>{t('dash.creative.credit_balance')}</span>
+          <span style={{ fontSize: 10, color: '#6c7086' }}>{fmt(card.used)}<span style={{ opacity: 0.6 }}> / {fmt(card.limit)}</span></span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ fontSize: 18, fontWeight: 600, lineHeight: 1, color: remainPct < 10 ? '#ef4444' : remainPct < 30 ? '#eab308' : '#a855f7' }}>{fmt(tokensRemaining)}</span>
+          <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.creative.credits_left')}</span>
+        </div>
+        <div style={{ marginTop: 8, height: 4, borderRadius: 2, background: 'rgba(49,34,68,0.6)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', borderRadius: 2, width: `${remainPct}%`, transition: 'width 0.5s', background: remainPct < 10 ? '#ef4444' : remainPct < 30 ? '#eab308' : '#a855f7' }} />
         </div>
       </div>
-      <div style={csCard}>
-        <div style={csLabel}>Speed</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {[0.8, 1.0, 1.2, 1.5].map(s => (
-            <button key={s} onClick={() => setVoiceSpeed(s)} style={{
-              padding: '4px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-              background: voiceSpeed === s ? '#a855f7' : 'rgba(49,34,68,0.5)',
-              color: voiceSpeed === s ? '#fff' : '#6c7086', transition: 'all 0.15s',
-            }}>{s}x</button>
-          ))}
+    );
+    if (card.connected) return (
+      <div style={{ flexShrink: 0, minWidth: 200, borderRadius: 16, border: '1px solid rgba(168,85,247,0.16)', background: 'rgba(15,15,23,0.6)', padding: '10px 16px' }}>
+        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, color: '#6c7086', display: 'block', marginBottom: 8 }}>{t('dash.creative.credit_balance')}</span>
+        <div style={{ height: 14, width: 80, borderRadius: 4, background: 'rgba(49,34,68,0.6)' }} />
+      </div>
+    );
+    return (
+      <div style={{ flexShrink: 0, minWidth: 200, borderRadius: 16, border: '1px solid rgba(168,85,247,0.16)', background: 'rgba(15,15,23,0.6)', padding: '10px 16px' }}>
+        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, color: '#6c7086', display: 'block', marginBottom: 4 }}>{t('dash.creative.credit_balance')}</span>
+        <p style={{ fontSize: 11, color: '#9b8caa', lineHeight: 1.5, margin: 0 }}>{t('dash.creative.sign_in_credits')}</p>
+      </div>
+    );
+  })();
+
+  return (
+    <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '28px 32px' }}>
+      {/* Header — Wan-correct subtitle + credit balance card. */}
+      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
+        <div>
+          <div style={pageTitle}>{t('dash.nav.creative_studio')}</div>
+          <div style={pageSubtitle}>{t('dash.creative.subtitle')}</div>
         </div>
+        {creditCard}
       </div>
-      {errorBox}
-      <button onClick={handleGenerateVoice} disabled={!voiceText.trim() || generating}
-        style={!voiceText.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}>
-        {generating ? 'Generating...' : 'Generate Voice'}
-      </button>
-    </div>
-  );
 
-  const renderVoiceResults = () => (
-    <CreativeGalleryStrip
-      items={sessionVoice}
-      onRegenerate={onRegenerateVoice}
-      onDelete={voiceGallery.deleteItem}
-      emptyHint="Generate voice — it'll appear here for this session, then live in your Library."
-    />
-  );
-
-  /* ---------- SFX tab ---------- */
-  const renderSfxGenerate = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={csCard}>
-        <div style={csLabel}>Sound Effect</div>
-        <textarea
-          placeholder="Describe the sound... e.g. 'door slam', 'rain on window', 'sci-fi laser'"
-          value={sfxPrompt}
-          onChange={e => setSfxPrompt(e.target.value)}
-          rows={4}
-          style={{ ...csInput, height: 100, resize: 'vertical' as const }}
-        />
+      {/* Feed — oldest-top, newest-bottom. Empty state is a full invitation. */}
+      <div ref={feedRef} style={{ flex: 1, overflowY: 'auto', minHeight: 0, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {feed.length === 0 && !generating && (
+          <CreativeEmptyState mode={tab} onPick={setCurrentPrompt} />
+        )}
+        {feed.map(item => (
+          <CreativeFeedCard
+            key={item.id}
+            item={item}
+            onRegenerate={regenerateFromItem}
+            onDelete={(it) => galleryForKind(it.kind).deleteItem(it)}
+            onAnimate={sendImageToVideo}
+            onVoiceover={sendImageToVoice}
+            onScore={sendMusicToVideo}
+          />
+        ))}
+        {generating && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderRadius: 16, border: '1px solid rgba(168,85,247,0.30)', background: 'linear-gradient(135deg, #0f0f17, #1a1625)' }}>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', border: '2.5px solid rgba(168,85,247,0.18)', borderTopColor: '#a855f7', animation: 'avaSpin 0.8s linear infinite' }} />
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>
+                {tab === 'images' ? t('dash.creative.gen_image') : tab === 'audio' ? t('dash.creative.gen_music') : tab === 'voice' ? t('dash.creative.gen_voice') : t('dash.creative.gen_video', { elapsed })}
+              </div>
+              <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{tab === 'video' ? t('dash.creative.gen_video_eta') : t('dash.creative.gen_eta')}</div>
+            </div>
+            <style>{`@keyframes avaSpin { to { transform: rotate(360deg) } }`}</style>
+          </div>
+        )}
       </div>
-      {errorBox}
-      <button onClick={handleGenerateSfx} disabled={!sfxPrompt.trim() || generating}
-        style={!sfxPrompt.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}>
-        {generating ? 'Generating...' : 'Generate SFX'}
-      </button>
-    </div>
-  );
 
-  const renderSfxResults = () => (
-    <CreativeGalleryStrip
-      items={sessionSfx}
-      onRegenerate={onRegenerateSfx}
-      onDelete={sfxGallery.deleteItem}
-      emptyHint="Generate a sound effect — it'll appear here for this session, then live in your Library."
-    />
-  );
+      {/* Composer — collapsed settings strip + textarea + glyph dock + send. */}
+      <div style={{ flexShrink: 0 }}>
+        {error && (
+          <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(243,139,168,0.08)', border: '1px solid rgba(243,139,168,0.2)', fontSize: 12, color: '#f38ba8', lineHeight: 1.5 }}>
+            {error}
+          </div>
+        )}
 
-  /* ---------- Video tab ---------- */
-  const renderVideoGenerate = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={csCard}>
-        <div style={csLabel}>Prompt</div>
-        <textarea
-          value={videoPrompt}
-          onChange={e => setVideoPrompt(e.target.value)}
-          placeholder="Describe the video scene..."
-          rows={5}
-          style={{ ...csInput, height: 120, resize: 'vertical' as const }}
-        />
-      </div>
-      <div style={csCard}>
-        <div style={csLabel}>Duration</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button onClick={() => setVideoDuration(6)} style={sizeBtn('6', videoDuration === 6)}>6s 1080P</button>
-          <button onClick={() => setVideoDuration(10)} style={sizeBtn('10', videoDuration === 10)}>10s 768P</button>
-        </div>
-      </div>
-      {errorBox}
-      <button
-        onClick={handleGenerateVideo}
-        disabled={!videoPrompt.trim() || generating}
-        style={!videoPrompt.trim() || generating ? csPrimaryBtnDisabled : csPrimaryBtn}
-      >
-        {generating ? 'Generating...' : 'Generate Video'}
-      </button>
-      {generating && tab === 'video' && (
-        <div style={{
-          padding: '10px 12px', borderRadius: 8,
-          background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.12)',
-          fontSize: 12, color: '#a6adc8', textAlign: 'center' as const,
+        {/* Collapsed settings trigger — "IMAGE SETTINGS  summary  ⚙" */}
+        <button onClick={() => setSettingsOpen(true)} style={{
+          width: '100%', marginBottom: 8, borderRadius: 12, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(15,15,23,0.6)',
+          padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: '#6c7086', transition: 'all 0.15s',
         }}>
-          Generating... {elapsed}s
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, opacity: 0.7, flexShrink: 0 }}>{t('dash.creative.mode_settings', { mode: modeLabel })}</span>
+            <span style={{ fontSize: 11, opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{settingsSummary}</span>
+          </span>
+          <PhGear weight="duotone" size={14} style={{ flexShrink: 0, marginLeft: 8, opacity: 0.6 }} />
+        </button>
+
+        <div style={{ border: '1px solid rgba(168,85,247,0.20)', borderRadius: 16, padding: 12, background: 'linear-gradient(135deg, rgba(15,15,23,0.95), rgba(26,22,37,0.95))' }}>
+          {/* Reference chip (video first-frame) */}
+          {composerAcceptsReference && videoReference && (
+            <div style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 8, borderRadius: 8, border: '1px solid rgba(168,85,247,0.2)', background: 'rgba(49,34,68,0.5)', padding: '4px 8px 4px 4px' }}>
+              <img src={videoReference.dataUrl} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }} />
+              <span style={{ fontSize: 10, color: '#9b8caa', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{videoReference.name}</span>
+              <button onClick={() => setVideoReference(null)} title={t('dash.creative.remove_first_frame')} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', display: 'flex', padding: 0 }}><PhX weight="bold" size={11} /></button>
+            </div>
+          )}
+
+          <textarea
+            value={currentPrompt}
+            onChange={e => setCurrentPrompt(e.target.value)}
+            placeholder={currentPlaceholder}
+            rows={3}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); if (currentPrompt.trim() && !generating) currentSend(); }
+            }}
+            style={{ width: '100%', resize: 'none', background: 'transparent', border: 'none', outline: 'none', color: '#cdd6f4', fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}
+          />
+
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {glyphs.map(g => (
+                <button key={g.key} onClick={() => setTab(g.key)} title={g.label} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s',
+                  border: tab === g.key ? '1px solid rgba(168,85,247,0.5)' : '1px solid transparent',
+                  background: tab === g.key ? 'rgba(168,85,247,0.15)' : 'transparent',
+                  color: tab === g.key ? '#a855f7' : '#6c7086',
+                }}>{g.icon}</button>
+              ))}
+              {composerAcceptsReference && (
+                <button onClick={() => fileRef.current?.click()} title={videoReference ? t('dash.creative.replace_first_frame') : t('dash.creative.attach_first_frame')} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s',
+                  border: videoReference ? '1px solid rgba(168,85,247,0.4)' : '1px solid transparent',
+                  background: videoReference ? 'rgba(168,85,247,0.1)' : 'transparent',
+                  color: videoReference ? '#a855f7' : '#6c7086',
+                }}><PhPaperclip weight="duotone" size={14} /></button>
+              )}
+              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadVideoReference(f); e.currentTarget.value = ''; }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span title={overBalance ? `${fmt(currentCredits)} cr — over your remaining balance` : `${fmt(currentCredits)} cr for this generation`}
+                style={{ fontSize: 10, fontWeight: overBalance ? 600 : 400, color: overBalance ? '#eab308' : '#6c7086' }}>
+                {t('dash.creative.cost_cr', { credits: fmt(currentCredits) })}
+              </span>
+              <button onClick={currentSend} disabled={!currentPrompt.trim() || generating} style={{
+                padding: '9px 18px', borderRadius: 10, border: 'none', fontSize: 12, fontWeight: 600,
+                cursor: (!currentPrompt.trim() || generating) ? 'not-allowed' : 'pointer',
+                background: '#a855f7', color: '#fff', opacity: (!currentPrompt.trim() || generating) ? 0.4 : 1, transition: 'all 0.15s',
+              }}>{generating ? t('dash.creative.generating') : t('dash.creative.send')}</button>
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: 8, textAlign: 'center', fontSize: 10, color: '#585b70' }}>
+          Shift+Enter for a new line · Ctrl/Cmd+Enter to send{composerAcceptsReference ? ' · drop an image to set the first frame' : ''}
+        </div>
+      </div>
+
+      {/* Settings modal — opened from the collapsed strip. Matches the
+          extension: backdrop + centered card, chip rows per mode. */}
+      {settingsOpen && (
+        <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, maxHeight: '80vh', overflowY: 'auto', borderRadius: 18, border: '1px solid rgba(168,85,247,0.20)', background: 'linear-gradient(135deg, #0f0f17, #1a1625)', boxShadow: '0 0 60px rgba(168,85,247,0.12)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(168,85,247,0.10)' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.creative.mode_settings', { mode: modeLabel })}</div>
+                <div style={{ fontSize: 10, color: '#9b8caa', marginTop: 2 }}>{settingsSummary}</div>
+              </div>
+              <button onClick={() => setSettingsOpen(false)} title={t('dash.creative.close_esc')} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhX weight="bold" size={12} /></button>
+            </div>
+            <div style={{ padding: '16px' }}>{renderSettingsBody()}</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px', borderTop: '1px solid rgba(168,85,247,0.10)' }}>
+              <button onClick={() => setSettingsOpen(false)} style={{ borderRadius: 10, border: '1px solid rgba(168,85,247,0.35)', background: 'rgba(168,85,247,0.15)', color: '#a855f7', fontSize: 11, fontWeight: 500, padding: '7px 14px', cursor: 'pointer' }}>{t('dash.creative.done')}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
+}
 
-  const renderVideoResults = () => (
-    <CreativeGalleryStrip
-      items={sessionVideo}
-      onRegenerate={onRegenerateVideo}
-      onDelete={videoGallery.deleteItem}
-      emptyHint="Generate a video — it'll appear here for this session, then live in your Library."
-    />
+/* ── Creative Studio — one generation card (feed) ───────────────────────────
+   Mirrors the extension's FeedCard: prompt header, the asset, then an action
+   row (variations / cross-mode sends / copy / download / delete + timestamp). */
+function CreativeFeedCard({ item, onRegenerate, onDelete, onAnimate, onVoiceover, onScore }: {
+  item: GalleryItem;
+  onRegenerate: (item: GalleryItem) => void;
+  onDelete: (item: GalleryItem) => void;
+  onAnimate: (item: GalleryItem) => void;
+  onVoiceover: (item: GalleryItem) => void;
+  onScore: (item: GalleryItem) => void;
+}) {
+  useLocale();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => { if (await copyGalleryPrompt(item)) { setCopied(true); setTimeout(() => setCopied(false), 1200); } };
+  const handleDelete = () => { if (!confirmDelete) { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 3000); return; } onDelete(item); };
+
+  const pill = (label: React.ReactNode, onClick: () => void, tone?: 'accent' | 'danger') => (
+    <button onClick={onClick} style={{
+      borderRadius: 6, padding: '5px 10px', fontSize: 10, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
+      border: tone === 'danger' ? '1px solid rgba(243,139,168,0.2)' : tone === 'accent' ? '1px solid rgba(168,85,247,0.35)' : '1px solid rgba(168,85,247,0.2)',
+      background: tone === 'danger' ? 'transparent' : tone === 'accent' ? 'rgba(168,85,247,0.08)' : 'rgba(49,34,68,0.5)',
+      color: tone === 'danger' ? '#f38ba8' : tone === 'accent' ? '#a855f7' : '#cdd6f4',
+    }}>{label}</button>
   );
 
   return (
-    <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={pageTitle}>Creative Studio</div>
-          <div style={pageSubtitle}>Generate images with Wan, plus music, voice, and video with MiniMax</div>
-        </div>
-        <CSTokenBar refreshKey={refreshKey} />
+    <div style={{ borderRadius: 16, border: '1px solid rgba(168,85,247,0.16)', background: 'linear-gradient(135deg, #0f0f17, #1a1625)', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px 8px', fontSize: 11, color: '#a6adc8', lineHeight: 1.5 }}>{item.prompt || t('dash.creative.no_prompt')}</div>
+      <div style={{ padding: '0 16px 12px' }}>
+        {item.kind === 'image' && <img src={item.url} alt={item.title || t('dash.creative.generated_image_alt')} loading="lazy" style={{ display: 'block', margin: '0 auto', borderRadius: 12, objectFit: 'contain', maxHeight: '32vh', maxWidth: '100%' }} />}
+        {(item.kind === 'music' || item.kind === 'voice') && <audio src={item.url} controls style={{ width: '100%' }} />}
+        {item.kind === 'video' && <video src={item.url} controls style={{ width: '100%', borderRadius: 12, maxHeight: '40vh' }} />}
       </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', padding: '10px 16px 12px', borderTop: '1px solid rgba(168,85,247,0.08)' }}>
+        {pill(t('dash.creative.action_variations'), () => onRegenerate(item))}
+        {item.kind === 'image' && pill(<>→ {t('dash.creative.action_animate')}</>, () => onAnimate(item), 'accent')}
+        {item.kind === 'image' && pill(<>→ {t('dash.creative.action_voiceover')}</>, () => onVoiceover(item), 'accent')}
+        {item.kind === 'music' && pill(<>→ {t('dash.creative.action_use_as_score')}</>, () => onScore(item), 'accent')}
+        {pill(copied ? `✓ ${t('dash.creative.copied')}` : t('dash.creative.copy_prompt'), handleCopy)}
+        {pill(t('dash.chat.download'), () => { void downloadGalleryItem(item); })}
+        {pill(confirmDelete ? t('dash.creative.click_again') : t('dash.common.delete'), handleDelete, 'danger')}
+        {item.createdAt && <span style={{ marginLeft: 'auto', fontSize: 9, color: '#585b70' }}>{new Date(item.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
+      </div>
+    </div>
+  );
+}
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
-        {/* SFX tab hidden — in development. MiniMax music model doesn't support short isolated sound effects yet. */}
-        {(['images', 'audio', 'voice', /* 'sfx', */ 'video'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={tabBtn(t, tab === t)}>
-            {t === 'images' ? '\uD83D\uDDBC\uFE0F Images' : t === 'audio' ? '\uD83C\uDFB5 Audio' : t === 'voice' ? '\uD83C\uDF99\uFE0F Voice' : t === 'video' ? '\uD83C\uDFAC Video' : '\uD83D\uDCDA Library'}
-          </button>
+/* ── Creative Studio — empty-state invitation ───────────────────────────────
+   Matches the extension's EmptyInvitation: left-aligned "Ready when you are.",
+   a mode-aware line, 3 ready-to-fire suggestions from the shared pool, and a
+   "Show me different ones" reshuffle. */
+function CreativeEmptyState({ mode, onPick }: { mode: CreativeMode; onPick: (text: string) => void }) {
+  useLocale();
+  const [shuffle, setShuffle] = useState(0);
+  const picks = useMemo(() => pickRandom(SUGGESTIONS[mode], 3), [mode, shuffle]);
+  const modeWord =
+    mode === 'images' ? t('dash.creative.modeword_images') :
+    mode === 'audio'  ? t('dash.creative.modeword_music') :
+    mode === 'voice'  ? t('dash.creative.modeword_voice') :
+                        t('dash.creative.modeword_video');
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '40px 4px' }}>
+      <h2 style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', margin: 0 }}>{t('dash.creative.ready_title')}</h2>
+      <p style={{ marginTop: 6, fontSize: 12, color: '#9b8caa', maxWidth: 460, lineHeight: 1.6 }}>{t('dash.creative.ready_desc', { mode: modeWord })}</p>
+      <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+        {picks.map((s, i) => (
+          <button key={`${mode}-${shuffle}-${i}`} onClick={() => onPick(s)} style={{
+            textAlign: 'left', borderRadius: 12, border: '1px solid rgba(168,85,247,0.12)', background: 'transparent',
+            padding: '10px 16px', fontSize: 12, color: '#9b8caa', cursor: 'pointer', transition: 'all 0.15s',
+          }}>{s}</button>
         ))}
       </div>
-
-      {/* Library tab removed — browsing lives in the top-level Library
-          page now. Creative Studio is pure creation surface. */}
-      {false ? null : (
-        <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
-          {/* LEFT: Generate panel */}
-          <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
-            {tab === 'images' && renderImagesGenerate()}
-            {tab === 'audio' && renderAudioGenerate()}
-            {tab === 'voice' && renderVoiceGenerate()}
-            {tab === 'sfx' && renderSfxGenerate()}
-            {tab === 'video' && renderVideoGenerate()}
-          </div>
-
-          {/* RIGHT: Results */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {tab === 'images' && renderImagesResults()}
-            {tab === 'audio' && renderAudioResults()}
-            {tab === 'voice' && renderVoiceResults()}
-            {tab === 'sfx' && renderSfxResults()}
-            {tab === 'video' && renderVideoResults()}
-          </div>
-        </div>
-      )}
+      <button onClick={() => setShuffle(s => s + 1)} style={{ marginTop: 12, background: 'transparent', border: 'none', padding: 0, fontSize: 10, color: '#6c7086', cursor: 'pointer' }}>{t('dash.creative.shuffle_suggestions')}</button>
     </div>
   );
 }
