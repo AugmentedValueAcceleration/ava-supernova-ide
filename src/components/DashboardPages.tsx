@@ -2897,9 +2897,16 @@ export function AvaChatPage() {
           ? { baseUrl: localBaseUrl, modelName: localModelName, apiKey: localApiKey || undefined, modelLabel: localModelLabel || undefined }
           : undefined;
 
+        // BYOK toggle: when the user has flipped to their own keys, withhold the
+        // platform key so the sidecar coordinator runs BYOK (hasPlatform false)
+        // and the whole persona team pins to their chosen model. Mirror of the
+        // extension's provider-source gate.
+        const usePlatform = (() => {
+          try { return localStorage.getItem('ava-ide-use-platform') !== '0'; } catch { return true; }
+        })();
         const config: SidecarConfig = {
           providers,
-          platformKey: getPlatformKey() || undefined,
+          platformKey: usePlatform ? (getPlatformKey() || undefined) : undefined,
           // Sidecar resolves bare 'auto'/'supernova' via AutoCoordinator; raw
           // model ids without a known mapping get a `platform:` prefix so the
           // ProviderRegistry resolver can find them. Never silently coerce
@@ -2914,7 +2921,7 @@ export function AvaChatPage() {
           userName: localStorage.getItem('ava-ide-user-name') || localStorage.getItem('ava-ide-email')?.split('@')[0] || undefined,
           userEmail: localStorage.getItem('ava-ide-email') || undefined,
           userTier: localStorage.getItem('ava-ide-tier') || undefined,
-          _devPlatformFallback: !!getPlatformKey(),
+          _devPlatformFallback: usePlatform && !!getPlatformKey(),
           generationLocalOnly,
           learningLocalOnly,
           local: localBlock,
@@ -2966,12 +2973,22 @@ export function AvaChatPage() {
     };
     window.addEventListener('ava-folder-changed', onFolderChanged);
 
+    // Platform/BYOK toggle flipped — full re-init so availableProviders +
+    // platformKey are rebuilt and routing actually switches source.
+    const onSourceChanged = () => {
+      if (cancelled) return;
+      setSidecarReady(false);
+      sidecar.stop().catch(() => {}).finally(() => { if (!cancelled) startSidecar(); });
+    };
+    window.addEventListener('ava-ide-source-changed', onSourceChanged);
+
     return () => {
       cancelled = true;
       sidecar.off('close', onClose);
       if ((sidecar as any).__avaHandler) sidecar.offAny((sidecar as any).__avaHandler);
       window.removeEventListener('ava-clear-memory', onClearMemory);
       window.removeEventListener('ava-folder-changed', onFolderChanged);
+      window.removeEventListener('ava-ide-source-changed', onSourceChanged);
       sidecar.stop().catch(() => {});
     };
   }, [canChat]); // Restart sidecar when chat ability changes
@@ -3692,15 +3709,16 @@ export function AvaChatPage() {
           catch { return {}; }
         })();
         const fallbackCloudAllowed = cloudSyncEnabled();
+        const useP = (() => { try { return localStorage.getItem('ava-ide-use-platform') !== '0'; } catch { return true; } })();
         sidecar.start({
           providers: {},
-          platformKey: getPlatformKey() || undefined,
+          platformKey: useP ? (getPlatformKey() || undefined) : undefined,
           activeModel: `platform:${model}`,
           cwd: localStorage.getItem('ava-ide-project-folder') || '.',
           mode,
           permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
           autoMemory: true,
-          _devPlatformFallback: true,
+          _devPlatformFallback: useP,
           generationLocalOnly: fallbackSyncPrefs.generations === false || !fallbackCloudAllowed,
           learningLocalOnly: fallbackSyncPrefs.learning === false || !fallbackCloudAllowed,
           useLocalEmbeddings: localStorage.getItem('ava-ide-embeddings-enabled') === '1',

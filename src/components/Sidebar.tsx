@@ -911,7 +911,9 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
   const [tier, setTier] = useState(() => getStoredTier() || 'free');
   const [showConnect, setShowConnect] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
-  const [usePlatform, setUsePlatform] = useState(true);
+  const [usePlatform, setUsePlatform] = useState(() => {
+    try { return localStorage.getItem('ava-ide-use-platform') !== '0'; } catch { return true; }
+  });
 
   // Re-read account state whenever sign-in/out fires anywhere — e.g. the
   // onboarding overlay's own SignInPanel. Without this the sidebar holds the
@@ -1044,7 +1046,16 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
             {[{ key: 'Platform', labelKey: 'dash.auth.platform' }, { key: 'API Key', labelKey: 'dash.auth.api_key' }].map(({ key, labelKey }) => {
               const active = key === 'Platform' ? usePlatform : !usePlatform;
               return (
-                <button key={key} onClick={() => setUsePlatform(key === 'Platform')}
+                <button key={key} onClick={() => {
+                  const next = key === 'Platform';
+                  setUsePlatform(next);
+                  try { localStorage.setItem('ava-ide-use-platform', next ? '1' : '0'); } catch { /* */ }
+                  // Re-init the sidecar so routing actually switches — mirrors the
+                  // extension's set_provider_source -> session re-init. BYOK ('0')
+                  // withholds the platform key so the persona team runs on the
+                  // user's own model.
+                  window.dispatchEvent(new Event('ava-ide-source-changed'));
+                }}
                   style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer', background: active ? '#a855f7' : 'rgba(49, 34, 68, 0.5)', color: active ? '#fff' : '#6c7086' }}>
                   {t(labelKey)}
                 </button>
