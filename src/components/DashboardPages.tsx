@@ -2011,7 +2011,7 @@ export function AvaChatPage() {
     'mistral-large-3', 'mistral-medium-3.5', 'mistral-small-4',
     'codestral-latest', 'devstral-latest',
     // Zhipu / GLM
-    'glm-5.1', 'glm-5', 'glm-4.7',
+    'glm-5.2',
     // Xiaomi MiMo
     'mimo-v2.5-pro', 'mimo-v2.5',
   ]);
@@ -2024,7 +2024,7 @@ export function AvaChatPage() {
     Qwen: [{ id: 'qwen3.7-max', name: 'Qwen 3.7 Max' }, { id: 'qwen3.6-plus', name: 'Qwen 3.6 Plus' }, { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
     MiniMax: [{ id: 'MiniMax-M3', name: 'MiniMax M3' }, { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 HighSpeed' }],
     Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
-    Zhipu: [{ id: 'glm-5.1', name: 'GLM-5.1' }, { id: 'glm-5', name: 'GLM-5' }, { id: 'glm-4.7', name: 'GLM-4.7' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
+    Zhipu: [{ id: 'glm-5.2', name: 'GLM-5.2' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
     Mistral: [{ id: 'mistral-large-3', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
     // Anthropic: 'claude-fable-5' DISABLED 2026-06-14 (US-gov restriction) — re-add { id: 'claude-fable-5', name: 'Claude Fable 5' } to re-enable
     Anthropic: [{ id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
@@ -4146,7 +4146,7 @@ export function AvaChatPage() {
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
                       'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
                       'claude-opus-4-8': 200000, 'claude-sonnet-4-6': 200000,
-                      'claude-haiku-4-5-20251001': 200000, 'glm-5': 200000,
+                      'claude-haiku-4-5-20251001': 200000, 'glm-5.2': 1000000, 'glm-4.5-air': 128000,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
                     setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
@@ -12219,7 +12219,7 @@ export function SettingsPage() {
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4 Pro and V4 Flash \u2014 1M context, MIT open-weight' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.5 \u2014 best multi-step tool calling' },
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M2.7 self-evolving, M2.5 best tool calling' },
-    { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5, GLM-4.7 \u2014 best tool-call reliability' },
+    { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5.2 \u2014 open-weights, 1M context, top-tier coding' },
     { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.5 Omni Plus and Omni Flash — multimodal' },
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4, Codestral, Devstral 2' },
   ];
