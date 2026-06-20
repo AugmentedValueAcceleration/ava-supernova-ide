@@ -14643,8 +14643,10 @@ export function CreativeStudioPage() {
         }).then(async res => {
           if (!res.ok) throw new Error(`Image generation failed (${res.status})`);
           const data = await res.json();
-          if (data.url) await imageGallery.saveGenerated({ prompt: imagePrompt, title: imagePrompt.slice(0, 60), url: data.url });
-          else throw new Error(data.error || 'No image URL returned');
+          if (data.url) {
+            const it = await imageGallery.saveGenerated({ prompt: imagePrompt, title: imagePrompt.slice(0, 60), url: data.url });
+            getSidecar().trackCreativeGeneration({ assetId: it.id, genType: 'image', model: 'platform', prompt: imagePrompt, paramsSummary: `size=${imageSize}`, success: true }).catch(() => {});
+          } else throw new Error(data.error || 'No image URL returned');
         }),
       );
       const results = await Promise.allSettled(calls);
@@ -14668,7 +14670,8 @@ export function CreativeStudioPage() {
       if (!res.ok) throw new Error(`Music generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        await musicGallery.saveGenerated({ prompt: musicPrompt, title: musicPrompt.slice(0, 60), url: data.url });
+        const it = await musicGallery.saveGenerated({ prompt: musicPrompt, title: musicPrompt.slice(0, 60), url: data.url });
+        getSidecar().trackCreativeGeneration({ assetId: it.id, genType: 'music', model: 'platform', prompt: musicPrompt, paramsSummary: `duration=${musicDuration}`, success: true }).catch(() => {});
         setMusicPrompt(''); setMusicLyrics('');
       } else throw new Error(data.error || 'No audio URL returned');
     } catch (e: any) { setError(e.message || 'Music generation failed'); }
@@ -14689,7 +14692,8 @@ export function CreativeStudioPage() {
       if (!res.ok) throw new Error(`Voice generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        await voiceGallery.saveGenerated({ prompt: voiceText, title: voiceText.slice(0, 60), url: data.url });
+        const it = await voiceGallery.saveGenerated({ prompt: voiceText, title: voiceText.slice(0, 60), url: data.url });
+        getSidecar().trackCreativeGeneration({ assetId: it.id, genType: 'voice', model: 'platform', prompt: voiceText, paramsSummary: `speed=${voiceSpeed}`, success: true }).catch(() => {});
         setVoiceText('');
       } else throw new Error(data.error || 'No voice URL returned');
     } catch (e: any) { setError(e.message || 'Voice generation failed'); }
@@ -14716,7 +14720,8 @@ export function CreativeStudioPage() {
       if (!res.ok) throw new Error(`Video generation failed (${res.status})`);
       const data = await res.json();
       if (data.url) {
-        await videoGallery.saveGenerated({ prompt: videoPrompt, title: videoPrompt.slice(0, 60), url: data.url });
+        const it = await videoGallery.saveGenerated({ prompt: videoPrompt, title: videoPrompt.slice(0, 60), url: data.url });
+        getSidecar().trackCreativeGeneration({ assetId: it.id, genType: 'video', model: 'platform', prompt: videoPrompt, paramsSummary: `duration=${videoDuration}, res=${videoResolution}`, success: true }).catch(() => {});
         setVideoPrompt(''); setVideoReference(null);
       } else throw new Error(data.error || 'No video URL returned');
     } catch (e: any) { setError(e.message || 'Video generation failed'); }
@@ -14760,6 +14765,7 @@ export function CreativeStudioPage() {
   const sendMusicToVideo = (item: GalleryItem) => { setTab('video'); if (!videoPrompt.trim() && item.prompt) setVideoPrompt(item.prompt); };
 
   const regenerateFromItem = (item: GalleryItem) => {
+    getSidecar().creativeUserAction(item.id, 'retried').catch(() => {});
     if (item.kind === 'image') { setTab('images'); setImagePrompt(item.prompt); }
     else if (item.kind === 'music') { setTab('audio'); setMusicPrompt(item.prompt); }
     else if (item.kind === 'voice') { setTab('voice'); setVoiceText(item.prompt); }
@@ -14950,7 +14956,7 @@ export function CreativeStudioPage() {
             key={item.id}
             item={item}
             onRegenerate={regenerateFromItem}
-            onDelete={(it) => galleryForKind(it.kind).deleteItem(it)}
+            onDelete={(it) => { getSidecar().creativeUserAction(it.id, 'discarded').catch(() => {}); galleryForKind(it.kind).deleteItem(it); }}
             onAnimate={sendImageToVideo}
             onVoiceover={sendImageToVoice}
             onScore={sendMusicToVideo}
@@ -15113,7 +15119,7 @@ function CreativeFeedCard({ item, onRegenerate, onDelete, onAnimate, onVoiceover
         {item.kind === 'image' && pill(<>→ {t('dash.creative.action_voiceover')}</>, () => onVoiceover(item), 'accent')}
         {item.kind === 'music' && pill(<>→ {t('dash.creative.action_use_as_score')}</>, () => onScore(item), 'accent')}
         {pill(copied ? `✓ ${t('dash.creative.copied')}` : t('dash.creative.copy_prompt'), handleCopy)}
-        {pill(t('dash.chat.download'), () => { void downloadGalleryItem(item); })}
+        {pill(t('dash.chat.download'), () => { getSidecar().creativeUserAction(item.id, 'kept').catch(() => {}); void downloadGalleryItem(item); })}
         {pill(confirmDelete ? t('dash.creative.click_again') : t('dash.common.delete'), handleDelete, 'danger')}
         {item.createdAt && <span style={{ marginLeft: 'auto', fontSize: 9, color: '#585b70' }}>{new Date(item.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
       </div>

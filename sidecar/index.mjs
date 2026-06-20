@@ -99,6 +99,8 @@ const {
   setLocale,
   resolveLocale,
   installDatasetConsumer,
+  trackUiGeneration,
+  emitGenerationUserAction,
   BudgetTracker,
   exportEncryptedBackup,
   importEncryptedBackup,
@@ -116,6 +118,42 @@ const {
 // sidecar restart (consumer reads config every 30s).
 if (typeof installDatasetConsumer === 'function') {
   try { installDatasetConsumer(); } catch { /* ignore */ }
+}
+
+// ── Creative Studio dataset capture (Phase 3) ────────────────────────────────
+// The IDE renderer generates via the platform API directly (outside any agent
+// trajectory), and the dataset consumer lives here in the sidecar — so the
+// renderer can't emit. It sends us two commands: 'creative_generation' (after a
+// generation finishes) and 'creative_user_action' (kept/retried/discarded). We
+// emit the shape-only events through core, keeping an assetId → completeEventId
+// map so a later action links back to the generation. Best-effort; capture must
+// never break generation.
+const creativeGenLinks = new Map();
+async function handleCreativeGeneration(data) {
+  if (typeof trackUiGeneration !== 'function') return;
+  try {
+    const { completeEventId } = await trackUiGeneration(
+      {
+        type: data.genType,
+        model: data.model || 'unknown',
+        prompt: data.prompt || '',
+        paramsSummary: data.paramsSummary || '',
+        surface: 'ide',
+      },
+      async (tracker) => {
+        if (data.success === false) tracker.fail(data.error || 'generation failed');
+        else tracker.complete();
+      },
+    );
+    if (data.assetId && completeEventId) creativeGenLinks.set(data.assetId, completeEventId);
+  } catch { /* dataset capture must never break the sidecar */ }
+}
+function handleCreativeUserAction(data) {
+  if (typeof emitGenerationUserAction !== 'function') return;
+  try {
+    const cid = creativeGenLinks.get(data.assetId);
+    if (cid) emitGenerationUserAction({ completeEventId: cid, action: data.action, surface: 'ide' });
+  } catch { /* non-fatal */ }
 }
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -2372,6 +2410,12 @@ rl.on('line', async (line) => {
       break;
     case 'clear':
       handleClear();
+      break;
+    case 'creative_generation':
+      handleCreativeGeneration(data).catch(() => {});
+      break;
+    case 'creative_user_action':
+      handleCreativeUserAction(data);
       break;
     case 'set_permission':
       if (toolRegistry && data.mode) {

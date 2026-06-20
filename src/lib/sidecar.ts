@@ -397,6 +397,28 @@ export class SidecarManager {
   }
 
   /**
+   * Creative Studio dataset capture (Phase 3). The renderer generates via the
+   * platform API directly, so it reports the generation to the sidecar (which
+   * owns the dataset consumer). `assetId` links a later user action back to it.
+   * Shape-only — never the prompt is stored, only a word-count signature in core.
+   */
+  async trackCreativeGeneration(opts: {
+    assetId: string;
+    genType: 'image' | 'music' | 'voice' | 'video';
+    model: string;
+    prompt: string;
+    paramsSummary: string;
+    success: boolean;
+  }): Promise<void> {
+    await this.send({ cmd: 'creative_generation', ...opts });
+  }
+
+  /** Report what the user did with a generated asset (kept/retried/discarded). */
+  async creativeUserAction(assetId: string, action: 'kept' | 'retried' | 'discarded' | 'edited'): Promise<void> {
+    await this.send({ cmd: 'creative_user_action', assetId, action });
+  }
+
+  /**
    * Switch model (hot-swap without restart).
    */
   async setModel(model: string): Promise<void> {
