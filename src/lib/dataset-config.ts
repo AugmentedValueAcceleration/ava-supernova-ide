@@ -23,7 +23,9 @@ export type DatasetName =
   | 'continuation-recovery'
   | 'mode-transitions'
   | 'generation-effectiveness'
-  | 'knowledge-pack-effectiveness';
+  | 'knowledge-pack-effectiveness'
+  | 'context-management'
+  | 'perception';
 
 export const ALL_AVA_MODES: AvaMode[] = ['work', 'write', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
 
@@ -31,7 +33,7 @@ export const ALL_DATASETS: DatasetName[] = [
   'tool-trajectories', 'persona-handoffs', 'verification-pairs',
   'auto-mode-classification', 'error-recovery', 'memory-operations',
   'continuation-recovery', 'mode-transitions', 'generation-effectiveness',
-  'knowledge-pack-effectiveness',
+  'knowledge-pack-effectiveness', 'context-management', 'perception',
 ];
 
 export interface DatasetConfig {
