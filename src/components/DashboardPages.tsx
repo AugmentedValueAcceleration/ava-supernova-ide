@@ -1958,7 +1958,7 @@ export function AvaChatPage() {
     'auto': 'auto',
     'supernova': 'supernova',
     'aurora': 'aurora',
-    'qwen3.6-plus': 'platform:qwen3.6-plus',
+    'qwen3.7-plus': 'platform:qwen3.7-plus',
     'kimi-k2.6': 'kimi:kimi-k2.6',
     'kimi-k2.5': 'kimi:kimi-k2.5',
     'qwen3.5-omni-flash': 'platform:qwen3.5-omni-flash',
@@ -1993,12 +1993,12 @@ export function AvaChatPage() {
   // coordinators. Both are excluded.
   //
   // 'auto' (Maestro), 'supernova' and 'aurora' resolve to known coordinators
-  // server-side (Qwen 3.6 Plus / DeepSeek V4 Pro / Mistral Large 3), all
+  // server-side (Qwen 3.7 Plus / DeepSeek V4 Pro / Mistral Large 3), all
   // desktop-capable, so they count.
   const DESKTOP_CAPABLE_MODEL_IDS = new Set<string>([
     'auto', 'supernova', 'aurora',
     // Platform / Qwen direct
-    'qwen3.7-max', 'qwen3.6-plus', 'qwen3.5-plus', 'qwen3.5-omni-plus',
+    'qwen3.7-max', 'qwen3.7-plus', 'qwen3.5-plus',
     // Platform DeepSeek (admin-gated)
     'deepseek-v4-pro-platform', 'deepseek-v4-pro',
     // Platform Mistral (Aurora's fleet, available on platform)
@@ -2021,7 +2021,7 @@ export function AvaChatPage() {
   // ── BYOK model map — fetched from platform, fallback to hardcoded ──────────
   const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
     DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
-    Qwen: [{ id: 'qwen3.7-max', name: 'Qwen 3.7 Max' }, { id: 'qwen3.6-plus', name: 'Qwen 3.6 Plus' }, { id: 'qwen3.5-omni-plus', name: 'Qwen 3.5 Omni Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
+    Qwen: [{ id: 'qwen3.7-max', name: 'Qwen 3.7 Max' }, { id: 'qwen3.7-plus', name: 'Qwen 3.7 Plus' }, { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
     MiniMax: [{ id: 'MiniMax-M3', name: 'MiniMax M3' }, { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 HighSpeed' }],
     Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
     Zhipu: [{ id: 'glm-5.2', name: 'GLM-5.2' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
@@ -4159,7 +4159,7 @@ export function AvaChatPage() {
                     const total = json.usage.prompt_tokens + json.usage.completion_tokens;
                     // Use model's actual context window for percentage
                     const MODEL_CTX: Record<string, number> = {
-                      'qwen3.6-plus': 1048576, 'kimi-k2.6': 262144, 'kimi-k2.5': 262144,
+                      'qwen3.7-plus': 1048576, 'kimi-k2.6': 262144, 'kimi-k2.5': 262144,
                       'MiniMax-M3': 1048576, 'MiniMax-M2.7': 204800, 'MiniMax-M2.7-highspeed': 204800,
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
                       'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
@@ -4370,7 +4370,7 @@ export function AvaChatPage() {
     if (model === 'aurora') return '✦ Aurora';
     if (model === 'supernova') return '✦ Supernova';
     if (model === 'auto') return '✦ Maestro';
-    if (model === 'qwen3.6-plus') return 'Qwen 3.6 Plus';
+    if (model === 'qwen3.7-plus') return 'Qwen 3.7 Plus';
     if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
     if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
     if (model === 'qwen3.5-omni-flash') return 'Qwen 3.5 Omni Flash';
@@ -4447,7 +4447,7 @@ export function AvaChatPage() {
                   const orchestrated = [
                     { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: 'Aurora — Mistral-only three-tier EU stack. Medium 3.5 leads (coordinator + Builder + vision + deep specialists), Small 4 carries the volume (chat, long-context, brainstorm, intent gate), Large 3 is the heavy reserve. Stays inside European infrastructure.' },
                     { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova', enabled: modeAvailability.supernova, title: 'Supernova — DeepSeek V4 Pro coordinator + V4 Flash specialists with Qwen builders. Heavy multi-step work.' },
-                    { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   enabled: modeAvailability.maestro,   title: 'Maestro — single Qwen 3.6 Plus conductor. Daily work, predictable cost.' },
+                    { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   enabled: modeAvailability.maestro,   title: 'Maestro — single Qwen 3.7 Plus conductor. Daily work, predictable cost.' },
                   ].map(o => ({ ...o, subtitle: modeSubtitle(o.modeId, modeAvailability, modeState) }));
                   return orchestrated.map((o) => {
                     const active = model === o.id;
@@ -6300,7 +6300,7 @@ export function AvaChatPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
             {([
               { id: 'auto', label: 'Maestro', note: 'One coordinator handles everything — production-tuned.' },
-              { id: 'qwen3.6-plus', label: 'Qwen 3.6 Plus', note: 'Flagship Qwen. 1M context.' },
+              { id: 'qwen3.7-plus', label: 'Qwen 3.7 Plus', note: 'Flagship Qwen. 1M context.' },
               { id: 'kimi-k2.6', label: 'Kimi K2.6', note: 'Top BYOK coordinator.' },
             ]).map(opt => {
               const isByokOnly = opt.id === 'kimi-k2.6';
@@ -11532,14 +11532,14 @@ export function UsagePage() {
                       ? { label: 'Supernova', flavour: 'DeepSeek + Qwen ensemble', roles: [
                           { name: 'DeepSeek V4 Pro', role: 'Coordinator' },
                           { name: 'DeepSeek V4 Flash', role: 'Mid-tier specialists' },
-                          { name: 'Qwen 3.6 Plus', role: 'Builder' },
+                          { name: 'Qwen 3.7 Plus', role: 'Builder' },
                           { name: 'Qwen 3.5 Flash', role: 'Light tier / intent gate' },
                           { name: 'Qwen 3.5 Omni Plus', role: 'Vision' },
                           { name: 'Qwen 3.5 Plus', role: 'Long-form writing' },
                         ] }
                       : activeId === 'auto'
                         ? { label: 'Maestro', flavour: 'Qwen-only · daily work, predictable cost', roles: [
-                            { name: 'Qwen 3.6 Plus', role: 'Coordinator + Builder' },
+                            { name: 'Qwen 3.7 Plus', role: 'Coordinator + Builder' },
                             { name: 'Qwen 3.5 Flash', role: 'Light tier / intent gate' },
                           ] }
                         : null;
@@ -13915,9 +13915,9 @@ export function ReleaseNotesPage() {
       highlights: ['Security: shell execute removed, XSS fixed, CSP tightened', 'Local-first: Tasks, Journal, Learning, Memory persist locally', 'Token bars show remaining consistently', 'Creative Studio token bar with subscription awareness', 'Help page: Docs tab, Support links for unconnected users'],
     },
     {
-      id: 'v0.11.0', version: '0.11.0', title: 'Qwen 3.6 Plus + Security Fixes', published_at: '2026-04-07',
-      tool_count: 59, body: 'Qwen 3.6 Plus as conductor model, security fixes for path traversal and cwd fallback.', platform: 'ide',
-      highlights: ['Qwen 3.6 Plus as sole reasoning model', 'Path traversal security fix', 'Category permissions with audit trail'],
+      id: 'v0.11.0', version: '0.11.0', title: 'Qwen 3.7 Plus + Security Fixes', published_at: '2026-04-07',
+      tool_count: 59, body: 'Qwen 3.7 Plus as conductor model, security fixes for path traversal and cwd fallback.', platform: 'ide',
+      highlights: ['Qwen 3.7 Plus as sole reasoning model', 'Path traversal security fix', 'Category permissions with audit trail'],
     },
     {
       id: 'v0.34.5', version: '0.34.5', title: 'Creative Studio + Token Balance', published_at: '2026-04-06',

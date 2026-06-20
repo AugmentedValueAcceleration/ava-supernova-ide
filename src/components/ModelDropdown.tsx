@@ -2,7 +2,7 @@
 //
 // Behaviour:
 //   - Orchestrated section at the top: Supernova (polyglot, V4 Pro coordinator)
-//     and Maestro (single conductor on Qwen 3.6 Plus). Both highlighted as
+//     and Maestro (single conductor on Qwen 3.7 Plus). Both highlighted as
 //     Ava-orchestrated modes vs raw model picks.
 //   - Supernova is admin-only at preview while the DeepSeek partnership is
 //     pending. Non-admin users see it in the dropdown with an "In development"
@@ -53,7 +53,7 @@ const ORCHESTRATED: { id: string; modeId: ModeId; label: string; title: string }
     id: 'auto',
     modeId: 'maestro',
     label: '✦ Maestro',
-    title: 'Maestro — single Qwen 3.6 Plus conductor. Daily work, predictable cost.',
+    title: 'Maestro — single Qwen 3.7 Plus conductor. Daily work, predictable cost.',
   },
 ];
 
