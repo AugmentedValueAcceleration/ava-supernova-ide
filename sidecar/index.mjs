@@ -16,7 +16,7 @@ import { platform } from 'node:os';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
 
 // ─── Resolve @ava/core ──────────────────────────────────────────────────────
@@ -84,6 +84,9 @@ const {
   buildSystemPrompt,
   buildPersonalityPrefix,
   loadPersonality,
+  getHealthRoomPrefix,
+  HEALTH_PROFILE_FIELDS,
+  humaniseSlug,
   AVA_HOME,
   PlatformMemorySync,
   ProviderHealthTracker,
@@ -176,6 +179,13 @@ let memoryAgentInstance = null;
 let currentAbort = null;
 let currentMode = 'work';
 let isRunning = false;
+// Second conversation thread — the focused "Ava Health & Fitness" room. Same
+// agent + memory + tools as the main chat, but its own message history so
+// health planning never lands in the main thread. The IDE's chat surfaces
+// filter by `activeLane` (stamped on every emitted event). One run pipeline
+// (the isRunning guard) → no concurrency, so a scalar lane is safe.
+let healthConversation = null;
+let activeLane = 'main';
 
 // Bracket tags the core agent's detectModeFromMessages() looks for at the
 // start of a user message to apply MODE_ALLOWED_TOOLS. Without this prefix
@@ -634,12 +644,219 @@ async function captureDesktopContext() {
 // ─── NDJSON I/O ─────────────────────────────────────────────────────────────
 
 function emit(event) {
+  // Stamp the lane of the in-flight turn so the IDE's two chat surfaces (main
+  // chat + the Ava Health room) each render only their own stream. Default
+  // 'main', so existing behaviour is unchanged; the health surface opts in by
+  // filtering for lane === 'health'. Additive — non-chat consumers ignore it.
+  if (event && event.lane === undefined) event.lane = activeLane;
   // All output goes to stdout as single-line JSON
   process.stdout.write(JSON.stringify(event) + '\n');
 }
 
 function emitError(message) {
   emit({ event: 'error', message });
+}
+
+// ── Account-scoped data root ─────────────────────────────────────────────────
+// All per-account data (health, memory, journal, tasks) lives under
+// ~/.ava/users/<id>/ so the sidecar reads AND writes the SAME files as the
+// extension and the IDE webview — one source of truth per account on a machine.
+// Resolved once at startup from the platform key; falls back to AVA_HOME (BYOK /
+// no account) so local-only users keep the flat layout. Machine assets (models,
+// bin, the shared config, backups) stay at AVA_HOME, not here.
+let ACCOUNT_ROOT = AVA_HOME;
+async function resolveAccountRoot(platformKey) {
+  if (!platformKey) return;
+  try {
+    const res = await fetch('https://ava-supernova.com/api/account-info', {
+      headers: { Authorization: `Bearer ${platformKey}`, 'User-Agent': 'ava-ide-sidecar' },
+    });
+    if (!res.ok) return;
+    const d = await res.json();
+    if (d?.id) ACCOUNT_ROOT = join(AVA_HOME, 'users', String(d.id));
+  } catch { /* keep AVA_HOME — local-only fallback */ }
+}
+
+/** Compact summary of the local health + general profiles for the Health Room
+ *  prefix (mirrors the extension's getHealthProfileSummary). Body basics come
+ *  from general.json; goals/constraints/schedule from health/profile.json.
+ *  Returns undefined when essentially empty so the room asks for the gaps. */
+function getHealthProfileSummary() {
+  try {
+    let p = null;
+    let g = null;
+    try { p = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'health', 'profile.json'), 'utf-8')); } catch { /* none */ }
+    try { g = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'general.json'), 'utf-8')); } catch { /* none */ }
+    const sex = g?.sex ?? p?.body?.sex;
+    const dob = g?.date_of_birth ?? p?.body?.date_of_birth;
+    const heightCm = g?.height_cm ?? p?.body?.height_cm;
+    const weightKg = g?.weight_kg ?? p?.body?.weight_kg;
+    const lines = [];
+    if (p?.goals?.primary) lines.push(`Primary goal: ${String(p.goals.primary).replace(/_/g, ' ')}`);
+    if (p?.goals?.weekly_focus) lines.push(`This week's focus: ${p.goals.weekly_focus}`);
+    if (sex) lines.push(`Sex: ${sex}`);
+    if (dob) {
+      const age = Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
+      if (age > 0 && age < 130) lines.push(`Age: ${age}`);
+    }
+    if (heightCm) lines.push(`Height: ${heightCm} cm`);
+    if (weightKg) lines.push(`Weight: ${weightKg} kg`);
+    if (p?.constraints?.allergens?.length) lines.push(`Allergens: ${p.constraints.allergens.join(', ')}`);
+    if (p?.constraints?.dietary?.length) lines.push(`Dietary preferences: ${p.constraints.dietary.join(', ')}`);
+    if (p?.constraints?.injuries?.length) lines.push(`Injuries / limitations: ${p.constraints.injuries.join(', ')}`);
+    if (p?.constraints?.equipment_available?.length) lines.push(`Equipment available: ${p.constraints.equipment_available.join(', ')}`);
+    if (p?.constraints?.minutes_per_day_target) lines.push(`Time budget per day: ${p.constraints.minutes_per_day_target} minutes`);
+    const tw = p?.schedule?.training_window;
+    if (tw?.start && tw?.end) lines.push(`Training window: ${tw.start}–${tw.end}`);
+    const mt = p?.schedule?.meal_times;
+    if (mt && (mt.breakfast || mt.lunch || mt.dinner)) {
+      const parts = [mt.breakfast && `breakfast ${mt.breakfast}`, mt.lunch && `lunch ${mt.lunch}`, mt.dinner && `dinner ${mt.dinner}`].filter(Boolean);
+      if (parts.length) lines.push(`Meal times: ${parts.join(', ')}`);
+    }
+    if (p?.food?.likes?.length) lines.push(`Food likes: ${p.food.likes.join(', ')}`);
+    if (p?.food?.dislikes?.length) lines.push(`Food dislikes (keep out of plans): ${p.food.dislikes.join(', ')}`);
+    if (p?.food?.cuisines?.length) lines.push(`Favourite cuisines: ${p.food.cuisines.join(', ')}`);
+    return lines.length ? lines.join('\n') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Compact summary of the user's current (non-archived) plans for the Health
+ *  Room prefix, so Ava knows what exists and can EDIT it with health_plan_update_day
+ *  instead of only building new ones. Returns undefined when there are none. */
+function getHealthPlansSummary() {
+  try {
+    const dir = join(ACCOUNT_ROOT, 'health', 'plans');
+    let files;
+    try { files = readdirSync(dir).filter((f) => f.endsWith('.json')); } catch { return undefined; }
+    const lines = [];
+    for (const f of files) {
+      let p;
+      try { p = JSON.parse(readFileSync(join(dir, f), 'utf-8')); } catch { continue; }
+      if (!p || p.schema_version !== 1 || p.status === 'archived') continue;
+      const days = Array.isArray(p.days) ? p.days : [];
+      const dayBits = days.map((d) => {
+        const bits = [`day ${d.day_index}`, d.kind || 'rest'];
+        if (d.title) bits.push(d.title);
+        const t = Array.isArray(d.training) ? d.training.length : 0;
+        const m = Array.isArray(d.meals) ? d.meals.length : 0;
+        if (t) bits.push(`${t} exercise${t === 1 ? '' : 's'}`);
+        if (m) bits.push(`${m} meal${m === 1 ? '' : 's'}`);
+        return bits.join(' · ');
+      });
+      const started = p.start_date ? `, started ${p.start_date}` : '';
+      lines.push(`- "${p.title}" (${p.type}, ${p.status}${started}, ${days.length} days) — id: ${p.id}\n  ${dayBits.join('\n  ')}`);
+    }
+    return lines.length ? lines.join('\n') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// ── Profile-fill (health_profile_ask) ────────────────────────────────────────
+// Mirror of the extension's AvaViewProvider flow. The card payload + save both
+// resolve the field shape from the shared core HEALTH_PROFILE_FIELDS registry,
+// so "what Ava asks", "what the card renders", and "where it saves" never drift.
+const generalProfilePath = () => join(ACCOUNT_ROOT, 'general.json');
+const healthProfilePath = () => join(ACCOUNT_ROOT, 'health', 'profile.json');
+
+function readJsonFile(path) {
+  try { return JSON.parse(readFileSync(path, 'utf-8')); } catch { return null; }
+}
+function emptyGeneralProfile() {
+  return { schema_version: 1, updated_at: null, display_name: null, sex: null, date_of_birth: null, height_cm: null, weight_kg: null, body_fat_pct: null, units: 'metric' };
+}
+function emptyHealthProfileObj() {
+  return {
+    schema_version: 1, updated_at: null,
+    goals: { primary: null, weekly_focus: null },
+    constraints: { allergens: [], dietary: [], injuries: [], equipment_available: [], minutes_per_day_target: null },
+    food: { likes: [], dislikes: [], cuisines: [] },
+    schedule: { training_window: { start: null, end: null }, meal_times: { breakfast: null, lunch: null, dinner: null }, sleep_target: { bedtime: null, wake: null } },
+  };
+}
+function getByPath(obj, path) {
+  return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
+function setByPath(obj, path, value) {
+  const keys = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (cur[keys[i]] == null || typeof cur[keys[i]] !== 'object') cur[keys[i]] = {};
+    cur = cur[keys[i]];
+  }
+  cur[keys[keys.length - 1]] = value;
+}
+function coerceProfileFieldValue(def, raw) {
+  switch (def.control) {
+    case 'number': {
+      if (raw === '' || raw == null) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    }
+    case 'multiselect':
+      return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
+    case 'text': {
+      if (def.asArray) {
+        const s = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.join('\n') : '';
+        return s.split('\n').map((x) => x.trim()).filter(Boolean);
+      }
+      return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+    }
+    default: // select, date
+      return typeof raw === 'string' && raw ? raw : null;
+  }
+}
+function describeProfileValue(def, value) {
+  if (value == null || (Array.isArray(value) && value.length === 0)) return 'none';
+  if (Array.isArray(value)) return value.map((v) => humaniseSlug(String(v))).join(', ');
+  if (def.control === 'number' && def.unit) return `${value} ${def.unit}`;
+  if (def.control === 'select') return humaniseSlug(String(value));
+  return String(value);
+}
+/** Build the confirm-card payload for a health_profile_ask: field id, Ava's
+ *  question, and the current saved value (so the card pre-selects). */
+function buildProfileFieldPayload(args) {
+  const field = typeof args?.field === 'string' ? args.field : '';
+  const def = HEALTH_PROFILE_FIELDS?.[field];
+  if (!def) return undefined;
+  const question = typeof args?.question === 'string' ? args.question : '';
+  let currentValue;
+  try {
+    const store = def.target === 'general' ? readJsonFile(generalProfilePath()) : readJsonFile(healthProfilePath());
+    if (store) currentValue = getByPath(store, def.path);
+  } catch { /* default empty */ }
+  return { field, question, currentValue };
+}
+/** Save one profile field's answer to general.json / health/profile.json and
+ *  re-emit the updated profile so the IDE profile pages refresh. Returns a short
+ *  confirmation for Ava. */
+function applyProfileField(field, rawValue) {
+  const def = HEALTH_PROFILE_FIELDS?.[field];
+  if (!def) return `Couldn't save — unknown field "${field}".`;
+  const value = coerceProfileFieldValue(def, rawValue);
+  const label = field.replace(/_/g, ' ');
+  try {
+    if (def.target === 'general') {
+      const g = readJsonFile(generalProfilePath()) ?? emptyGeneralProfile();
+      setByPath(g, def.path, value);
+      g.updated_at = new Date().toISOString();
+      mkdirSync(ACCOUNT_ROOT, { recursive: true });
+      writeFileSync(generalProfilePath(), JSON.stringify(g, null, 2), 'utf-8');
+      emit({ event: 'general_profile_saved', profile: g });
+    } else {
+      const h = readJsonFile(healthProfilePath()) ?? emptyHealthProfileObj();
+      setByPath(h, def.path, value);
+      h.updated_at = new Date().toISOString();
+      mkdirSync(join(ACCOUNT_ROOT, 'health'), { recursive: true });
+      writeFileSync(healthProfilePath(), JSON.stringify(h, null, 2), 'utf-8');
+      emit({ event: 'health_profile_saved', profile: h });
+    }
+  } catch (err) {
+    return `Tried to save ${label} but hit an error: ${err?.message || err}.`;
+  }
+  return `Saved ${label}: ${describeProfileValue(def, value)}.`;
 }
 
 // Prevent unhandled errors from crashing the sidecar
@@ -869,7 +1086,8 @@ async function handleInit(data) {
     toolRegistry.setConfirmationHandler(async (toolName, args, toolCallId) => {
       const id = crypto.randomUUID().slice(0, 8);
       const toolCategory = toolRegistry.getCategoryForTool(toolName);
-      emit({ event: 'confirm_required', id, toolCallId, toolName, toolCategory, args });
+      const extra = toolName === 'health_profile_ask' ? { profileField: buildProfileFieldPayload(args) } : {};
+      emit({ event: 'confirm_required', id, toolCallId, toolName, toolCategory, args, ...extra });
       return new Promise((resolve) => {
         pendingConfirmations.set(id, { resolve, toolName });
       });
@@ -894,6 +1112,9 @@ async function handleInit(data) {
     } catch {
       // Optional dep — sidecar still works without persistence.
     }
+    // Resolve the account-scoped health root before any health read/write, so
+    // the sidecar shares the extension + webview's per-account files.
+    await resolveAccountRoot(config.platformKey);
     toolRegistry.setAuditCallback((entry) => {
       auditLog.push(entry);
       if (auditLog.length > 500) auditLog.shift();
@@ -917,7 +1138,7 @@ async function handleInit(data) {
     let projectInstructions = null;
     try {
       memoryManager = new MemoryManager({
-        globalDir: AVA_HOME,
+        globalDir: ACCOUNT_ROOT,
         projectRoot,
         // Opt-in local semantic recall — dormant until the IDE front-end sends
         // these prefs; off by default → keyword recall, no dependency.
@@ -1041,11 +1262,11 @@ async function handleInit(data) {
     }
 
     // Journal manager (local-first, stored in ~/.ava/journal/)
-    journalManager = new JournalManager({ globalDir: AVA_HOME, projectRoot: cwd });
+    journalManager = new JournalManager({ globalDir: ACCOUNT_ROOT, projectRoot: cwd });
 
     // Task manager — required so AutoCoordinator's TaskExecutor can pick up
     // session tasks created by todo_write and dispatch a Builder per task.
-    taskManager = new TaskManager({ globalDir: AVA_HOME, projectRoot: cwd });
+    taskManager = new TaskManager({ globalDir: ACCOUNT_ROOT, projectRoot: cwd });
 
     // Project indexer
     let projectIndexer = null;
@@ -1066,7 +1287,7 @@ async function handleInit(data) {
       // Surface-injected health plan store — Node-fs impl pointed at
       // ~/.ava/health/plans/*.json, the same files the renderer's
       // Tauri-fs store reads/writes. See COMMAND_PALETTE_PLAN.md §10.
-      healthPlanStore: new NodeHealthPlanStore(),
+      healthPlanStore: new NodeHealthPlanStore({ baseDir: join(ACCOUNT_ROOT, 'health', 'plans') }),
       projectIndexer,
       platformKey: config.platformKey,
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
@@ -1512,6 +1733,23 @@ async function handleMessage(data) {
   const abortController = new AbortController();
   currentAbort = abortController;
 
+  // Lane swap — point the single run pipeline at the right conversation thread
+  // for this turn. A health-room turn runs against the health thread (created
+  // lazily, sharing the main system prompt) and is restored in the finally.
+  // The isRunning guard guarantees no overlapping turn, so a pointer swap is
+  // safe. activeLane (set here, cleared in finally) tags outbound events.
+  const surface = data.surface === 'health' ? 'health' : 'main';
+  activeLane = surface;
+  const mainConversation = conversation;
+  if (surface === 'health') {
+    if (!healthConversation) {
+      healthConversation = new Conversation();
+      const sysMsg = conversation.getMessages().find(m => m.role === 'system');
+      if (sysMsg) healthConversation.setSystemPrompt(typeof sysMsg.content === 'string' ? sysMsg.content : '');
+    }
+    conversation = healthConversation;
+  }
+
   // Clear any active desktop-trajectory plan AND the per-turn mutative
   // counter at the start of each new user turn. A fresh message may be a
   // follow-up that needs its own approval scope — we don't blanket-approve
@@ -1625,6 +1863,14 @@ async function handleMessage(data) {
       }
     }
 
+    // Health room: wrap the user's message in the focused health briefing
+    // (catalogue-first, profile-aware, safety rail). The prefix already carries
+    // the [Health Room] tag the core agent reads for tool gating, so the
+    // mode-tag path below stays empty for this lane.
+    const effectiveContent = activeLane === 'health'
+      ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary())
+      : data.content;
+
     // Build multimodal content if attachments are present (images, files)
     if (data.attachments && Array.isArray(data.attachments) && data.attachments.length > 0) {
       emit({ event: 'info', message: `Attachments received: ${data.attachments.length}` });
@@ -1635,9 +1881,9 @@ async function handleMessage(data) {
         emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.6 Plus or Qwen 3.5 Omni Flash to analyse images.` });
       }
       const parts = [];
-      const baseContent = combinedDesktopPrefix && data.content
-        ? `${combinedDesktopPrefix}\n\n${data.content}`
-        : data.content;
+      const baseContent = combinedDesktopPrefix && effectiveContent
+        ? `${combinedDesktopPrefix}\n\n${effectiveContent}`
+        : effectiveContent;
       const prefixedContent = modeTag && baseContent
         ? `${modeTag} ${baseContent}`
         : baseContent;
@@ -1667,11 +1913,11 @@ async function handleMessage(data) {
           }
         }
       }
-      conversation.addUserMessage(parts.length > 0 ? parts : (prefixedContent ?? data.content));
+      conversation.addUserMessage(parts.length > 0 ? parts : (prefixedContent ?? effectiveContent));
     } else {
-      const baseContent = combinedDesktopPrefix && data.content
-        ? `${combinedDesktopPrefix}\n\n${data.content}`
-        : data.content;
+      const baseContent = combinedDesktopPrefix && effectiveContent
+        ? `${combinedDesktopPrefix}\n\n${effectiveContent}`
+        : effectiveContent;
       const userContent = modeTag && baseContent
         ? `${modeTag} ${baseContent}`
         : baseContent;
@@ -2006,6 +2252,11 @@ async function handleMessage(data) {
   } finally {
     isRunning = false;
     currentAbort = null;
+    // Restore the main thread + lane after a health-room turn. The health
+    // thread keeps its appended messages (same object); only the active pointer
+    // flips back so the main chat owns `conversation` again between turns.
+    conversation = mainConversation;
+    activeLane = 'main';
 
     // Auto-close the Ava browser at end of turn if Ava forgot.
     // Prompt-level "please call browser_close" is unreliable; the model
@@ -2111,6 +2362,26 @@ function handleConfirm(data) {
     toolRegistry.setCategoryPermission(category, 'auto');
   }
 
+  // health_profile_ask — the response is JSON { field, value } or
+  // { field, skipped }. Save the answer to the profile and hand Ava a
+  // confirmation string (mirrors the extension's handleConfirmationResponse).
+  if (pending.toolName === 'health_profile_ask') {
+    if (data.approved !== false && data.response) {
+      let parsed = null;
+      try { parsed = JSON.parse(data.response); } catch { /* malformed */ }
+      if (parsed?.skipped && typeof parsed.field === 'string') {
+        pending.resolve(`User skipped ${String(parsed.field).replace(/_/g, ' ')} for now — move on, don't re-ask it.`);
+      } else if (parsed && typeof parsed.field === 'string') {
+        pending.resolve(applyProfileField(parsed.field, parsed.value));
+      } else {
+        pending.resolve(`User response: ${data.response}`);
+      }
+    } else {
+      pending.resolve('User closed the profile question without answering — move on, don\'t re-ask it.');
+    }
+    return;
+  }
+
   if (data.response && typeof data.response === 'string') {
     // Free-text response (e.g., ask_user, present_plan approval)
     pending.resolve(data.response);
@@ -2120,7 +2391,20 @@ function handleConfirm(data) {
   }
 }
 
-function handleClear() {
+function handleClear(data) {
+  // Lane-aware: the Health room clears ONLY its own thread (drop the
+  // healthConversation so the next health turn rebuilds it fresh); the main
+  // chat is untouched. Default (no surface) clears the main conversation.
+  if (data && data.surface === 'health') {
+    if (healthConversation) {
+      const messages = healthConversation.getMessages();
+      const systemMsg = messages.find((m) => m.role === 'system');
+      healthConversation.clear();
+      if (systemMsg) healthConversation.setSystemPrompt(systemMsg.content);
+    }
+    emit({ event: 'cleared', lane: 'health' });
+    return;
+  }
   if (isRunning) {
     handleCancel();
   }
@@ -2409,7 +2693,7 @@ rl.on('line', async (line) => {
       handleSecretGrantResponse(data);
       break;
     case 'clear':
-      handleClear();
+      handleClear(data);
       break;
     case 'creative_generation':
       handleCreativeGeneration(data).catch(() => {});
@@ -2521,7 +2805,7 @@ rl.on('line', async (line) => {
       if (memoryManager) {
         try {
           await memoryManager.clearEverything();
-          memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot: cwd });
+          memoryManager = new MemoryManager({ globalDir: ACCOUNT_ROOT, projectRoot: cwd });
           emit({ event: 'info', message: 'Memory cleared and manager reset' });
         } catch (err) {
           emitError(`Failed to clear memory: ${err.message}`);
@@ -2566,7 +2850,7 @@ rl.on('line', async (line) => {
         const projectRoot = detectProjectRoot(newCwd) ?? undefined;
         if (memoryManager) {
           try {
-            memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot });
+            memoryManager = new MemoryManager({ globalDir: ACCOUNT_ROOT, projectRoot });
             if (globalThis._sharedState) globalThis._sharedState.memoryManager = memoryManager;
           } catch { /* non-fatal */ }
         }

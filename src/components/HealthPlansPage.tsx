@@ -21,6 +21,10 @@ import type {
 import {
   loadHealthPlanIndex, loadHealthPlan, saveHealthPlan, deleteHealthPlan,
 } from '../lib/health-plans-store';
+// The rich, tabbed catalogue detail bodies — reused so a recipe/exercise opened
+// from a plan or the day view reads identically to the library (skill levels,
+// full nutrition, diets, equipment, per-step technique), not a thin copy.
+import { ExerciseDetailBody as CatExerciseDetail, RecipeDetailBody as CatRecipeDetail } from './HealthPage';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
   HealthPlanDay, HealthPlanExercise, HealthPlanMeal,
@@ -315,6 +319,9 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
   onDelete: (id: string) => void;
 }) {
   const [tab, setTab] = useState<'calendar' | 'programs'>('calendar');
+  // A clicked calendar day opens the DAY view (what's on that date across every
+  // plan), not a single plan's editor.
+  const [dayKey, setDayKey] = useState<string | null>(null);
   const [month, setMonth] = useState<Date>(() => {
     const dated = plans.find(p => p.start_date);
     return dated?.start_date ? new Date(`${dated.start_date}T00:00:00`) : new Date();
@@ -339,23 +346,42 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
     }
     return map;
   }, [plans]);
-  // Which plan covers a date? Prefer active, then most recently updated.
-  const planForDate = useCallback((key: string): HealthPlanSummary | null => {
-    const sel = new Date(`${key}T00:00:00`).getTime();
-    const covering = plans.filter(p => {
-      if (!p.start_date) return false;
-      const s = new Date(`${p.start_date}T00:00:00`).getTime();
-      if (isNaN(s)) return false;
-      return sel >= s && sel <= s + (p.duration_days - 1) * 86400000;
-    });
-    if (covering.length === 0) return null;
-    covering.sort((a, b) => {
-      if ((a.status === 'active') !== (b.status === 'active')) return a.status === 'active' ? -1 : 1;
-      return (b.updated_at ?? '').localeCompare(a.updated_at ?? '');
-    });
-    return covering[0];
+
+  // Full dated plans → per-date content (session title + move / meal names) so
+  // the calendar cells show what's actually on, not just a dot. Mirrors the
+  // extension's planContent.
+  const [fullPlans, setFullPlans] = useState<HealthPlan[]>([]);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const dated = plans.filter(p => p.start_date);
+        const full = (await Promise.all(dated.map(s => loadHealthPlan(s.id)))).filter(Boolean) as HealthPlan[];
+        if (live) setFullPlans(full);
+      } catch { /* none loaded — cells fall back to dots */ }
+    })();
+    return () => { live = false; };
   }, [plans]);
 
+  const planContent = useMemo(() => {
+    const map = new Map<string, { title: string | null; training: string[]; meals: string[] }>();
+    for (const p of fullPlans) {
+      if (!p.start_date) continue;
+      const start = new Date(`${p.start_date}T00:00:00`);
+      if (isNaN(start.getTime())) continue;
+      for (const day of p.days) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + (day.day_index - 1));
+        const key = ymd(d);
+        const cur = map.get(key) ?? { title: null as string | null, training: [] as string[], meals: [] as string[] };
+        if (day.title && !cur.title) cur.title = day.title;
+        if (p.type === 'fitness' || p.type === 'combined') for (const ex of day.training) if (ex.name) cur.training.push(ex.name);
+        if (p.type === 'meal' || p.type === 'combined') for (const m of day.meals) if (m.name) cur.meals.push(m.name);
+        map.set(key, cur);
+      }
+    }
+    return map;
+  }, [fullPlans]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -379,7 +405,9 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
       </div>
 
       {tab === 'calendar' ? (
-        <MonthCalendar month={month} onMonthChange={setMonth} marks={planMarks} selected={null} onSelectDate={(key) => { const p = planForDate(key); if (p) onOpen(p.id); else onNew(); }} />
+        <div style={{ display: 'flex', minHeight: '64vh' }}>
+          <MonthCalendar month={month} onMonthChange={setMonth} marks={planMarks} content={planContent} selected={null} onSelectDate={(key) => setDayKey(key)} fill />
+        </div>
       ) : plans.length === 0 ? (
         <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '40px 16px', textAlign: 'center' }}>
           <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.empty_title')}</div>
@@ -392,6 +420,177 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
           {plans.map(p => <PlanCard key={p.id} plan={p} onOpen={() => onOpen(p.id)} onDelete={() => onDelete(p.id)} />)}
         </div>
       )}
+
+      {dayKey && <HealthDayView dateKey={dayKey} onClose={() => setDayKey(null)} onNewPlan={() => { setDayKey(null); onNew(); }} />}
+    </div>
+  );
+}
+
+// ── Day view — a date's agenda, EXTENSIBLE by source ─────────────────────────
+// A day belongs to no single plan: it's whatever is scheduled on that DATE,
+// gathered from every active plan. The body is a list of SECTIONS, each fed by a
+// source. Training + meals today; tasks, learning paths, a journal entry slot in
+// tomorrow by adding one builder to `sections` below — the view renders whatever
+// sections exist, so new content types never restructure anything.
+
+function planDayForDate(plan: HealthPlan, dateKey: string): HealthPlanDay | null {
+  if (!plan.start_date) return null;
+  const start = new Date(`${plan.start_date}T00:00:00`).getTime();
+  const sel = new Date(`${dateKey}T00:00:00`).getTime();
+  if (isNaN(start) || isNaN(sel)) return null;
+  const idx = Math.round((sel - start) / 86400000) + 1;
+  if (idx < 1 || idx > plan.duration_days) return null;
+  return plan.days.find(d => d.day_index === idx) ?? null;
+}
+
+interface DayAgendaItem { id: string; kind: 'exercise' | 'recipe'; slug?: string; title: string; meta?: string; slot?: string; thumb?: string | null; planTitle: string }
+interface DayAgendaSection { key: string; label: string; icon: string; accent: string; items: DayAgendaItem[] }
+
+function HealthDayView({ dateKey, onClose, onNewPlan }: { dateKey: string; onClose: () => void; onNewPlan: () => void }) {
+  useLocale();
+  const [plans, setPlans] = useState<HealthPlan[]>([]);
+  const [exerciseDetails, setExerciseDetails] = useState<Record<string, HealthExerciseDetail>>({});
+  const [recipeDetails, setRecipeDetails] = useState<Record<string, HealthRecipeDetail>>({});
+  const [detail, setDetail] = useState<{ kind: 'exercise' | 'recipe'; slug: string; name: string } | null>(null);
+
+  // Self-load the active, dated plans (same as the Command Center week view).
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const index = await loadHealthPlanIndex();
+        const actives = index.filter(p => p.status === 'active' && p.start_date);
+        const full = (await Promise.all(actives.map(s => loadHealthPlan(s.id)))).filter(Boolean) as HealthPlan[];
+        if (live) setPlans(full);
+      } catch { /* none */ }
+    })();
+    return () => { live = false; };
+  }, []);
+
+  // Pull catalogue details for the date's items so thumbnails + macros resolve.
+  useEffect(() => {
+    for (const p of plans) {
+      const day = planDayForDate(p, dateKey);
+      if (!day) continue;
+      for (const ex of day.training) { const s = ex.ref?.slug; if (s && !exerciseDetails[s]) loadExerciseDetail(s).then(d => { if (d) setExerciseDetails(prev => ({ ...prev, [s]: d })); }).catch(() => {}); }
+      for (const meal of day.meals) { const s = meal.ref?.slug; if (s && !recipeDetails[s]) loadRecipeDetail(s).then(d => { if (d) setRecipeDetails(prev => ({ ...prev, [s]: d })); }).catch(() => {}); }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plans, dateKey]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const { sections, mealTotals, mealsEstimated, hasMeals } = useMemo(() => {
+    const training: DayAgendaItem[] = [];
+    const meals: DayAgendaItem[] = [];
+    const allMeals: HealthPlanMeal[] = [];
+    for (const p of plans) {
+      const day = planDayForDate(p, dateKey);
+      if (!day) continue;
+      if (p.type === 'fitness' || p.type === 'combined') {
+        for (const ex of day.training) if (ex.name) training.push({ id: `${p.id}:${ex.id}`, kind: 'exercise', slug: ex.ref?.slug, title: ex.name, meta: exerciseSummary(ex), thumb: ex.ref ? (exerciseDetails[ex.ref.slug]?.thumbnail_url ?? null) : null, planTitle: p.title });
+      }
+      if (p.type === 'meal' || p.type === 'combined') {
+        for (const meal of day.meals) if (meal.name) {
+          allMeals.push(meal);
+          meals.push({ id: `${p.id}:${meal.id}`, kind: 'recipe', slug: meal.ref?.slug, title: meal.name, meta: mealSummaryLine(meal, recipeDetails), slot: meal.slot, thumb: meal.ref ? (recipeDetails[meal.ref.slug]?.hero_image_url ?? null) : null, planTitle: p.title });
+        }
+      }
+    }
+    const { totals, estimated } = dayTotals({ day_index: 0, kind: 'rest', title: null, training: [], meals: allMeals, notes: null }, recipeDetails);
+    const sections: DayAgendaSection[] = [
+      { key: 'training', label: t('health.plans.training'), icon: '🏋', accent: '#a855f7', items: training },
+      { key: 'meals', label: t('health.plans.meals'), icon: '🍽', accent: '#f59e0b', items: meals },
+      // ── Future sources plug in here as more sections (tasks, learning, …) ──
+    ];
+    return { sections, mealTotals: totals, mealsEstimated: estimated, hasMeals: allMeals.length > 0 };
+  }, [dateKey, plans, exerciseDetails, recipeDetails]);
+
+  const openItem = (item: DayAgendaItem) => {
+    if (!item.slug) return;
+    if (item.kind === 'exercise') loadExerciseDetail(item.slug).then(d => { if (d) setExerciseDetails(prev => ({ ...prev, [item.slug!]: d })); }).catch(() => {});
+    else loadRecipeDetail(item.slug).then(d => { if (d) setRecipeDetails(prev => ({ ...prev, [item.slug!]: d })); }).catch(() => {});
+    setDetail({ kind: item.kind, slug: item.slug, name: item.title });
+  };
+
+  const date = new Date(`${dateKey}T00:00:00`);
+  const dateLabel = date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  const anything = sections.some(s => s.items.length > 0);
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, maxHeight: '88vh', overflow: 'hidden', borderRadius: 14, border: '1px solid rgba(168,85,247,0.25)', background: 'linear-gradient(to bottom right, #100d1a, #181327)', boxShadow: '0 0 80px rgba(168,85,247,0.15)' }}>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(168,85,247,0.14)', padding: '12px 24px' }}>
+          <div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.18em', color: MUTED }}>{t('health.plans.on_this_day')}</div>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: TEXT, margin: 0 }}>{dateLabel}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label={t('health.plans.cancel')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32, width: 32, borderRadius: 999, border: 'none', background: 'rgba(0,0,0,0.3)', color: MUTED, fontSize: 15, cursor: 'pointer' }}>×</button>
+        </div>
+
+        <div style={{ minHeight: 0, flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {!anything ? (
+            <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '48px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.day_empty')}</div>
+              <button type="button" onClick={onNewPlan} style={{ ...accentBtn(true), margin: '12px auto 0', padding: '6px 12px', fontSize: 11 }}>{t('health.plans.new_plan')}</button>
+            </div>
+          ) : sections.map(section => (
+            <div key={section.key}>
+              <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: MUTED }}>
+                <span aria-hidden>{section.icon}</span>{section.label}
+                {section.items.length > 0 && <span style={{ opacity: 0.6 }}>· {section.items.length}</span>}
+              </div>
+              {section.items.length === 0 ? (
+                <div style={{ borderRadius: 6, border: `1px dashed ${BORDER}`, padding: '10px 12px', fontSize: 11, fontStyle: 'italic', color: MUTED }}>
+                  {section.key === 'training' ? t('health.plans.no_workout') : t('health.plans.no_meals')}
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 8 }}>
+                  {section.items.map(item => (
+                    <button key={item.id} type="button" disabled={!item.slug} onClick={() => openItem(item)} title={item.planTitle}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden', borderRadius: 10, border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.015)', padding: 8, textAlign: 'left', cursor: item.slug ? 'pointer' : 'default' }}>
+                      <div style={{ position: 'relative', height: 48, width: 48, flexShrink: 0, overflow: 'hidden', borderRadius: 8, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+                        {item.thumb
+                          ? <img src={item.thumb} alt="" loading="lazy" style={{ height: '100%', width: '100%', objectFit: 'cover' }} />
+                          : <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, background: `linear-gradient(135deg, ${section.accent}2e, ${section.accent}0d)` }} aria-hidden>{section.icon}</div>}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 500, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.slot && <span style={{ marginRight: 6, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.04em', color: MUTED }}>{item.slot}</span>}{item.title}
+                        </div>
+                        {item.meta && <div style={{ fontSize: 10, color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.meta}</div>}
+                        <div style={{ fontSize: 9, color: MUTED, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.planTitle}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {section.key === 'meals' && hasMeals && (
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, borderRadius: 6, border: '1px solid rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.05)', padding: '8px 12px' }}>
+                  <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'rgba(252,211,77,0.8)' }}>{t('health.plans.day_total')}</span>
+                  {MACRO_FIELDS.map(f => (
+                    <span key={f.key} style={{ fontSize: 11, color: TEXT2 }}>{t(f.labelKey)} <span style={{ fontWeight: 600, color: TEXT }}>{mealTotals[f.key] ?? 0}{f.unit}</span></span>
+                  ))}
+                  {mealsEstimated && <span style={{ fontSize: 9, fontStyle: 'italic', color: MUTED }}>{t('health.plans.estimated')}</span>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {detail && (
+          <ItemDetailModal
+            detail={detail}
+            exercise={detail.kind === 'exercise' ? exerciseDetails[detail.slug] : undefined}
+            recipe={detail.kind === 'recipe' ? recipeDetails[detail.slug] : undefined}
+            onClose={() => setDetail(null)}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -450,7 +649,7 @@ function PlanOverlay(props: {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 24 }}>
       <div style={{
-        display: 'flex', flexDirection: 'column', height: '100%', width: '100%', maxWidth: 1180,
+        display: 'flex', flexDirection: 'column', maxHeight: '88vh', width: '100%', maxWidth: props.planOpen ? 880 : 720,
         overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(168,85,247,0.25)', background: PANEL_BG,
         boxShadow: '0 0 80px rgba(168,85,247,0.15)',
       }}>
@@ -560,7 +759,6 @@ function PlanBuilder(props: {
   const { plan, onClose, onSave, onDelete, exerciseDetails, recipeDetails, onLoadExerciseDetail, onLoadRecipeDetail } = props;
   const [draft, setDraft] = useState<HealthPlan>(plan);
   const [selectedDay, setSelectedDay] = useState(1);
-  const [month, setMonth] = useState<Date>(() => new Date(`${plan.start_date ?? todayISO()}T00:00:00`));
   const [confirming, setConfirming] = useState(false);
   const [picker, setPicker] = useState<'exercise' | 'recipe' | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
@@ -569,7 +767,6 @@ function PlanBuilder(props: {
   useEffect(() => {
     setDraft(plan);
     setSelectedDay(1);
-    setMonth(new Date(`${plan.start_date ?? todayISO()}T00:00:00`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan.id]);
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
@@ -593,29 +790,6 @@ function PlanBuilder(props: {
     for (const d of draft.days) map.set(d.day_index, d);
     return map;
   }, [draft.days]);
-
-  const startISO = draft.start_date ?? todayISO();
-  const dateForDay = useCallback((dayIndex: number): string => {
-    const d = new Date(`${startISO}T00:00:00`);
-    d.setDate(d.getDate() + dayIndex - 1);
-    return ymd(d);
-  }, [startISO]);
-  const dayForDate = useCallback((key: string): number | null => {
-    const start = new Date(`${startISO}T00:00:00`);
-    const sel = new Date(`${key}T00:00:00`);
-    const idx = Math.round((sel.getTime() - start.getTime()) / 86400000) + 1;
-    return idx >= 1 && idx <= draft.duration_days ? idx : null;
-  }, [startISO, draft.duration_days]);
-  const calendarMarks = useMemo(() => {
-    const map = new Map<string, { training: boolean; meals: boolean }>();
-    for (const d of draft.days) {
-      map.set(dateForDay(d.day_index), {
-        training: showTraining && d.training.length > 0,
-        meals: showMeals && d.meals.length > 0,
-      });
-    }
-    return map;
-  }, [draft.days, dateForDay, showTraining, showMeals]);
 
   // On open, load detail for referenced catalogue items.
   useEffect(() => {
@@ -696,9 +870,9 @@ function PlanBuilder(props: {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {/* Header */}
-      <div style={{ borderBottom: `1px solid ${BORDER}`, padding: '12px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ flexShrink: 0, borderBottom: `1px solid ${BORDER}`, padding: '12px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <button type="button" onClick={closeWithFlush} style={{ border: 'none', background: 'transparent', fontSize: 11, color: MUTED, cursor: 'pointer' }}>{t('health.plans.all_plans')}</button>
           <span style={{ fontSize: 10, color: MUTED }}>{t('health.plans.autosave')}</span>
@@ -716,36 +890,45 @@ function PlanBuilder(props: {
           placeholder={t('health.plans.goal_placeholder')} style={{ ...inputStyle, width: '100%' }} />
       </div>
 
-      {/* Body — calendar + day editor side by side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 16, flex: 1, minHeight: 0, overflow: 'hidden', padding: 24 }}>
-        <div style={{ minHeight: 0, overflowY: 'auto' }}>
-          <MonthCalendar
-            month={month}
-            onMonthChange={setMonth}
-            marks={calendarMarks}
-            selected={dateForDay(selectedDay)}
-            onSelectDate={(key) => { const idx = dayForDate(key); if (idx != null) setSelectedDay(idx); }}
-          />
+      {/* Body — compact: pick a day from the strip, then its Workouts / Meals
+          sections. No calendar; the day strip is the navigation. */}
+      <div style={{ minHeight: 0, flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+          {draft.days.map(d => {
+            const date = planDate(draft.start_date, d.day_index);
+            const active = selectedDay === d.day_index;
+            const has = (showTraining && d.training.length > 0) || (showMeals && d.meals.length > 0);
+            return (
+              <button key={d.day_index} type="button" onClick={() => setSelectedDay(d.day_index)}
+                style={{ borderRadius: 8, border: `1px solid ${active ? ACCENT : BORDER}`, background: active ? 'rgba(168,85,247,0.15)' : 'transparent', padding: '6px 10px', textAlign: 'left', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: active ? ACCENT : TEXT }}>
+                  {t('health.plans.day_n', { n: d.day_index })}
+                  {has && <span style={{ height: 6, width: 6, borderRadius: 999, background: ACCENT }} aria-hidden />}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 9, color: MUTED }}>
+                  {date ? date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }) : (d.kind === 'rest' ? t('health.week.rest') : '·')}
+                </div>
+              </button>
+            );
+          })}
         </div>
-        <div style={{ minHeight: 0, overflowY: 'auto' }}>
-          <DayPanel
-            day={selDay}
-            startDate={draft.start_date}
-            showTraining={showTraining}
-            showMeals={showMeals}
-            recipeDetails={recipeDetails}
-            exerciseDetails={exerciseDetails}
-            onChange={upsertDay}
-            onAddExercises={() => setPicker('exercise')}
-            onAddMeals={() => setPicker('recipe')}
-            onLoadExerciseDetail={onLoadExerciseDetail}
-            onLoadRecipeDetail={onLoadRecipeDetail}
-          />
-        </div>
+        <DayPanel
+          day={selDay}
+          startDate={draft.start_date}
+          showTraining={showTraining}
+          showMeals={showMeals}
+          recipeDetails={recipeDetails}
+          exerciseDetails={exerciseDetails}
+          onChange={upsertDay}
+          onAddExercises={() => setPicker('exercise')}
+          onAddMeals={() => setPicker('recipe')}
+          onLoadExerciseDetail={onLoadExerciseDetail}
+          onLoadRecipeDetail={onLoadRecipeDetail}
+        />
       </div>
 
       {/* Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${BORDER}`, padding: '12px 24px' }}>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', borderTop: `1px solid ${BORDER}`, padding: '12px 24px' }}>
         {confirming ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 11, color: TEXT2 }}>{t('health.plans.delete_confirm')}</span>
@@ -761,12 +944,18 @@ function PlanBuilder(props: {
 }
 
 // ── Month calendar ────────────────────────────────────────────────────
-function MonthCalendar({ month, onMonthChange, marks, selected, onSelectDate }: {
+function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelectDate, fill }: {
   month: Date;
   onMonthChange: (d: Date) => void;
   marks: Map<string, { training: boolean; meals: boolean }>;
+  /** Per-date plan content — session title + the day's moves / meals — so cells
+   *  show what's on, not just a dot. Falls back to `marks` dots where absent. */
+  content?: Map<string, { title: string | null; training: string[]; meals: string[] }>;
   selected: string | null;
   onSelectDate: (key: string) => void;
+  /** Fill the container — cells stretch to equal-height squares (auto-rows-fr)
+   *  filling a tall calendar, matching the extension's Plans calendar. */
+  fill?: boolean;
 }) {
   const year = month.getFullYear();
   const mon = month.getMonth();
@@ -784,42 +973,70 @@ function MonthCalendar({ month, onMonthChange, marks, selected, onSelectDate }: 
   };
 
   return (
-    <div style={{ overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(168,85,247,0.18)', background: PANEL_BG }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${BORDER}`, background: 'rgba(168,85,247,0.05)', padding: '8px 16px' }}>
+    <div style={{ overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(168,85,247,0.18)', background: PANEL_BG, ...(fill ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } : {}) }}>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${BORDER}`, background: 'rgba(168,85,247,0.05)', padding: '8px 16px' }}>
         <button type="button" aria-label={t('health.plans.prev_month')} onClick={() => onMonthChange(new Date(year, mon - 1, 1))} style={navBtn}>‹</button>
         <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{monthLabel}</span>
         <button type="button" aria-label={t('health.plans.next_month')} onClick={() => onMonthChange(new Date(year, mon + 1, 1))} style={navBtn}>›</button>
       </div>
-      <div style={{ padding: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6, marginBottom: 6 }}>
+      <div style={{ padding: 12, ...(fill ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } : {}) }}>
+        <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6, marginBottom: 6 }}>
           {[0, 1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} style={{ textAlign: 'center', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.14em', color: MUTED }}>{weekdayInitial(i)}</div>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6, ...(fill ? { flex: 1, gridAutoRows: '1fr' } : { gridAutoRows: '62px', alignContent: 'start' }) }}>
           {cells.map((date, i) => {
             if (!date) return <div key={i} />;
             const key = ymd(date);
             const mk = marks.get(key);
+            const c = content?.get(key);
             const isToday = key === today;
             const isSelected = key === selected;
             const hasContent = !!mk && (mk.training || mk.meals);
+            const items = c ? [
+              ...c.training.map(name => ({ icon: '🏋', name })),
+              ...c.meals.map(name => ({ icon: '🍽', name })),
+            ] : [];
+            const shown = items.slice(0, fill ? 4 : 2);
+            const extra = items.length - shown.length;
             return (
               <button key={i} type="button" onClick={() => onSelectDate(key)} style={{
-                display: 'flex', flexDirection: 'column', gap: 4, minHeight: 54, borderRadius: 8, padding: 6, textAlign: 'left', cursor: 'pointer',
+                // The grid forces every ROW to a fixed 62px (gridAutoRows), so no
+                // day's content can drag its week taller — every cell is identical.
+                // minHeight:0 + overflow:hidden lets a busy day clip instead of grow.
+                display: 'flex', flexDirection: 'column', gap: 3, minHeight: 0, boxSizing: 'border-box', overflow: 'hidden', borderRadius: 8, padding: 6, textAlign: 'left', cursor: 'pointer',
                 border: `1px solid ${isSelected ? ACCENT : hasContent ? 'rgba(168,85,247,0.22)' : BORDER_SOFT}`,
                 background: isSelected ? 'rgba(168,85,247,0.15)' : hasContent ? 'rgba(168,85,247,0.05)' : 'transparent',
               }}>
-                <span style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', height: 17, width: 17, borderRadius: 9, fontSize: 10,
-                  background: isToday ? ACCENT : 'transparent',
-                  color: isToday ? '#fff' : isSelected ? ACCENT : TEXT2,
-                  fontWeight: isToday ? 700 : isSelected ? 600 : 500,
-                }}>{date.getDate()}</span>
-                <span style={{ marginTop: 'auto', display: 'flex', gap: 3 }}>
-                  {mk?.training && <span style={{ height: 6, width: 6, borderRadius: 3, background: ACCENT }} />}
-                  {mk?.meals && <span style={{ height: 6, width: 6, borderRadius: 3, background: AMBER }} />}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <span style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', height: 17, width: 17, borderRadius: 9, fontSize: 10,
+                    background: isToday ? ACCENT : 'transparent',
+                    color: isToday ? '#fff' : isSelected ? ACCENT : TEXT2,
+                    fontWeight: isToday ? 700 : isSelected ? 600 : 500,
+                  }}>{date.getDate()}</span>
+                  {/* Dots only when there's no detailed content to show. */}
+                  {!c && (mk?.training || mk?.meals) && (
+                    <span style={{ display: 'flex', gap: 3 }}>
+                      {mk?.training && <span style={{ height: 6, width: 6, borderRadius: 3, background: ACCENT }} />}
+                      {mk?.meals && <span style={{ height: 6, width: 6, borderRadius: 3, background: AMBER }} />}
+                    </span>
+                  )}
+                </div>
+                {c && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
+                    {c.title && <div style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.2, color: TEXT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</div>}
+                    {shown.map((it, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, lineHeight: 1.2, color: TEXT2 }}>
+                        <span aria-hidden style={{ flexShrink: 0, opacity: 0.7 }}>{it.icon}</span>
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</span>
+                      </div>
+                    ))}
+                    {extra > 0 && <div style={{ fontSize: 8, color: MUTED }}>+{extra} more</div>}
+                    {c.title && items.length === 0 && <div style={{ fontSize: 9, fontStyle: 'italic', color: MUTED }}>{t('health.week.rest')}</div>}
+                  </div>
+                )}
               </button>
             );
           })}
@@ -1023,8 +1240,6 @@ function DayReadView({ day, showTraining, showMeals, exerciseDetails, recipeDeta
   );
 }
 
-const dChip: CSSProperties = { borderRadius: 999, border: `1px solid ${BORDER}`, padding: '1px 8px', fontSize: 10, textTransform: 'capitalize', color: MUTED };
-const dHd: CSSProperties = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: MUTED };
 
 function ItemDetailModal({ detail, exercise, recipe, onClose }: {
   detail: { kind: 'exercise' | 'recipe'; slug: string; name: string };
@@ -1035,79 +1250,14 @@ function ItemDetailModal({ detail, exercise, recipe, onClose }: {
   const loaded = detail.kind === 'exercise' ? !!exercise : !!recipe;
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', maxHeight: '85vh', width: '100%', maxWidth: 640, overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(168,85,247,0.25)', background: 'linear-gradient(to bottom right, #100d1a, #181327)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid rgba(168,85,247,0.14)', padding: '12px 20px' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: TEXT }}>{detail.name}</span>
-          <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 14, color: MUTED, cursor: 'pointer' }}>✕</button>
-        </div>
-        <div style={{ minHeight: 0, flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {!loaded ? <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.loading')}</div>
-            : exercise ? <ExerciseDetailBody ex={exercise} />
-              : recipe ? <RecipeDetailBody rec={recipe} />
-                : <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.no_detail')}</div>}
-        </div>
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: 'min(760px, 86vh)', width: '100%', maxWidth: 820, overflow: 'hidden', borderRadius: 16, border: '1px solid rgba(168,85,247,0.20)', background: 'linear-gradient(to bottom right, #0f0f17, #1a1625)' }}>
+        <button type="button" onClick={onClose} aria-label={t('health.plans.cancel')} style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32, width: 32, borderRadius: 999, border: 'none', background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: 18, cursor: 'pointer' }}>×</button>
+        {/* The rich, tabbed catalogue detail — same component the library uses. */}
+        {!loaded ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.loading')}</div>
+          : exercise ? <CatExerciseDetail ex={exercise} />
+            : recipe ? <CatRecipeDetail r={recipe} />
+              : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.no_detail')}</div>}
       </div>
-    </div>
-  );
-}
-
-function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
-  const r = ex.routine;
-  const routineParts = [
-    r.sets != null ? t('health.plans.n_sets', { n: r.sets }) : null,
-    r.reps_target ? t('health.plans.n_reps', { n: r.reps_target }) : null,
-    r.rest_seconds != null ? t('health.plans.n_rest', { n: r.rest_seconds }) : null,
-    r.tempo ? t('health.plans.tempo', { v: r.tempo }) : null,
-    r.frequency_per_week ? t('health.plans.per_week', { n: r.frequency_per_week }) : null,
-  ].filter(Boolean);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontSize: 12, lineHeight: 1.5, color: TEXT2 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        <span style={dChip}>{ex.exercise_type}</span>
-        <span style={dChip}>{ex.workout_type}</span>
-        {typeof ex.difficulty === 'number' && <span style={dChip}>{t('health.plans.difficulty', { n: ex.difficulty })}</span>}
-      </div>
-      {ex.thumbnail_url && <img src={ex.thumbnail_url} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'cover' }} />}
-      {ex.description && <p style={{ margin: 0 }}>{ex.description}</p>}
-      {routineParts.length > 0 && <div><div style={dHd}>{t('health.plans.routine')}</div><p style={{ margin: '4px 0 0' }}>{routineParts.join('  ·  ')}{r.progression ? ` — ${r.progression}` : ''}</p></div>}
-      {ex.steps.length > 0 && <div><div style={dHd}>{t('health.plans.how_to')}</div><ol style={{ margin: '4px 0 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>{ex.steps.map((s, i) => <li key={i}>{s}</li>)}</ol></div>}
-      {ex.common_mistakes && <div><div style={dHd}>{t('health.plans.common_mistakes')}</div><p style={{ margin: '4px 0 0' }}>{ex.common_mistakes}</p></div>}
-      {ex.muscles.length > 0 && <div><div style={dHd}>{t('health.plans.muscles')}</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>{ex.muscles.map(mu => <span key={mu.slug} style={dChip}>{mu.name}{mu.role === 'secondary' ? ` ${t('health.plans.secondary_suffix')}` : ''}</span>)}</div></div>}
-      {ex.equipment.length > 0 && <div><div style={dHd}>{t('health.plans.equipment')}</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>{ex.equipment.map(eq => <span key={eq.slug} style={dChip}>{eq.name}</span>)}</div></div>}
-      {ex.demo_video_url && <a href={ex.demo_video_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: ACCENT }}>{t('health.plans.watch_demo')}</a>}
-    </div>
-  );
-}
-
-function RecipeDetailBody({ rec }: { rec: HealthRecipeDetail }) {
-  const version = rec.versions.find(v => v.level === 'intermediate') ?? rec.versions[0];
-  const n = version?.nutrition;
-  const timeParts = version ? [
-    version.prep_time_minutes != null ? t('health.plans.m_prep', { n: version.prep_time_minutes }) : null,
-    version.cook_time_minutes != null ? t('health.plans.m_cook', { n: version.cook_time_minutes }) : null,
-  ].filter(Boolean) : [];
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontSize: 12, lineHeight: 1.5, color: TEXT2 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {rec.course && <span style={dChip}>{rec.course}</span>}
-        {rec.cuisine_name && <span style={dChip}>{rec.cuisine_name}</span>}
-        {version?.default_servings != null && <span style={dChip}>{t('health.plans.n_servings', { n: version.default_servings })}</span>}
-      </div>
-      {rec.hero_image_url && <img src={rec.hero_image_url} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'cover' }} />}
-      {(rec.overview || version?.description) && <p style={{ margin: 0 }}>{rec.overview ?? version?.description}</p>}
-      {timeParts.length > 0 && <p style={{ margin: 0, color: MUTED }}>{timeParts.join('  ·  ')}</p>}
-      {n && typeof n.calories === 'number' && (
-        <div><div style={dHd}>{n.source === 'verified' ? t('health.plans.nutrition_per_serving') : t('health.plans.nutrition_per_serving_est')}</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
-            {n.calories != null && <span>{t('health.plans.macro.cal')} <span style={{ fontWeight: 600, color: TEXT }}>{n.calories}</span></span>}
-            {n.protein_g != null && <span>{t('health.plans.macro.protein')} <span style={{ fontWeight: 600, color: TEXT }}>{n.protein_g}g</span></span>}
-            {n.carbs_g != null && <span>{t('health.plans.macro.carbs')} <span style={{ fontWeight: 600, color: TEXT }}>{n.carbs_g}g</span></span>}
-            {n.fat_g != null && <span>{t('health.plans.macro.fat')} <span style={{ fontWeight: 600, color: TEXT }}>{n.fat_g}g</span></span>}
-          </div>
-        </div>
-      )}
-      {rec.ingredients.length > 0 && <div><div style={dHd}>{t('health.plans.ingredients')}</div><ul style={{ margin: '4px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>{[...rec.ingredients].sort((a, b) => a.sort_order - b.sort_order).map((ing, i) => <li key={i}>{[ing.quantity != null ? ing.quantity : null, ing.unit, ing.name].filter(v => v != null && v !== '').join(' ')}{ing.optional ? ` ${t('health.plans.optional_suffix')}` : ''}</li>)}</ul></div>}
-      {version && version.steps.length > 0 && <div><div style={dHd}>{t('health.plans.method')}</div><ol style={{ margin: '4px 0 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>{[...version.steps].sort((a, b) => a.sort_order - b.sort_order).map((s, i) => <li key={i}>{s.action}</li>)}</ol></div>}
     </div>
   );
 }

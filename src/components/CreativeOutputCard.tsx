@@ -120,10 +120,10 @@ export function CreativeOutputCard({ item, onRegenerate, onDelete }: OutputCardP
           fontSize: 9,
           padding: '1px 6px',
           borderRadius: 4,
-          background: item.cloudId ? 'rgba(96,165,250,0.15)' : 'rgba(166,227,161,0.15)',
-          color: item.cloudId ? '#60a5fa' : '#a6e3a1',
+          background: 'rgba(166,227,161,0.15)',
+          color: '#a6e3a1',
         }}>
-          {item.cloudId && item.localPath ? 'both' : item.cloudId ? 'cloud' : 'local'}
+          local
         </span>
       </div>
 

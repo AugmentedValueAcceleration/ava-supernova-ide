@@ -19,6 +19,42 @@ export function isConnected(): boolean {
   return !!key && key.startsWith('sk-ava-');
 }
 
+// ── Account id ────────────────────────────────────────────────────────────
+// The signed-in user's id, used to scope local data under ~/.ava/users/<id>/
+// (the same per-account layout the extension uses, so both surfaces read the
+// same files on one machine). Cached in localStorage so it survives reloads;
+// an in-flight promise dedupes concurrent callers. null for BYOK / no-account.
+const ACCOUNT_ID_KEY = 'ava-ide-account-id';
+let accountIdPromise: Promise<string | null> | null = null;
+
+export function resetAccountIdCache(): void {
+  accountIdPromise = null;
+}
+
+export async function getAccountId(): Promise<string | null> {
+  try { const cached = localStorage.getItem(ACCOUNT_ID_KEY); if (cached) return cached; } catch { /* ignore */ }
+  const key = getPlatformKey();
+  if (!key) return null;
+  if (accountIdPromise) return accountIdPromise;
+  accountIdPromise = (async () => {
+    try {
+      const res = await fetch(`${PLATFORM_URL}/account-info`, {
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const id: string | null = data?.id ?? null;
+      if (id) { try { localStorage.setItem(ACCOUNT_ID_KEY, id); } catch { /* ignore */ } }
+      return id;
+    } catch {
+      return null;
+    } finally {
+      accountIdPromise = null; // allow a retry on the next call if this failed
+    }
+  })();
+  return accountIdPromise;
+}
+
 /**
  * Disconnect account — clears all account-specific data and resets to local-first state.
  * Keeps local-only keys: BYOK, device ID, onboarded, consent, language, project folder, work hours.
@@ -29,6 +65,8 @@ export function disconnectAccount() {
   localStorage.removeItem('ava-ide-email');
   localStorage.removeItem('ava-ide-tier');
   localStorage.removeItem('ava-ide-user-name');
+  localStorage.removeItem('ava-ide-account-id');
+  resetAccountIdCache();
   // Clear from shared config so other surfaces see the disconnect on next read.
   void import('./shared-config').then((m) => m.clearSharedPlatformKey());
 

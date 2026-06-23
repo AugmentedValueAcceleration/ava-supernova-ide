@@ -8,9 +8,12 @@
 
 import { readTextFile, writeTextFile, mkdir, readDir, remove, BaseDirectory } from '@tauri-apps/plugin-fs';
 import type { HealthProfile } from './health-store';
+import { accountRoot } from './account-scope';
 
-const PLANS_DIR = '.ava/health/plans';
-const planFile = (id: string) => `${PLANS_DIR}/${id}.json`;
+// Account-scoped plans dir — ~/.ava/users/<id>/health/plans when signed in (the
+// same files the extension writes), ~/.ava/health/plans for BYOK / no-account.
+const plansDir = async (): Promise<string> => `${await accountRoot()}/health/plans`;
+const planFile = async (id: string): Promise<string> => `${await plansDir()}/${id}.json`;
 
 // ── Types — mirror of the extension's HealthPlan shapes ───────────────
 
@@ -98,7 +101,7 @@ function toSummary(p: HealthPlan): HealthPlanSummary {
 /** Read one plan by id. Null when missing / malformed / unknown schema. */
 export async function loadHealthPlan(id: string): Promise<HealthPlan | null> {
   try {
-    const raw = await readTextFile(planFile(id), { baseDir: BaseDirectory.Home });
+    const raw = await readTextFile(await planFile(id), { baseDir: BaseDirectory.Home });
     const parsed = JSON.parse(raw) as HealthPlan;
     if (parsed && parsed.schema_version === 1) return parsed;
   } catch { /* missing / malformed — fall through */ }
@@ -110,7 +113,7 @@ export async function loadHealthPlan(id: string): Promise<HealthPlan | null> {
 export async function loadHealthPlanIndex(): Promise<HealthPlanSummary[]> {
   let entries: Array<{ name: string }> = [];
   try {
-    entries = await readDir(PLANS_DIR, { baseDir: BaseDirectory.Home });
+    entries = await readDir(await plansDir(), { baseDir: BaseDirectory.Home });
   } catch {
     return [];
   }
@@ -127,7 +130,7 @@ export async function loadHealthPlanIndex(): Promise<HealthPlanSummary[]> {
  *  other active plan of the same type — one active plan per type feeds
  *  the daily dashboard. Returns the refreshed library index. */
 export async function saveHealthPlan(plan: HealthPlan): Promise<HealthPlanSummary[]> {
-  await mkdir(PLANS_DIR, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+  await mkdir(await plansDir(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
   const now = new Date().toISOString();
   if (plan.status === 'active') {
     const index = await loadHealthPlanIndex();
@@ -136,7 +139,7 @@ export async function saveHealthPlan(plan: HealthPlan): Promise<HealthPlanSummar
       const full = await loadHealthPlan(other.id);
       if (full) {
         await writeTextFile(
-          planFile(other.id),
+          await planFile(other.id),
           JSON.stringify({ ...full, status: 'archived', updated_at: now }, null, 2),
           { baseDir: BaseDirectory.Home },
         );
@@ -144,14 +147,14 @@ export async function saveHealthPlan(plan: HealthPlan): Promise<HealthPlanSummar
     }
   }
   const next: HealthPlan = { ...plan, schema_version: 1, updated_at: now };
-  await writeTextFile(planFile(next.id), JSON.stringify(next, null, 2), { baseDir: BaseDirectory.Home });
+  await writeTextFile(await planFile(next.id), JSON.stringify(next, null, 2), { baseDir: BaseDirectory.Home });
   return loadHealthPlanIndex();
 }
 
 /** Delete a plan. Returns the refreshed library index. */
 export async function deleteHealthPlan(id: string): Promise<HealthPlanSummary[]> {
   try {
-    await remove(planFile(id), { baseDir: BaseDirectory.Home });
+    await remove(await planFile(id), { baseDir: BaseDirectory.Home });
   } catch { /* already gone */ }
   return loadHealthPlanIndex();
 }

@@ -14,6 +14,7 @@
 
 import { readTextFile, writeTextFile, mkdir, readDir, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
+import { accountRoot } from './account-scope';
 
 export type JournalAuthor = 'user' | 'ava';
 
@@ -109,8 +110,10 @@ function projectFolder(): string | null {
   }
 }
 
-const GLOBAL_DIR = '.ava/journal';
-const globalRel = (date: string) => `${GLOBAL_DIR}/${date}.json`;
+// Account-scoped global journal — ~/.ava/users/<id>/journal when signed in (the
+// same files the extension + sidecar use), ~/.ava/journal for BYOK / no-account.
+const globalDir = async (): Promise<string> => `${await accountRoot()}/journal`;
+const globalRel = async (date: string): Promise<string> => `${await globalDir()}/${date}.json`;
 
 async function projectDir(): Promise<string | null> {
   const folder = projectFolder();
@@ -126,7 +129,7 @@ async function projectDir(): Promise<string | null> {
 
 async function readGlobalDay(date: string): Promise<JournalDay> {
   try {
-    return migrateDay(JSON.parse(await readTextFile(globalRel(date), { baseDir: BaseDirectory.Home })), date);
+    return migrateDay(JSON.parse(await readTextFile(await globalRel(date), { baseDir: BaseDirectory.Home })), date);
   } catch {
     return { version: 2, date, entries: [] };
   }
@@ -143,8 +146,8 @@ async function readProjectDay(date: string): Promise<JournalDay> {
 }
 
 async function writeGlobalDay(day: JournalDay): Promise<void> {
-  await mkdir(GLOBAL_DIR, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
-  await writeTextFile(globalRel(day.date), JSON.stringify(day, null, 2), { baseDir: BaseDirectory.Home });
+  await mkdir(await globalDir(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+  await writeTextFile(await globalRel(day.date), JSON.stringify(day, null, 2), { baseDir: BaseDirectory.Home });
 }
 
 async function writeProjectDay(day: JournalDay): Promise<boolean> {
@@ -166,7 +169,7 @@ const DATE_RE = /^(\d{4}-\d{2}-\d{2})\.json$/;
 
 async function globalDates(): Promise<string[]> {
   try {
-    const entries = await readDir(GLOBAL_DIR, { baseDir: BaseDirectory.Home });
+    const entries = await readDir(await globalDir(), { baseDir: BaseDirectory.Home });
     return entries.map((e) => DATE_RE.exec(e.name ?? '')?.[1]).filter((d): d is string => !!d);
   } catch {
     return [];
@@ -303,11 +306,11 @@ export async function searchJournal(query: string, filters?: { kind?: string; au
   return hits;
 }
 
-const KINDS_REL = `${GLOBAL_DIR}/kinds.json`;
+const kindsRel = async (): Promise<string> => `${await globalDir()}/kinds.json`;
 
 async function readCustomKinds(): Promise<JournalKind[]> {
   try {
-    const raw = JSON.parse(await readTextFile(KINDS_REL, { baseDir: BaseDirectory.Home }));
+    const raw = JSON.parse(await readTextFile(await kindsRel(), { baseDir: BaseDirectory.Home }));
     return Array.isArray(raw?.kinds) ? raw.kinds.map((k: any) => ({ ...k, builtin: false })) : [];
   } catch {
     return [];
@@ -315,8 +318,8 @@ async function readCustomKinds(): Promise<JournalKind[]> {
 }
 
 async function writeCustomKinds(kinds: JournalKind[]): Promise<void> {
-  await mkdir(GLOBAL_DIR, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
-  await writeTextFile(KINDS_REL, JSON.stringify({ version: 1, kinds }, null, 2), { baseDir: BaseDirectory.Home });
+  await mkdir(await globalDir(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+  await writeTextFile(await kindsRel(), JSON.stringify({ version: 1, kinds }, null, 2), { baseDir: BaseDirectory.Home });
 }
 
 /** Custom kinds persisted at ~/.ava/journal/kinds.json, merged with built-ins. */

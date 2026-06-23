@@ -78,6 +78,10 @@ export interface SidecarUsage {
 
 export interface SidecarEvent {
   event: string;
+  /** Conversation lane this event belongs to — 'health' for the Ava Health
+   *  & Fitness room (its own thread), 'main'/undefined for the main chat.
+   *  The IDE's two chat surfaces filter on this so they never cross-render. */
+  lane?: 'main' | 'health';
   // stream events
   content?: string;
   // tool events
@@ -136,6 +140,12 @@ export interface SidecarEvent {
   grantId?: string;
   label?: string;
   reason?: string;
+  // health_profile_ask — structured profile-field card (goal cards, chips,
+  // number box). The room resolves the control from HEALTH_PROFILE_FIELDS.
+  profileField?: { field: string; question: string; currentValue?: unknown };
+  // general_profile_saved / health_profile_saved — Ava saved a profile field
+  // via the fill card; the renderer can refresh the profile pages.
+  profile?: Record<string, unknown>;
 }
 
 type EventListener = (event: SidecarEvent) => void;
@@ -309,7 +319,7 @@ export class SidecarManager {
   /**
    * Send a chat message to the agent.
    */
-  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[]): Promise<void> {
+  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health'): Promise<void> {
     // For large attachments (images), write to temp files to avoid stdin buffer limits
     let processedAttachments = attachments;
     if (attachments?.length) {
@@ -332,7 +342,7 @@ export class SidecarManager {
         }
       }
     }
-    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined });
+    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined, surface });
   }
 
   async setWorkingHours(start: number, end: number): Promise<void> {
@@ -376,10 +386,11 @@ export class SidecarManager {
   }
 
   /**
-   * Clear conversation (new chat).
+   * Clear conversation (new chat). Pass surface:'health' to clear only the
+   * Ava Health room thread, leaving the main chat untouched.
    */
-  async clear(): Promise<void> {
-    await this.send({ cmd: 'clear' });
+  async clear(surface?: 'main' | 'health'): Promise<void> {
+    await this.send({ cmd: 'clear', surface });
   }
 
   /**

@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { HealthRoomChat } from './HealthRoomChat';
+import { TimeField } from './TimeField';
 import {
   loadExercises,
   loadRecipes,
@@ -24,7 +26,10 @@ import {
 import {
   loadHealthProfile,
   saveHealthProfile,
+  loadGeneralProfile,
+  saveGeneralProfile,
   type HealthProfile,
+  type GeneralProfile,
 } from '../lib/health-store';
 import { t, useLocale } from '../lib/i18n';
 
@@ -38,7 +43,13 @@ import { t, useLocale } from '../lib/i18n';
  * detail modals land in 2c.
  */
 
-type HealthTab = 'exercises' | 'recipes' | 'mine' | 'profile';
+type HealthTab = 'exercises' | 'recipes' | 'ava';
+
+// Set when something elsewhere (the main-chat → Health room handoff) wants the
+// page to open on the Ava room tab. Read on mount; the live event covers the
+// already-mounted case.
+let pendingHealthRoomOpen = false;
+export function requestHealthRoomTab(): void { pendingHealthRoomOpen = true; }
 
 const PAGE_SIZE = 24;
 
@@ -65,8 +76,16 @@ const exerciseTypeLabel = (type: string): string => t(`health.submit.ex_type.${t
 
 export function HealthPage() {
   useLocale();
-  const [tab, setTab] = useState<HealthTab>('exercises');
-  const [contributeOpen, setContributeOpen] = useState(false);
+  const [tab, setTab] = useState<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'exercises');
+
+  // Open the Ava room tab on the handoff request — the module flag covers a
+  // fresh mount, the event covers an already-mounted page.
+  useEffect(() => {
+    if (pendingHealthRoomOpen) { pendingHealthRoomOpen = false; setTab('ava'); }
+    const onOpenRoom = () => setTab('ava');
+    window.addEventListener('ava-open-health-room', onOpenRoom);
+    return () => window.removeEventListener('ava-open-health-room', onOpenRoom);
+  }, []);
 
   const tabBtnStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 16px', borderRadius: 0, border: 'none', cursor: 'pointer',
@@ -84,42 +103,33 @@ export function HealthPage() {
         borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
         background: 'rgba(12, 8, 20, 0.4)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>
-              {t('health.browse.title')}
-            </h1>
-            <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
-              {t('health.browse.subtitle')}
-            </p>
-          </div>
-          <button
-            onClick={() => setContributeOpen(true)}
-            style={{
-              flexShrink: 0, padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              borderRadius: 6, background: 'rgba(168, 85, 247, 0.12)', color: '#c084fc',
-              border: '1px solid rgba(168, 85, 247, 0.35)',
-            }}
-          >
-            {t('health.browse.contribute')}
-          </button>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>
+            {t('health.browse.title')}
+          </h1>
+          <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
+            {t('health.browse.subtitle')}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
           <button onClick={() => setTab('exercises')} style={tabBtnStyle(tab === 'exercises')}>{t('health.browse.tab.exercises')}</button>
           <button onClick={() => setTab('recipes')} style={tabBtnStyle(tab === 'recipes')}>{t('health.browse.tab.recipes')}</button>
-          <button onClick={() => setTab('mine')} style={tabBtnStyle(tab === 'mine')}>{t('health.browse.tab.mine')}</button>
-          <button onClick={() => setTab('profile')} style={tabBtnStyle(tab === 'profile')}>{t('health.browse.tab.profile')}</button>
+          <button onClick={() => setTab('ava')} style={tabBtnStyle(tab === 'ava')}>{t('health.browse.tab.ava')}</button>
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px' }}>
-        {tab === 'exercises' && <ExercisesGrid />}
-        {tab === 'recipes' && <RecipesGrid />}
-        {tab === 'mine' && <MySubmissionsTab />}
-        {tab === 'profile' && <ProfileTab />}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        {/* Non-Ava tabs — padded scroll area. */}
+        <div style={{ height: '100%', overflowY: 'auto', padding: '20px 32px', display: tab === 'ava' ? 'none' : 'block' }}>
+          {tab === 'exercises' && <ExercisesGrid />}
+          {tab === 'recipes' && <RecipesGrid />}
+        </div>
+        {/* Ava room — always mounted so its conversation survives tab switches;
+            full-bleed (the chat owns its own scroll). */}
+        <div style={{ height: '100%', display: tab === 'ava' ? 'block' : 'none' }}>
+          <HealthRoomChat active={tab === 'ava'} />
+        </div>
       </div>
-
-      {contributeOpen && <ContributeModal onClose={() => setContributeOpen(false)} />}
     </div>
   );
 }
@@ -820,7 +830,7 @@ function DetailCentered({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
+export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
   const accent = WORKOUT_ACCENT[ex.workout_type];
   const routine: Array<[string, string]> = [];
   if (ex.routine.sets != null) routine.push([t('health.browse.routine.sets'), String(ex.routine.sets)]);
@@ -844,6 +854,12 @@ function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {/* Hero image — leads the overlay, like the recipe detail. */}
+      {ex.thumbnail_url && (
+        <div style={{ flexShrink: 0, height: 184, overflow: 'hidden', background: 'rgba(168,85,247,0.06)' }}>
+          <img src={ex.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        </div>
+      )}
       <div style={{ flexShrink: 0, padding: '24px 28px 0' }}>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: accent, marginBottom: 6 }}>
@@ -1027,7 +1043,7 @@ function SubmissionRow({ row }: { row: SubmissionRowData }) {
 /** The caller's own submissions — pending / rejected / published —
  *  with a "clear rejected" action. Reads through the submission data
  *  layer; the submit modal that creates these lands in 2e-3. */
-function MySubmissionsTab() {
+export function MySubmissionsTab() {
   const [data, setData] = useState<HealthMySubmissions | null>(null);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
@@ -1108,15 +1124,98 @@ function parseNum(s: string): number | null {
 
 /** Profile form — body stats, goals, constraints, schedule. Reads /
  *  writes the local-first health-store with debounced autosave. */
-function ProfileTab() {
+// ── Health-profile option lists — mirror the extension's HealthProfilePage so
+// the IDE profile reads identically. `slug` is persisted; labels resolve via
+// t() (the keys live in core, shared with the extension). Allergens load from
+// the live taxonomy at runtime — the same source the extension uses.
+const GOAL_OPTIONS: Array<{ value: NonNullable<HealthProfile['goals']['primary']>; labelKey: string; hintKey: string }> = [
+  { value: 'fat_loss',    labelKey: 'health.profile.goal.fat_loss',    hintKey: 'health.profile.goal.fat_loss.hint' },
+  { value: 'muscle_gain', labelKey: 'health.profile.goal.muscle_gain', hintKey: 'health.profile.goal.muscle_gain.hint' },
+  { value: 'maintenance', labelKey: 'health.profile.goal.maintenance', hintKey: 'health.profile.goal.maintenance.hint' },
+  { value: 'athletic',    labelKey: 'health.profile.goal.athletic',    hintKey: 'health.profile.goal.athletic.hint' },
+  { value: 'recovery',    labelKey: 'health.profile.goal.recovery',    hintKey: 'health.profile.goal.recovery.hint' },
+  { value: 'longevity',   labelKey: 'health.profile.goal.longevity',   hintKey: 'health.profile.goal.longevity.hint' },
+];
+
+const DIETARY_OPTIONS: Array<{ slug: string; labelKey: string }> = [
+  { slug: 'vegan', labelKey: 'health.profile.diet.vegan' },
+  { slug: 'vegetarian', labelKey: 'health.profile.diet.vegetarian' },
+  { slug: 'pescatarian', labelKey: 'health.profile.diet.pescatarian' },
+  { slug: 'gluten_free', labelKey: 'health.profile.diet.gluten_free' },
+  { slug: 'dairy_free', labelKey: 'health.profile.diet.dairy_free' },
+  { slug: 'low_fodmap', labelKey: 'health.profile.diet.low_fodmap' },
+  { slug: 'keto', labelKey: 'health.profile.diet.keto' },
+  { slug: 'mediterranean', labelKey: 'health.profile.diet.mediterranean' },
+  { slug: 'halal', labelKey: 'health.profile.diet.halal' },
+  { slug: 'kosher', labelKey: 'health.profile.diet.kosher' },
+];
+
+const EQUIPMENT_OPTIONS: Array<{ slug: string; labelKey: string }> = [
+  { slug: 'bodyweight', labelKey: 'health.profile.equip.bodyweight' },
+  { slug: 'dumbbells', labelKey: 'health.profile.equip.dumbbells' },
+  { slug: 'barbell', labelKey: 'health.profile.equip.barbell' },
+  { slug: 'kettlebell', labelKey: 'health.profile.equip.kettlebell' },
+  { slug: 'pull_up_bar', labelKey: 'health.profile.equip.pull_up_bar' },
+  { slug: 'bench', labelKey: 'health.profile.equip.bench' },
+  { slug: 'squat_rack', labelKey: 'health.profile.equip.squat_rack' },
+  { slug: 'cable_machine', labelKey: 'health.profile.equip.cable_machine' },
+  { slug: 'rowing_machine', labelKey: 'health.profile.equip.rowing_machine' },
+  { slug: 'treadmill', labelKey: 'health.profile.equip.treadmill' },
+  { slug: 'exercise_bike', labelKey: 'health.profile.equip.exercise_bike' },
+  { slug: 'mat', labelKey: 'health.profile.equip.mat' },
+  { slug: 'resistance_bands', labelKey: 'health.profile.equip.resistance_bands' },
+  { slug: 'foam_roller', labelKey: 'health.profile.equip.foam_roller' },
+];
+
+// Global cuisines — single-word slugs humanise to a clean chip label (no i18n
+// key needed), matching the catalogue's worldwide recipe set.
+const CUISINE_OPTIONS: Array<{ slug: string; label: string }> = [
+  'italian', 'french', 'spanish', 'greek', 'mediterranean', 'indian', 'thai',
+  'vietnamese', 'chinese', 'japanese', 'korean', 'mexican', 'american',
+  'caribbean', 'moroccan', 'lebanese', 'turkish', 'british', 'brazilian', 'ethiopian',
+].map(slug => ({ slug, label: slug.charAt(0).toUpperCase() + slug.slice(1) }));
+
+/** Pill chips — the IDE mirror of the extension's PickerChips. */
+function Chips({ selected, options, onToggle, emptyHint }: {
+  selected: string[];
+  options: Array<{ slug: string; label: string }>;
+  onToggle: (slug: string) => void;
+  emptyHint?: string;
+}) {
+  if (options.length === 0) {
+    return <div style={{ fontSize: 10, fontStyle: 'italic', color: '#9b8caa' }}>{emptyHint ?? ''}</div>;
+  }
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {options.map(o => {
+        const active = selected.includes(o.slug);
+        return (
+          <button key={o.slug} type="button" onClick={() => onToggle(o.slug)} style={{
+            borderRadius: 999, padding: '4px 10px', fontSize: 10, cursor: 'pointer', transition: 'all 0.15s',
+            border: `1px solid ${active ? '#a855f7' : 'rgba(168,85,247,0.2)'}`,
+            background: active ? 'rgba(168,85,247,0.15)' : 'transparent',
+            color: active ? '#c084fc' : '#9b8caa',
+          }}>{o.label}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ProfileTab() {
+  useLocale();
   const [profile, setProfile] = useState<HealthProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [savedTick, setSavedTick] = useState(0);
+  const [allergenOpts, setAllergenOpts] = useState<Array<{ slug: string; label: string }>>([]);
   const saveTimer = useRef<number | null>(null);
 
   useEffect(() => {
     let live = true;
     loadHealthProfile().then(p => { if (live) { setProfile(p); setLoading(false); } });
+    // Allergen chips come from the live taxonomy — same source the extension uses.
+    loadTaxonomies()
+      .then(tax => { if (live) setAllergenOpts((tax.allergens ?? []).map(a => ({ slug: a.slug, label: a.name }))); })
+      .catch(() => { /* offline / BYOK — chips show the loading hint */ });
     return () => {
       live = false;
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -1128,30 +1227,176 @@ function ProfileTab() {
     setProfile(next);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
-      saveHealthProfile(next)
-        .then(() => setSavedTick(t => t + 1))
-        .catch(() => { /* non-fatal — retried on next edit */ });
+      saveHealthProfile(next).catch(() => { /* non-fatal — retried on next edit */ });
     }, 600);
   }, []);
 
   if (loading || !profile) return <CenterNote>{t('health.profile.loading')}</CenterNote>;
   const p = profile;
+  const c = p.constraints;
+  const f = p.food ?? { likes: [], dislikes: [], cuisines: [] };
+  const toggle = (list: string[], slug: string) => (list.includes(slug) ? list.filter(s => s !== slug) : [...list, slug]);
 
   return (
-    <div style={{ maxWidth: 620, display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div>
+        <h2 style={{ fontSize: 16, fontWeight: 500, color: '#e9e2f4', margin: 0 }}>{t('health.profile.your_profile')}</h2>
+        <p style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: '#9b8caa', maxWidth: '70ch' }}>{t('health.profile.intro_blurb')}</p>
+      </div>
+
+      {/* Goals — selectable cards, like the extension. */}
+      <ProfileSection title={t('health.profile.goals')} subtitle={t('health.profile.goals_subtitle')}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+          {GOAL_OPTIONS.map(g => {
+            const active = p.goals.primary === g.value;
+            return (
+              <button key={g.value} type="button"
+                onClick={() => update({ ...p, goals: { ...p.goals, primary: active ? null : g.value } })}
+                style={{
+                  textAlign: 'left', borderRadius: 10, padding: 12, cursor: 'pointer', transition: 'all 0.15s',
+                  border: `1px solid ${active ? '#a855f7' : 'rgba(168,85,247,0.18)'}`,
+                  background: active ? 'rgba(168,85,247,0.10)' : 'transparent',
+                }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: active ? '#c084fc' : '#e9e2f4' }}>{t(g.labelKey)}</div>
+                <div style={{ fontSize: 10, color: '#9b8caa', marginTop: 4, lineHeight: 1.5 }}>{t(g.hintKey)}</div>
+              </button>
+            );
+          })}
+        </div>
+        <Field label={t('health.profile.weekly_focus')}>
+          <input type="text" value={p.goals.weekly_focus ?? ''} maxLength={120}
+            placeholder={t('health.profile.weekly_focus_placeholder')}
+            onChange={e => update({ ...p, goals: { ...p.goals, weekly_focus: e.target.value || null } })}
+            style={fieldInputStyle} />
+        </Field>
+      </ProfileSection>
+
+      {/* Constraints — chips + textarea, full-width stacked. */}
+      <ProfileSection title={t('health.profile.constraints')} subtitle={t('health.profile.constraints_subtitle')}>
+        <Field label={t('health.profile.allergens')}>
+          <Chips selected={c.allergens} options={allergenOpts}
+            onToggle={slug => update({ ...p, constraints: { ...c, allergens: toggle(c.allergens, slug) } })}
+            emptyHint={t('health.profile.allergens_loading')} />
+        </Field>
+        <Field label={t('health.profile.dietary')}>
+          <Chips selected={c.dietary} options={DIETARY_OPTIONS.map(o => ({ slug: o.slug, label: t(o.labelKey) }))}
+            onToggle={slug => update({ ...p, constraints: { ...c, dietary: toggle(c.dietary, slug) } })} />
+        </Field>
+        <Field label={t('health.profile.equipment')}>
+          <Chips selected={c.equipment_available} options={EQUIPMENT_OPTIONS.map(o => ({ slug: o.slug, label: t(o.labelKey) }))}
+            onToggle={slug => update({ ...p, constraints: { ...c, equipment_available: toggle(c.equipment_available, slug) } })} />
+        </Field>
+        <Field label={t('health.profile.injuries')}>
+          <textarea rows={2} value={c.injuries.join('\n')}
+            placeholder={t('health.profile.injuries_placeholder')}
+            onChange={e => update({ ...p, constraints: { ...c, injuries: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
+            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
+        </Field>
+        <Field label={t('health.profile.minutes_per_day')}>
+          <input type="number" inputMode="numeric" value={c.minutes_per_day_target ?? ''} placeholder="45"
+            onChange={e => update({ ...p, constraints: { ...c, minutes_per_day_target: parseNum(e.target.value) } })}
+            style={fieldInputStyle} />
+        </Field>
+      </ProfileSection>
+
+      {/* Food & taste — steers meal plans toward what they enjoy. */}
+      <ProfileSection title={t('health.profile.food_taste')} subtitle={t('health.profile.food_taste_subtitle')}>
+        <Field label={t('health.profile.likes')}>
+          <textarea rows={2} value={f.likes.join('\n')}
+            placeholder={t('health.profile.likes_placeholder')}
+            onChange={e => update({ ...p, food: { ...f, likes: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
+            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
+        </Field>
+        <Field label={t('health.profile.dislikes')}>
+          <textarea rows={2} value={f.dislikes.join('\n')}
+            placeholder={t('health.profile.dislikes_placeholder')}
+            onChange={e => update({ ...p, food: { ...f, dislikes: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
+            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
+        </Field>
+        <Field label={t('health.profile.cuisines')}>
+          <Chips selected={f.cuisines} options={CUISINE_OPTIONS}
+            onToggle={slug => update({ ...p, food: { ...f, cuisines: toggle(f.cuisines, slug) } })} />
+        </Field>
+      </ProfileSection>
+
+      {/* Schedule — time pickers in a 3-column grid. */}
+      <ProfileSection title={t('health.profile.schedule')} subtitle={t('health.profile.schedule_subtitle')}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+          <Field label={t('health.profile.training_start')}>
+            <TimeField value={p.schedule.training_window.start}
+              onChange={v => update({ ...p, schedule: { ...p.schedule, training_window: { ...p.schedule.training_window, start: v } } })} />
+          </Field>
+          <Field label={t('health.profile.training_end')}>
+            <TimeField value={p.schedule.training_window.end}
+              onChange={v => update({ ...p, schedule: { ...p.schedule, training_window: { ...p.schedule.training_window, end: v } } })} />
+          </Field>
+          <Field label={t('health.profile.breakfast')}>
+            <TimeField value={p.schedule.meal_times.breakfast}
+              onChange={v => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, breakfast: v } } })} />
+          </Field>
+          <Field label={t('health.profile.lunch')}>
+            <TimeField value={p.schedule.meal_times.lunch}
+              onChange={v => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, lunch: v } } })} />
+          </Field>
+          <Field label={t('health.profile.dinner')}>
+            <TimeField value={p.schedule.meal_times.dinner}
+              onChange={v => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, dinner: v } } })} />
+          </Field>
+          <Field label={t('health.profile.bedtime')}>
+            <TimeField value={p.schedule.sleep_target.bedtime}
+              onChange={v => update({ ...p, schedule: { ...p.schedule, sleep_target: { ...p.schedule.sleep_target, bedtime: v } } })} />
+          </Field>
+          <Field label={t('health.profile.wake')}>
+            <TimeField value={p.schedule.sleep_target.wake}
+              onChange={v => update({ ...p, schedule: { ...p.schedule, sleep_target: { ...p.schedule.sleep_target, wake: v } } })} />
+          </Field>
+        </div>
+      </ProfileSection>
+    </div>
+  );
+}
+
+/** General profile editor — identity + body basics, stored at account level
+ *  (general.json). The General sub-tab of "{name}'s profile" in Account. */
+export function GeneralProfilePage() {
+  const [profile, setProfile] = useState<GeneralProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [savedTick, setSavedTick] = useState(0);
+  const saveTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    loadGeneralProfile().then(p => { if (live) { setProfile(p); setLoading(false); } });
+    return () => { live = false; if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, []);
+
+  const update = useCallback((next: GeneralProfile) => {
+    setProfile(next);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveGeneralProfile(next).then(() => setSavedTick(s => s + 1)).catch(() => { /* retried next edit */ });
+    }, 600);
+  }, []);
+
+  if (loading || !profile) return <CenterNote>{t('health.profile.loading')}</CenterNote>;
+  const p = profile;
+  const accountName = (() => { try { return localStorage.getItem('ava-ide-user-name') || ''; } catch { return ''; } })();
+
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 24 }}>
       <p style={{ fontSize: 12, color: '#9b8caa', margin: 0 }}>
-        {t('health.profile.local_blurb')}
+        {t('general.profile.intro')}
         {savedTick > 0 && <span style={{ color: '#34d399', marginLeft: 8 }}>{t('health.profile.saved')}</span>}
       </p>
 
-      <ProfileSection title={t('health.profile.body')}>
+      <ProfileSection title={t('general.profile.identity')}>
+        <Field label={t('general.profile.display_name')}>
+          <input type="text" value={p.display_name ?? ''} placeholder={accountName || t('general.profile.display_name_placeholder')} maxLength={60}
+            onChange={e => update({ ...p, display_name: e.target.value || null })} style={fieldInputStyle} />
+        </Field>
         <FieldRow>
           <Field label={t('health.profile.sex')}>
-            <select
-              value={p.body.sex ?? ''}
-              onChange={e => update({ ...p, body: { ...p.body, sex: (e.target.value || null) as HealthProfile['body']['sex'] } })}
-              style={fieldInputStyle}
-            >
+            <select value={p.sex ?? ''} onChange={e => update({ ...p, sex: (e.target.value || null) as GeneralProfile['sex'] })} style={fieldInputStyle}>
               <option value="">—</option>
               <option value="female">{t('health.profile.sex.female')}</option>
               <option value="male">{t('health.profile.sex.male')}</option>
@@ -1159,123 +1404,21 @@ function ProfileTab() {
             </select>
           </Field>
           <Field label={t('health.profile.date_of_birth')}>
-            <input type="date" value={p.body.date_of_birth ?? ''}
-              onChange={e => update({ ...p, body: { ...p.body, date_of_birth: e.target.value || null } })}
-              style={fieldInputStyle} />
+            <input type="date" value={p.date_of_birth ?? ''} onChange={e => update({ ...p, date_of_birth: e.target.value || null })} style={fieldInputStyle} />
           </Field>
         </FieldRow>
+      </ProfileSection>
+
+      <ProfileSection title={t('general.profile.body')}>
         <FieldRow>
           <Field label={t('health.profile.height_cm')}>
-            <input type="number" inputMode="numeric" value={p.body.height_cm ?? ''}
-              onChange={e => update({ ...p, body: { ...p.body, height_cm: parseNum(e.target.value) } })}
-              style={fieldInputStyle} />
+            <input type="number" inputMode="numeric" value={p.height_cm ?? ''} onChange={e => update({ ...p, height_cm: parseNum(e.target.value) })} style={fieldInputStyle} />
           </Field>
           <Field label={t('health.profile.weight_kg')}>
-            <input type="number" inputMode="numeric" value={p.body.weight_kg ?? ''}
-              onChange={e => update({ ...p, body: { ...p.body, weight_kg: parseNum(e.target.value) } })}
-              style={fieldInputStyle} />
+            <input type="number" inputMode="numeric" value={p.weight_kg ?? ''} onChange={e => update({ ...p, weight_kg: parseNum(e.target.value) })} style={fieldInputStyle} />
           </Field>
           <Field label={t('health.profile.body_fat_pct')}>
-            <input type="number" inputMode="numeric" value={p.body.body_fat_pct ?? ''}
-              onChange={e => update({ ...p, body: { ...p.body, body_fat_pct: parseNum(e.target.value) } })}
-              style={fieldInputStyle} />
-          </Field>
-        </FieldRow>
-      </ProfileSection>
-
-      <ProfileSection title={t('health.profile.goals')}>
-        <FieldRow>
-          <Field label={t('health.profile.primary_goal')}>
-            <select
-              value={p.goals.primary ?? ''}
-              onChange={e => update({ ...p, goals: { ...p.goals, primary: (e.target.value || null) as HealthProfile['goals']['primary'] } })}
-              style={fieldInputStyle}
-            >
-              <option value="">—</option>
-              <option value="fat_loss">{t('health.profile.goal.fat_loss')}</option>
-              <option value="muscle_gain">{t('health.profile.goal.muscle_gain')}</option>
-              <option value="maintenance">{t('health.profile.goal.maintenance')}</option>
-              <option value="athletic">{t('health.profile.goal.athletic_performance')}</option>
-              <option value="recovery">{t('health.profile.goal.recovery')}</option>
-              <option value="longevity">{t('health.profile.goal.longevity')}</option>
-            </select>
-          </Field>
-          <Field label={t('health.profile.this_weeks_focus')}>
-            <input type="text" value={p.goals.weekly_focus ?? ''} placeholder={t('health.profile.weekly_focus_short_placeholder')}
-              onChange={e => update({ ...p, goals: { ...p.goals, weekly_focus: e.target.value || null } })}
-              style={fieldInputStyle} />
-          </Field>
-        </FieldRow>
-      </ProfileSection>
-
-      <ProfileSection title={t('health.profile.constraints')}>
-        <Field label={t('health.profile.allergens_csv')}>
-          <input type="text" value={p.constraints.allergens.join(', ')}
-            onChange={e => update({ ...p, constraints: { ...p.constraints, allergens: csv(e.target.value) } })}
-            style={fieldInputStyle} />
-        </Field>
-        <Field label={t('health.profile.dietary_csv')}>
-          <input type="text" value={p.constraints.dietary.join(', ')} placeholder={t('health.profile.dietary_csv_placeholder')}
-            onChange={e => update({ ...p, constraints: { ...p.constraints, dietary: csv(e.target.value) } })}
-            style={fieldInputStyle} />
-        </Field>
-        <Field label={t('health.profile.injuries_csv')}>
-          <input type="text" value={p.constraints.injuries.join(', ')}
-            onChange={e => update({ ...p, constraints: { ...p.constraints, injuries: csv(e.target.value) } })}
-            style={fieldInputStyle} />
-        </Field>
-        <Field label={t('health.profile.equipment_csv')}>
-          <input type="text" value={p.constraints.equipment_available.join(', ')} placeholder={t('health.profile.equipment_csv_placeholder')}
-            onChange={e => update({ ...p, constraints: { ...p.constraints, equipment_available: csv(e.target.value) } })}
-            style={fieldInputStyle} />
-        </Field>
-        <Field label={t('health.profile.minutes_per_day_available')}>
-          <input type="number" inputMode="numeric" value={p.constraints.minutes_per_day_target ?? ''}
-            onChange={e => update({ ...p, constraints: { ...p.constraints, minutes_per_day_target: parseNum(e.target.value) } })}
-            style={fieldInputStyle} />
-        </Field>
-      </ProfileSection>
-
-      <ProfileSection title={t('health.profile.schedule')}>
-        <FieldRow>
-          <Field label={t('health.profile.training_start_short')}>
-            <input type="time" value={p.schedule.training_window.start ?? ''}
-              onChange={e => update({ ...p, schedule: { ...p.schedule, training_window: { ...p.schedule.training_window, start: e.target.value || null } } })}
-              style={fieldInputStyle} />
-          </Field>
-          <Field label={t('health.profile.training_end_short')}>
-            <input type="time" value={p.schedule.training_window.end ?? ''}
-              onChange={e => update({ ...p, schedule: { ...p.schedule, training_window: { ...p.schedule.training_window, end: e.target.value || null } } })}
-              style={fieldInputStyle} />
-          </Field>
-        </FieldRow>
-        <FieldRow>
-          <Field label={t('health.profile.breakfast')}>
-            <input type="time" value={p.schedule.meal_times.breakfast ?? ''}
-              onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, breakfast: e.target.value || null } } })}
-              style={fieldInputStyle} />
-          </Field>
-          <Field label={t('health.profile.lunch')}>
-            <input type="time" value={p.schedule.meal_times.lunch ?? ''}
-              onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, lunch: e.target.value || null } } })}
-              style={fieldInputStyle} />
-          </Field>
-          <Field label={t('health.profile.dinner')}>
-            <input type="time" value={p.schedule.meal_times.dinner ?? ''}
-              onChange={e => update({ ...p, schedule: { ...p.schedule, meal_times: { ...p.schedule.meal_times, dinner: e.target.value || null } } })}
-              style={fieldInputStyle} />
-          </Field>
-        </FieldRow>
-        <FieldRow>
-          <Field label={t('health.profile.bedtime')}>
-            <input type="time" value={p.schedule.sleep_target.bedtime ?? ''}
-              onChange={e => update({ ...p, schedule: { ...p.schedule, sleep_target: { ...p.schedule.sleep_target, bedtime: e.target.value || null } } })}
-              style={fieldInputStyle} />
-          </Field>
-          <Field label={t('health.profile.wake')}>
-            <input type="time" value={p.schedule.sleep_target.wake ?? ''}
-              onChange={e => update({ ...p, schedule: { ...p.schedule, sleep_target: { ...p.schedule.sleep_target, wake: e.target.value || null } } })}
-              style={fieldInputStyle} />
+            <input type="number" inputMode="numeric" value={p.body_fat_pct ?? ''} onChange={e => update({ ...p, body_fat_pct: parseNum(e.target.value) })} style={fieldInputStyle} />
           </Field>
         </FieldRow>
       </ProfileSection>
@@ -1283,32 +1426,39 @@ function ProfileTab() {
   );
 }
 
-/** Split a comma-separated input into a trimmed, de-emptied string array. */
-function csv(value: string): string[] {
-  return value.split(',').map(s => s.trim()).filter(Boolean);
-}
-
-function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
+function ProfileSection({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  // Mirrors the extension's Section: sentence-case medium title + muted
+  // subtitle, content below.
   return (
     <div>
-      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086', marginBottom: 12 }}>
-        {title}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: '#e9e2f4' }}>{title}</div>
+      {subtitle && <div style={{ fontSize: 11, color: '#9b8caa', marginTop: 2, lineHeight: 1.5 }}>{subtitle}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>{children}</div>
     </div>
   );
 }
 
 function FieldRow({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>{children}</div>;
+  // Responsive grid that fills the full-width tab without stretching fields.
+  // auto-FILL (not auto-fit) keeps empty tracks, so a 2-field row stays compact
+  // (~180px each) instead of each field ballooning to half the window. Mirrors
+  // the extension's FieldGrid density across the wide IDE tab.
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+      {children}
+    </div>
+  );
 }
 
+// A <div>, NOT a <label>: a label forwards clicks anywhere in its box to the
+// first control inside, which for the custom TimeField/chip buttons popped the
+// wrong thing open. The label is uppercase + tracked to match the extension.
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ flex: '1 1 160px', minWidth: 140, display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10, color: '#9b8caa' }}>{label}</span>
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9b8caa', marginBottom: 4 }}>{label}</div>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -1353,7 +1503,7 @@ function NutritionGrid({ n }: { n: HealthRecipeNutrition }) {
   );
 }
 
-function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
+export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
   const levels = r.versions.map(v => v.level);
   const [level, setLevel] = useState<HealthRecipeSkillLevel>(levels[0] ?? 'beginner');
   const v = r.versions.find(vv => vv.level === level) ?? r.versions[0];
@@ -1486,7 +1636,7 @@ const EXERCISE_TYPES: HealthExerciseType[] = [
   'mobility', 'cardio', 'isometric', 'stretching', 'breathing',
 ];
 
-function ContributeModal({ onClose }: { onClose: () => void }) {
+export function ContributeModal({ onClose }: { onClose: () => void }) {
   const [kind, setKind] = useState<'exercise' | 'recipe'>('exercise');
   const [taxonomies, setTaxonomies] = useState<HealthTaxonomies | null>(null);
 

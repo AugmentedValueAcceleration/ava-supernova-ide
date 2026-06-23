@@ -81,9 +81,10 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 // the chat header calls setCloudSync(); a single localStorage value is
 // the source of truth across the IDE.
 import { cloudSyncEnabled } from '../lib/data-mode';
-import { useCreativeGallery, downloadGalleryItem, copyGalleryPrompt, type GalleryItem } from '../lib/creative-gallery';
+import { useCreativeGallery, downloadGalleryItem, copyGalleryPrompt, readAllLocalCreative, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
+import { GeneralProfilePage, ProfileTab, MySubmissionsTab, ContributeModal, requestHealthRoomTab } from './HealthPage';
 // Creative Studio shared source — single source of truth with the extension
 // (registries, voices, AVA_VOICE_ID, compose helpers, cost estimators,
 // suggestions). Browser-safe leaf, no node deps. Mirror of the extension's
@@ -174,6 +175,9 @@ function CustomSelect({ value, onChange, options, placeholder, width, height }: 
         onClick={() => setOpen(!open)}
         style={{
           ...inputStyle,
+          // Solid — inputStyle's bg is 50% opaque, which reads transparent for a
+          // dropdown; the open menu floats over content so it must be opaque.
+          background: '#1a1028',
           width: '100%',
           height: height || 36,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -193,7 +197,7 @@ function CustomSelect({ value, onChange, options, placeholder, width, height }: 
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
-          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
+          background: '#1a1028', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8,
           boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 50,
           maxHeight: 220, overflowY: 'auto',
         }}>
@@ -3128,6 +3132,9 @@ export function AvaChatPage() {
 
   // ── Sidecar event handler (for local mode streaming) ──────────────────
   const handleSidecarEvent = useCallback((event: SidecarEvent) => {
+    // Health-room turns run on their own lane and render in the Ava room on the
+    // Health page — never in the main chat. Ignore them here.
+    if (event.lane === 'health') return;
     switch (event.event) {
       case 'stream_start':
         setStatusText('');
@@ -4997,6 +5004,33 @@ export function AvaChatPage() {
                             </span>
                           </div>
                         ))}
+                      </div>
+                    );
+                  })}
+
+                  {/* Main-chat → Health room handoff (open_health_room) */}
+                  {msg.toolCalls?.filter(tc => tc.name === 'open_health_room').slice(0, 1).map((tc, idx) => {
+                    const planType = tc.args?.plan_type as string | undefined;
+                    const titleKey = planType === 'fitness' ? 'health.handoff.title.fitness'
+                      : planType === 'meal' ? 'health.handoff.title.meal'
+                      : planType === 'combined' ? 'health.handoff.title.combined'
+                      : 'health.handoff.title.generic';
+                    return (
+                      <div key={`hr-${idx}`} style={{ marginTop: 8, borderRadius: 12, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)', padding: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span aria-hidden>🏋</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t(titleKey)}</span>
+                        </div>
+                        <p style={{ margin: '0 0 12px', fontSize: 11, lineHeight: 1.5, color: '#8b8398' }}>{t('health.handoff.body')}</p>
+                        <button type="button" onClick={() => {
+                          requestHealthRoomTab();
+                          try {
+                            window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'health' }));
+                            window.dispatchEvent(new CustomEvent('ava-open-health-room', { detail: planType }));
+                          } catch { /* no window */ }
+                        }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: 'none', background: '#a855f7', color: '#fff', padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                          {t('health.handoff.button')} <span aria-hidden>→</span>
+                        </button>
                       </div>
                     );
                   })}
@@ -8035,9 +8069,13 @@ export function JournalPage() {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
           <div style={pageTitle}>{t('dash.journal.title')}</div>
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ ...inputStyle, width: 'auto', height: 30, padding: '0 8px', fontSize: 12, colorScheme: 'dark' }}>
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <CustomSelect
+            value={String(year)}
+            onChange={(v) => setYear(Number(v))}
+            options={years.map((y) => ({ value: String(y), label: String(y) }))}
+            width={92}
+            height={30}
+          />
           <button onClick={() => setShowHeatmap((s) => !s)} title={t('dash.journal.year_view')} style={{ padding: '6px 11px', borderRadius: 6, fontSize: 11, cursor: 'pointer', border: '1px solid rgba(168,85,247,0.15)', background: showHeatmap ? 'rgba(168,85,247,0.15)' : 'transparent', color: showHeatmap ? '#cdd6f4' : '#6c7086' }}>{t('dash.journal.year_view')}</button>
           <div style={{ flex: 1 }} />
           <button onClick={startNew} style={{ ...btnPrimary, padding: '8px 16px', fontSize: 13 }}>+ {t('dash.journal.write_entry')}</button>
@@ -9273,6 +9311,23 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
 
+  // Open the account-scoped local creative folder in the OS file explorer.
+  const openCreativeFolder = async () => {
+    try {
+      const [{ homeDir, join }, { mkdir, BaseDirectory }, { accountRoot }, { openPath }] = await Promise.all([
+        import('@tauri-apps/api/path'),
+        import('@tauri-apps/plugin-fs'),
+        import('../lib/account-scope'),
+        import('@tauri-apps/plugin-opener'),
+      ]);
+      const rel = `${await accountRoot()}/creative`;
+      await mkdir(rel, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+      await openPath(await join(await homeDir(), rel));
+    } catch (e) {
+      console.warn('[library] open creative folder failed', e);
+    }
+  };
+
   // Watch projectFolder — re-scan when the user opens a different project.
   // App.tsx persists the folder in localStorage['projectFolder'] and emits
   // 'ava-folder-changed' on change.
@@ -9292,6 +9347,36 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // results for anyone. Switched to /creative-assets and wired the
   // response shape accordingly.
   useEffect(() => {
+    // Assets are local-first now — read the account-scoped creative gallery
+    // (~/.ava/users/<id>/creative, shared with the extension), no cloud.
+    // Voice/audio hidden: image + video only.
+    if (kind === 'assets') {
+      let cancelled = false;
+      setLoading(true);
+      readAllLocalCreative()
+        .then((items) => {
+          if (cancelled) return;
+          setCloudFiles(items
+            .filter((it) => it.kind === 'image' || it.kind === 'video')
+            .map((it): LibraryFile => ({
+              id: it.id,
+              name: it.title || 'Untitled',
+              path: it.url || '',
+              folder: 'Creative Studio',
+              type: 'image',
+              mediaKind: it.kind as LibraryMediaKind,
+              size: 0,
+              modified: it.createdAt || '',
+              url: it.url || '',
+              prompt: it.prompt || '',
+              source: 'local',
+            })));
+        })
+        .catch(() => { if (!cancelled) setCloudFiles([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+      return () => { cancelled = true; };
+    }
+    // Documents — still the platform creative_assets (docs / spreadsheets).
     if (!connected) { setLoading(false); return; }
     setLoading(true);
     apiFetch('/creative-assets')
@@ -9334,7 +9419,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       })
       .catch(() => setCloudFiles([]))
       .finally(() => setLoading(false));
-  }, [connected]);
+  }, [connected, kind]);
 
   // Local scan — independent of connection state (local files exist
   // whether or not the user is signed in). Re-runs whenever the
@@ -9360,7 +9445,10 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // type-specific filter tabs below are scoped to the kinds that
   // actually appear in the current view — no empty "0" pills.
   const kindFiles = useMemo(() => {
+    // Assets are local-first (no source split) — always show everything, never
+    // a stale cloud/local filter carried over from the Documents tab.
     const src: LibraryFile[] =
+      kind === 'assets' ? [...cloudFiles, ...localFiles] :
       sourceFilter === 'cloud' ? cloudFiles :
       sourceFilter === 'local' ? localFiles :
       [...cloudFiles, ...localFiles];
@@ -9422,10 +9510,9 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       { id: 'all', label: localised('dash.library.all', 'All'), count: typeCounts.all },
     ];
     if (kind === 'assets') {
+      // Voice/audio hidden — Creative Studio no longer produces them.
       base.push(
         { id: 'image',        label: localised('dash.library.images', 'Images'),       count: typeCounts.image },
-        { id: 'music',        label: localised('dash.library.music',  'Music'),        count: typeCounts.music },
-        { id: 'voice',        label: localised('dash.library.voice',  'Voice'),        count: typeCounts.voice },
         { id: 'video',        label: localised('dash.library.video',  'Video'),        count: typeCounts.video },
         { id: 'presentation', label: localised('dash.library.slides', 'Slides'),       count: typeCounts.presentation },
       );
@@ -9454,9 +9541,9 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '16px 32px 0', flexShrink: 0 }}>
-        {/* Source filter — separate row so the two axes (where it lives
-            vs what kind of file it is) read as distinct. Labels kept to
-            single words so the row stays compact. */}
+        {/* Source filter — Documents only. Assets are local-first now (no cloud
+            source), so the cloud/local split is dropped there. */}
+        {kind !== 'assets' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500 }}>Source</span>
           {([
@@ -9489,6 +9576,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
             </span>
           )}
         </div>
+        )}
 
         {/* Type filter + view toggle */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -9504,6 +9592,20 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                 }}
               >
                 + New document
+              </button>
+            )}
+            {kind === 'assets' && (
+              <button
+                onClick={openCreativeFolder}
+                title="Open the local creative folder on disk"
+                style={{
+                  padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.35)',
+                  cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  background: 'rgba(168,85,247,0.15)', color: '#e0b0ff',
+                  display: 'flex', alignItems: 'center', gap: 6, marginRight: 6,
+                }}
+              >
+                Open save folder
               </button>
             )}
             {filterOptions.map((tab) => (
@@ -14182,6 +14284,8 @@ interface IdeRoadmapTheme {
  * ═══════════════════════════════════════════════════════════════════ */
 
 export function PlannerPage() {
+  // Plans also live in Account \u2192 "{name}'s profile"; the Planner surfaces the
+  // same library here too (mirrors the extension's Planner Plans tab).
   const [tab, setTab] = useState<'tasks' | 'journal' | 'learning' | 'plans'>('tasks');
   const tabs = [
     { key: 'tasks' as const, icon: '\u2713', label: 'Tasks' },
@@ -14193,7 +14297,7 @@ export function PlannerPage() {
     <div style={pageWrapper}>
       <div style={{ marginBottom: 16 }}>
         <h2 style={pageTitle}>Planner</h2>
-        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Tasks, reflections, and learning paths</p>
+        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Tasks, reflections, learning paths, and health plans</p>
       </div>
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
         {tabs.map(t => (
@@ -14219,7 +14323,17 @@ function JournalPageInner() { return <JournalPage />; }
 function LearningPageInner() { return <LearningPage />; }
 
 export function AccountPage() {
-  const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality'>('settings');
+  const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality' | 'profile'>('settings');
+  // "{name}'s profile" — the user's own data: identity/body, health goals, their
+  // plans, and their catalogue contributions.
+  const [profileSubTab, setProfileSubTab] = useState<'general' | 'health' | 'plans' | 'submissions'>('general');
+  const [contributeOpen, setContributeOpen] = useState(false);
+  const profileLabel = (() => {
+    try {
+      const first = (localStorage.getItem('ava-ide-user-name') || '').trim().split(/\s+/)[0];
+      return first ? t('general.profile.account_tab_named', { name: first }) : t('general.profile.account_tab');
+    } catch { return t('general.profile.account_tab'); }
+  })();
   // Was reading 'ava-platform-key' — wrong storage key. The canonical
   // location is 'ava-ide-platform-key' (per getPlatformKey() in lib/api).
   // The mismatch meant the Billing tab was hidden even for signed-in
@@ -14239,7 +14353,14 @@ export function AccountPage() {
     // Connections tab hidden for now — being reworked later this week.
     // Re-enable by restoring: { key: 'connections' as const, label: 'Connections' },
     { key: 'personality' as const, label: "Ava's Style" },
+    { key: 'profile' as const, label: profileLabel },
     // Sync tab removed — Ava is local-first; nothing syncs to the cloud.
+  ];
+  const profileSubTabs = [
+    { key: 'general' as const, label: t('general.profile.tab') },
+    { key: 'health' as const, label: t('general.profile.health_tab') },
+    { key: 'plans' as const, label: t('health.browse.tab.plans') },
+    { key: 'submissions' as const, label: t('health.browse.tab.mine') },
   ];
   return (
     <div style={pageWrapper}>
@@ -14261,6 +14382,35 @@ export function AccountPage() {
       {tab === 'billing' && <BillingPage />}
       {tab === 'connections' && <ConnectionsPage />}
       {tab === 'personality' && <PersonalityPage />}
+      {tab === 'profile' && (
+        <div>
+          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
+            {profileSubTabs.map(st => (
+              <button key={st.key} onClick={() => setProfileSubTab(st.key)} style={{
+                padding: '6px 12px', fontSize: 12, fontWeight: 500, border: 'none', cursor: 'pointer',
+                background: 'transparent', color: profileSubTab === st.key ? '#cdd6f4' : '#585b70',
+                borderBottom: profileSubTab === st.key ? '2px solid #a855f7' : '2px solid transparent',
+                transition: 'all 0.15s',
+              }}>{st.label}</button>
+            ))}
+          </div>
+          {profileSubTab === 'general' && <GeneralProfilePage />}
+          {profileSubTab === 'health' && <ProfileTab />}
+          {profileSubTab === 'plans' && <HealthPlansPage />}
+          {profileSubTab === 'submissions' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                <button onClick={() => setContributeOpen(true)} style={{
+                  padding: '6px 14px', fontSize: 12, fontWeight: 500, borderRadius: 6,
+                  background: 'rgba(168, 85, 247, 0.12)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.35)', cursor: 'pointer',
+                }}>{t('health.browse.contribute')}</button>
+              </div>
+              <MySubmissionsTab />
+              {contributeOpen && <ContributeModal onClose={() => setContributeOpen(false)} />}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
