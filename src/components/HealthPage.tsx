@@ -10,7 +10,6 @@ import {
   type HealthExerciseDetail,
   type HealthRecipeSummary,
   type HealthRecipeDetail,
-  type HealthRecipeNutrition,
   type HealthRecipeSkillLevel,
   type HealthExerciseType,
   type HealthWorkoutType,
@@ -176,6 +175,11 @@ function ExercisesGrid() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, search]);
 
+  // Detail opens as a full page in place of the grid (not an overlay).
+  if (modalSlug) {
+    return <ExerciseDetailView slug={modalSlug} onBack={() => setModalSlug(null)} />;
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <BrowseToolbar search={search} onSearch={setSearch} placeholder={t('health.browse.search_exercises_placeholder')} view={view} onView={setView} />
@@ -202,8 +206,6 @@ function ExercisesGrid() {
         )}
       </div>
       {items.length > 0 && <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />}
-
-      {modalSlug && <ExerciseDetailModal slug={modalSlug} onClose={() => setModalSlug(null)} />}
     </div>
   );
 }
@@ -283,6 +285,11 @@ function RecipesGrid() {
   const tier2Count = collections.size + diets.size + flags.size + cuisines.size + (maxTime != null ? 1 : 0) + (sort !== 'curated' ? 1 : 0);
   const clearAll = () => { setCollections(new Set()); setDiets(new Set()); setFlags(new Set()); setCuisines(new Set()); setMaxTime(null); setSort('curated'); };
 
+  // Detail opens as a full page in place of the grid (not an overlay).
+  if (modalSlug) {
+    return <RecipeDetailView slug={modalSlug} onBack={() => setModalSlug(null)} />;
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <BrowseToolbar search={search} onSearch={setSearch} placeholder={t('health.browse.search_recipes_placeholder')} view={view} onView={setView} />
@@ -347,8 +354,6 @@ function RecipesGrid() {
         )}
       </div>
       {items.length > 0 && <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />}
-
-      {modalSlug && <RecipeDetailModal slug={modalSlug} onClose={() => setModalSlug(null)} />}
     </div>
   );
 }
@@ -784,6 +789,30 @@ function ModalShell({ onClose, children, fillHeight }: { onClose: () => void; ch
   );
 }
 
+/** Full-page detail view inside the Health tab — a back bar over the detail
+ *  body (which owns its own scroll). Replaces the old modal overlay for a
+ *  page-style UX (navigate in, "← Back"); Esc also goes back. */
+function DetailPageView({ onBack, backLabel, children }: { onBack: () => void; backLabel: string; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onBack(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onBack]);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div style={{ flex: 'none', borderBottom: '1px solid rgba(168,85,247,0.12)', paddingBottom: 10, marginBottom: 6 }}>
+        <button
+          onClick={onBack}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', borderRadius: 6, border: '1px solid rgba(168,85,247,0.25)', background: 'transparent', color: '#9b8caa', fontSize: 11, fontWeight: 600, padding: '5px 10px' }}
+        >
+          ← {backLabel}
+        </button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+    </div>
+  );
+}
+
 function sectionLabel(text: string): React.ReactElement {
   return (
     <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086', marginBottom: 8 }}>
@@ -794,7 +823,7 @@ function sectionLabel(text: string): React.ReactElement {
 
 // ── Exercise detail ───────────────────────────────────────────────────────
 
-function ExerciseDetailModal({ slug, onClose }: { slug: string; onClose: () => void }) {
+function ExerciseDetailView({ slug, onBack }: { slug: string; onBack: () => void }) {
   const [detail, setDetail] = useState<HealthExerciseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -811,13 +840,13 @@ function ExerciseDetailModal({ slug, onClose }: { slug: string; onClose: () => v
   }, [slug]);
 
   return (
-    <ModalShell onClose={onClose} fillHeight>
+    <DetailPageView onBack={onBack} backLabel={t('health.browse.tab.exercises')}>
       {loading
         ? <DetailCentered>{t('health.browse.loading_exercise')}</DetailCentered>
         : failed || !detail
           ? <DetailCentered>{t('health.browse.couldnt_load_exercise')}</DetailCentered>
           : <ExerciseDetailBody ex={detail} />}
-    </ModalShell>
+    </DetailPageView>
   );
 }
 
@@ -841,14 +870,13 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
   const primaries = ex.muscles.filter(m => m.role === 'primary');
   const secondaries = ex.muscles.filter(m => m.role === 'secondary');
 
-  type ExTab = 'overview' | 'howto' | 'routine' | 'muscles';
+  type ExTab = 'overview' | 'howto';
   const hasRoutine = routine.length > 0 || !!ex.routine.progression;
   const hasMuscles = primaries.length > 0 || secondaries.length > 0 || ex.equipment.length > 0;
+  // Routine + Muscles & kit now live inside Overview (less tab clutter).
   const tabs: { key: ExTab; label: string }[] = [
-    { key: 'overview', label: 'Overview' },
-    ...(ex.steps.length > 0 ? [{ key: 'howto' as ExTab, label: 'How-to' }] : []),
-    ...(hasRoutine ? [{ key: 'routine' as ExTab, label: 'Routine' }] : []),
-    ...(hasMuscles ? [{ key: 'muscles' as ExTab, label: 'Muscles & kit' }] : []),
+    { key: 'overview', label: t('health.browse.overview') },
+    ...(ex.steps.length > 0 ? [{ key: 'howto' as ExTab, label: t('health.browse.howto') }] : []),
   ];
   const [tab, setTab] = useState<ExTab>('overview');
 
@@ -891,38 +919,22 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
                 <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.common_mistakes}</p>
               </div>
             )}
-            {!ex.description && !ex.beginner_detail && !ex.common_mistakes && (
-              <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>Nothing here yet.</p>
-            )}
-          </div>
-        )}
-
-        {tab === 'howto' && (
-          <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {ex.steps.map((s, i) => (
-              <li key={i} style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4' }}>{s}</li>
-            ))}
-          </ol>
-        )}
-
-        {tab === 'routine' && (
-          <div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
-              {routine.map(([k, val]) => (
-                <div key={k}>
-                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{k}</div>
-                  <div style={{ fontSize: 14, color: '#cdd6f4', marginTop: 2 }}>{val}</div>
+            {hasRoutine && (
+              <div>
+                {sectionLabel(t('health.browse.routine'))}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+                  {routine.map(([k, val]) => (
+                    <div key={k}>
+                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{k}</div>
+                      <div style={{ fontSize: 14, color: '#cdd6f4', marginTop: 2 }}>{val}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            {ex.routine.progression && (
-              <p style={{ fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 14, marginBottom: 0 }}>{ex.routine.progression}</p>
+                {ex.routine.progression && (
+                  <p style={{ fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 14, marginBottom: 0 }}>{ex.routine.progression}</p>
+                )}
+              </div>
             )}
-          </div>
-        )}
-
-        {tab === 'muscles' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {(primaries.length > 0 || secondaries.length > 0) && (
               <div>
                 {sectionLabel(t('health.browse.muscles'))}
@@ -946,7 +958,18 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
                 </div>
               </div>
             )}
+            {!ex.description && !ex.beginner_detail && !ex.common_mistakes && !hasRoutine && !hasMuscles && (
+              <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>{t('health.browse.nothing_here')}</p>
+            )}
           </div>
+        )}
+
+        {tab === 'howto' && (
+          <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {ex.steps.map((s, i) => (
+              <li key={i} style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4' }}>{s}</li>
+            ))}
+          </ol>
         )}
       </div>
     </div>
@@ -955,7 +978,7 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
 
 // ── Recipe detail ─────────────────────────────────────────────────────────
 
-function RecipeDetailModal({ slug, onClose }: { slug: string; onClose: () => void }) {
+function RecipeDetailView({ slug, onBack }: { slug: string; onBack: () => void }) {
   const [detail, setDetail] = useState<HealthRecipeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -972,13 +995,13 @@ function RecipeDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
   }, [slug]);
 
   return (
-    <ModalShell onClose={onClose} fillHeight>
+    <DetailPageView onBack={onBack} backLabel={t('health.browse.tab.recipes')}>
       {loading
         ? <DetailCentered>{t('health.browse.loading_recipe')}</DetailCentered>
         : failed || !detail
           ? <DetailCentered>{t('health.browse.couldnt_load_recipe')}</DetailCentered>
           : <RecipeDetailBody r={detail} />}
-    </ModalShell>
+    </DetailPageView>
   );
 }
 
@@ -1484,21 +1507,42 @@ const NUTRITION_DISPLAY: Array<[NutritionDisplayKey, string]> = [
   ['calories', 'Calories (kcal)'], ['protein_g', 'Protein (g)'], ['carbs_g', 'Carbs (g)'], ['fat_g', 'Fat (g)'],
   ['fibre_g', 'Fibre (g)'], ['sugar_g', 'Sugar (g)'], ['sodium_mg', 'Sodium (mg)'], ['saturated_fat_g', 'Saturated fat (g)'],
 ];
+// i18n key per nutrient for the compact table header (units dropped).
+const NUTRI_LABEL_KEY: Record<NutritionDisplayKey, string> = {
+  calories: 'health.browse.nutri.calories', protein_g: 'health.browse.nutri.protein',
+  carbs_g: 'health.browse.nutri.carbs', fat_g: 'health.browse.nutri.fat',
+  fibre_g: 'health.browse.nutri.fibre', sugar_g: 'health.browse.nutri.sugar',
+  sodium_mg: 'health.browse.nutri.sodium', saturated_fat_g: 'health.browse.nutri.sat_fat',
+};
 
-function NutritionGrid({ n }: { n: HealthRecipeNutrition }) {
+/** Per-serving nutrition as a table — one row per skill level. Columns with no
+ *  data on any level are dropped. */
+function NutritionTable({ versions }: { versions: HealthRecipeDetail['versions'] }) {
+  const cols = NUTRITION_DISPLAY.filter(([k]) => versions.some((vv) => typeof vv.nutrition?.[k] === 'number'));
+  if (cols.length === 0) return null;
+  const cell: React.CSSProperties = { padding: '7px 12px', fontSize: 12, color: '#cdd6f4' };
+  const th: React.CSSProperties = { padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#6c7086', textAlign: 'left', whiteSpace: 'nowrap' };
   return (
     <div>
-      <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 14 }}>
-        Per serving{n.source === 'estimated' ? ' · estimated by Ava' : n.source === 'verified' ? ' · verified' : ''}
+      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid rgba(168,85,247,0.18)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(168,85,247,0.18)' }}>
+              <th style={th}>{t('health.browse.per_serving')}</th>
+              {cols.map(([k]) => <th key={k} style={th}>{t(NUTRI_LABEL_KEY[k])}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {versions.map((vv, i) => (
+              <tr key={vv.level} style={i < versions.length - 1 ? { borderBottom: '1px solid rgba(168,85,247,0.10)' } : undefined}>
+                <td style={{ ...cell, textTransform: 'capitalize', color: '#9b8caa' }}>{t(`health.browse.level.${vv.level}`)}</td>
+                {cols.map(([k]) => <td key={k} style={cell}>{typeof vv.nutrition?.[k] === 'number' ? vv.nutrition[k] : '—'}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        {NUTRITION_DISPLAY.map(([k, label]) => (
-          <div key={k}>
-            <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{label}</div>
-            <div style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', marginTop: 4 }}>{typeof n[k] === 'number' ? n[k] : '—'}</div>
-          </div>
-        ))}
-      </div>
+      <p style={{ margin: '8px 0 0', fontSize: 10, color: '#6c7086' }}>{t('health.browse.per_serving_estimated')}</p>
     </div>
   );
 }
@@ -1508,13 +1552,15 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
   const [level, setLevel] = useState<HealthRecipeSkillLevel>(levels[0] ?? 'beginner');
   const v = r.versions.find(vv => vv.level === level) ?? r.versions[0];
 
-  type RTab = 'overview' | 'ingredients' | 'method' | 'nutrition';
-  const hasNutrition = !!v && NUTRITION_DISPLAY.some(([k]) => typeof v.nutrition?.[k] === 'number');
+  type RTab = 'overview' | 'ingredients' | 'method' | 'storage';
+  const hasNutrition = r.versions.some((vv) => NUTRITION_DISPLAY.some(([k]) => typeof vv.nutrition?.[k] === 'number'));
+  const st = r.storage;
+  const hasStorage = !!st && (st.keeps_fridge_days != null || st.keeps_freezer_months != null || !!st.from_frozen_notes);
   const tabs: { key: RTab; label: string }[] = [
-    { key: 'overview', label: 'Overview' },
-    ...(r.ingredients.length > 0 ? [{ key: 'ingredients' as RTab, label: 'Ingredients' }] : []),
-    ...(r.versions.length > 0 ? [{ key: 'method' as RTab, label: 'Method' }] : []),
-    ...(hasNutrition ? [{ key: 'nutrition' as RTab, label: 'Nutrition' }] : []),
+    { key: 'overview', label: t('health.browse.overview') },
+    ...(r.ingredients.length > 0 ? [{ key: 'ingredients' as RTab, label: t('health.browse.ingredients') }] : []),
+    ...(r.versions.length > 0 ? [{ key: 'method' as RTab, label: t('health.browse.method') }] : []),
+    ...(hasStorage ? [{ key: 'storage' as RTab, label: t('health.browse.storage') }] : []),
   ];
   const [tab, setTab] = useState<RTab>('overview');
 
@@ -1562,9 +1608,17 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
       {/* Content — flexes to fill the consistent modal height, scrolls. */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 28px 26px' }}>
         {tab === 'overview' && (
-          r.overview
-            ? <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{r.overview}</p>
-            : <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>No overview yet.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {r.overview
+              ? <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{r.overview}</p>
+              : <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>{t('health.browse.no_overview')}</p>}
+            {hasNutrition && (
+              <div>
+                {sectionLabel(t('health.browse.nutrition'))}
+                <NutritionTable versions={r.versions} />
+              </div>
+            )}
+          </div>
         )}
 
         {tab === 'ingredients' && (
@@ -1607,10 +1661,33 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
           </div>
         )}
 
-        {tab === 'nutrition' && v && (
-          <div>
-            {levelPills}
-            <NutritionGrid n={v.nutrition} />
+        {tab === 'storage' && st && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {(st.keeps_fridge_days != null || st.keeps_freezer_months != null) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                {st.keeps_fridge_days != null && (
+                  <div style={{ borderRadius: 8, border: '1px solid rgba(168,85,247,0.18)', padding: 16 }}>
+                    <div style={{ fontSize: 18 }} aria-hidden>❄️</div>
+                    <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086', marginTop: 4 }}>{t('health.storage.fridge')}</div>
+                    <div style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', marginTop: 2 }}>{st.keeps_fridge_days} {t(st.keeps_fridge_days === 1 ? 'health.storage.day' : 'health.storage.days')}</div>
+                  </div>
+                )}
+                {st.keeps_freezer_months != null && (
+                  <div style={{ borderRadius: 8, border: '1px solid rgba(168,85,247,0.18)', padding: 16 }}>
+                    <div style={{ fontSize: 18 }} aria-hidden>🧊</div>
+                    <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086', marginTop: 4 }}>{t('health.storage.freezer')}</div>
+                    <div style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', marginTop: 2 }}>{st.keeps_freezer_months} {t(st.keeps_freezer_months === 1 ? 'health.storage.month' : 'health.storage.months')}</div>
+                  </div>
+                )}
+              </div>
+            )}
+            {st.from_frozen_notes && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086', marginBottom: 8 }}>{t('health.storage.cooking_frozen')}</div>
+                <p style={{ margin: 0, borderRadius: 8, border: '1px solid rgba(168,85,247,0.18)', padding: '12px 14px', fontSize: 13, lineHeight: 1.6, color: '#cdd6f4' }}>{st.from_frozen_notes}</p>
+              </div>
+            )}
+            <p style={{ margin: 0, fontSize: 10, color: '#6c7086' }}>{t('health.storage.disclaimer')}</p>
           </div>
         )}
       </div>

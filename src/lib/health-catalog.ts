@@ -145,9 +145,17 @@ export interface HealthRecipeVersionDetail {
   equipment: HealthRecipeEquipment[];
 }
 
+export interface HealthRecipeStorage {
+  keeps_fridge_days: number | null;
+  keeps_freezer_months: number | null;
+  from_frozen_notes: string | null;
+}
+
 export interface HealthRecipeDetail extends HealthRecipeSummary {
   overview: string | null;
   source_attribution: string | null;
+  /** Storage / keeping info — may be absent on older API responses. */
+  storage?: HealthRecipeStorage;
   ingredients: HealthRecipeIngredient[];
   versions: HealthRecipeVersionDetail[];
 }
