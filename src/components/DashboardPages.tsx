@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { ALL_MODELS } from '@ava/core/models';
+import { APP_VERSION } from '../version';
 // Phosphor icons (duotone weight) — distinctive layered fill that reads
 // as a crafted product instead of a generic SaaS dashboard. Same author
 // quality as Lucide but with 6 weights; duotone is the one that wins
@@ -1816,13 +1818,11 @@ export function CommandCentrePage() {
               text={`${workStart}:00 - ${workEnd}:00`}
               title="Working hours — change on Daily tab"
             />
-            {latestRelease && (
-              <HeroPill
-                icon={<PhRocket size={14} weight="duotone" />}
-                text={`v${(latestRelease as { version?: string }).version ?? ''}`}
-                title="Latest release — full notes on Briefing tab"
-              />
-            )}
+            <HeroPill
+              icon={<PhRocket size={14} weight="duotone" />}
+              text={`v${APP_VERSION}`}
+              title={`Ava IDE v${APP_VERSION}`}
+            />
           </div>
         </div>
 
@@ -2024,40 +2024,19 @@ export function AvaChatPage() {
   const isDesktopCapable = (modelId: string | undefined): boolean =>
     !!modelId && DESKTOP_CAPABLE_MODEL_IDS.has(modelId);
 
-  // ── BYOK model map — fetched from platform, fallback to hardcoded ──────────
-  const BYOK_MODELS_FALLBACK: Record<string, { id: string; name: string }[]> = {
-    DeepSeek: [{ id: 'deepseek-chat', name: 'DeepSeek V3.2' }, { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }],
-    Qwen: [{ id: 'qwen3.7-max', name: 'Qwen 3.7 Max' }, { id: 'qwen3.7-plus', name: 'Qwen 3.7 Plus' }, { id: 'qwen3.5-plus', name: 'Qwen 3.5 Plus' }, { id: 'qwen3.5-flash', name: 'Qwen 3.5 Flash' }],
-    MiniMax: [{ id: 'MiniMax-M3', name: 'MiniMax M3' }, { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 HighSpeed' }],
-    Moonshot: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }],
-    Zhipu: [{ id: 'glm-5.2', name: 'GLM-5.2' }, { id: 'glm-4.5-air', name: 'GLM-4.5 Air' }],
-    Mistral: [{ id: 'mistral-large-3', name: 'Mistral Large 3' }, { id: 'mistral-medium-3.5', name: 'Mistral Medium 3.5' }, { id: 'mistral-small-4', name: 'Mistral Small 4' }, { id: 'codestral-latest', name: 'Codestral' }, { id: 'devstral-latest', name: 'Devstral 2' }],
-    // Anthropic: 'claude-fable-5' DISABLED 2026-06-14 (US-gov restriction) — re-add { id: 'claude-fable-5', name: 'Claude Fable 5' } to re-enable
-    Anthropic: [{ id: 'claude-opus-4-8', name: 'Claude Opus 4.8' }, { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }],
-  };
-
-  const [platformModels, setPlatformModels] = useState<Record<string, { id: string; name: string }[]> | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { fetchPlatformModels } = await import('../lib/api');
-        const models = await fetchPlatformModels();
-        if (models && models.length > 0) {
-          const byokMap: Record<string, { id: string; name: string }[]> = {};
-          for (const m of models) {
-            if (m.section !== 'byok') continue;
-            const providerName = m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
-            if (!byokMap[providerName]) byokMap[providerName] = [];
-            byokMap[providerName].push({ id: m.id, name: m.name });
-          }
-          setPlatformModels(byokMap);
-        }
-      } catch { /* fallback to hardcoded */ }
-    })();
+  // Static catalogue keyed by the BYOK key-entry name (Settings → Models:
+  // DeepSeek / Moonshot / Qwen / Zhipu / Mistral) so byokModels/canChat see
+  // every model the user holds a key for. Single source: @ava/core/models.
+  const BYOK_MODELS = useMemo<Record<string, { id: string; name: string }[]>>(() => {
+    const STORE: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral' };
+    const map: Record<string, { id: string; name: string }[]> = {};
+    for (const [id, models] of Object.entries(ALL_MODELS)) {
+      const store = STORE[id];
+      if (!store) continue;
+      map[store] = models.filter((m) => !m.disabled).map((m) => ({ id: m.id, name: m.name }));
+    }
+    return map;
   }, []);
-
-  const BYOK_MODELS = platformModels || BYOK_MODELS_FALLBACK;
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const nextMsgId = useRef(0);
@@ -2606,6 +2585,34 @@ export function AvaChatPage() {
       return result;
     } catch { return []; }
   }, [byokRefresh]);
+
+  // Providers the user has a key for — drives which catalogue models are live.
+  const keyedProviders = useMemo(() => {
+    void byokRefresh;
+    try {
+      const raw = localStorage.getItem('ava-ide-byok');
+      if (!raw) return new Set<string>();
+      const keys: Record<string, string> = JSON.parse(raw);
+      return new Set(Object.entries(keys).filter(([, v]) => v && v.trim()).map(([k]) => k));
+    } catch { return new Set<string>(); }
+  }, [byokRefresh]);
+
+  // Full picker catalogue — mirrors the extension's ModelSelector exactly:
+  // providers alphabetical by label, models sorted by name, extension display
+  // labels (Kimi / GLM, not Moonshot / Zhipu), availability per BYOK key.
+  const MODEL_CATALOGUE = useMemo(() => {
+    const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', anthropic: 'Anthropic', minimax: 'MiniMax', xiaomi: 'Xiaomi' };
+    const STORE: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral' };
+    return Object.entries(ALL_MODELS)
+      .map(([id, models]) => ({
+        id,
+        label: LABEL[id] || (id.charAt(0).toUpperCase() + id.slice(1)),
+        available: STORE[id] ? keyedProviders.has(STORE[id]) : false,
+        models: models.filter((m) => !m.disabled).map((m) => ({ id: m.id, name: m.name })).sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .filter((g) => g.models.length > 0)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [keyedProviders]);
 
   // ── Derived: can the user actually chat? ────────────────────────────────
   const hasByokKeys = byokModels.length > 0;
@@ -4471,8 +4478,9 @@ export function AvaChatPage() {
             {modelMenuOpen && (
               <div style={{
                 position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 999,
-                background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
-                padding: 6, minWidth: 240, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                background: '#1a1028', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
+                padding: 6, minWidth: 240, maxHeight: 420, overflowY: 'auto',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               }}>
                 {/* Orchestrated section — Supernova (polyglot ensemble) on top,
                     Maestro (single conductor) below. Both highlighted as
@@ -4529,35 +4537,47 @@ export function AvaChatPage() {
                     direct model selection now. Decision 2026-04-29 —
                     see project_byok_mode_gating memory. */}
 
-                {/* BYOK models */}
-                {byokModels.length > 0 && (
-                  <>
+                {/* Per-provider groups — mirrors the extension's ModelSelector:
+                    alphabetical providers, available rows live, locked rows show
+                    amber "Add key" and route to Settings → Models on click. */}
+                {MODEL_CATALOGUE.map((group) => (
+                  <div key={group.id}>
                     <div style={{ height: 1, background: 'rgba(49, 34, 68, 0.5)', margin: '6px 0' }} />
                     <div style={{ fontSize: 10, fontWeight: 600, color: '#6c7086', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                      {t('dash.chat.your_api_keys')}
+                      {group.label}
                     </div>
-                    {byokModels.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => { setModel(m.id); setModelMenuOpen(false); }}
-                        style={{
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                          padding: '8px 10px', background: model === m.id ? 'rgba(168,85,247,0.15)' : 'transparent',
-                          border: 'none', borderRadius: 6, color: model === m.id ? '#e0b0ff' : '#cdd6f4',
-                          fontSize: 12, cursor: 'pointer', textAlign: 'left',
-                        }}
-                        onMouseEnter={(e) => { if (model !== m.id) e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
-                        onMouseLeave={(e) => { if (model !== m.id) e.currentTarget.style.background = 'transparent'; }}
-                      >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {model === m.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a6e3a1' }} />}
-                          {m.name}
-                        </span>
-                        <span style={{ fontSize: 10, color: '#6c7086' }}>{m.provider}</span>
-                      </button>
-                    ))}
-                  </>
-                )}
+                    {group.models.map((m) => {
+                      const active = model === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => {
+                            if (!group.available) { window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'settings' })); setModelMenuOpen(false); return; }
+                            setModel(m.id); setModelMenuOpen(false);
+                          }}
+                          title={group.available ? m.name : `Add ${group.label} API key to unlock`}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                            padding: '8px 10px',
+                            background: group.available && active ? 'rgba(168,85,247,0.15)' : 'transparent',
+                            border: 'none', borderRadius: 6,
+                            color: !group.available ? '#6c7086' : active ? '#e0b0ff' : '#cdd6f4',
+                            fontSize: 12, cursor: 'pointer', textAlign: 'left',
+                            opacity: group.available ? 1 : 0.45,
+                          }}
+                          onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(168,85,247,0.08)'; }}
+                          onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {group.available && active && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }} />}
+                            <span style={{ fontWeight: group.available && active ? 600 : 400 }}>{m.name}</span>
+                          </span>
+                          {!group.available && <span style={{ fontSize: 10, color: '#facc15', opacity: 0.7 }}>{t('model.add_key')}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             )}
           </div>

@@ -42,12 +42,12 @@ const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = 
   // bottom-anchored secondary action.
   dashboard: {
     label: 'Dashboard',
+    // Supernova star-burst — on-brand for the Command Center, and reads as a
+    // distinct "home / overview" mark rather than a generic grid.
     svg: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="9" rx="1" />
-        <rect x="14" y="3" width="7" height="5" rx="1" />
-        <rect x="14" y="12" width="7" height="9" rx="1" />
-        <rect x="3" y="16" width="7" height="5" rx="1" />
+        <path d="M12 7.2 L13.4 10.6 L16.8 12 L13.4 13.4 L12 16.8 L10.6 13.4 L7.2 12 L10.6 10.6 Z" />
+        <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2l1.8 1.8M19 5l-1.8 1.8M6.8 17.2L5 19" />
       </svg>
     ),
   },
@@ -145,7 +145,7 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
             ? `${icons[item]?.label} — ${gitChangeCount} uncommitted change${gitChangeCount === 1 ? '' : 's'}`
             : icons[item]?.label;
           return (
-            <Tooltip key={item} content={titleText || ''} placement="bottom">
+            <Tooltip key={item} content={titleText || ''} placement="right">
               <button
                 onClick={() => onSelect(item)}
                 style={{

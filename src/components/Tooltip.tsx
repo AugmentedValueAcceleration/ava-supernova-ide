@@ -24,8 +24,10 @@ interface TooltipProps {
   content: ReactNode;
   /** Element(s) the tooltip describes. */
   children: ReactNode;
-  /** Where to place the tooltip relative to the trigger. */
-  placement?: 'top' | 'bottom';
+  /** Where to place the tooltip relative to the trigger. `right` is the
+   *  correct choice for left-edge rails (e.g. the activity bar) — a centered
+   *  top/bottom label would overflow off the left of the screen. */
+  placement?: 'top' | 'bottom' | 'right';
   /** Delay before show, in ms. Default 300 — long enough to avoid noise on
    *  a passing cursor, short enough to feel responsive when hovering with
    *  intent. */
@@ -57,6 +59,9 @@ export function Tooltip({
     const rect = el.getBoundingClientRect();
     if (placement === 'top') {
       return { top: rect.top - 8, left: rect.left + rect.width / 2 };
+    }
+    if (placement === 'right') {
+      return { top: rect.top + rect.height / 2, left: rect.right + 8 };
     }
     return { top: rect.bottom + 8, left: rect.left + rect.width / 2 };
   }, [placement]);
@@ -130,7 +135,11 @@ export function Tooltip({
             position: 'fixed',
             top: pos.top,
             left: pos.left,
-            transform: placement === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+            transform: placement === 'top'
+              ? 'translate(-50%, -100%)'
+              : placement === 'right'
+                ? 'translate(0, -50%)'
+                : 'translate(-50%, 0)',
             background: 'rgba(15, 10, 26, 0.96)',
             border: '1px solid rgba(168, 85, 247, 0.30)',
             borderRadius: 6,
@@ -147,7 +156,7 @@ export function Tooltip({
             // A short fade in so the tooltip feels intentional rather
             // than abrupt. No fade out — leave is instant so dismissing
             // never lags the cursor.
-            animation: 'avaTooltipIn 0.12s ease-out',
+            animation: `avaTooltipIn_${placement} 0.12s ease-out`,
           }}
         >
           {content}
@@ -155,9 +164,17 @@ export function Tooltip({
         document.body,
       )}
       <style>{`
-        @keyframes avaTooltipIn {
-          from { opacity: 0; transform: translate(-50%, ${placement === 'top' ? '-95%' : '4px'}); }
-          to   { opacity: 1; transform: translate(-50%, ${placement === 'top' ? '-100%' : '0'}); }
+        @keyframes avaTooltipIn_top {
+          from { opacity: 0; transform: translate(-50%, -95%); }
+          to   { opacity: 1; transform: translate(-50%, -100%); }
+        }
+        @keyframes avaTooltipIn_bottom {
+          from { opacity: 0; transform: translate(-50%, 4px); }
+          to   { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @keyframes avaTooltipIn_right {
+          from { opacity: 0; transform: translate(4px, -50%); }
+          to   { opacity: 1; transform: translate(0, -50%); }
         }
       `}</style>
     </>

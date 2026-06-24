@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { check } from '@tauri-apps/plugin-updater';
 
-export const APP_VERSION = '0.12.0';
+// Single source of truth is src/version.ts; re-exported for back-compat.
+import { APP_VERSION } from '../version';
+export { APP_VERSION };
 
 interface UpdateInfo {
   version: string;
