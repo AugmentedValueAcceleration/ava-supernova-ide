@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { HealthRoomChat } from './HealthRoomChat';
 import { TimeField } from './TimeField';
+import { DateField } from './MiniDatePicker';
 import {
   loadExercises,
   loadRecipes,
@@ -1427,7 +1428,7 @@ export function GeneralProfilePage() {
             </select>
           </Field>
           <Field label={t('health.profile.date_of_birth')}>
-            <input type="date" value={p.date_of_birth ?? ''} onChange={e => update({ ...p, date_of_birth: e.target.value || null })} style={fieldInputStyle} />
+            <DateField value={p.date_of_birth ?? null} onChange={v => update({ ...p, date_of_birth: v })} style={fieldInputStyle} />
           </Field>
         </FieldRow>
       </ProfileSection>
