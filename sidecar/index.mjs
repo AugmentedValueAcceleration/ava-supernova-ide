@@ -79,6 +79,7 @@ const {
   GenericProvider,
   MemoryManager,
   TaskManager,
+  migrateGlobalTasksToSubfolder,
   JournalManager,
   CheckpointManager,
   buildSystemPrompt,
@@ -859,6 +860,32 @@ function applyProfileField(field, rawValue) {
   return `Saved ${label}: ${describeProfileValue(def, value)}.`;
 }
 
+/** Create a task the user accepted from a task_suggest card. Global scope,
+ *  source 'ava' (she proposed it, they accepted). Returns a confirmation. */
+async function createSuggestedTask(p) {
+  if (!taskManager) return 'Task manager unavailable.';
+  const title = String(p?.title ?? '').trim();
+  if (!title) return 'No task title.';
+  try {
+    await taskManager.addTask({
+      title,
+      description: p.description,
+      priority: p.priority ?? 'medium',
+      category: p.category ?? 'personal',
+      dueDate: p.due_date,
+      dueTime: p.due_time,
+      reminderLead: p.reminder_lead,
+      recurrence: p.recurrence ?? 'none',
+      subtasks: Array.isArray(p.subtasks) ? p.subtasks.map((t) => ({ id: crypto.randomUUID(), title: t, done: false })) : undefined,
+      scope: 'global',
+      source: 'ava',
+    });
+  } catch (err) {
+    return `Tried to add "${title}" but hit an error: ${err?.message || err}.`;
+  }
+  return `Added "${title}" to their tasks.`;
+}
+
 // Prevent unhandled errors from crashing the sidecar
 process.on('uncaughtException', (err) => {
   emitError(`Uncaught: ${err.message}`);
@@ -1266,7 +1293,10 @@ async function handleInit(data) {
 
     // Task manager — required so AutoCoordinator's TaskExecutor can pick up
     // session tasks created by todo_write and dispatch a Builder per task.
-    taskManager = new TaskManager({ globalDir: ACCOUNT_ROOT, projectRoot: cwd });
+    // Tasks live in a dedicated tasks/ subfolder (mirrors creative/) so the
+    // panel's open-folder button has a clean target; migrate any legacy file.
+    migrateGlobalTasksToSubfolder(ACCOUNT_ROOT);
+    taskManager = new TaskManager({ globalDir: join(ACCOUNT_ROOT, 'tasks'), projectRoot: cwd });
 
     // Project indexer
     let projectIndexer = null;
@@ -2378,6 +2408,25 @@ function handleConfirm(data) {
       }
     } else {
       pending.resolve('User closed the profile question without answering — move on, don\'t re-ask it.');
+    }
+    return;
+  }
+
+  // task_suggest — the response is the (user-edited) task JSON on Add; a
+  // dismiss comes through as not-approved. The task persists only on Add.
+  if (pending.toolName === 'task_suggest') {
+    if (data.approved !== false && data.response) {
+      let parsed = null;
+      try { parsed = JSON.parse(data.response); } catch { /* malformed */ }
+      if (parsed?.title) {
+        createSuggestedTask(parsed)
+          .then((msg) => pending.resolve(msg))
+          .catch(() => pending.resolve('Added the task to their list.'));
+      } else {
+        pending.resolve('User added the suggested task.');
+      }
+    } else {
+      pending.resolve('User dismissed the task suggestion — don\'t re-suggest it.');
     }
     return;
   }

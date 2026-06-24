@@ -41,8 +41,10 @@ import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
 import { Tooltip } from './Tooltip';
 import { LessonPlayer, SAMPLE_LESSON, type PlayableLesson, type LessonStep } from './LessonPlayer';
 import { readLocalLearning } from '../lib/learning-store';
-import IdeTasksPanel, { IdeTasksSpine, type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI } from './IdeTasksPanel';
-import { readLocalTasks, createLocalTask, toggleLocalTask } from '../lib/task-store';
+import IdeTasksPanel, { IdeTasksSpine, type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI, type CreateTaskInput as TaskCreateInput, type UpdateTaskInput as TaskUpdateInput } from './IdeTasksPanel';
+import { readLocalTasks, createLocalTask, toggleLocalTask, toggleLocalSubtask, updateLocalTask, tasksFolderPath } from '../lib/task-store';
+import { startTaskReminderScheduler } from '../lib/task-reminders';
+import { IdeTaskSuggestCard } from './IdeTaskSuggestCard';
 import {
   readMonth as readJournalMonth, addEntry as addJournalEntry, updateEntry as updateJournalEntry,
   deleteEntry as deleteJournalEntry, searchJournal, listKinds as listJournalKinds, kindOf,
@@ -2663,8 +2665,14 @@ export function AvaChatPage() {
       const today = new Date().toISOString().slice(0, 10);
       const entries = await readLocalTasks();
       const mapped: TodayTaskUI[] = entries.map((t) => ({
-        id: t.id, title: t.title, priority: (t.priority || 'medium') as TodayTaskUI['priority'],
-        status: (t.status || 'todo') as TodayTaskUI['status'], dueDate: t.dueDate, category: t.category || 'general',
+        id: t.id, title: t.title, description: t.description,
+        priority: (t.priority || 'medium') as TodayTaskUI['priority'],
+        status: (t.status || 'todo') as TodayTaskUI['status'],
+        dueDate: t.dueDate, dueTime: t.dueTime, category: t.category || 'general',
+        recurrence: (t.recurrence as TodayTaskUI['recurrence']) || undefined,
+        reminderLead: t.reminderLead,
+        subtasks: t.subtasks,
+        context: t.context as TodayTaskUI['context'],
       }));
       setAllTasks(mapped);
       // Today = in-progress OR due today and not done (mirrors @ava/core getTodayTasks).
@@ -2675,6 +2683,8 @@ export function AvaChatPage() {
   useEffect(() => { if (tasksPanelOpen) fetchUserTasks(); }, [tasksPanelOpen, fetchUserTasks]);
   // Preload on mount too — the collapsed spine shows a live active-count.
   useEffect(() => { fetchUserTasks(); }, [fetchUserTasks]);
+  // Task reminders fire app-wide while the window is open (permission-gated).
+  useEffect(() => startTaskReminderScheduler(), []);
 
   const handleToggleTask = useCallback(async (taskId: string) => {
     try {
@@ -2683,12 +2693,38 @@ export function AvaChatPage() {
     } catch { /* */ }
   }, [fetchUserTasks]);
 
-  const handleCreateTask = useCallback(async (task: { title: string; priority?: string; category?: string; due_date?: string }) => {
+  const handleCreateTask = useCallback(async (task: TaskCreateInput) => {
     try {
       await createLocalTask(task);
       fetchUserTasks();
     } catch { /* */ }
   }, [fetchUserTasks]);
+
+  const handleToggleSubtask = useCallback(async (taskId: string, subtaskId: string) => {
+    try {
+      await toggleLocalSubtask(taskId, subtaskId);
+      fetchUserTasks();
+    } catch { /* */ }
+  }, [fetchUserTasks]);
+
+  const handleUpdateTask = useCallback(async (taskId: string, updates: TaskUpdateInput) => {
+    try {
+      await updateLocalTask(taskId, updates);
+      fetchUserTasks();
+    } catch { /* */ }
+  }, [fetchUserTasks]);
+
+  const handleOpenTasksFolder = useCallback(async () => {
+    try {
+      const [{ openPath }, { mkdir, BaseDirectory }, { accountRoot }] = await Promise.all([
+        import('@tauri-apps/plugin-opener'),
+        import('@tauri-apps/plugin-fs'),
+        import('../lib/account-scope'),
+      ]);
+      await mkdir(`${await accountRoot()}/tasks`, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+      await openPath(await tasksFolderPath());
+    } catch (e) { console.warn('[tasks] open folder failed', e); }
+  }, []);
 
   // ── Persist messages ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -5252,6 +5288,23 @@ export function AvaChatPage() {
 
       {/* ── Tool Confirmation — inline banner above input ──────────────── */}
       {pendingConfirm && (() => {
+        // task_suggest — Ava's "you decide" card. Add creates the task (the
+        // sidecar persists it on confirm); Dismiss writes nothing.
+        if (pendingConfirm.toolName === 'task_suggest') {
+          return (
+            <IdeTaskSuggestCard
+              args={pendingConfirm.args || {}}
+              onAdd={(payload) => {
+                void getSidecar().confirm(pendingConfirm.id, true, JSON.stringify(payload));
+                setPendingConfirm(null);
+                // The sidecar persists the task; refresh the panel once the
+                // write has landed so it shows up without reopening.
+                setTimeout(() => { fetchUserTasks(); }, 500);
+              }}
+              onDismiss={() => { void getSidecar().confirm(pendingConfirm.id, false); setPendingConfirm(null); }}
+            />
+          );
+        }
         // Per-card data derived once — cheaper than inline ternaries, and
         // puts the "what is this?" decision in one place.
         const isPlanCard = pendingConfirm.toolName === 'desktop_plan_approve';
@@ -6287,6 +6340,9 @@ export function AvaChatPage() {
         onClose={() => setTasksPanelOpen(false)}
         onToggleTask={handleToggleTask}
         onCreateTask={handleCreateTask}
+        onToggleSubtask={handleToggleSubtask}
+        onUpdateTask={handleUpdateTask}
+        onOpenFolder={handleOpenTasksFolder}
         width={tasksPanelWidth}
         onWidthChange={setTasksPanelWidth}
       />
