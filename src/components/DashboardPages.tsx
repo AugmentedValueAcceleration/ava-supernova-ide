@@ -980,7 +980,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
         <svg style={{ width: 14, height: 14 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
         </svg>
-        Back to News
+        {t('dash.article.back_to_news')}
       </button>
 
       {/* Hero image */}
@@ -998,10 +998,10 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
             </span>
           )}
           {article.priority === 'breaking' && (
-            <span style={{ borderRadius: 9999, background: '#ef4444', padding: '3px 10px', fontSize: 9, fontWeight: 700, color: '#fff' }}>BREAKING</span>
+            <span style={{ borderRadius: 9999, background: '#ef4444', padding: '3px 10px', fontSize: 9, fontWeight: 700, color: '#fff' }}>{t('dash.article.breaking')}</span>
           )}
           {article.ai_generated && (
-            <span style={{ borderRadius: 9999, background: 'rgba(255,255,255,0.1)', padding: '3px 10px', fontSize: 9, fontWeight: 700, color: '#a855f7', backdropFilter: 'blur(4px)' }}>AI-Curated</span>
+            <span style={{ borderRadius: 9999, background: 'rgba(255,255,255,0.1)', padding: '3px 10px', fontSize: 9, fontWeight: 700, color: '#a855f7', backdropFilter: 'blur(4px)' }}>{t('dash.article.ai_curated')}</span>
           )}
         </div>
       </div>
@@ -1009,7 +1009,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
       {/* Meta */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 10, color: '#6c7086', marginBottom: 12 }}>
         <span>{new Date(article.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-        {article.reading_time && <><span>&middot;</span><span>{article.reading_time} min read</span></>}
+        {article.reading_time && <><span>&middot;</span><span>{t('dash.article.min_read', { n: article.reading_time })}</span></>}
         {article.source_publication && <><span>&middot;</span><span>{article.source_publication}</span></>}
       </div>
 
@@ -1029,10 +1029,10 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         <button onClick={handleCopy} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.3)', padding: '6px 12px', fontSize: 10, color: '#a6adc8', cursor: 'pointer' }}>
-          {copied ? '✓ Copied!' : '🔗 Copy Link'}
+          {copied ? `✓ ${t('dash.article.copied')}` : `🔗 ${t('dash.article.copy_link')}`}
         </button>
         <button onClick={() => window.open(articleUrl, '_blank')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(49,34,68,0.3)', padding: '6px 12px', fontSize: 10, color: '#a6adc8', cursor: 'pointer' }}>
-          🔗 Open in Browser
+          🔗 {t('dash.article.open_in_browser')}
         </button>
       </div>
 
@@ -1040,13 +1040,13 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
       {(article.source_url || article.source_author || article.source_publication) && (
         <div style={{ marginBottom: 24, borderRadius: 12, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)', padding: 12 }}>
           <p style={{ fontSize: 12, color: '#a6adc8', margin: 0 }}>
-            Originally reported
-            {article.source_author && <> by <span style={{ fontWeight: 500, color: '#cdd6f4' }}>{article.source_author}</span></>}
-            {article.source_publication && <> at <span style={{ fontWeight: 500, color: '#cdd6f4' }}>{article.source_publication}</span></>}
+            {t('dash.article.originally_reported')}
+            {article.source_author && <> {t('dash.article.by')} <span style={{ fontWeight: 500, color: '#cdd6f4' }}>{article.source_author}</span></>}
+            {article.source_publication && <> {t('dash.article.at')} <span style={{ fontWeight: 500, color: '#cdd6f4' }}>{article.source_publication}</span></>}
           </p>
           {article.source_url && (
             <a href={article.source_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 12, color: '#a855f7', textDecoration: 'none' }}>
-              Read the original article ↗
+              {t('dash.article.read_original')} ↗
             </a>
           )}
         </div>
@@ -1077,8 +1077,8 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
               <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>A</span>
             </div>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: '#cdd6f4', margin: 0 }}>Ava's Take</p>
-              <p style={{ fontSize: 9, color: '#6c7086', margin: 0 }}>Ava Supernova Commentary</p>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#cdd6f4', margin: 0 }}>{t('dash.article.avas_take')}</p>
+              <p style={{ fontSize: 9, color: '#6c7086', margin: 0 }}>{t('dash.article.commentary')}</p>
             </div>
           </div>
           <p style={{ fontSize: 12, lineHeight: 1.6, color: '#a6adc8', margin: 0 }}>{article.ava_commentary}</p>
@@ -1088,7 +1088,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
       {/* Sources */}
       {sources.length > 0 && (
         <div style={{ marginTop: 32, borderTop: '1px solid rgba(168,85,247,0.12)', paddingTop: 24 }}>
-          <h2 style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 12 }}>Sources</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 12 }}>{t('dash.article.sources')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {sources.map((source: any, i: number) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, borderRadius: 8, border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(26,16,40,0.6)', padding: 10 }}>
@@ -1108,7 +1108,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
       {/* Related articles */}
       {related.length > 0 && (
         <div style={{ marginTop: 32, borderTop: '1px solid rgba(168,85,247,0.12)', paddingTop: 24 }}>
-          <h2 style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 12 }}>Related Articles</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 12 }}>{t('dash.article.related')}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {related.map((rel: any, i: number) => {
               const relCat = rel.category ? ARTICLE_CATEGORIES[rel.category] : null;
@@ -1130,7 +1130,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
                   <div style={{ padding: 10 }}>
                     <h3 style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, color: '#cdd6f4', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{rel.title}</h3>
                     <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, color: '#6c7086' }}>
-                      {rel.reading_time && <span>{rel.reading_time}m read</span>}
+                      {rel.reading_time && <span>{t('dash.article.m_read', { n: rel.reading_time })}</span>}
                       {rel.reading_time && <span>&middot;</span>}
                       <span>{new Date(rel.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     </div>
@@ -2933,8 +2933,10 @@ export function AvaChatPage() {
         const localModelName = localStorage.getItem('ava-ide-local-model') || '';
         const localApiKey = localStorage.getItem('ava-ide-local-apikey') || '';
         const localModelLabel = localStorage.getItem('ava-ide-local-label') || '';
-        const localBlock = (localBaseUrl && localModelName)
-          ? { baseUrl: localBaseUrl, modelName: localModelName, apiKey: localApiKey || undefined, modelLabel: localModelLabel || undefined }
+        let localModels: string[] = [];
+        try { const v = JSON.parse(localStorage.getItem('ava-ide-local-models') || '[]'); if (Array.isArray(v)) localModels = v; } catch { /* ignore */ }
+        const localBlock = (localBaseUrl && (localModels.length > 0 || localModelName))
+          ? { baseUrl: localBaseUrl, modelName: localModelName, apiKey: localApiKey || undefined, modelLabel: localModelLabel || undefined, models: localModels.length ? localModels : undefined }
           : undefined;
 
         // BYOK toggle: when the user has flipped to their own keys, withhold the
@@ -5724,8 +5726,8 @@ export function AvaChatPage() {
                       border: '1px dashed rgba(168, 85, 247, 0.18)', borderRadius: 8,
                     }}>
                       <div style={{ fontSize: 20, marginBottom: 6 }}>{'\ud83d\udd10'}</div>
-                      <div style={{ fontWeight: 500, color: '#9399b2' }}>No secrets stored yet</div>
-                      <div style={{ marginTop: 2, fontSize: 11 }}>Add an API key, password, or token below.</div>
+                      <div style={{ fontWeight: 500, color: '#9399b2' }}>{t('dash.secrets.empty_yet')}</div>
+                      <div style={{ marginTop: 2, fontSize: 11 }}>{t('dash.secrets.add_hint')}</div>
                     </div>
                   )}
                   {secrets.map(s => {
@@ -6574,14 +6576,14 @@ export function ChatHistoryPage() {
   return (
     <div style={pageWrapper}>
       <div style={{ width: '100%' }}>
-        <div style={pageTitle}>History</div>
-        <div style={{ ...pageSubtitle, marginBottom: 16 }}>Credits, sessions, models</div>
+        <div style={pageTitle}>{t('dash.history.title')}</div>
+        <div style={{ ...pageSubtitle, marginBottom: 16 }}>{t('dash.history.subtitle_short')}</div>
 
         {/* ── Tabs ───────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168, 85, 247, 0.12)', marginBottom: 16, paddingBottom: 1 }}>
-          <button style={tabStyle(activeTab === 'conversations')} onClick={() => setActiveTab('conversations')}>Conversations</button>
-          <button style={tabStyle(activeTab === 'usage')} onClick={() => setActiveTab('usage')}>Usage</button>
-          <button style={tabStyle(activeTab === 'audit')} onClick={() => setActiveTab('audit')}>Audit</button>
+          <button style={tabStyle(activeTab === 'conversations')} onClick={() => setActiveTab('conversations')}>{t('dash.history.tab_conversations')}</button>
+          <button style={tabStyle(activeTab === 'usage')} onClick={() => setActiveTab('usage')}>{t('dash.history.tab_usage')}</button>
+          <button style={tabStyle(activeTab === 'audit')} onClick={() => setActiveTab('audit')}>{t('dash.history.tab_audit')}</button>
         </div>
 
         {/* ── Audit Tab — every tool call Ava made on this machine.
@@ -6611,13 +6613,13 @@ export function ChatHistoryPage() {
             {/* Credit Balance */}
             {connected && usage && (
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Credit Balance</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>{t('dash.usage.credit_balance')}</div>
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px' }}>
                   {isUnlimited ? (
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
-                        <span style={{ color: '#a6adc8' }}>Admin</span>
-                        <span style={{ color: '#a855f7', fontWeight: 600 }}>Unlimited</span>
+                        <span style={{ color: '#a6adc8' }}>{t('dash.usage.admin')}</span>
+                        <span style={{ color: '#a855f7', fontWeight: 600 }}>{t('dash.usage.unlimited')}</span>
                       </div>
                       <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
                         <div style={{ width: '100%', height: '100%', borderRadius: 6, background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
@@ -6626,7 +6628,7 @@ export function ChatHistoryPage() {
                   ) : (
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                        <span style={{ color: '#a6adc8' }}>Credits Remaining</span>
+                        <span style={{ color: '#a6adc8' }}>{t('dash.usage.credits_remaining')}</span>
                         <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{balanceRemaining.toLocaleString()}</span>
                       </div>
                       <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
@@ -6637,8 +6639,8 @@ export function ChatHistoryPage() {
                         }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#585b70', marginTop: 4 }}>
-                        <span>{balanceUsed.toLocaleString()} used</span>
-                        <span>{balanceLimit.toLocaleString()} limit</span>
+                        <span>{t('dash.usage.n_used', { n: balanceUsed.toLocaleString() })}</span>
+                        <span>{t('dash.usage.n_limit', { n: balanceLimit.toLocaleString() })}</span>
                       </div>
                     </>
                   )}
@@ -6649,13 +6651,13 @@ export function ChatHistoryPage() {
             {/* Overview Stats */}
             {connected && usage && (
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Overview</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>{t('dash.usage.overview')}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                   {[
-                    { label: 'Credits This Month', value: monthValue.toLocaleString() },
-                    { label: 'Requests',           value: String(monthRequests) },
-                    { label: 'Active Days',        value: String(totals.active_days || 0) },
-                    { label: 'Avg / Request',      value: monthAvg.toLocaleString() },
+                    { label: t('dash.usage.credits_this_month'), value: monthValue.toLocaleString() },
+                    { label: t('dash.usage.requests'),           value: String(monthRequests) },
+                    { label: t('dash.usage.active_days'),        value: String(totals.active_days || 0) },
+                    { label: t('dash.usage.avg_request'),      value: monthAvg.toLocaleString() },
                   ].map(s => (
                     <div key={s.label} style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10, padding: '14px 16px' }}>
                       <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{s.label}</div>
@@ -6669,7 +6671,7 @@ export function ChatHistoryPage() {
             {/* Daily Usage Chart */}
             {connected && (
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Daily Usage (Last 14 Days)</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>{t('dash.usage.daily_usage')}</div>
                 {daily.length > 0 ? (
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80 }}>
@@ -6678,7 +6680,7 @@ export function ChatHistoryPage() {
                       const h = maxDaily > 0 ? Math.max(2, (v / maxDaily) * 80) : 2;
                       const isToday = d.date === today;
                       return (
-                        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} title={`${d.date}: ${formatTokens(v)} credits`}>
+                        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} title={t('dash.usage.daily_tooltip', { date: d.date, credits: formatTokens(v) })}>
                           <div style={{
                             width: '100%', height: h, borderRadius: 3,
                             background: isToday ? '#a855f7' : 'rgba(168, 85, 247, 0.3)',
@@ -6694,7 +6696,7 @@ export function ChatHistoryPage() {
                 </div>
                 ) : (
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 12, color: '#6c7086' }}>No usage data for this period.</div>
+                  <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.usage.no_usage_period')}</div>
                 </div>
                 )}
               </div>
@@ -6703,7 +6705,7 @@ export function ChatHistoryPage() {
             {/* Most Used Models */}
             {connected && (
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>Most Used Models</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>{t('dash.usage.most_used_models')}</div>
                 {models.length > 0 ? (
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {models.slice(0, 5).map((m: any) => {
@@ -6712,7 +6714,7 @@ export function ChatHistoryPage() {
                       <div key={m.model}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
                           <span style={{ color: '#cdd6f4', fontWeight: 500 }}>{m.model}</span>
-                          <span style={{ color: '#6c7086' }}>{formatTokens(v)} credits ({m.request_count} req)</span>
+                          <span style={{ color: '#6c7086' }}>{t('dash.usage.model_credits_req', { credits: formatTokens(v), req: m.request_count })}</span>
                         </div>
                         <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
                           <div style={{ width: `${(v / maxModelTokens) * 100}%`, height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
@@ -6723,7 +6725,7 @@ export function ChatHistoryPage() {
                 </div>
                 ) : (
                 <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 12, color: '#6c7086' }}>No usage data for this period.</div>
+                  <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.usage.no_usage_period')}</div>
                 </div>
                 )}
               </div>
@@ -6731,7 +6733,7 @@ export function ChatHistoryPage() {
 
             {!connected && (
               <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: '48px 20px', textAlign: 'center' }}>
-                <div style={{ fontSize: 13, color: '#6c7086' }}>Connect your account to see usage analytics.</div>
+                <div style={{ fontSize: 13, color: '#6c7086' }}>{t('dash.usage.connect_analytics')}</div>
               </div>
             )}
           </>
@@ -7037,7 +7039,7 @@ export function MemoryPage() {
             </button>
             {memories.length > 0 && !deletingAll && (
               <button onClick={() => setConfirmDeleteAll(true)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: 12, cursor: 'pointer' }}>
-                Delete All
+                {t('dash.memory.delete_all')}
               </button>
             )}
           </div>
@@ -7046,14 +7048,14 @@ export function MemoryPage() {
         {/* Delete All Confirmation */}
         {confirmDeleteAll && (
           <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)' }}>
-            <p style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>Delete all memories?</p>
-            <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>This permanently deletes every memory — on this machine and any cloud copy. It cannot be undone.</p>
+            <p style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>{t('dash.memory.delete_all_q')}</p>
+            <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>{t('dash.memory.delete_all_body')}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={() => handleDeleteAll()} style={{ padding: '6px 14px', borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 12, border: 'none', cursor: 'pointer' }}>
-                Delete Everything
+                {t('dash.memory.delete_everything')}
               </button>
               <button onClick={() => setConfirmDeleteAll(false)} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.2)', background: 'transparent', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
-                Cancel
+                {t('dash.settings.cancel')}
               </button>
             </div>
           </div>
@@ -7064,8 +7066,8 @@ export function MemoryPage() {
           <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.1)', display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
             <div>
-              <p style={{ fontSize: 13, color: '#f59e0b' }}>Deleting all memories... This may take a moment.</p>
-              <p style={{ fontSize: 11, color: 'rgba(245,158,11,0.6)', marginTop: 2 }}>Please stay on this page — leaving will interrupt the deletion.</p>
+              <p style={{ fontSize: 13, color: '#f59e0b' }}>{t('dash.memory.deleting_all')}</p>
+              <p style={{ fontSize: 11, color: 'rgba(245,158,11,0.6)', marginTop: 2 }}>{t('dash.memory.deleting_stay')}</p>
             </div>
           </div>
         )}
@@ -9122,16 +9124,16 @@ export function LearningLibraryPage() {
   return (
     <div style={pageWrapper}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <div style={pageTitle}>Learning Library</div>
+        <div style={pageTitle}>{t('dash.learning_library.title')}</div>
         <button onClick={() => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }))} style={{ background: 'none', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 6, padding: '4px 12px', color: '#a6adc8', cursor: 'pointer', fontSize: 11 }}>
-          My Learning
+          {t('dash.learning_library.my_learning')}
         </button>
       </div>
-      <div style={pageSubtitle}>Curated and community learning paths. Free for everyone.</div>
+      <div style={pageSubtitle}>{t('dash.learning_library.subtitle')}</div>
 
       <input
         type="text"
-        placeholder="Search paths..."
+        placeholder={t('dash.learning_library.search')}
         value={search}
         onChange={e => setSearch(e.target.value)}
         style={{ ...inputStyle, marginBottom: 12 }}
@@ -9150,7 +9152,7 @@ export function LearningLibraryPage() {
               fontSize: 11, fontWeight: 500, transition: 'all 0.15s',
             }}
           >
-            {sub === 'all' ? 'All' : sub}
+            {sub === 'all' ? t('dash.library.all') : sub}
           </button>
         ))}
       </div>
@@ -9160,11 +9162,11 @@ export function LearningLibraryPage() {
           value={levelFilter}
           onChange={setLevelFilter}
           options={[
-            { value: 'all', label: 'All levels' },
-            { value: 'beginner', label: 'Beginner' },
-            { value: 'intermediate', label: 'Intermediate' },
-            { value: 'advanced', label: 'Advanced' },
-            { value: 'mixed', label: 'Mixed' },
+            { value: 'all', label: t('dash.learning_library.all_levels') },
+            { value: 'beginner', label: t('dash.learning_library.level_beginner') },
+            { value: 'intermediate', label: t('dash.learning_library.level_intermediate') },
+            { value: 'advanced', label: t('dash.learning_library.level_advanced') },
+            { value: 'mixed', label: t('dash.learning_library.level_mixed') },
           ]}
           width={140}
           height={30}
@@ -9173,9 +9175,9 @@ export function LearningLibraryPage() {
           value={sort}
           onChange={setSort}
           options={[
-            { value: 'popular', label: 'Most Popular' },
-            { value: 'newest', label: 'Newest' },
-            { value: 'rating', label: 'Highest Rated' },
+            { value: 'popular', label: t('dash.learning_library.most_popular') },
+            { value: 'newest', label: t('dash.learning_library.newest') },
+            { value: 'rating', label: t('dash.learning_library.highest_rated') },
           ]}
           width={140}
           height={30}
@@ -9183,12 +9185,12 @@ export function LearningLibraryPage() {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 40, color: '#6c7086' }}>Loading...</div>
+        <div style={{ textAlign: 'center', padding: 40, color: '#6c7086' }}>{t('dash.common.loading')}</div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: '#6c7086' }}>
           <div style={{ marginBottom: 8, color: '#a855f7' }}><PhBook size={36} weight="duotone" /></div>
-          <div style={{ fontSize: 13 }}>No paths found.</div>
-          <div style={{ fontSize: 11, marginTop: 4 }}>Try a different search or ask Ava to create a custom path.</div>
+          <div style={{ fontSize: 13 }}>{t('dash.learning_library.empty')}</div>
+          <div style={{ fontSize: 11, marginTop: 4 }}>{t('dash.learning_library.empty_hint')}</div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
@@ -9315,17 +9317,17 @@ export function LibraryPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 0 }}>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>Library</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>{t('dash.library.title')}</h1>
             <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
-              Your courses, papers, assets, and documents — everything Ava has made for you.
+              {t('dash.library.hub_subtitle')}
             </p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
-          <button onClick={() => setTab('courses')} style={tabBtnStyle(tab === 'courses')}>Courses</button>
-          <button onClick={() => setTab('papers')} style={tabBtnStyle(tab === 'papers')}>Papers</button>
-          <button onClick={() => setTab('assets')} style={tabBtnStyle(tab === 'assets')}>Assets</button>
-          <button onClick={() => setTab('documents')} style={tabBtnStyle(tab === 'documents')}>Documents</button>
+          <button onClick={() => setTab('courses')} style={tabBtnStyle(tab === 'courses')}>{t('dash.library.tab.courses')}</button>
+          <button onClick={() => setTab('papers')} style={tabBtnStyle(tab === 'papers')}>{t('dash.library.tab.papers')}</button>
+          <button onClick={() => setTab('assets')} style={tabBtnStyle(tab === 'assets')}>{t('dash.library.tab.assets')}</button>
+          <button onClick={() => setTab('documents')} style={tabBtnStyle(tab === 'documents')}>{t('dash.library.tab.documents')}</button>
         </div>
       </div>
 
@@ -10525,7 +10527,7 @@ function NewDocumentModal({
       >
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t('dash.library.close')}
           style={{
             position: 'absolute', top: 12, right: 12,
             width: 32, height: 32, borderRadius: 16, background: 'rgba(0,0,0,0.2)',
@@ -10534,16 +10536,16 @@ function NewDocumentModal({
           }}
         >×</button>
 
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#cdd6f4', margin: 0 }}>New document</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#cdd6f4', margin: 0 }}>{t('dash.newdoc.title')}</h2>
         <p style={{ fontSize: 12, color: '#6c7086', marginTop: 4, marginBottom: 20 }}>
           {projectFolder ? (
-            <>Saves to <code style={{ fontFamily: 'monospace', fontSize: 11, padding: '1px 5px', borderRadius: 4, background: 'rgba(168,85,247,0.1)' }}>documents/</code> in your project, then opens in your default app.</>
+            <>{t('dash.newdoc.saves_to_pre')} <code style={{ fontFamily: 'monospace', fontSize: 11, padding: '1px 5px', borderRadius: 4, background: 'rgba(168,85,247,0.1)' }}>documents/</code> {t('dash.newdoc.saves_to_post')}</>
           ) : (
-            <>You'll be asked where to save the file, then it opens in your default app.</>
+            <>{t('dash.newdoc.save_prompt')}</>
           )}
         </p>
 
-        <h3 style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500, marginBottom: 10 }}>Blank file</h3>
+        <h3 style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500, marginBottom: 10 }}>{t('dash.newdoc.blank_file')}</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 24 }}>
           {NEW_DOC_BLANK_FORMATS.map(f => (
             <button
@@ -10565,7 +10567,7 @@ function NewDocumentModal({
           ))}
         </div>
 
-        <h3 style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500, marginBottom: 10 }}>From template</h3>
+        <h3 style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500, marginBottom: 10 }}>{t('dash.newdoc.from_template')}</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
           {NEW_DOC_TEMPLATES.map(tmpl => (
             <button
@@ -11443,13 +11445,13 @@ export function CloudSyncPage() {
           background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10,
           padding: '16px 20px', marginTop: 28,
         }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>How it works</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{t('dash.learning.how_it_works')}</div>
           <ul style={{ margin: 0, paddingLeft: 16 }}>
             {[
-              'All data is saved locally by default \u2014 nothing leaves your machine automatically',
-              'Push to Cloud sends your local data to the platform for cross-device access',
-              'Your companion app and web dashboard will show the synced data',
-              'You control what syncs and when \u2014 complete privacy by default',
+              t('dash.sync.how1'),
+              t('dash.sync.how2'),
+              t('dash.sync.how3'),
+              t('dash.sync.how4'),
             ].map((text, i) => (
               <li key={i} style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.8 }}>{text}</li>
             ))}
@@ -11632,7 +11634,7 @@ export function UsagePage() {
                 transition: 'all 0.15s',
               }}
             >
-              {tab === 'session' ? t('dash.usage.session') : tab === 'alltime' ? t('dash.usage.all_time') : 'Audit'}
+              {tab === 'session' ? t('dash.usage.session') : tab === 'alltime' ? t('dash.usage.all_time') : t('dash.history.tab_audit')}
             </button>
           ))}
         </div>
@@ -11705,12 +11707,12 @@ export function UsagePage() {
                   return (
                     <div style={{ ...card, borderColor: 'rgba(168, 85, 247, 0.25)' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#a855f7', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Active Mode</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#a855f7', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{t('dash.usage.active_mode')}</span>
                         <span style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4' }}>{modeInfo.label}</span>
                         <span style={{ fontSize: 11, color: '#6c7086' }}>{modeInfo.flavour}</span>
                       </div>
                       <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>
-                        Models below show specialists that actually fired this session. Chat-only sessions typically only invoke the coordinator — the rest activate when the orchestrator spawns Builders, vision, long-form, etc.
+                        {t('dash.usage.active_mode_explainer')}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 4 }}>
                         {modeInfo.roles.map((r) => (
@@ -11727,7 +11729,7 @@ export function UsagePage() {
                 {/* Model Breakdown */}
                 {models.length > 0 && (
                   <div style={{ ...card }}>
-                    <div style={sectionTitle}>Models Used</div>
+                    <div style={sectionTitle}>{t('dash.usage.models_used')}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {models.map((m: any, i: number) => {
                         const mTotal = (m.input_tokens || 0) + (m.output_tokens || 0);
@@ -11743,7 +11745,7 @@ export function UsagePage() {
                               <span style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>{m.model || m.name}</span>
                               <div style={{ display: 'flex', gap: 12 }}>
                                 <span style={{ fontSize: 10, fontWeight: 500, color: costColour(cost) }}>${cost.toFixed(4)}</span>
-                                <span style={{ fontSize: 10, color: '#6c7086' }}>{m.requests || 0} reqs</span>
+                                <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.usage.n_reqs', { n: m.requests || 0 })}</span>
                               </div>
                             </div>
                             <div style={{ height: 8, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
@@ -11753,9 +11755,9 @@ export function UsagePage() {
                               }} />
                             </div>
                             <div style={{ display: 'flex', gap: 12, fontSize: 10, color: '#6c7086' }}>
-                              <span>In: {formatTokens(m.input_tokens || 0)}</span>
-                              <span>Out: {formatTokens(m.output_tokens || 0)}</span>
-                              <span>Total: {formatTokens(mTokens)}</span>
+                              <span>{t('dash.usage.in_label', { n: formatTokens(m.input_tokens || 0) })}</span>
+                              <span>{t('dash.usage.out_label', { n: formatTokens(m.output_tokens || 0) })}</span>
+                              <span>{t('dash.usage.total_label', { n: formatTokens(mTokens) })}</span>
                             </div>
                           </div>
                         );
@@ -11769,7 +11771,7 @@ export function UsagePage() {
                     background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
                     padding: '32px 20px', textAlign: 'center',
                   }}>
-                    <div style={{ fontSize: 13, color: '#6c7086' }}>No usage this session yet. Start chatting with Ava!</div>
+                    <div style={{ fontSize: 13, color: '#6c7086' }}>{t('dash.usage.no_usage_session')}</div>
                   </div>
                 )}
               </>
@@ -11794,12 +11796,12 @@ export function UsagePage() {
                 {/* Credit Balance */}
                 {usage && (
                   <div style={{ ...card }}>
-                    <div style={sectionTitle}>Credit Balance</div>
+                    <div style={sectionTitle}>{t('dash.usage.credit_balance')}</div>
                     {isUnlimited ? (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
-                          <span style={{ color: '#a6adc8' }}>Admin tier</span>
-                          <span style={{ fontWeight: 500, color: '#a855f7' }}>Unlimited</span>
+                          <span style={{ color: '#a6adc8' }}>{t('dash.usage.admin_tier')}</span>
+                          <span style={{ fontWeight: 500, color: '#a855f7' }}>{t('dash.usage.unlimited')}</span>
                         </div>
                         <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
                           <div style={{ width: '100%', height: '100%', borderRadius: 6, background: 'linear-gradient(90deg, #a855f7, #6366f1)' }} />
@@ -11808,7 +11810,7 @@ export function UsagePage() {
                     ) : (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                          <span style={{ color: '#a6adc8' }}>Credits Remaining</span>
+                          <span style={{ color: '#a6adc8' }}>{t('dash.usage.credits_remaining')}</span>
                           <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{balanceRemaining.toLocaleString()}</span>
                         </div>
                         <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
@@ -11819,8 +11821,8 @@ export function UsagePage() {
                           }} />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#585b70', marginTop: 4 }}>
-                          <span>{balanceUsed.toLocaleString()} used</span>
-                          <span>{balanceLimit.toLocaleString()} limit</span>
+                          <span>{t('dash.usage.n_used', { n: balanceUsed.toLocaleString() })}</span>
+                          <span>{t('dash.usage.n_limit', { n: balanceLimit.toLocaleString() })}</span>
                         </div>
                       </>
                     )}
@@ -11848,7 +11850,7 @@ export function UsagePage() {
                 {/* Daily Usage Chart */}
                 {daily.length > 0 && (
                   <div style={{ ...card }}>
-                    <div style={sectionTitle}>Daily Usage (Last 14 Days)</div>
+                    <div style={sectionTitle}>{t('dash.usage.daily_usage')}</div>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120 }}>
                       {daily.map((d: any, i: number) => {
                         const tokens = d.tokens || d.total_tokens || 0;
@@ -11858,7 +11860,7 @@ export function UsagePage() {
                         return (
                           <div key={d.date || d.day || i} style={{
                             flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                          }} title={`${d.date || d.day}: ${formatTokens(tokens)} tokens`}>
+                          }} title={t('dash.usage.daily_tooltip_tokens', { date: d.date || d.day, tokens: formatTokens(tokens) })}>
                             <div style={{ width: '100%', display: 'flex', alignItems: 'flex-end', height: 90 }}>
                               <div style={{
                                 width: '100%', borderRadius: '3px 3px 0 0', transition: 'all 0.2s',
@@ -11885,7 +11887,7 @@ export function UsagePage() {
                 {/* Most Used Models */}
                 {models.length > 0 && (
                   <div style={{ ...card }}>
-                    <div style={sectionTitle}>Most Used Models</div>
+                    <div style={sectionTitle}>{t('dash.usage.most_used_models')}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {models.map((m: any, i: number) => {
                         const mTokens = m.tokens || m.total_tokens || ((m.input_tokens || 0) + (m.output_tokens || 0));
@@ -11916,7 +11918,7 @@ export function UsagePage() {
                     padding: '32px 20px', textAlign: 'center',
                   }}>
                     <div style={{ fontSize: 13, color: '#6c7086' }}>
-                      No usage data available yet. Start using Ava to see your stats here.
+                      {t('dash.usage.no_data_yet')}
                     </div>
                   </div>
                 )}
@@ -11944,6 +11946,47 @@ function LocalModelSettings() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('ava-ide-local-apikey') || '');
   const [modelLabel, setModelLabel] = useState(() => localStorage.getItem('ava-ide-local-label') || '');
   const [savedTick, setSavedTick] = useState(0);
+  // Detect: the models the endpoint reports via GET /models, and which the user
+  // has ticked to surface in the picker (all ticked by default).
+  const readSavedModels = (): string[] => {
+    try { const v = JSON.parse(localStorage.getItem('ava-ide-local-models') || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+  };
+  const [detectedModels, setDetectedModels] = useState<string[]>(() => readSavedModels());
+  const [enabledModels, setEnabledModels] = useState<Set<string>>(() => new Set(readSavedModels()));
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState('');
+
+  useEffect(() => {
+    const handler = (ev: SidecarEvent) => {
+      if (ev.event !== 'local_models_detected') return;
+      setDetecting(false);
+      if (ev.error) { setDetectError(ev.error); return; }
+      setDetectError('');
+      const found = Array.isArray(ev.models) ? ev.models : [];
+      setDetectedModels(found);
+      setEnabledModels(new Set(found)); // default: all ticked
+    };
+    getSidecar().on('local_models_detected', handler);
+    return () => getSidecar().off('local_models_detected', handler);
+  }, []);
+
+  const handleDetect = () => {
+    if (!baseUrl.trim()) return;
+    setDetecting(true);
+    setDetectError('');
+    getSidecar().detectLocalModels(baseUrl.trim(), apiKey.trim() || undefined).catch((e) => {
+      setDetecting(false);
+      setDetectError(e?.message || 'Could not reach the sidecar.');
+    });
+  };
+
+  const toggleEnabledModel = (id: string) => {
+    setEnabledModels(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const save = () => {
     if (baseUrl.trim()) localStorage.setItem('ava-ide-local-baseurl', baseUrl.trim());
@@ -11954,6 +11997,9 @@ function LocalModelSettings() {
     else localStorage.removeItem('ava-ide-local-apikey');
     if (modelLabel.trim()) localStorage.setItem('ava-ide-local-label', modelLabel.trim());
     else localStorage.removeItem('ava-ide-local-label');
+    const enabled = [...enabledModels];
+    if (enabled.length) localStorage.setItem('ava-ide-local-models', JSON.stringify(enabled));
+    else localStorage.removeItem('ava-ide-local-models');
     setSavedTick(t => t + 1);
     // Flash success indicator briefly
     setTimeout(() => setSavedTick(t => t + 1), 1800);
@@ -11964,14 +12010,18 @@ function LocalModelSettings() {
     setModelName('');
     setApiKey('');
     setModelLabel('');
+    setDetectedModels([]);
+    setEnabledModels(new Set());
+    setDetectError('');
     localStorage.removeItem('ava-ide-local-baseurl');
     localStorage.removeItem('ava-ide-local-model');
     localStorage.removeItem('ava-ide-local-apikey');
     localStorage.removeItem('ava-ide-local-label');
+    localStorage.removeItem('ava-ide-local-models');
     setSavedTick(t => t + 1);
   };
 
-  const isConfigured = !!(baseUrl.trim() && modelName.trim());
+  const isConfigured = !!(baseUrl.trim() && (enabledModels.size > 0 || modelName.trim()));
   const justSaved = savedTick % 2 === 1;
 
   const inputStyle: React.CSSProperties = {
@@ -11990,27 +12040,24 @@ function LocalModelSettings() {
         <span style={{ fontSize: 22 }}>🦙</span>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Custom model — Ollama, LM Studio, vLLM, or any OpenAI-compatible endpoint</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.custom_model_title')}</div>
             {isConfigured && (
               <span style={{
                 fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
                 background: 'rgba(166, 227, 161, 0.10)', color: '#a6e3a1',
                 border: '1px solid rgba(166, 227, 161, 0.30)', letterSpacing: 0.4,
-              }}>CONFIGURED</span>
+              }}>{t('dash.settings.configured_badge')}</span>
             )}
           </div>
           <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2, lineHeight: 1.5 }}>
-            Point Ava at any model — local (Ollama, LM Studio, vLLM on your machine) or remote (private vLLM cluster,
-            self-hosted finetune, OpenRouter, Together, anything that speaks the OpenAI Chat Completions API).
-            Local servers stay on your machine; remote endpoints get whatever security your endpoint exposes.
-            Restart the chat panel after saving for changes to take effect.
+            {t('dash.settings.custom_model_desc')}
           </div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div style={{ gridColumn: '1 / span 2' }}>
-          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Base URL</div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.settings.base_url')}</div>
           <input
             value={baseUrl}
             onChange={e => setBaseUrl(e.target.value)}
@@ -12020,12 +12067,44 @@ function LocalModelSettings() {
           />
           <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
             Ollama: <code style={{ color: '#cdd6f4' }}>http://localhost:11434/v1</code>. LM Studio: <code style={{ color: '#cdd6f4' }}>http://localhost:1234/v1</code>.
-            Remote endpoints: <code style={{ color: '#cdd6f4' }}>https://your-host/v1</code>.
+            {' '}{t('dash.settings.base_url_hint_remote')}: <code style={{ color: '#cdd6f4' }}>https://your-host/v1</code>.
           </div>
         </div>
 
+        {/* Detect — list the models the endpoint is serving (GET /models) so the
+            user picks from their library instead of typing each name. */}
+        <div style={{ gridColumn: '1 / span 2' }}>
+          <button
+            onClick={handleDetect}
+            disabled={!baseUrl.trim() || detecting}
+            style={{
+              padding: '6px 14px', borderRadius: 6, cursor: baseUrl.trim() && !detecting ? 'pointer' : 'default',
+              border: '1px solid rgba(168,85,247,0.40)', background: 'rgba(168,85,247,0.10)',
+              color: '#a855f7', fontSize: 11, fontWeight: 600, opacity: !baseUrl.trim() || detecting ? 0.4 : 1,
+            }}
+          >
+            {detecting ? 'Detecting…' : 'Detect models'}
+          </button>
+          {detectError && <div style={{ fontSize: 11, color: '#f87171', marginTop: 8 }}>{detectError}</div>}
+          {detectedModels.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>
+                Found {detectedModels.length} — tick the ones to show in the picker:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto', borderRadius: 6, border: '1px solid rgba(168,85,247,0.18)', background: 'rgba(10,6,18,0.8)', padding: 8 }}>
+                {detectedModels.map(id => (
+                  <label key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={enabledModels.has(id)} onChange={() => toggleEnabledModel(id)} />
+                    <span style={{ fontFamily: 'monospace', color: '#cdd6f4' }}>{id}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div>
-          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Model name</div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.settings.model_name')} <span style={{ color: '#6c7086', fontWeight: 400 }}>{t('dash.settings.optional_paren')}</span></div>
           <input
             value={modelName}
             onChange={e => setModelName(e.target.value)}
@@ -12034,31 +12113,31 @@ function LocalModelSettings() {
             spellCheck={false}
           />
           <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
-            The exact id your server reports (e.g. <code style={{ color: '#cdd6f4' }}>ollama list</code>).
+            {t('dash.settings.model_name_hint_full')} <code style={{ color: '#cdd6f4' }}>ollama list</code>).
           </div>
         </div>
 
         <div>
-          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Display name <span style={{ color: '#6c7086', fontWeight: 400 }}>(optional)</span></div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.settings.display_name')} <span style={{ color: '#6c7086', fontWeight: 400 }}>{t('dash.settings.optional_paren')}</span></div>
           <input
             value={modelLabel}
             onChange={e => setModelLabel(e.target.value)}
-            placeholder="Defaults to the model name"
+            placeholder={t('dash.settings.display_name_placeholder')}
             style={inputStyle}
             spellCheck={false}
           />
           <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
-            What you'll see in the chat model picker.
+            {t('dash.settings.display_name_hint')}
           </div>
         </div>
 
         <div style={{ gridColumn: '1 / span 2' }}>
-          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>API key <span style={{ color: '#6c7086', fontWeight: 400 }}>(optional — leave empty for local servers)</span></div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.settings.api_key')} <span style={{ color: '#6c7086', fontWeight: 400 }}>{t('dash.settings.api_key_optional')}</span></div>
           <input
             type="password"
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
-            placeholder="Most local servers don't require one"
+            placeholder={t('dash.settings.api_key_empty_placeholder')}
             style={inputStyle}
             spellCheck={false}
             autoComplete="off"
@@ -12075,7 +12154,7 @@ function LocalModelSettings() {
             color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
           }}
         >
-          {justSaved ? 'Saved ✓' : 'Save'}
+          {justSaved ? t('dash.settings.saved_check') : t('dash.settings.save')}
         </button>
         {(baseUrl || modelName || apiKey || modelLabel) && (
           <button
@@ -12087,7 +12166,7 @@ function LocalModelSettings() {
               fontSize: 11, fontWeight: 500, cursor: 'pointer',
             }}
           >
-            Remove
+            {t('dash.settings.remove')}
           </button>
         )}
         <span style={{ flex: 1 }} />
@@ -12099,7 +12178,7 @@ function LocalModelSettings() {
           onMouseEnter={e => (e.currentTarget.style.color = '#9399b2')}
           onMouseLeave={e => (e.currentTarget.style.color = '#6c7086')}
         >
-          Get Ollama →
+          {t('dash.settings.get_ollama')}
         </a>
       </div>
     </div>
@@ -12153,18 +12232,17 @@ function SemanticRecallSettings() {
         <span style={{ fontSize: 22 }}>🧠</span>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Local semantic recall</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.recall.title')}</div>
             {enabled && (
               <span style={{
                 fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
                 background: 'rgba(166, 227, 161, 0.10)', color: '#a6e3a1',
                 border: '1px solid rgba(166, 227, 161, 0.30)', letterSpacing: 0.4,
-              }}>ON</span>
+              }}>{t('dash.recall.on')}</span>
             )}
           </div>
           <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2, lineHeight: 1.5 }}>
-            Recall memories by meaning, not just keywords — embeddings run on a local model (Ollama by default),
-            so nothing leaves your machine. Off → keyword recall, no dependency. Restart the chat panel after changing.
+            {t('dash.recall.desc')}
           </div>
         </div>
         <button
@@ -12186,7 +12264,7 @@ function SemanticRecallSettings() {
       {enabled && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Embedding model</div>
+            <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.recall.embedding_model')}</div>
             <input
               value={model}
               onChange={e => setModel(e.target.value)}
@@ -12196,11 +12274,11 @@ function SemanticRecallSettings() {
               spellCheck={false}
             />
             <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
-              Pull it first: <code style={{ color: '#cdd6f4' }}>ollama pull nomic-embed-text</code>.
+              {t('dash.recall.pull_first')} <code style={{ color: '#cdd6f4' }}>ollama pull nomic-embed-text</code>.
             </div>
           </div>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Embeddings base URL</div>
+            <div style={{ fontSize: 11, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.recall.embeddings_base_url')}</div>
             <input
               value={baseUrl}
               onChange={e => setBaseUrl(e.target.value)}
@@ -12210,14 +12288,14 @@ function SemanticRecallSettings() {
               spellCheck={false}
             />
             <div style={{ fontSize: 10, color: '#6c7086', marginTop: 4 }}>
-              Ollama's OpenAI-compatible endpoint.
+              {t('dash.recall.endpoint_hint')}
             </div>
           </div>
         </div>
       )}
 
       {justSaved && (
-        <div style={{ fontSize: 10, color: '#a6e3a1' }}>Saved ✓ — restart the chat panel to apply.</div>
+        <div style={{ fontSize: 10, color: '#a6e3a1' }}>{t('dash.recall.saved_restart')}</div>
       )}
     </div>
   );
@@ -12240,8 +12318,8 @@ function ChatBackendSetting() {
     } catch { /* no window */ }
   };
   const opts: Array<{ id: 'local' | 'cloud'; label: string; desc: string }> = [
-    { id: 'cloud', label: 'Platform', desc: 'Run the chat on the Ava platform — needs a connected account.' },
-    { id: 'local', label: 'Local sidecar', desc: 'Run the chat on this machine with your own API keys (BYOK).' },
+    { id: 'cloud', label: t('dash.backend.platform'), desc: t('dash.backend.platform_desc') },
+    { id: 'local', label: t('dash.backend.local_sidecar'), desc: t('dash.backend.local_sidecar_desc') },
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
@@ -12619,7 +12697,7 @@ export function SettingsPage() {
         </div>
 
         {/* 3.5 Help train Ava's own model — dataset capture opt-in */}
-        <div style={sLabel}>Help train Ava&apos;s own model</div>
+        <div style={sLabel}>{t('dash.settings.dataset_section')}</div>
         <div style={{
           background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16,
@@ -12629,10 +12707,9 @@ export function SettingsPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', color: '#a6e3a1' }}><PhTestTube size={18} weight="duotone" /></span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Capture Ava&apos;s actions as training data</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.dataset_capture_title')}</div>
                 <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>
-                  Records Ava&apos;s tool choices, persona handoffs, memory ops, etc. to ~/.ava/datasets/.
-                  Local-only by default. Never captures your prompts or files — only her decisions and shape-only context.
+                  {t('dash.settings.dataset_capture_desc')}
                 </div>
               </div>
             </div>
@@ -12642,9 +12719,9 @@ export function SettingsPage() {
           {datasetCfg?.enabled && (
             <>
               <div style={divider} />
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 6 }}>Modes captured</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 6 }}>{t('dash.settings.dataset_modes')}</div>
               <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 10 }}>
-                Choose which thought modes feed the dataset. Toggle any off to keep that mode private.
+                {t('dash.settings.dataset_modes_desc')}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
                 {DC_ALL_MODES.map((mode) => {
@@ -12667,9 +12744,9 @@ export function SettingsPage() {
               </div>
 
               <div style={divider} />
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 6 }}>Dataset kinds</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#a6adc8', marginBottom: 6 }}>{t('dash.settings.dataset_kinds')}</div>
               <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 10 }}>
-                The 10 distinct training datasets Ava generates. All on by default; turn off any you&apos;d rather not contribute to.
+                {t('dash.settings.dataset_kinds_desc_ide')}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 {DC_ALL_DATASETS.map((kind) => {
@@ -12694,7 +12771,7 @@ export function SettingsPage() {
               </div>
 
               <div style={{ fontSize: 10, color: '#6c7086', marginTop: 14 }}>
-                All capture is local and append-only. Nothing leaves your machine until you explicitly push to your private dataset repo (separate, opt-in).
+                {t('dash.settings.dataset_note')}
               </div>
             </>
           )}
@@ -12840,7 +12917,7 @@ export function SettingsPage() {
             Independent of cloud sync; previously these shared one header
             toggle, now separated so the IDE chat header mirrors the
             extension. */}
-        <div style={sLabel}>CHAT BACKEND</div>
+        <div style={sLabel}>{t('dash.settings.section.chat_backend')}</div>
         <ChatBackendSetting />
 
         {/* Custom OpenAI-compatible model — Ollama / LM Studio / vLLM /
@@ -12848,13 +12925,13 @@ export function SettingsPage() {
             Completions API. Covers BYOM (private vLLM, self-finetuned
             on your own server, OpenRouter / Together / etc) as well as
             on-machine local servers. */}
-        <div style={sLabel}>CUSTOM MODEL</div>
+        <div style={sLabel}>{t('dash.settings.section.custom_model')}</div>
         <LocalModelSettings />
 
         {/* Local semantic recall — opt-in embeddings (Ollama) so memory is
             recalled by meaning, not just keywords. Mirror of the extension's
             preferences.useLocalEmbeddings. Off by default. */}
-        <div style={sLabel}>SEMANTIC RECALL</div>
+        <div style={sLabel}>{t('dash.settings.section.semantic_recall')}</div>
         <SemanticRecallSettings />
 
         {/* 6. API Keys (collapsible) */}
@@ -13054,7 +13131,7 @@ export function SettingsPage() {
         {/* ── Group: Desktop (sec 8) ──────────────────────────── */}
         <div style={{ display: settingsTab === 'desktop' ? 'contents' : 'none' }}>
         {/* 8. Desktop Automation */}
-        <div style={sLabel}>DESKTOP AUTOMATION</div>
+        <div style={sLabel}>{t('dash.settings.section.desktop_automation')}</div>
         <div style={{
           background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12,
           padding: '18px 20px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 16,
@@ -13063,20 +13140,18 @@ export function SettingsPage() {
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <span style={{ fontSize: 24 }}>🖥️</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Desktop Automation</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.desktop.title')}</div>
               <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2, lineHeight: 1.5 }}>
-                Lets Ava reach out of the IDE into the rest of your OS — launch apps, click UI elements, type into forms,
-                drive a visible browser. Same memory, mission, and audit log as code mode; additional safety gates apply.
+                {t('dash.desktop.desc')}
               </div>
             </div>
           </div>
 
           {/* Permission level — three-state pill, same value as the chat-bar pill */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>Permission level</div>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.desktop.permission_level')}</div>
             <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 8, lineHeight: 1.5 }}>
-              How aggressively Ava is allowed to act on your screen. Irreversible actions (Send, Pay, Delete, destructive
-              key combos) always re-prompt regardless of level.
+              {t('dash.desktop.permission_level_desc')}
             </div>
             <div
               style={{
@@ -13086,9 +13161,9 @@ export function SettingsPage() {
               }}
             >
               {([
-                { id: 'watch' as const, label: 'Watch',  desc: 'Ava describes; you stay on the mouse + keyboard. Safest.' },
-                { id: 'ask'   as const, label: 'Ask',    desc: 'You approve every click / keystroke / launch. Default.' },
-                { id: 'drive' as const, label: 'Drive',  desc: 'Reversible plan steps run silently after one approval.' },
+                { id: 'watch' as const, label: t('dash.desktop.level.watch'),  desc: t('dash.desktop.level.watch_desc') },
+                { id: 'ask'   as const, label: t('dash.desktop.level.ask'),    desc: t('dash.desktop.level.ask_desc') },
+                { id: 'drive' as const, label: t('dash.desktop.level.drive'),  desc: t('dash.desktop.level.drive_desc') },
               ]).map(l => {
                 const active = desktopPermLevel === l.id;
                 return (
@@ -13410,11 +13485,11 @@ export function BillingPage() {
             return (
               <div style={{ ...card, marginTop: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: '#6c7086' }}>Credits Remaining</div>
+                  <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.usage.credits_remaining')}</div>
                   <div style={{ fontSize: 11, color: '#45475a' }}>
                     {limit > 0
-                      ? `${remaining.toLocaleString()} of ${limit.toLocaleString()}`
-                      : 'No credits this period'}
+                      ? t('dash.usage.n_of_m', { n: remaining.toLocaleString(), m: limit.toLocaleString() })
+                      : t('dash.usage.no_credits_period')}
                   </div>
                 </div>
                 <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4', marginBottom: 10, fontVariantNumeric: 'tabular-nums' }}>

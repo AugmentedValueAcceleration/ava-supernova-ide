@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { t, useLocale } from '../lib/i18n';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -60,19 +61,22 @@ export interface UpdateTaskInput {
 const CATEGORY_OPTIONS = ['personal', 'coding', 'admin', 'meeting', 'health', 'finance', 'errands', 'study', 'home'];
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
 const RECURRENCE_OPTIONS = ['none', 'daily', 'weekdays', 'weekly', 'monthly'];
-/** Reminder lead presets — minutes before due. -1 = none, 0 = at the due time. */
-const REMINDER_OPTIONS: { value: number; label: string }[] = [
-  { value: -1, label: 'No reminder' },
-  { value: 0, label: 'At time' },
-  { value: 10, label: '10 min before' },
-  { value: 30, label: '30 min before' },
-  { value: 60, label: '1 hour before' },
-  { value: 1440, label: '1 day before' },
+/** Reminder lead presets — minutes before due. -1 = none, 0 = at the due time.
+ *  `key` is the stable i18n key (shared with the extension panel); `label` is
+ *  the English fallback used when a locale hasn't translated it yet. */
+const REMINDER_OPTIONS: { value: number; key: string; label: string }[] = [
+  { value: -1, key: 'tasks.reminder_none', label: 'No reminder' },
+  { value: 0, key: 'tasks.reminder_at_time', label: 'At time' },
+  { value: 10, key: 'tasks.reminder_10m', label: '10 min before' },
+  { value: 30, key: 'tasks.reminder_30m', label: '30 min before' },
+  { value: 60, key: 'tasks.reminder_1h', label: '1 hour before' },
+  { value: 1440, key: 'tasks.reminder_1d', label: '1 day before' },
 ];
-function recurrenceLabel(r?: string): string | null { return !r || r === 'none' ? null : r; }
+function recurrenceLabel(r?: string): string | null { return !r || r === 'none' ? null : t(`tasks.recurrence_${r}`); }
 function reminderLabel(lead?: number): string | null {
   if (lead === undefined || lead < 0) return null;
-  return REMINDER_OPTIONS.find(o => o.value === lead)?.label ?? null;
+  const opt = REMINDER_OPTIONS.find(o => o.value === lead);
+  return opt ? t(opt.key) : null;
 }
 
 interface Props {
@@ -95,7 +99,7 @@ interface Props {
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
+  if (mins < 1) return t('tasks.just_now');
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -159,6 +163,7 @@ function SessionItem({ task }: { task: SessionTaskUI }) {
 }
 
 function CompletedItem({ task }: { task: AvaCompletedTaskUI }) {
+  useLocale();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', opacity: 0.5 }}>
       <span style={{ fontSize: 12, color: '#a6e3a1', width: 16, textAlign: 'center' }}>✓</span>
@@ -176,6 +181,7 @@ function TaskItem({ task, onToggle, onToggleSubtask, onUpdateTask }: {
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onUpdateTask: (taskId: string, updates: UpdateTaskInput) => void;
 }) {
+  useLocale();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const isDone = task.status === 'done';
@@ -260,7 +266,7 @@ function TaskItem({ task, onToggle, onToggleSubtask, onUpdateTask }: {
               ))}
             </div>
           )}
-          {task.context && <div style={{ fontSize: 10, color: '#585b70' }}>📎 From {task.context.label || task.context.kind}</div>}
+          {task.context && <div style={{ fontSize: 10, color: '#585b70' }}>📎 {t('tasks.from')} {task.context.label || task.context.kind}</div>}
           {!isDone && (
             editing ? (
               <TaskEditForm task={task} onSave={(u) => { onUpdateTask(task.id, u); setEditing(false); }} onCancel={() => setEditing(false)} />
@@ -268,7 +274,7 @@ function TaskItem({ task, onToggle, onToggleSubtask, onUpdateTask }: {
               <button
                 onClick={() => setEditing(true)}
                 style={{ alignSelf: 'flex-start', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6, cursor: 'pointer', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' }}
-              >Edit</button>
+              >{t('tasks.edit')}</button>
             )
           )}
         </div>
@@ -281,6 +287,7 @@ function TaskItem({ task, onToggle, onToggleSubtask, onUpdateTask }: {
 function TaskEditForm({ task, onSave, onCancel }: {
   task: TodayTaskUI; onSave: (u: UpdateTaskInput) => void; onCancel: () => void;
 }) {
+  useLocale();
   const [title, setTitle] = useState(task.title);
   const [priority, setPriority] = useState(task.priority);
   const [category, setCategory] = useState(task.category || 'personal');
@@ -295,7 +302,7 @@ function TaskEditForm({ task, onSave, onCancel }: {
       <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ ...INPUT_STYLE, width: '100%' }} />
       <div style={{ display: 'flex', gap: 6 }}>
         <select value={priority} onChange={(e) => setPriority(e.target.value as TodayTaskUI['priority'])} style={small}>
-          {PRIORITY_OPTIONS.map(p => <option key={p} value={p} style={{ background: '#1a1028' }}>{p}</option>)}
+          {PRIORITY_OPTIONS.map(p => <option key={p} value={p} style={{ background: '#1a1028' }}>{t(`tasks.priority_${p}`)}</option>)}
         </select>
         <input list="ide-edit-cats" value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...small, cursor: 'text' }} />
         <datalist id="ide-edit-cats">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist>
@@ -306,16 +313,16 @@ function TaskEditForm({ task, onSave, onCancel }: {
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <select value={recurrence} onChange={(e) => setRecurrence(e.target.value as 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly')} style={small}>
-          {RECURRENCE_OPTIONS.map(r => <option key={r} value={r} style={{ background: '#1a1028' }}>{r}</option>)}
+          {RECURRENCE_OPTIONS.map(r => <option key={r} value={r} style={{ background: '#1a1028' }}>{t(`tasks.recurrence_${r}`)}</option>)}
         </select>
         <select value={reminderLead} onChange={(e) => setReminderLead(Number(e.target.value))} style={small}>
-          {REMINDER_OPTIONS.map(r => <option key={r.value} value={r.value} style={{ background: '#1a1028' }}>{r.label}</option>)}
+          {REMINDER_OPTIONS.map(r => <option key={r.value} value={r.value} style={{ background: '#1a1028' }}>{t(r.key)}</option>)}
         </select>
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <button onClick={() => onSave({ title: title.trim() || task.title, priority, category, due_date: dueDate || undefined, due_time: dueTime || undefined, recurrence, reminder_lead: reminderLead })}
-          style={{ padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600, background: '#a855f7', color: 'white', cursor: 'pointer' }}>Save</button>
-        <button onClick={onCancel} style={{ padding: '5px 10px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, background: 'transparent', color: '#a6adc8', cursor: 'pointer' }}>Cancel</button>
+          style={{ padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600, background: '#a855f7', color: 'white', cursor: 'pointer' }}>{t('tasks.save')}</button>
+        <button onClick={onCancel} style={{ padding: '5px 10px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, background: 'transparent', color: '#a6adc8', cursor: 'pointer' }}>{t('tasks.cancel')}</button>
       </div>
     </div>
   );
@@ -357,6 +364,7 @@ const INPUT_STYLE: React.CSSProperties = {
 };
 
 function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput) => void; defaultDueToday: boolean }) {
+  useLocale();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState('medium');
@@ -407,7 +415,7 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
         }}
       >
         <span style={{ color: '#a855f7', fontSize: 14, lineHeight: 1 }}>+</span>
-        Add a task
+        {t('tasks.add_task')}
       </button>
     );
   }
@@ -432,8 +440,8 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#cdd6f4' }}>New task</span>
-          <button onClick={cancel} aria-label="Close" style={{ marginLeft: 'auto', width: 28, height: 28, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.04)', color: '#a6adc8', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#cdd6f4' }}>{t('tasks.new_task')}</span>
+          <button onClick={cancel} aria-label={t('tasks.cancel')} style={{ marginLeft: 'auto', width: 28, height: 28, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.04)', color: '#a6adc8', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
 
         <input
@@ -441,19 +449,19 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); else if (e.key === 'Escape') cancel(); }}
-          placeholder="What needs doing?"
+          placeholder={t('tasks.add_placeholder')}
           style={{ ...mInput, fontSize: 15, padding: '11px 12px' }}
         />
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <span style={fieldLabel}>Priority</span>
+            <span style={fieldLabel}>{t('tasks.priority')}</span>
             <select value={priority} onChange={(e) => setPriority(e.target.value)} style={{ ...mInput, cursor: 'pointer' }}>
-              {PRIORITY_OPTIONS.map(p => <option key={p} value={p} style={{ background: '#1a1028' }}>{p}</option>)}
+              {PRIORITY_OPTIONS.map(p => <option key={p} value={p} style={{ background: '#1a1028' }}>{t(`tasks.priority_${p}`)}</option>)}
             </select>
           </div>
           <div style={{ flex: 1 }}>
-            <span style={fieldLabel}>Category</span>
+            <span style={fieldLabel}>{t('tasks.category')}</span>
             <input list="ide-quickadd-categories" value={category} onChange={(e) => setCategory(e.target.value)} style={mInput} />
             <datalist id="ide-quickadd-categories">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist>
           </div>
@@ -461,32 +469,32 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <span style={fieldLabel}>Due date</span>
+            <span style={fieldLabel}>{t('tasks.due_date')}</span>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...mInput, cursor: 'pointer' }} />
           </div>
           <div style={{ flex: 1 }}>
-            <span style={fieldLabel}>Time</span>
+            <span style={fieldLabel}>{t('tasks.due_time')}</span>
             <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} style={{ ...mInput, cursor: 'pointer' }} />
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <span style={fieldLabel}>Repeat</span>
+            <span style={fieldLabel}>{t('tasks.recurrence')}</span>
             <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)} style={{ ...mInput, cursor: 'pointer' }}>
-              {RECURRENCE_OPTIONS.map(r => <option key={r} value={r} style={{ background: '#1a1028' }}>{r}</option>)}
+              {RECURRENCE_OPTIONS.map(r => <option key={r} value={r} style={{ background: '#1a1028' }}>{t(`tasks.recurrence_${r}`)}</option>)}
             </select>
           </div>
           <div style={{ flex: 1 }}>
-            <span style={fieldLabel}>Reminder</span>
+            <span style={fieldLabel}>{t('tasks.reminder')}</span>
             <select value={reminderLead} onChange={(e) => setReminderLead(Number(e.target.value))} style={{ ...mInput, cursor: 'pointer' }}>
-              {REMINDER_OPTIONS.map(r => <option key={r.value} value={r.value} style={{ background: '#1a1028' }}>{r.label}</option>)}
+              {REMINDER_OPTIONS.map(r => <option key={r.value} value={r.value} style={{ background: '#1a1028' }}>{t(r.key)}</option>)}
             </select>
           </div>
         </div>
 
         <div>
-          <span style={fieldLabel}>Subtasks</span>
+          <span style={fieldLabel}>{t('tasks.subtasks')}</span>
           {subtasks.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
               {subtasks.map((s, i) => (
@@ -499,8 +507,8 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
             </div>
           )}
           <div style={{ display: 'flex', gap: 6 }}>
-            <input value={subInput} onChange={(e) => setSubInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSub(); } }} placeholder="Add a step…" style={{ ...mInput, flex: 1 }} />
-            <button onClick={addSub} style={{ padding: '0 14px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)', color: '#a855f7', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Add</button>
+            <input value={subInput} onChange={(e) => setSubInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSub(); } }} placeholder={t('tasks.add_step')} style={{ ...mInput, flex: 1 }} />
+            <button onClick={addSub} style={{ padding: '0 14px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)', color: '#a855f7', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{t('tasks.add')}</button>
           </div>
         </div>
 
@@ -510,9 +518,9 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
             disabled={!title.trim()}
             style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, background: '#a855f7', color: 'white', cursor: title.trim() ? 'pointer' : 'default', opacity: title.trim() ? 1 : 0.4 }}
           >
-            Create task
+            {t('tasks.create_task')}
           </button>
-          <button onClick={cancel} style={{ padding: '11px 18px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 500, background: 'rgba(255,255,255,0.05)', color: '#a6adc8', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={cancel} style={{ padding: '11px 18px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 500, background: 'rgba(255,255,255,0.05)', color: '#a6adc8', cursor: 'pointer' }}>{t('tasks.cancel')}</button>
         </div>
       </div>
     </div>
@@ -522,6 +530,7 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
 /* ── Ava band — sticky live-work indicator ───────────────────────────────── */
 
 function AvaBand({ sessionTasks }: { sessionTasks: SessionTaskUI[] }) {
+  useLocale();
   const [expanded, setExpanded] = useState(false);
   const total = sessionTasks.length;
   const done = sessionTasks.filter(t => t.status === 'completed').length;
@@ -541,10 +550,10 @@ function AvaBand({ sessionTasks }: { sessionTasks: SessionTaskUI[] }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: allDone ? '#a6e3a1' : '#a855f7', display: 'flex', alignItems: 'center', gap: 4 }}>
             {!allDone && <span style={{ display: 'inline-block', animation: 'avaSpin 1.5s linear infinite' }}>⟳</span>}
-            Ava
+            {t('tasks.ava')}
           </span>
           <span style={{ fontSize: 10, color: '#6c7086', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {allDone ? 'All steps complete' : current?.title}
+            {allDone ? t('tasks.all_complete') : current?.title}
           </span>
           <span style={{ fontSize: 10, fontWeight: 600, color: allDone ? '#a6e3a1' : '#a855f7', flexShrink: 0 }}>{done}/{total}</span>
           <span style={{ fontSize: 8, color: '#585b70', transition: 'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
@@ -570,6 +579,7 @@ function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onT
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onUpdateTask: (taskId: string, updates: UpdateTaskInput) => void;
 }) {
+  useLocale();
   const tasks = filter === 'today' ? todayTasks : allTasks;
   const active = tasks.filter(t => t.status !== 'done');
   const done = tasks.filter(t => t.status === 'done');
@@ -589,19 +599,19 @@ function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onT
               color: filter === f ? '#cdd6f4' : '#585b70',
             }}
           >
-            {f === 'today' ? 'Today' : 'All'}
+            {f === 'today' ? t('tasks.filter_today') : t('tasks.filter_all')}
           </button>
         ))}
       </div>
 
       {active.length > 0 && (
-        <CollapsibleSection title="Active" count={active.length} defaultOpen>
+        <CollapsibleSection title={t('tasks.section_active')} count={active.length} defaultOpen>
           {active.map(t => <TaskItem key={t.id} task={t} onToggle={onToggle} onToggleSubtask={onToggleSubtask} onUpdateTask={onUpdateTask} />)}
         </CollapsibleSection>
       )}
 
       {done.length > 0 && (
-        <CollapsibleSection title="Done" count={done.length} defaultOpen={false}>
+        <CollapsibleSection title={t('tasks.section_done')} count={done.length} defaultOpen={false}>
           {done.map(t => <TaskItem key={t.id} task={t} onToggle={onToggle} onToggleSubtask={onToggleSubtask} onUpdateTask={onUpdateTask} />)}
         </CollapsibleSection>
       )}
@@ -610,7 +620,7 @@ function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onT
         <div style={{ textAlign: 'center', padding: '32px 16px' }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>🎯</div>
           <div style={{ fontSize: 12, color: '#6c7086' }}>
-            {filter === 'today' ? 'No tasks today. Enjoy the clear board!' : 'No tasks yet.'}
+            {filter === 'today' ? t('tasks.empty_today') : t('tasks.empty_all')}
           </div>
         </div>
       )}
@@ -621,9 +631,10 @@ function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onT
 /* ── Ava recent work — collapsible history at the bottom ──────────────────── */
 
 function AvaRecentWork({ avaCompletedTasks }: { avaCompletedTasks: AvaCompletedTaskUI[] }) {
+  useLocale();
   return (
     <div style={{ padding: '4px 12px 12px', borderTop: '1px solid rgba(168,85,247,0.08)' }}>
-      <CollapsibleSection title="Ava's recent work" count={avaCompletedTasks.length} defaultOpen={false}>
+      <CollapsibleSection title={t('tasks.ava_recent_work')} count={avaCompletedTasks.length} defaultOpen={false}>
         {avaCompletedTasks.slice(0, 20).map(t => <CompletedItem key={t.id} task={t} />)}
       </CollapsibleSection>
     </div>
@@ -653,6 +664,7 @@ function SpineRing({ done, total }: { done: number; total: number }) {
 export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
   activeCount: number; sessionTasks: SessionTaskUI[]; onExpand: () => void;
 }) {
+  useLocale();
   const total = sessionTasks.length;
   const done = sessionTasks.filter(t => t.status === 'completed').length;
   const avaWorking = total > 0 && done < total;
@@ -667,8 +679,8 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
       {/* Grip — straddles the border at mid-height. */}
       <button
         onClick={onExpand}
-        title="Open tasks"
-        aria-label="Open tasks"
+        title={t('tasks.open_tasks')}
+        aria-label={t('tasks.open_tasks')}
         style={{
           position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 10,
           width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -684,7 +696,7 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
       {/* Rail body — also fully clickable. */}
       <button
         onClick={onExpand}
-        title="Open tasks"
+        title={t('tasks.open_tasks')}
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%', height: '100%', paddingTop: 12, background: 'transparent', border: 'none', cursor: 'pointer' }}
       >
         {avaWorking ? (
@@ -697,7 +709,7 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
           <span style={{ fontSize: 14, color: '#585b70' }}>☰</span>
         )}
         <span style={{ writingMode: 'vertical-rl', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086' }}>
-          Tasks
+          {t('tasks.tasks')}
         </span>
       </button>
     </div>
@@ -710,6 +722,7 @@ export default function IdeTasksPanel({
   sessionTasks, avaCompletedTasks, todayTasks, allTasks,
   onClose, onToggleTask, onCreateTask, onToggleSubtask, onUpdateTask, onOpenFolder, width, onWidthChange,
 }: Props) {
+  useLocale();
   const [filter, setFilter] = useState<'today' | 'all'>('today');
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
 
@@ -769,8 +782,8 @@ export default function IdeTasksPanel({
       {/* Persistent grip — same spot as the spine's, points right to collapse. */}
       <button
         onClick={onClose}
-        title="Collapse"
-        aria-label="Collapse"
+        title={t('tasks.collapse')}
+        aria-label={t('tasks.collapse')}
         style={{
           position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 20,
           width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -789,13 +802,13 @@ export default function IdeTasksPanel({
         padding: '8px 12px', borderBottom: '1px solid rgba(168, 85, 247, 0.12)', flexShrink: 0,
       }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Tasks
+          {t('tasks.tasks')}
         </span>
         {/* Open the on-disk tasks folder — mirrors the Library's open-folder. */}
         <button
           onClick={onOpenFolder}
-          title="Open the tasks folder on disk"
-          aria-label="Open the tasks folder on disk"
+          title={t('tasks.open_folder')}
+          aria-label={t('tasks.open_folder')}
           style={{ marginLeft: 'auto', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer' }}
           onMouseOver={(e) => { e.currentTarget.style.color = '#a855f7'; e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
           onMouseOut={(e) => { e.currentTarget.style.color = '#6c7086'; e.currentTarget.style.background = 'transparent'; }}

@@ -146,6 +146,9 @@ export interface SidecarEvent {
   // general_profile_saved / health_profile_saved — Ava saved a profile field
   // via the fill card; the renderer can refresh the profile pages.
   profile?: Record<string, unknown>;
+  // local_models_detected — response to detect_local_models (Custom Model card).
+  models?: string[];
+  error?: string;
 }
 
 type EventListener = (event: SidecarEvent) => void;
@@ -368,6 +371,16 @@ export class SidecarManager {
    */
   async confirm(id: string, approved: boolean, response?: string, alwaysAllowCategory?: boolean): Promise<void> {
     await this.send({ cmd: 'confirm', id, approved, response, alwaysAllowCategory });
+  }
+
+  /**
+   * Ask the sidecar to list the models an OpenAI-compatible endpoint serves
+   * (GET /models). The result comes back as a `local_models_detected` event
+   * ({ models, error }) — subscribe via `on('local_models_detected', …)`.
+   * Done sidecar-side so localhost is reachable without the webview's CSP.
+   */
+  async detectLocalModels(baseUrl: string, apiKey?: string): Promise<void> {
+    await this.send({ cmd: 'detect_local_models', baseUrl, apiKey });
   }
 
   /**

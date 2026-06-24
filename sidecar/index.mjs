@@ -77,6 +77,7 @@ const {
   ProviderRegistry,
   PlatformProvider,
   GenericProvider,
+  listOpenAICompatibleModels,
   MemoryManager,
   TaskManager,
   migrateGlobalTasksToSubfolder,
@@ -940,24 +941,33 @@ async function handleInit(data) {
     // vLLM, or anything else speaking the OpenAI Chat Completions API. The
     // user supplies baseUrl + modelName via the IDE Settings page, persisted
     // to localStorage and passed through here on init.
-    if (config.local?.baseUrl && config.local?.modelName) {
+    // Enabled-model list from Detect; fall back to the single manual name.
+    let localModelIds = Array.isArray(config.local?.models)
+      ? config.local.models.filter((m) => typeof m === 'string' && m.trim())
+      : [];
+    if (localModelIds.length === 0 && config.local?.modelName) localModelIds = [config.local.modelName];
+
+    if (config.local?.baseUrl && localModelIds.length > 0) {
       try {
-        const localModel = {
-          id: config.local.modelName,
-          name: config.local.modelLabel || config.local.modelName,
+        // A custom display label only applies to a single registered model;
+        // a detected library shows each model by its own id.
+        const singleLabel = config.local.modelLabel && localModelIds.length === 1 ? config.local.modelLabel : undefined;
+        const localModels = localModelIds.map((id) => ({
+          id,
+          name: singleLabel || id,
           provider: 'generic',
           contextWindow: 32000,
           maxOutputTokens: 4096,
           supportsToolCalls: true,
           supportsStreaming: true,
-        };
+        }));
         const localProvider = new GenericProvider({
           apiKey: config.local.apiKey || 'local',
           baseUrl: config.local.baseUrl,
-          models: [localModel],
+          models: localModels,
         });
         providerRegistry.registerCustom('generic', localProvider);
-        emit({ event: 'info', message: `Local provider registered: ${config.local.modelName} @ ${config.local.baseUrl}` });
+        emit({ event: 'info', message: `Local provider registered: ${localModelIds.length} model(s) @ ${config.local.baseUrl}` });
       } catch (err) {
         emit({ event: 'info', message: `Local provider error: ${err.message}` });
       }
@@ -2377,6 +2387,22 @@ async function handleInterrupt() {
   }
 }
 
+/** Detect the models an OpenAI-compatible endpoint is serving (GET /models).
+ *  Runs in the sidecar (Node) so localhost is reachable without the webview's
+ *  CSP/CORS limits. Mirrors the extension host's detect path. */
+async function detectLocalModels({ baseUrl, apiKey }) {
+  if (!baseUrl) {
+    emit({ event: 'local_models_detected', models: [], error: 'Enter a base URL first.' });
+    return;
+  }
+  try {
+    const models = await listOpenAICompatibleModels(String(baseUrl), apiKey ? String(apiKey) : undefined);
+    emit({ event: 'local_models_detected', models });
+  } catch (err) {
+    emit({ event: 'local_models_detected', models: [], error: err?.message || 'Could not reach that endpoint.' });
+  }
+}
+
 function handleConfirm(data) {
   const pending = pendingConfirmations.get(data.id);
   if (!pending) {
@@ -2737,6 +2763,9 @@ rl.on('line', async (line) => {
       break;
     case 'confirm':
       handleConfirm(data);
+      break;
+    case 'detect_local_models':
+      detectLocalModels(data).catch((err) => emit({ event: 'local_models_detected', models: [], error: err?.message || 'detect failed' }));
       break;
     case 'secret_grant_response':
       handleSecretGrantResponse(data);
