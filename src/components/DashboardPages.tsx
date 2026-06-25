@@ -405,8 +405,8 @@ const MOOD_EMOJI: Record<number, string> = {
 
 // Mirrors packages/web/src/lib/news-categories.ts — IDs MUST match it.
 const NEWS_CATEGORIES = [
-  'ai', 'technology', 'open-source', 'security-privacy', 'world', 'sport',
-  'business', 'science', 'health', 'food', 'education',
+  'world', 'ai', 'technology', 'open-source', 'security-privacy',
+  'business', 'science', 'health', 'food', 'education', 'sport',
 ] as const;
 
 const WMO_EMOJI: Record<number, { label: string; emoji: string }> = {
@@ -575,8 +575,8 @@ const PUBLIC_API = 'https://ava-supernova.com/api';
 async function fetchNewsDirect(category?: string): Promise<NewsArticle[]> {
   try {
     const url = category
-      ? `${PUBLIC_API}/news?category=${category}&limit=6`
-      : `${PUBLIC_API}/news?limit=6`;
+      ? `${PUBLIC_API}/news?category=${category}&limit=24`
+      : `${PUBLIC_API}/news?limit=24`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return [];
     const data = await res.json();
@@ -903,17 +903,17 @@ const ARTICLE_GRADIENTS = [
 
 // Mirrors packages/web/src/lib/news-categories.ts — IDs MUST match it.
 const ARTICLE_CATEGORIES: Record<string, { label: string; icon: string }> = {
+  'world':            { label: 'World News',         icon: '🌍' },
   'ai':               { label: 'AI',                 icon: '🤖' },
   'technology':       { label: 'Technology',         icon: '💻' },
   'open-source':      { label: 'Open Source',        icon: '📦' },
   'security-privacy': { label: 'Security & Privacy', icon: '🛡️' },
-  'world':            { label: 'World',              icon: '🌍' },
-  'sport':            { label: 'Sport',              icon: '⚽' },
   'business':         { label: 'Business & Economy', icon: '📈' },
   'science':          { label: 'Science',            icon: '🔬' },
   'health':           { label: 'Health & Fitness',   icon: '🩺' },
   'food':             { label: 'Food & Nutrition',   icon: '🍳' },
   'education':        { label: 'Education',          icon: '🎓' },
+  'sport':            { label: 'Sport',              icon: '⚽' },
 };
 
 // Escape raw HTML before any markdown conversion. The companion's
@@ -1179,6 +1179,13 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
     border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
   };
 
+  const [page, setPage] = useState(0);
+  const PER_PAGE = 6;
+  const totalPages = Math.max(1, Math.ceil(articles.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageArticles = articles.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
+  useEffect(() => { setPage(0); }, [selectedCategory]);
+
   return (
     <WidgetCard title={t('dash.cc.latest_news')} icon={'\uD83D\uDCF0'} onRefresh={onRefresh}>
       {/* Category carousel */}
@@ -1216,8 +1223,9 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
       ) : articles.length === 0 ? (
         <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_news')}</p>
       ) : (
+        <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {articles.map((article, idx) => (
+          {pageArticles.map((article, idx) => (
             <button
               key={article.slug || idx}
               onClick={() => onOpenArticle ? onOpenArticle(article.slug) : window.open(`https://ava-supernova.com/news/${article.slug}`, '_blank')}
@@ -1244,6 +1252,14 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
             </button>
           ))}
         </div>
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, borderTop: '1px solid rgba(168,85,247,0.12)', paddingTop: 8 }}>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={safePage === 0} style={{ background: 'none', border: 'none', color: '#6c7086', fontSize: 11, fontWeight: 500, cursor: safePage === 0 ? 'default' : 'pointer', opacity: safePage === 0 ? 0.3 : 1 }}>{'‹'} Prev</button>
+            <span style={{ fontSize: 10, color: '#6c7086' }}>{safePage + 1} / {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} style={{ background: 'none', border: 'none', color: '#6c7086', fontSize: 11, fontWeight: 500, cursor: safePage >= totalPages - 1 ? 'default' : 'pointer', opacity: safePage >= totalPages - 1 ? 0.3 : 1 }}>Next {'›'}</button>
+          </div>
+        )}
+        </>
       )}
     </WidgetCard>
   );
