@@ -403,9 +403,10 @@ const MOOD_EMOJI: Record<number, string> = {
   1: '\uD83D\uDE14', 2: '\uD83D\uDE15', 3: '\uD83D\uDE10', 4: '\uD83D\uDE0A', 5: '\uD83D\uDE04',
 };
 
+// Mirrors packages/web/src/lib/news-categories.ts — IDs MUST match it.
 const NEWS_CATEGORIES = [
-  'ai-agents', 'models', 'dev-tools', 'open-source', 'education',
-  'productivity', 'companions', 'health', 'enterprise', 'industry',
+  'ai', 'technology', 'open-source', 'security-privacy', 'world', 'sport',
+  'business', 'science', 'health', 'food', 'education',
 ] as const;
 
 const WMO_EMOJI: Record<number, { label: string; emoji: string }> = {
@@ -464,6 +465,12 @@ function truncate(str: string, len: number): string {
 }
 
 function formatCategoryLabel(slug: string): string {
+  // Localised name if we have a translation, else the canonical English label,
+  // else a title-cased fallback.
+  const i18nKey = `news.${slug.replace(/-/g, '_')}`;
+  const translated = t(i18nKey);
+  if (translated && translated !== i18nKey) return translated;
+  if (ARTICLE_CATEGORIES[slug]) return ARTICLE_CATEGORIES[slug].label;
   return slug
     .split('-')
     .map(word => (word === 'ai' ? 'AI' : word.charAt(0).toUpperCase() + word.slice(1)))
@@ -894,17 +901,19 @@ const ARTICLE_GRADIENTS = [
   'radial-gradient(ellipse at 70% 60%, rgba(99,102,241,0.2), transparent 60%), linear-gradient(135deg, #111827, #1e1b4b)',
 ];
 
+// Mirrors packages/web/src/lib/news-categories.ts — IDs MUST match it.
 const ARTICLE_CATEGORIES: Record<string, { label: string; icon: string }> = {
-  'ai-agents':    { label: 'AI Agents',          icon: '🤖' },
-  'models':       { label: 'Models & Benchmarks', icon: '🧠' },
-  'dev-tools':    { label: 'Developer Tools',     icon: '🛠️' },
-  'open-source':  { label: 'Open Source',          icon: '📦' },
-  'education':    { label: 'AI Education',         icon: '🎓' },
-  'productivity': { label: 'Productivity & AI',    icon: '⚡' },
-  'companions':   { label: 'AI Companions',        icon: '💬' },
-  'health':       { label: 'Health & Wellness',    icon: '🏥' },
-  'enterprise':   { label: 'Enterprise AI',        icon: '🏢' },
-  'industry':     { label: 'Industry & Policy',    icon: '📰' },
+  'ai':               { label: 'AI',                 icon: '🤖' },
+  'technology':       { label: 'Technology',         icon: '💻' },
+  'open-source':      { label: 'Open Source',        icon: '📦' },
+  'security-privacy': { label: 'Security & Privacy', icon: '🛡️' },
+  'world':            { label: 'World',              icon: '🌍' },
+  'sport':            { label: 'Sport',              icon: '⚽' },
+  'business':         { label: 'Business & Economy', icon: '📈' },
+  'science':          { label: 'Science',            icon: '🔬' },
+  'health':           { label: 'Health & Fitness',   icon: '🩺' },
+  'food':             { label: 'Food & Nutrition',   icon: '🍳' },
+  'education':        { label: 'Education',          icon: '🎓' },
 };
 
 // Escape raw HTML before any markdown conversion. The companion's
@@ -1196,7 +1205,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
                 color: selectedCategory === cat ? '#fff' : '#6c7086',
               }}
             >
-              {t(`news.${cat.replace(/-/g, '_')}`) || formatCategoryLabel(cat)}
+              {formatCategoryLabel(cat)}
             </button>
           ))}
         </div>
