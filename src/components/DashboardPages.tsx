@@ -353,6 +353,7 @@ interface NewsArticle {
   category: string;
   reading_time: number;
   date: string;
+  image_url?: string | null;
 }
 
 interface ReleaseInfo {
@@ -1234,21 +1235,28 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
                 background: 'rgba(49,50,68,0.3)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 8, cursor: 'pointer',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                {article.category && (
-                  <span style={{
-                    borderRadius: 9999, background: 'rgba(168,85,247,0.15)', padding: '2px 8px',
-                    fontSize: 9, fontWeight: 500, color: '#a855f7',
-                  }}>
-                    {formatCategoryLabel(article.category)}
-                  </span>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                {article.image_url && (
+                  <img src={article.image_url} alt="" loading="lazy" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
                 )}
-                {article.reading_time > 0 && (
-                  <span style={{ fontSize: 9, color: '#6c7086' }}>{t('news.min_read', { n: article.reading_time })}</span>
-                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    {article.category && (
+                      <span style={{
+                        borderRadius: 9999, background: 'rgba(168,85,247,0.15)', padding: '2px 8px',
+                        fontSize: 9, fontWeight: 500, color: '#a855f7',
+                      }}>
+                        {formatCategoryLabel(article.category)}
+                      </span>
+                    )}
+                    {article.reading_time > 0 && (
+                      <span style={{ fontSize: 9, color: '#6c7086' }}>{t('news.min_read', { n: article.reading_time })}</span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0, lineHeight: 1.4 }}>{article.title}</p>
+                  <p style={{ fontSize: 10, color: '#6c7086', margin: '4px 0 0 0' }}>{formatRelativeDate(article.date)}</p>
+                </div>
               </div>
-              <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0, lineHeight: 1.4 }}>{article.title}</p>
-              <p style={{ fontSize: 10, color: '#6c7086', margin: '4px 0 0 0' }}>{formatRelativeDate(article.date)}</p>
             </button>
           ))}
         </div>
