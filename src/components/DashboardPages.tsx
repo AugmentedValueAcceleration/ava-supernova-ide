@@ -6446,9 +6446,9 @@ export function AvaChatPage() {
             {([
               { id: 'auto', label: 'Maestro', note: 'One coordinator handles everything — production-tuned.' },
               { id: 'qwen3.7-plus', label: 'Qwen 3.7 Plus', note: 'Flagship Qwen. 1M context.' },
-              { id: 'kimi-k2.6', label: 'Kimi K2.6', note: 'Top BYOK coordinator.' },
+              { id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code', note: 'Agentic coding leader.' },
             ]).map(opt => {
-              const isByokOnly = opt.id === 'kimi-k2.6';
+              const isByokOnly = opt.id === 'kimi-k2.7-code';
               const hasKey = byokModels.some(m => m.id === opt.id);
               const enabled = !isByokOnly || hasKey;
               return (
@@ -11747,7 +11747,7 @@ export function UsagePage() {
                           { name: 'DeepSeek V4 Flash', role: 'Mid-tier specialists' },
                           { name: 'Qwen 3.7 Plus', role: 'Builder' },
                           { name: 'Qwen 3.5 Flash', role: 'Light tier / intent gate' },
-                          { name: 'Qwen 3.5 Omni Plus', role: 'Vision' },
+                          { name: 'Qwen 3.7 Plus', role: 'Vision' },
                           { name: 'Qwen 3.5 Plus', role: 'Long-form writing' },
                         ] }
                       : activeId === 'auto'
@@ -12524,10 +12524,10 @@ export function SettingsPage() {
   const PROVIDERS = [
     { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.8, Sonnet 4.6, Haiku 4.5' },
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4 Pro and V4 Flash \u2014 1M context, MIT open-weight' },
-    { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.5 \u2014 best multi-step tool calling' },
-    { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M2.7 self-evolving, M2.5 best tool calling' },
+    { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.7 Code \u2014 agentic coding leader' },
+    { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M3 flagship, M2.7 standard' },
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5.2 \u2014 open-weights, 1M context, top-tier coding' },
-    { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.5 Omni Plus and Omni Flash — multimodal' },
+    { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.7 Plus and 3.7 Max — vision, 1M context' },
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4, Codestral, Devstral 2' },
   ];
 

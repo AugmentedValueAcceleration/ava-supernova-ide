@@ -1918,7 +1918,7 @@ async function handleMessage(data) {
       const hasImages = data.attachments.some(a => a.mimeType?.startsWith('image/'));
       const currentModel = globalThis._currentModel;
       if (hasImages && currentModel && !currentModel.supportsVision) {
-        emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.6 Plus or Qwen 3.5 Omni Flash to analyse images.` });
+        emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.7 Plus to analyse images.` });
       }
       const parts = [];
       const baseContent = combinedDesktopPrefix && effectiveContent
