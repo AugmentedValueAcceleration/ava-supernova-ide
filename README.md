@@ -60,6 +60,7 @@ Same engine as the CLI and the VS Code extension — so everything you learn in 
 - **60+ tools**, plus the IDE-only desktop- and browser-automation tools described above.
 - **Knowledge packs** — toggle domain expertise on/off in the chat bar; the system prompt rebuilds live, no restart.
 - **5-layer memory** — local-first, curated by a dedicated Memory Agent so context stays lean.
+- **Honesty gate** — completion/state claims are checked against the verifying tools run that turn; an unbacked claim is flagged rather than stated as fact. Always on, no off-switch.
 - **Tick Engine** — background awareness every couple of minutes; surfaces tasks, token balance, and support messages only when they matter.
 - **Live chat support** — Ava first-line triage, no tickets or forms.
 
