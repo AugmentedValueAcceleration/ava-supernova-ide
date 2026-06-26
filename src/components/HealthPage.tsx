@@ -1405,7 +1405,6 @@ type CookTime = { by_day: Record<string, MealCook> };
 
 function CookingTimeField({ value, onChange }: { value: CookTime | undefined; onChange: (v: CookTime) => void }) {
   const cook: CookTime = value ?? { by_day: {} };
-  const sel: React.CSSProperties = { width: '100%', padding: '6px 8px', borderRadius: 8, background: 'rgba(49,34,68,0.5)', border: '1px solid rgba(168,85,247,0.2)', color: '#cdd6f4', fontSize: 12 };
   const cellVal = (d: number, meal: MealKey) => cook.by_day[String(d)]?.[meal] ?? '';
   const setCell = (d: number, meal: MealKey, v: string) => {
     const by = { ...cook.by_day };
@@ -1426,7 +1425,7 @@ function CookingTimeField({ value, onChange }: { value: CookTime | undefined; on
           <Fragment key={d}>
             <div style={{ fontSize: 12, color: '#bac2de', paddingRight: 8 }}>{t(`health.plans.weekday.${d}`)}</div>
             {COOK_MEALS.map(m => (
-              <select key={m.m} style={sel} value={cellVal(d, m.m)} onChange={e => setCell(d, m.m, e.target.value)}>
+              <select key={m.m} style={fieldInputStyle} value={cellVal(d, m.m)} onChange={e => setCell(d, m.m, e.target.value)}>
                 {COOK_TIERS.map(o => <option key={o.v} value={o.v} style={{ background: '#1e1529' }}>{t(o.k)}</option>)}
               </select>
             ))}
