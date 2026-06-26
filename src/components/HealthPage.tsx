@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { HealthRoomChat } from './HealthRoomChat';
 import { TimeField } from './TimeField';
 import { DateField } from './MiniDatePicker';
@@ -1381,9 +1381,11 @@ export function ProfileTab() {
   );
 }
 
-// ── Cooking-time field — how long the user has to cook. Default tier
-// (≤15/≤30/≤60/60+), optionally per day for shift/irregular schedules.
-// Feeds the meal planner so quick meals land on tight days.
+// ── Cooking-time field — how long the user has to cook, set per day AND per
+// meal type (Breakfast/Lunch/Dinner), each defaulting to "Any". A 7-day grid:
+// rows = days, columns = meals. This per-slot granularity is the data Ava needs
+// to slot the right recipe into each real meal — a quick weekday breakfast, a
+// longer weekend dinner — instead of one blunt time for the whole day.
 const COOK_TIERS = [
   { v: '', k: 'health.profile.cooking_any' },
   { v: '15', k: 'health.profile.cooking_15' },
@@ -1392,40 +1394,45 @@ const COOK_TIERS = [
   { v: '60+', k: 'health.profile.cooking_60plus' },
 ];
 const COOK_DAYS = [1, 2, 3, 4, 5, 6, 0]; // Mon→Sun, via health.plans.weekday.N
-type CookTime = { default: string | null; by_day: Record<string, string> };
+type MealKey = 'breakfast' | 'lunch' | 'dinner';
+const COOK_MEALS: { m: MealKey; k: string }[] = [
+  { m: 'breakfast', k: 'health.profile.breakfast' },
+  { m: 'lunch', k: 'health.profile.lunch' },
+  { m: 'dinner', k: 'health.profile.dinner' },
+];
+type MealCook = { breakfast: string | null; lunch: string | null; dinner: string | null };
+type CookTime = { by_day: Record<string, MealCook> };
 
 function CookingTimeField({ value, onChange }: { value: CookTime | undefined; onChange: (v: CookTime) => void }) {
-  const cook: CookTime = value ?? { default: null, by_day: {} };
-  const [perDay, setPerDay] = useState(Object.keys(cook.by_day).length > 0);
-  const sel: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 8, background: 'rgba(49,34,68,0.5)', border: '1px solid rgba(168,85,247,0.2)', color: '#cdd6f4', fontSize: 13 };
-  const setDay = (d: number, v: string) => {
+  const cook: CookTime = value ?? { by_day: {} };
+  const sel: React.CSSProperties = { width: '100%', padding: '6px 8px', borderRadius: 8, background: 'rgba(49,34,68,0.5)', border: '1px solid rgba(168,85,247,0.2)', color: '#cdd6f4', fontSize: 12 };
+  const cellVal = (d: number, meal: MealKey) => cook.by_day[String(d)]?.[meal] ?? '';
+  const setCell = (d: number, meal: MealKey, v: string) => {
     const by = { ...cook.by_day };
-    if (v) by[String(d)] = v; else delete by[String(d)];
-    onChange({ ...cook, by_day: by });
+    const prev: MealCook = by[String(d)] ?? { breakfast: null, lunch: null, dinner: null };
+    const day: MealCook = { ...prev, [meal]: v || null };
+    if (!day.breakfast && !day.lunch && !day.dinner) delete by[String(d)];
+    else by[String(d)] = day;
+    onChange({ by_day: by });
   };
   return (
     <div style={{ marginTop: 16 }}>
-      <Field label={t('health.profile.cooking_time')}>
-        <select style={sel} value={cook.default ?? ''} onChange={e => onChange({ ...cook, default: e.target.value || null })}>
-          {COOK_TIERS.map(o => <option key={o.v} value={o.v} style={{ background: '#1e1529' }}>{t(o.k)}</option>)}
-        </select>
-      </Field>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('health.profile.cooking_time')}</div>
       <p style={{ fontSize: 11, color: '#6c7086', marginTop: 4 }}>{t('health.profile.cooking_time_hint')}</p>
-      <button type="button" onClick={() => setPerDay(prev => !prev)} style={{ background: 'none', border: 'none', color: '#a855f7', fontSize: 11, cursor: 'pointer', marginTop: 6, padding: 0 }}>
-        {t('health.profile.cooking_per_day')}
-      </button>
-      {perDay && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginTop: 8 }}>
-          {COOK_DAYS.map(d => (
-            <Field key={d} label={t(`health.plans.weekday.${d}`)}>
-              <select style={sel} value={cook.by_day[String(d)] ?? ''} onChange={e => setDay(d, e.target.value)}>
-                <option value="" style={{ background: '#1e1529' }}>{t('health.profile.cooking_same')}</option>
-                {COOK_TIERS.slice(1).map(o => <option key={o.v} value={o.v} style={{ background: '#1e1529' }}>{t(o.k)}</option>)}
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto repeat(3, minmax(0, 1fr))', gap: '6px 8px', alignItems: 'center', marginTop: 12 }}>
+        <div />
+        {COOK_MEALS.map(m => <div key={m.m} style={{ fontSize: 11, color: '#6c7086', textAlign: 'center' }}>{t(m.k)}</div>)}
+        {COOK_DAYS.map(d => (
+          <Fragment key={d}>
+            <div style={{ fontSize: 12, color: '#bac2de', paddingRight: 8 }}>{t(`health.plans.weekday.${d}`)}</div>
+            {COOK_MEALS.map(m => (
+              <select key={m.m} style={sel} value={cellVal(d, m.m)} onChange={e => setCell(d, m.m, e.target.value)}>
+                {COOK_TIERS.map(o => <option key={o.v} value={o.v} style={{ background: '#1e1529' }}>{t(o.k)}</option>)}
               </select>
-            </Field>
-          ))}
-        </div>
-      )}
+            ))}
+          </Fragment>
+        ))}
+      </div>
     </div>
   );
 }
