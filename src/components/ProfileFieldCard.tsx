@@ -5,6 +5,7 @@ import { t, useLocale } from '../lib/i18n';
 // (no node deps), imported from the built core like the i18n strings.
 import { HEALTH_PROFILE_FIELDS, humaniseSlug } from '../../../core/dist/health/profile-fields.js';
 import { TimeField } from './TimeField';
+import { CookingTimeGrid, type CookTime } from './CookingTimeGrid';
 
 /**
  * Profile-field card for the IDE Health room — the structured "Ava fills your
@@ -34,7 +35,12 @@ export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSk
   const [multi, setMulti] = useState<string[]>(Array.isArray(currentValue) ? currentValue.map(String) : []);
   const [text, setText] = useState<string>(
     def?.asArray && Array.isArray(currentValue) ? currentValue.join('\n')
-    : currentValue != null && !Array.isArray(currentValue) ? String(currentValue) : '',
+    : currentValue != null && !Array.isArray(currentValue) && def?.control !== 'cooking_grid' ? String(currentValue) : '',
+  );
+  const [grid, setGrid] = useState<CookTime>(
+    currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue) && (currentValue as CookTime).by_day
+      ? (currentValue as CookTime)
+      : { by_day: {} },
   );
 
   if (!def) {
@@ -99,6 +105,14 @@ export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSk
             })}
           </div>
           <Actions onSave={() => onSubmit(multi)} onSkip={onSkip} />
+        </>
+      )}
+
+      {def.control === 'cooking_grid' && (
+        <>
+          <div style={{ fontSize: 10, color: '#8b8398', marginBottom: 8 }}>{t('health.fill.cooking_grid_hint')}</div>
+          <CookingTimeGrid value={grid} onChange={setGrid} />
+          <Actions onSave={() => onSubmit(grid)} onSkip={onSkip} />
         </>
       )}
 

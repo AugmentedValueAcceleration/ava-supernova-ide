@@ -107,7 +107,7 @@ function emptyExercise(): HealthPlanExercise {
   return { id: newId('ex'), ref: null, name: '', sets: null, reps: null, weight: null, rest_seconds: null, tempo: null, notes: null };
 }
 function emptyMeal(slot: HealthPlanMeal['slot']): HealthPlanMeal {
-  return { id: newId('ml'), slot, ref: null, name: '', servings: null, calories: null, protein_g: null, carbs_g: null, fat_g: null, notes: null };
+  return { id: newId('ml'), slot, ref: null, name: '', servings: null, calories: null, protein_g: null, carbs_g: null, fat_g: null, cook_time_minutes: null, notes: null };
 }
 function defaultDay(dayIndex: number): HealthPlanDay {
   return { day_index: dayIndex, kind: 'rest', title: null, training: [], meals: [], notes: null };
@@ -248,7 +248,7 @@ export default function HealthPlansPage() {
 
   return (
     <>
-      <BasePlansTab plans={plans} onNew={() => setSetupOpen(true)} onOpen={onOpenPlan} onDelete={onDeletePlan} />
+      <BasePlansTab plans={plans} onNew={() => setSetupOpen(true)} onOpen={onOpenPlan} onDelete={onDeletePlan} onSavePlan={onSavePlan} />
       {(setupOpen || planOpen) && (
         <PlanOverlay
           planOpen={planOpen}
@@ -312,11 +312,13 @@ function PlanSelect({ value, onChange, options }: {
   );
 }
 
-function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
+function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
   plans: HealthPlanSummary[];
   onNew: () => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Persist an edited plan from the calendar day view (refreshes the list). */
+  onSavePlan: (plan: HealthPlan) => void;
 }) {
   const [tab, setTab] = useState<'calendar' | 'programs'>('calendar');
   // A clicked calendar day opens the DAY view (what's on that date across every
@@ -326,26 +328,6 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
     const dated = plans.find(p => p.start_date);
     return dated?.start_date ? new Date(`${dated.start_date}T00:00:00`) : new Date();
   });
-
-  // Mark every day each plan spans — training (accent) / meals (amber) —
-  // so created plans actually show on the calendar (was hardcoded empty).
-  const planMarks = useMemo(() => {
-    const map = new Map<string, { training: boolean; meals: boolean }>();
-    for (const p of plans) {
-      if (!p.start_date) continue;
-      const start = new Date(`${p.start_date}T00:00:00`);
-      if (isNaN(start.getTime())) continue;
-      const training = p.type === 'fitness' || p.type === 'combined';
-      const meals = p.type === 'meal' || p.type === 'combined';
-      for (let i = 0; i < p.duration_days; i++) {
-        const d = new Date(start); d.setDate(d.getDate() + i);
-        const key = ymd(d);
-        const prev = map.get(key) ?? { training: false, meals: false };
-        map.set(key, { training: prev.training || training, meals: prev.meals || meals });
-      }
-    }
-    return map;
-  }, [plans]);
 
   // Full dated plans → per-date content (session title + move / meal names) so
   // the calendar cells show what's actually on, not just a dot. Mirrors the
@@ -378,6 +360,28 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
         if (p.type === 'fitness' || p.type === 'combined') for (const ex of day.training) if (ex.name) cur.training.push(ex.name);
         if (p.type === 'meal' || p.type === 'combined') for (const m of day.meals) if (m.name) cur.meals.push(m.name);
         map.set(key, cur);
+      }
+    }
+    return map;
+  }, [fullPlans]);
+
+  // Dots reflect the day's ACTUAL content (from the full dated plans), not just
+  // the plan's type/range — so deleting every meal on a day clears its dot.
+  const planMarks = useMemo(() => {
+    const map = new Map<string, { training: boolean; meals: boolean }>();
+    for (const p of fullPlans) {
+      if (!p.start_date) continue;
+      const start = new Date(`${p.start_date}T00:00:00`);
+      if (isNaN(start.getTime())) continue;
+      for (const day of p.days) {
+        const hasTraining = (p.type === 'fitness' || p.type === 'combined') && day.training.some(e => e.name);
+        const hasMeals = (p.type === 'meal' || p.type === 'combined') && day.meals.some(m => m.name);
+        if (!hasTraining && !hasMeals) continue;
+        const d = new Date(start);
+        d.setDate(d.getDate() + (day.day_index - 1));
+        const key = ymd(d);
+        const prev = map.get(key) ?? { training: false, meals: false };
+        map.set(key, { training: prev.training || hasTraining, meals: prev.meals || hasMeals });
       }
     }
     return map;
@@ -421,7 +425,7 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
         </div>
       )}
 
-      {dayKey && <HealthDayView dateKey={dayKey} onClose={() => setDayKey(null)} onNewPlan={() => { setDayKey(null); onNew(); }} />}
+      {dayKey && <HealthDayView dateKey={dayKey} onClose={() => setDayKey(null)} onNewPlan={() => { setDayKey(null); onNew(); }} onSavePlan={onSavePlan} />}
     </div>
   );
 }
@@ -433,25 +437,129 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete }: {
 // tomorrow by adding one builder to `sections` below — the view renders whatever
 // sections exist, so new content types never restructure anything.
 
-function planDayForDate(plan: HealthPlan, dateKey: string): HealthPlanDay | null {
+/** The 1-based day_index a plan assigns to a calendar date, or null when the
+ *  date is outside the plan's range. Does NOT require the day object to exist —
+ *  so an empty/rest day can still be edited. */
+function dayIndexForDate(plan: HealthPlan, dateKey: string): number | null {
   if (!plan.start_date) return null;
   const start = new Date(`${plan.start_date}T00:00:00`).getTime();
   const sel = new Date(`${dateKey}T00:00:00`).getTime();
   if (isNaN(start) || isNaN(sel)) return null;
   const idx = Math.round((sel - start) / 86400000) + 1;
   if (idx < 1 || idx > plan.duration_days) return null;
+  return idx;
+}
+
+function planDayForDate(plan: HealthPlan, dateKey: string): HealthPlanDay | null {
+  const idx = dayIndexForDate(plan, dateKey);
+  if (idx == null) return null;
   return plan.days.find(d => d.day_index === idx) ?? null;
 }
 
-interface DayAgendaItem { id: string; kind: 'exercise' | 'recipe'; slug?: string; title: string; meta?: string; slot?: string; thumb?: string | null; planTitle: string }
+interface DayAgendaItem { id: string; kind: 'exercise' | 'recipe'; slug?: string; title: string; meta?: string; slot?: string; thumb?: string | null; planTitle: string; planId: string; itemId: string; dayIndex: number }
 interface DayAgendaSection { key: string; label: string; icon: string; accent: string; items: DayAgendaItem[] }
 
-function HealthDayView({ dateKey, onClose, onNewPlan }: { dateKey: string; onClose: () => void; onNewPlan: () => void }) {
+function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: string; onClose: () => void; onNewPlan: () => void; onSavePlan: (plan: HealthPlan) => void }) {
   useLocale();
   const [plans, setPlans] = useState<HealthPlan[]>([]);
   const [exerciseDetails, setExerciseDetails] = useState<Record<string, HealthExerciseDetail>>({});
   const [recipeDetails, setRecipeDetails] = useState<Record<string, HealthRecipeDetail>>({});
   const [detail, setDetail] = useState<{ kind: 'exercise' | 'recipe'; slug: string; name: string } | null>(null);
+
+  // ── Editing: the loaded full plans ARE the working model — edits mutate the
+  // matching plan's day and autosave (debounced) through onSavePlan, the same
+  // path the plan builder uses. ───────────────────────────────────────────────
+  const [editing, setEditing] = useState(false);
+  // Add / swap happens INLINE inside a section (no second overlay).
+  const [inlineSearch, setInlineSearch] = useState<{ section: 'training' | 'meals'; kind: 'exercise' | 'recipe'; mode: 'add' | 'swap'; planId: string; dayIndex: number; itemId?: string } | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const MIN_PANEL_H = 400;
+  const [frozenH, setFrozenH] = useState<number | null>(null);
+  // Which item's delete is awaiting confirmation — same confirm as deleting a program.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const plansRef = useRef<HealthPlan[]>([]);
+  plansRef.current = plans;
+  const pendingSave = useRef<Map<string, HealthPlan>>(new Map());
+  const saveTimer = useRef<number | undefined>(undefined);
+  const flushSaves = () => {
+    if (saveTimer.current !== undefined) { clearTimeout(saveTimer.current); saveTimer.current = undefined; }
+    for (const p of pendingSave.current.values()) onSavePlan(p);
+    pendingSave.current.clear();
+  };
+  const scheduleSave = (plan: HealthPlan) => {
+    pendingSave.current.set(plan.id, plan);
+    if (saveTimer.current !== undefined) clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(flushSaves, 600);
+  };
+  useEffect(() => () => flushSaves(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updatePlanDay = (planId: string, dayIndex: number, mutate: (day: HealthPlanDay) => HealthPlanDay) => {
+    const p = plansRef.current.find(x => x.id === planId);
+    if (!p) return;
+    const existing = p.days.find(d => d.day_index === dayIndex) ?? defaultDay(dayIndex);
+    const nextDay = mutate(existing);
+    const days = p.days.filter(d => d.day_index !== dayIndex);
+    if (!isEmptyDay(nextDay)) days.push(nextDay);
+    days.sort((a, b) => a.day_index - b.day_index);
+    const nextPlan: HealthPlan = { ...p, days };
+    // Update the ref synchronously so rapid successive edits (e.g. two quick
+    // deletes) each build on the previous one — otherwise the second read would
+    // see pre-edit state and its save would revert the first edit.
+    const nextPlans = plansRef.current.map(x => (x.id === planId ? nextPlan : x));
+    plansRef.current = nextPlans;
+    setPlans(nextPlans);
+    scheduleSave(nextPlan);
+  };
+
+  // Local catalogue search powering the inline add/swap strip (self-contained).
+  const [exResults, setExResults] = useState<HealthExerciseSummary[]>([]);
+  const [recResults, setRecResults] = useState<HealthRecipeSummary[]>([]);
+  const [searching, setSearching] = useState(false);
+  const exSeq = useRef(0);
+  const recSeq = useRef(0);
+  const searchExercises = useCallback<PlanSearch>(async (o) => {
+    exSeq.current += 1; const seq = exSeq.current; setSearching(true);
+    try { const { exercises } = await loadExercises({ q: o.q, offset: o.offset, workoutType: o.category ?? undefined, limit: PICKER_PAGE_SIZE }); if (seq === exSeq.current) setExResults(exercises); }
+    catch { if (seq === exSeq.current) setExResults([]); }
+    finally { if (seq === exSeq.current) setSearching(false); }
+  }, []);
+  const searchRecipes = useCallback<PlanSearch>(async (o) => {
+    recSeq.current += 1; const seq = recSeq.current; setSearching(true);
+    try { const { recipes } = await loadRecipes({ q: o.q, offset: o.offset, course: o.category ?? undefined, limit: PICKER_PAGE_SIZE }); if (seq === recSeq.current) setRecResults(recipes); }
+    catch { if (seq === recSeq.current) setRecResults([]); }
+    finally { if (seq === recSeq.current) setSearching(false); }
+  }, []);
+
+  const addTargets = useMemo(() => {
+    let training: { planId: string; dayIndex: number } | null = null;
+    let meals: { planId: string; dayIndex: number } | null = null;
+    for (const p of plans) {
+      const idx = dayIndexForDate(p, dateKey);
+      if (idx == null) continue;
+      if (!training && (p.type === 'fitness' || p.type === 'combined')) training = { planId: p.id, dayIndex: idx };
+      if (!meals && (p.type === 'meal' || p.type === 'combined')) meals = { planId: p.id, dayIndex: idx };
+    }
+    return { training, meals };
+  }, [plans, dateKey]);
+
+  const handleInlinePick = (it: { slug: string; name: string }) => {
+    if (!inlineSearch) return;
+    const { kind, mode, planId, dayIndex, itemId } = inlineSearch;
+    if (kind === 'exercise') {
+      loadExerciseDetail(it.slug).then(d => { if (d) setExerciseDetails(prev => ({ ...prev, [it.slug]: d })); }).catch(() => {});
+      if (mode === 'add') updatePlanDay(planId, dayIndex, day => ({ ...day, kind: day.kind === 'rest' ? 'training' : day.kind, training: [...day.training, { ...emptyExercise(), ref: { kind: 'exercise', slug: it.slug }, name: it.name }] }));
+      else if (itemId) updatePlanDay(planId, dayIndex, day => ({ ...day, training: day.training.map(e => (e.id === itemId ? { ...e, ref: { kind: 'exercise', slug: it.slug }, name: it.name } : e)) }));
+    } else {
+      loadRecipeDetail(it.slug).then(d => { if (d) setRecipeDetails(prev => ({ ...prev, [it.slug]: d })); }).catch(() => {});
+      if (mode === 'add') updatePlanDay(planId, dayIndex, day => ({ ...day, meals: [...day.meals, { ...emptyMeal('breakfast'), ref: { kind: 'recipe', slug: it.slug }, name: it.name, servings: 1 }] }));
+      else if (itemId) updatePlanDay(planId, dayIndex, day => ({ ...day, meals: day.meals.map(m => (m.id === itemId ? { ...m, ref: { kind: 'recipe', slug: it.slug }, name: it.name } : m)) }));
+    }
+    setInlineSearch(null);
+  };
+  const deleteItem = (section: 'training' | 'meals', planId: string, dayIndex: number, itemId: string) => {
+    if (section === 'training') updatePlanDay(planId, dayIndex, day => ({ ...day, training: day.training.filter(e => e.id !== itemId) }));
+    else updatePlanDay(planId, dayIndex, day => ({ ...day, meals: day.meals.filter(m => m.id !== itemId) }));
+  };
 
   // Self-load the active, dated plans (same as the Command Center week view).
   useEffect(() => {
@@ -489,15 +597,17 @@ function HealthDayView({ dateKey, onClose, onNewPlan }: { dateKey: string; onClo
     const meals: DayAgendaItem[] = [];
     const allMeals: HealthPlanMeal[] = [];
     for (const p of plans) {
-      const day = planDayForDate(p, dateKey);
+      const idx = dayIndexForDate(p, dateKey);
+      if (idx == null) continue;
+      const day = p.days.find(d => d.day_index === idx);
       if (!day) continue;
       if (p.type === 'fitness' || p.type === 'combined') {
-        for (const ex of day.training) if (ex.name) training.push({ id: `${p.id}:${ex.id}`, kind: 'exercise', slug: ex.ref?.slug, title: ex.name, meta: exerciseSummary(ex), thumb: ex.ref ? (exerciseDetails[ex.ref.slug]?.thumbnail_url ?? null) : null, planTitle: p.title });
+        for (const ex of day.training) if (ex.name) training.push({ id: `${p.id}:${ex.id}`, planId: p.id, itemId: ex.id, dayIndex: idx, kind: 'exercise', slug: ex.ref?.slug, title: ex.name, meta: exerciseSummary(ex), thumb: ex.ref ? (exerciseDetails[ex.ref.slug]?.thumbnail_url ?? null) : null, planTitle: p.title });
       }
       if (p.type === 'meal' || p.type === 'combined') {
         for (const meal of day.meals) if (meal.name) {
           allMeals.push(meal);
-          meals.push({ id: `${p.id}:${meal.id}`, kind: 'recipe', slug: meal.ref?.slug, title: meal.name, meta: mealSummaryLine(meal, recipeDetails), slot: meal.slot, thumb: meal.ref ? (recipeDetails[meal.ref.slug]?.hero_image_url ?? null) : null, planTitle: p.title });
+          meals.push({ id: `${p.id}:${meal.id}`, planId: p.id, itemId: meal.id, dayIndex: idx, kind: 'recipe', slug: meal.ref?.slug, title: meal.name, meta: mealSummaryLine(meal, recipeDetails), slot: meal.slot, thumb: meal.ref ? (recipeDetails[meal.ref.slug]?.hero_image_url ?? null) : null, planTitle: p.title });
         }
       }
     }
@@ -520,66 +630,119 @@ function HealthDayView({ dateKey, onClose, onNewPlan }: { dateKey: string; onClo
   const date = new Date(`${dateKey}T00:00:00`);
   const dateLabel = date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
   const anything = sections.some(s => s.items.length > 0);
+  const covered = plans.some(p => dayIndexForDate(p, dateKey) != null);
+  // Hold the modal's size steady while editing (freeze height on entering Edit)
+  // with a min height so it never collapses as items are added / deleted.
+  const enterEdit = () => { setFrozenH(panelRef.current?.offsetHeight ?? null); setEditing(true); };
+  const exitEdit = () => { flushSaves(); setInlineSearch(null); setConfirmingId(null); setFrozenH(null); setEditing(false); };
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, maxHeight: '88vh', overflow: 'hidden', borderRadius: 14, border: '1px solid rgba(168,85,247,0.25)', background: 'linear-gradient(to bottom right, #100d1a, #181327)', boxShadow: '0 0 80px rgba(168,85,247,0.15)' }}>
+      <div ref={panelRef} onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, minHeight: MIN_PANEL_H, maxHeight: '88vh', ...(editing && frozenH ? { height: Math.max(frozenH, MIN_PANEL_H) } : {}), overflow: 'hidden', borderRadius: 14, border: '1px solid rgba(168,85,247,0.25)', background: 'linear-gradient(to bottom right, #100d1a, #181327)', boxShadow: '0 0 80px rgba(168,85,247,0.15)' }}>
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(168,85,247,0.14)', padding: '12px 24px' }}>
           <div>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.18em', color: MUTED }}>{t('health.plans.on_this_day')}</div>
             <h2 style={{ fontSize: 16, fontWeight: 600, color: TEXT, margin: 0 }}>{dateLabel}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label={t('health.plans.cancel')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32, width: 32, borderRadius: 999, border: 'none', background: 'rgba(0,0,0,0.3)', color: MUTED, fontSize: 15, cursor: 'pointer' }}>×</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {covered && (
+              <button type="button" onClick={() => (editing ? exitEdit() : enterEdit())} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
+                {editing ? t('health.plans.done') : t('health.plans.edit')}
+              </button>
+            )}
+            <button type="button" onClick={() => { flushSaves(); onClose(); }} aria-label={t('health.plans.cancel')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32, width: 32, borderRadius: 999, border: 'none', background: 'rgba(0,0,0,0.3)', color: MUTED, fontSize: 15, cursor: 'pointer' }}>×</button>
+          </div>
         </div>
 
         <div style={{ minHeight: 0, flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {!anything ? (
+          {!editing && !anything ? (
             <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '48px 16px', textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.day_empty')}</div>
               <button type="button" onClick={onNewPlan} style={{ ...accentBtn(true), margin: '12px auto 0', padding: '6px 12px', fontSize: 11 }}>{t('health.plans.new_plan')}</button>
             </div>
-          ) : sections.map(section => (
-            <div key={section.key}>
-              <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: MUTED }}>
-                <span aria-hidden>{section.icon}</span>{section.label}
-                {section.items.length > 0 && <span style={{ opacity: 0.6 }}>· {section.items.length}</span>}
-              </div>
-              {section.items.length === 0 ? (
-                <div style={{ borderRadius: 6, border: `1px dashed ${BORDER}`, padding: '10px 12px', fontSize: 11, fontStyle: 'italic', color: MUTED }}>
-                  {section.key === 'training' ? t('health.plans.no_workout') : t('health.plans.no_meals')}
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 8 }}>
-                  {section.items.map(item => (
-                    <button key={item.id} type="button" disabled={!item.slug} onClick={() => openItem(item)} title={item.planTitle}
-                      style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden', borderRadius: 10, border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.015)', padding: 8, textAlign: 'left', cursor: item.slug ? 'pointer' : 'default' }}>
-                      <div style={{ position: 'relative', height: 48, width: 48, flexShrink: 0, overflow: 'hidden', borderRadius: 8, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
-                        {item.thumb
-                          ? <img src={item.thumb} alt="" loading="lazy" style={{ height: '100%', width: '100%', objectFit: 'cover' }} />
-                          : <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, background: `linear-gradient(135deg, ${section.accent}2e, ${section.accent}0d)` }} aria-hidden>{section.icon}</div>}
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.slot && <span style={{ marginRight: 6, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.04em', color: MUTED }}>{item.slot}</span>}{item.title}
-                        </div>
-                        {item.meta && <div style={{ fontSize: 10, color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.meta}</div>}
-                        <div style={{ fontSize: 9, color: MUTED, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.planTitle}</div>
-                      </div>
+          ) : sections.map(section => {
+            const sectionKey = section.key as 'training' | 'meals';
+            const addTarget = sectionKey === 'training' ? addTargets.training : addTargets.meals;
+            const searchKind: 'exercise' | 'recipe' = sectionKey === 'training' ? 'exercise' : 'recipe';
+            const open = editing && inlineSearch?.section === sectionKey;
+            return (
+              <div key={section.key}>
+                <div style={{ marginBottom: 8, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: MUTED }}>
+                    <span aria-hidden>{section.icon}</span>{section.label}
+                    {section.items.length > 0 && <span style={{ opacity: 0.6 }}>· {section.items.length}</span>}
+                  </span>
+                  {editing && addTarget && (
+                    <button type="button"
+                      onClick={() => setInlineSearch(open && inlineSearch?.mode === 'add' ? null : { section: sectionKey, kind: searchKind, mode: 'add', planId: addTarget.planId, dayIndex: addTarget.dayIndex })}
+                      style={{ ...accentBtn(true), padding: '4px 10px', fontSize: 11 }}>
+                      {sectionKey === 'training' ? t('health.plans.add_exercises') : t('health.plans.add_recipes')}
                     </button>
-                  ))}
+                  )}
                 </div>
-              )}
-              {section.key === 'meals' && hasMeals && (
-                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, borderRadius: 6, border: '1px solid rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.05)', padding: '8px 12px' }}>
-                  <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'rgba(252,211,77,0.8)' }}>{t('health.plans.day_total')}</span>
-                  {MACRO_FIELDS.map(f => (
-                    <span key={f.key} style={{ fontSize: 11, color: TEXT2 }}>{t(f.labelKey)} <span style={{ fontWeight: 600, color: TEXT }}>{mealTotals[f.key] ?? 0}{f.unit}</span></span>
-                  ))}
-                  {mealsEstimated && <span style={{ fontSize: 9, fontStyle: 'italic', color: MUTED }}>{t('health.plans.estimated')}</span>}
-                </div>
-              )}
-            </div>
-          ))}
+
+                {open && inlineSearch && (
+                  <InlineCatalogSearch
+                    kind={inlineSearch.kind}
+                    mode={inlineSearch.mode}
+                    accent={section.accent}
+                    results={inlineSearch.kind === 'exercise' ? exResults : recResults}
+                    searching={searching}
+                    onSearch={inlineSearch.kind === 'exercise' ? searchExercises : searchRecipes}
+                    onPick={handleInlinePick}
+                    onClose={() => setInlineSearch(null)}
+                  />
+                )}
+
+                {section.items.length === 0 ? (
+                  <div style={{ borderRadius: 6, border: `1px dashed ${BORDER}`, padding: '10px 12px', fontSize: 11, fontStyle: 'italic', color: MUTED }}>
+                    {sectionKey === 'training' ? t('health.plans.no_workout') : t('health.plans.no_meals')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 8 }}>
+                    {section.items.map(item => (
+                      editing ? (
+                        <div key={item.id} title={item.planTitle}
+                          style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden', borderRadius: 10, border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.015)', padding: 8, textAlign: 'left' }}>
+                          <AgendaCardInner item={item} icon={section.icon} accent={section.accent} />
+                          {confirmingId === item.id ? (
+                            <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 6, borderRadius: 6, border: '1px solid rgba(243,139,168,0.3)', background: INPUT_BG, padding: '4px 8px' }}>
+                              <span style={{ fontSize: 10, color: TEXT2 }}>{t('health.plans.delete_q')}</span>
+                              <button type="button" onClick={() => { deleteItem(sectionKey, item.planId, item.dayIndex, item.itemId); setConfirmingId(null); }} style={{ border: 'none', background: 'transparent', fontSize: 10, fontWeight: 600, color: RED, cursor: 'pointer' }}>{t('health.plans.yes')}</button>
+                              <button type="button" onClick={() => setConfirmingId(null)} style={{ border: 'none', background: 'transparent', fontSize: 10, color: MUTED, cursor: 'pointer' }}>{t('health.plans.no')}</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 2 }}>
+                              <button type="button" title={t('health.plans.swap')}
+                                onClick={() => setInlineSearch({ section: sectionKey, kind: searchKind, mode: 'swap', planId: item.planId, dayIndex: item.dayIndex, itemId: item.itemId })}
+                                style={{ display: 'flex', height: 24, width: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 12, color: MUTED, cursor: 'pointer' }}>⇄</button>
+                              <button type="button" title={t('health.plans.remove')}
+                                onClick={() => setConfirmingId(item.id)}
+                                style={{ display: 'flex', height: 24, width: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 12, color: MUTED, cursor: 'pointer' }}>✕</button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <button key={item.id} type="button" disabled={!item.slug} onClick={() => openItem(item)} title={item.planTitle}
+                          style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden', borderRadius: 10, border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.015)', padding: 8, textAlign: 'left', cursor: item.slug ? 'pointer' : 'default' }}>
+                          <AgendaCardInner item={item} icon={section.icon} accent={section.accent} />
+                        </button>
+                      )
+                    ))}
+                  </div>
+                )}
+                {sectionKey === 'meals' && hasMeals && (
+                  <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, borderRadius: 6, border: '1px solid rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.05)', padding: '8px 12px' }}>
+                    <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'rgba(252,211,77,0.8)' }}>{t('health.plans.day_total')}</span>
+                    {MACRO_FIELDS.map(f => (
+                      <span key={f.key} style={{ fontSize: 11, color: TEXT2 }}>{t(f.labelKey)} <span style={{ fontWeight: 600, color: TEXT }}>{mealTotals[f.key] ?? 0}{f.unit}</span></span>
+                    ))}
+                    {mealsEstimated && <span style={{ fontSize: 9, fontStyle: 'italic', color: MUTED }}>{t('health.plans.estimated')}</span>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {detail && (
@@ -589,6 +752,87 @@ function HealthDayView({ dateKey, onClose, onNewPlan }: { dateKey: string; onClo
             recipe={detail.kind === 'recipe' ? recipeDetails[detail.slug] : undefined}
             onClose={() => setDetail(null)}
           />
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+/** Thumbnail + title/meta/plan block — shared by the read card and the edit
+ *  card so both look identical (image-1 design); only the trailing control
+ *  differs (open-detail vs swap/delete). */
+function AgendaCardInner({ item, icon, accent }: { item: DayAgendaItem; icon: string; accent: string }) {
+  return (
+    <>
+      <div style={{ position: 'relative', height: 48, width: 48, flexShrink: 0, overflow: 'hidden', borderRadius: 8, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+        {item.thumb
+          ? <img src={item.thumb} alt="" loading="lazy" style={{ height: '100%', width: '100%', objectFit: 'cover' }} />
+          : <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, background: `linear-gradient(135deg, ${accent}2e, ${accent}0d)` }} aria-hidden>{icon}</div>}
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {item.slot && <span style={{ marginRight: 6, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.04em', color: MUTED }}>{item.slot}</span>}{item.title}
+        </div>
+        {item.meta && <div style={{ fontSize: 10, color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.meta}</div>}
+        <div style={{ fontSize: 9, color: MUTED, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.planTitle}</div>
+      </div>
+    </>
+  );
+}
+
+/** Compact catalogue search that drops INLINE inside a section (no overlay).
+ *  Picking a result adds it / swaps it in place. */
+function InlineCatalogSearch({ kind, mode, accent, results, searching, onSearch, onPick, onClose }: {
+  kind: 'exercise' | 'recipe';
+  mode: 'add' | 'swap';
+  accent: string;
+  results: Array<HealthExerciseSummary | HealthRecipeSummary>;
+  searching: boolean;
+  onSearch: PlanSearch;
+  onPick: (it: { slug: string; name: string }) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    const tmr = window.setTimeout(() => onSearch({ q: query.trim(), offset: 0, category: null }), query ? 300 : 0);
+    return () => clearTimeout(tmr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+  const icon = kind === 'exercise' ? '🏋' : '🍽';
+  return (
+    <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.05)', padding: 8 }}>
+      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
+          placeholder={kind === 'exercise' ? t('health.plans.picker.search_exercises') : t('health.plans.picker.search_recipes')}
+          style={{ ...inputStyle, flex: 1 }} />
+        <button type="button" onClick={onClose} aria-label={t('health.plans.cancel')} style={{ flexShrink: 0, border: 'none', background: 'transparent', padding: '4px 6px', color: MUTED, cursor: 'pointer' }}>✕</button>
+      </div>
+      <div style={{ maxHeight: 230, overflowY: 'auto' }}>
+        {searching && results.length === 0 ? (
+          <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 11, color: MUTED }}>{t('health.plans.searching')}</div>
+        ) : results.length === 0 ? (
+          <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 11, color: MUTED }}>{kind === 'exercise' ? t('health.plans.picker.no_exercises') : t('health.plans.picker.no_recipes')}</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 6 }}>
+            {results.map(r => {
+              const slug = (r as HealthExerciseSummary | HealthRecipeSummary).slug;
+              const name = (r as HealthExerciseSummary | HealthRecipeSummary).name;
+              const thumb = kind === 'exercise' ? ((r as HealthExerciseSummary).thumbnail_url ?? null) : ((r as HealthRecipeSummary).hero_image_url ?? null);
+              return (
+                <button key={slug} type="button" onClick={() => onPick({ slug, name })}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', borderRadius: 8, border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.015)', padding: 6, textAlign: 'left', cursor: 'pointer' }}>
+                  <div style={{ position: 'relative', height: 36, width: 36, flexShrink: 0, overflow: 'hidden', borderRadius: 6, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+                    {thumb
+                      ? <img src={thumb} alt="" loading="lazy" style={{ height: '100%', width: '100%', objectFit: 'cover' }} />
+                      : <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: `linear-gradient(135deg, ${accent}2e, ${accent}0d)` }} aria-hidden>{icon}</div>}
+                  </div>
+                  <span style={{ minWidth: 0, flex: 1, fontSize: 11, fontWeight: 500, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                  <span style={{ flexShrink: 0, fontSize: 12, color: ACCENT }}>{mode === 'swap' ? '⇄' : '+'}</span>
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -1153,6 +1397,7 @@ function mealSummaryLine(meal: HealthPlanMeal, recipeDetails: Record<string, Hea
   const { macros } = mealMacros(meal, recipeDetails);
   if (macros.calories != null) parts.push(t('health.plans.n_cal', { n: macros.calories }));
   if (macros.protein_g != null) parts.push(t('health.plans.n_protein', { n: macros.protein_g }));
+  if (meal.cook_time_minutes != null) parts.push(t('health.plans.n_cook', { n: meal.cook_time_minutes }));
   return parts.join('  ·  ') || '—';
 }
 
@@ -1285,11 +1530,13 @@ function routineSets(detail: HealthExerciseDetail | undefined): number | null {
   return null;
 }
 
-function ExerciseRow({ ex, detail, onChange, onRemove }: {
+function ExerciseRow({ ex, detail, onChange, onRemove, onSwap }: {
   ex: HealthPlanExercise;
   detail: HealthExerciseDetail | undefined;
   onChange: (e: HealthPlanExercise) => void;
   onRemove: () => void;
+  /** When set, a swap button replaces this exercise with another from the catalogue. */
+  onSwap?: () => void;
 }) {
   const recSets = routineSets(detail);
   const recRest = detail?.routine?.rest_seconds ?? null;
@@ -1300,6 +1547,7 @@ function ExerciseRow({ ex, detail, onChange, onRemove }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderRadius: 6, border: `1px solid ${BORDER}`, background: INPUT_BG, padding: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input value={ex.name} onChange={e => onChange({ ...ex, name: e.target.value })} placeholder={t('health.plans.exercise_name_placeholder')} style={{ ...inputStyle, flex: 1 }} />
+        {onSwap && <button type="button" onClick={onSwap} title={t('health.plans.swap')} style={{ border: 'none', background: 'transparent', padding: '0 4px', color: MUTED, cursor: 'pointer' }}>⇄</button>}
         <button type="button" onClick={onRemove} title={t('health.plans.remove')} style={{ border: 'none', background: 'transparent', padding: '0 4px', color: MUTED, cursor: 'pointer' }}>✕</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
@@ -1318,11 +1566,13 @@ function ExerciseRow({ ex, detail, onChange, onRemove }: {
   );
 }
 
-function MealRow({ meal, recipeDetails, onChange, onRemove }: {
+function MealRow({ meal, recipeDetails, onChange, onRemove, onSwap }: {
   meal: HealthPlanMeal;
   recipeDetails: Record<string, HealthRecipeDetail>;
   onChange: (m: HealthPlanMeal) => void;
   onRemove: () => void;
+  /** When set, a swap button replaces this meal with another recipe from the catalogue. */
+  onSwap?: () => void;
 }) {
   const isRecipe = !!meal.ref;
   const { macros, estimated, pending } = mealMacros(meal, recipeDetails);
@@ -1332,6 +1582,7 @@ function MealRow({ meal, recipeDetails, onChange, onRemove }: {
         <PlanSelect value={meal.slot} onChange={v => onChange({ ...meal, slot: v as HealthPlanMeal['slot'] })}
           options={[{ value: 'breakfast', label: mealSlotLabel('breakfast') }, { value: 'lunch', label: mealSlotLabel('lunch') }, { value: 'dinner', label: mealSlotLabel('dinner') }, { value: 'snack', label: mealSlotLabel('snack') }]} />
         <input value={meal.name} onChange={e => onChange({ ...meal, name: e.target.value })} placeholder={t('health.plans.meal_name_placeholder')} style={{ ...inputStyle, flex: 1 }} />
+        {onSwap && <button type="button" onClick={onSwap} title={t('health.plans.swap')} style={{ border: 'none', background: 'transparent', padding: '0 4px', color: MUTED, cursor: 'pointer' }}>⇄</button>}
         <button type="button" onClick={onRemove} title={t('health.plans.remove')} style={{ border: 'none', background: 'transparent', padding: '0 4px', color: MUTED, cursor: 'pointer' }}>✕</button>
       </div>
       {isRecipe ? (

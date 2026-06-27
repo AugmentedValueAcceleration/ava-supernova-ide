@@ -89,6 +89,7 @@ const {
   getHealthRoomPrefix,
   HEALTH_PROFILE_FIELDS,
   humaniseSlug,
+  summariseCookingTime,
   AVA_HOME,
   PlatformMemorySync,
   ProviderHealthTracker,
@@ -715,6 +716,8 @@ function getHealthProfileSummary() {
       const parts = [mt.breakfast && `breakfast ${mt.breakfast}`, mt.lunch && `lunch ${mt.lunch}`, mt.dinner && `dinner ${mt.dinner}`].filter(Boolean);
       if (parts.length) lines.push(`Meal times: ${parts.join(', ')}`);
     }
+    const cookLine = summariseCookingTime(p?.schedule?.cooking_time);
+    if (cookLine) lines.push(cookLine);
     if (p?.food?.likes?.length) lines.push(`Food likes: ${p.food.likes.join(', ')}`);
     if (p?.food?.dislikes?.length) lines.push(`Food dislikes (keep out of plans): ${p.food.dislikes.join(', ')}`);
     if (p?.food?.cuisines?.length) lines.push(`Favourite cuisines: ${p.food.cuisines.join(', ')}`);
@@ -790,6 +793,23 @@ function setByPath(obj, path, value) {
   }
   cur[keys[keys.length - 1]] = value;
 }
+// Normalise the cooking-time grid: keep only valid day keys ('0'–'6') and tiers
+// ('15'|'30'|'60'|'60+'), and drop days where every meal is unset.
+const COOK_TIER_SET = new Set(['15', '30', '60', '60+']);
+function coerceCookingGrid(raw) {
+  const out = {};
+  const byDay = raw?.by_day;
+  if (byDay && typeof byDay === 'object') {
+    for (const key of Object.keys(byDay)) {
+      if (!/^[0-6]$/.test(key)) continue;
+      const d = byDay[key] ?? {};
+      const tier = (v) => (typeof v === 'string' && COOK_TIER_SET.has(v) ? v : null);
+      const day = { breakfast: tier(d.breakfast), lunch: tier(d.lunch), dinner: tier(d.dinner) };
+      if (day.breakfast || day.lunch || day.dinner) out[key] = day;
+    }
+  }
+  return { by_day: out };
+}
 function coerceProfileFieldValue(def, raw) {
   switch (def.control) {
     case 'number': {
@@ -799,6 +819,8 @@ function coerceProfileFieldValue(def, raw) {
     }
     case 'multiselect':
       return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
+    case 'cooking_grid':
+      return coerceCookingGrid(raw);
     case 'text': {
       if (def.asArray) {
         const s = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.join('\n') : '';
@@ -812,6 +834,10 @@ function coerceProfileFieldValue(def, raw) {
 }
 function describeProfileValue(def, value) {
   if (value == null || (Array.isArray(value) && value.length === 0)) return 'none';
+  if (def.control === 'cooking_grid') {
+    const s = summariseCookingTime(value);
+    return s ? s.replace(/^Cooking time[^:]*:\s*/, '').replace(/\.$/, '') : 'none';
+  }
   if (Array.isArray(value)) return value.map((v) => humaniseSlug(String(v))).join(', ');
   if (def.control === 'number' && def.unit) return `${value} ${def.unit}`;
   if (def.control === 'select') return humaniseSlug(String(value));
