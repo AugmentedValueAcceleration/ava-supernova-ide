@@ -32,7 +32,7 @@ export function HealthDashboard() {
     padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12,
     fontWeight: active ? 600 : 500, background: 'transparent',
     color: active ? '#c084fc' : '#6c7086',
-    borderBottom: active ? '2px solid #a855f7' : '2px solid transparent', marginBottom: -1,
+    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: -1,
   });
 
   return (
@@ -42,7 +42,7 @@ export function HealthDashboard() {
         <h1 style={{ fontSize: 20, fontWeight: 300, color: '#cdd6f4', margin: '4px 0 0' }}>{t(greetingKey())}.</h1>
       </header>
 
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid rgba(168,85,247,0.12)' }}>
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
         <button onClick={() => setInnerTab('today')} style={tabBtn(innerTab === 'today')}>{t('health.week.today')}</button>
         <button onClick={() => setInnerTab('week')} style={tabBtn(innerTab === 'week')}>{t('health.week.title')}</button>
       </div>

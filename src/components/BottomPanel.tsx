@@ -303,7 +303,7 @@ function AvaCliPanel() {
   const lineColors: Record<CliLine['type'], string> = {
     user: '#89b4fa',
     ava: '#cdd6f4',
-    tool: '#a855f7',
+    tool: 'var(--accent)',
     error: '#f38ba8',
     system: '#6c7086',
   };
@@ -353,10 +353,10 @@ function AvaCliPanel() {
       {/* Input */}
       <div style={{
         display: 'flex', alignItems: 'center', padding: '6px 14px',
-        borderTop: '1px solid rgba(168, 85, 247, 0.12)', background: 'rgba(15, 10, 26, 0.95)',
+        borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(15, 10, 26, 0.95)',
       }}>
         <span style={{
-          color: '#a855f7', fontFamily: "'Cascadia Code', 'Fira Code', monospace",
+          color: 'var(--accent)', fontFamily: "'Cascadia Code', 'Fira Code', monospace",
           fontSize: 13, marginRight: 4, fontWeight: 600,
         }}>{'>'}</span>
         <span style={{
@@ -418,7 +418,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
       style={{
         height: panelHeight,
         background: 'rgba(15, 10, 26, 0.95)',
-        borderTop: '1px solid rgba(168, 85, 247, 0.12)',
+        borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -433,7 +433,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
           background: 'transparent',
           flexShrink: 0,
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#a855f7'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
         onMouseLeave={(e) => { if (!resizing.current) e.currentTarget.style.background = 'transparent'; }}
       />
 
@@ -461,8 +461,8 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
                   padding: '0 12px',
                   background: 'transparent',
                   border: 'none',
-                  borderBottom: isActive ? '2px solid #a855f7' : '2px solid transparent',
-                  color: isActive ? (isAva ? '#a855f7' : '#cdd6f4') : '#6c7086',
+                  borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                  color: isActive ? (isAva ? 'var(--accent)' : '#cdd6f4') : '#6c7086',
                   fontSize: 12,
                   fontWeight: isAva ? 600 : 400,
                   cursor: 'pointer',
@@ -473,7 +473,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
                   gap: 5,
                 }}
                 onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = '#a6adc8'; }}
-                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = isActive ? (isAva ? '#a855f7' : '#cdd6f4') : '#6c7086'; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = isActive ? (isAva ? 'var(--accent)' : '#cdd6f4') : '#6c7086'; }}
               >
                 {isAva && (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -535,7 +535,7 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
               {t('dash.panel.terminal_title')}
             </div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ color: '#a855f7' }}>ava</span>
+              <span style={{ color: 'var(--accent)' }}>ava</span>
               <span style={{ color: '#6c7086' }}>:</span>
               <span style={{ color: '#89b4fa' }}>~/project</span>
               <span style={{ color: '#cdd6f4', marginLeft: 4 }}>$ </span>

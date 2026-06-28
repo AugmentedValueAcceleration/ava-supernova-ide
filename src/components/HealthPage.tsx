@@ -93,7 +93,7 @@ export function HealthPage() {
     fontSize: 12, fontWeight: active ? 600 : 500,
     background: 'transparent',
     color: active ? '#c084fc' : '#6c7086',
-    borderBottom: active ? '2px solid #a855f7' : '2px solid transparent',
+    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
     marginBottom: -1,
   });
 
@@ -101,7 +101,7 @@ export function HealthPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div style={{
         padding: '20px 32px 0', flexShrink: 0,
-        borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
+        borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         background: 'rgba(12, 8, 20, 0.4)',
       }}>
         <div>
@@ -391,8 +391,8 @@ function RecipeFilterDropdown({ label, options, selected, onToggle, valueLabel }
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
           padding: '4px 11px', fontSize: 11, fontWeight: 500, borderRadius: 999,
-          border: `1px solid ${active ? '#a855f7' : '#313244'}`,
-          background: active ? 'rgba(168,85,247,0.15)' : 'transparent',
+          border: `1px solid ${active ? 'var(--accent)' : '#313244'}`,
+          background: active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
           color: active ? '#c084fc' : '#6c7086',
         }}
       >
@@ -400,7 +400,7 @@ function RecipeFilterDropdown({ label, options, selected, onToggle, valueLabel }
         <span aria-hidden style={{ fontSize: 8, opacity: 0.7 }}>&#9662;</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', left: 0, zIndex: 50, marginTop: 6, maxHeight: 288, width: 240, overflowY: 'auto', borderRadius: 12, border: '1px solid rgba(168,85,247,0.2)', background: '#1a1028', padding: 6, boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
+        <div style={{ position: 'absolute', left: 0, zIndex: 50, marginTop: 6, maxHeight: 288, width: 240, overflowY: 'auto', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: '#1a1028', padding: 6, boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
           {options.map((o) => {
             const on = selected.has(o.slug);
             return (
@@ -414,7 +414,7 @@ function RecipeFilterDropdown({ label, options, selected, onToggle, valueLabel }
                   color: on ? '#c084fc' : '#9b8caa',
                 }}
               >
-                <span style={{ display: 'flex', width: 14, height: 14, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontSize: 8, color: '#fff', border: `1px solid ${on ? '#a855f7' : '#45475a'}`, background: on ? '#a855f7' : 'transparent' }}>{on ? '✓' : ''}</span>
+                <span style={{ display: 'flex', width: 14, height: 14, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontSize: 8, color: '#fff', border: `1px solid ${on ? 'var(--accent)' : '#45475a'}`, background: on ? 'var(--accent)' : 'transparent' }}>{on ? '✓' : ''}</span>
                 {o.name}
               </button>
             );
@@ -429,7 +429,7 @@ function RecipeFilterDropdown({ label, options, selected, onToggle, valueLabel }
 
 const cardStyle: React.CSSProperties = {
   background: 'rgba(26, 16, 40, 0.6)',
-  border: '1px solid rgba(168, 85, 247, 0.12)',
+  border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
   borderRadius: 8,
   overflow: 'hidden',
 };
@@ -461,8 +461,8 @@ function ViewToggle({ view, onView }: { view: View; onView: (v: View) => void })
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28,
           borderRadius: 6, cursor: 'pointer', transition: 'all 0.12s',
-          border: `1px solid ${active ? 'rgba(168,85,247,0.5)' : 'rgba(168,85,247,0.14)'}`,
-          background: active ? 'rgba(168,85,247,0.18)' : 'transparent',
+          border: `1px solid ${active ? 'color-mix(in srgb, var(--accent) 50%, transparent)' : 'color-mix(in srgb, var(--accent) 14%, transparent)'}`,
+          background: active ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
           color: active ? '#cdd6f4' : '#6c7086',
         }}
       >
@@ -518,7 +518,7 @@ function Card({ onClick, children }: { onClick: () => void; children: React.Reac
       style={{
         ...cardStyle,
         cursor: 'pointer',
-        borderColor: hover ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.12)',
+        borderColor: hover ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)',
         transition: 'border-color 0.12s',
       }}
     >
@@ -577,13 +577,13 @@ function FromScratchBadge({ floating }: { floating?: boolean }) {
   const label = t('health.browse.from_scratch');
   if (floating) {
     return (
-      <div style={{ position: 'absolute', left: 6, top: 6, zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#a855f7', color: '#fff', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+      <div style={{ position: 'absolute', left: 6, top: 6, zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: 'var(--accent)', color: '#fff', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>
         <span aria-hidden>✦</span>{label}
       </div>
     );
   }
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 999, background: 'rgba(168,85,247,0.15)', color: '#c084fc', fontSize: 9, fontWeight: 500 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 999, background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: '#c084fc', fontSize: 9, fontWeight: 500 }}>
       <span aria-hidden>✦</span>{label}
     </span>
   );
@@ -599,7 +599,7 @@ function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: Vie
     return (
       <Card onClick={() => onOpen(r.slug)}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8 }}>
-          <div style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: 'rgba(168,85,247,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{img}</div>
+          <div style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{img}</div>
           <div style={{ minWidth: 0, flex: 1 }}>
             {r.cuisine_name && <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.4, color: '#fbbf24' }}>{r.cuisine_name}</div>}
             <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
@@ -614,7 +614,7 @@ function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: Vie
   }
   return (
     <Card onClick={() => onOpen(r.slug)}>
-      <div style={{ position: 'relative', aspectRatio: '3 / 2', overflow: 'hidden', background: 'rgba(168,85,247,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'relative', aspectRatio: '3 / 2', overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {img}
         {r.from_scratch && <FromScratchBadge floating />}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '66%', background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.3) 50%, transparent)' }} />
@@ -653,7 +653,7 @@ function LoadError({ noun, onRetry }: { noun: string; onRetry: () => void }) {
         onClick={onRetry}
         style={{
           cursor: 'pointer', borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 600,
-          border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.12)', color: '#cba6f7',
+          border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: '#cba6f7',
         }}
       >
         {t('health.browse.retry')}
@@ -673,7 +673,7 @@ function SearchInput({ value, onChange, placeholder }: { value: string; onChange
         width: '100%', boxSizing: 'border-box', marginBottom: 12,
         padding: '8px 12px', fontSize: 12,
         background: 'rgba(12, 8, 20, 0.5)', color: '#cdd6f4',
-        border: '1px solid rgba(168, 85, 247, 0.18)', borderRadius: 8, outline: 'none',
+        border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', borderRadius: 8, outline: 'none',
       }}
     />
   );
@@ -694,9 +694,9 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
       style={{
         padding: '4px 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
         borderRadius: 999,
-        background: active ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+        background: active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
         color: active ? '#c084fc' : '#6c7086',
-        border: `1px solid ${active ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.12)'}`,
+        border: `1px solid ${active ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
       }}
     >
       {children}
@@ -710,7 +710,7 @@ function Dots({ value, accent }: { value: number; accent: string }) {
       {[1, 2, 3, 4, 5].map(n => (
         <span key={n} style={{
           width: 5, height: 5, borderRadius: '50%',
-          background: n <= value ? accent : 'rgba(168, 85, 247, 0.15)',
+          background: n <= value ? accent : 'color-mix(in srgb, var(--accent) 15%, transparent)',
         }} />
       ))}
     </span>
@@ -728,7 +728,7 @@ function Pagination({ total, offset, loading, onPage }: {
   const btn = (disabled: boolean): React.CSSProperties => ({
     padding: '5px 12px', fontSize: 11, borderRadius: 6, cursor: disabled ? 'not-allowed' : 'pointer',
     background: 'transparent', color: disabled ? '#45475a' : '#9b8caa',
-    border: '1px solid rgba(168, 85, 247, 0.15)',
+    border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
   });
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 24 }}>
@@ -767,7 +767,7 @@ function ModalShell({ onClose, children, fillHeight }: { onClose: () => void; ch
         style={{
           position: 'relative', width: '100%', maxWidth: 640,
           background: 'linear-gradient(160deg, #0f0f17, #1a1625)',
-          border: '1px solid rgba(168, 85, 247, 0.25)', borderRadius: 16,
+          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', borderRadius: 16,
           // fillHeight: a consistent modal size (so detail overlays don't
           // resize per tab) with the body flexing + scrolling inside. Otherwise
           // the modal grows to fit its content up to 85vh.
@@ -802,10 +802,10 @@ function DetailPageView({ onBack, backLabel, children }: { onBack: () => void; b
   }, [onBack]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{ flex: 'none', borderBottom: '1px solid rgba(168,85,247,0.12)', paddingBottom: 10, marginBottom: 6 }}>
+      <div style={{ flex: 'none', borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', paddingBottom: 10, marginBottom: 6 }}>
         <button
           onClick={onBack}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', borderRadius: 6, border: '1px solid rgba(168,85,247,0.25)', background: 'transparent', color: '#9b8caa', fontSize: 11, fontWeight: 600, padding: '5px 10px' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'transparent', color: '#9b8caa', fontSize: 11, fontWeight: 600, padding: '5px 10px' }}
         >
           ← {backLabel}
         </button>
@@ -886,7 +886,7 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Hero image — leads the overlay, like the recipe detail. */}
       {ex.thumbnail_url && (
-        <div style={{ flexShrink: 0, height: 184, overflow: 'hidden', background: 'rgba(168,85,247,0.06)' }}>
+        <div style={{ flexShrink: 0, height: 184, overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
           <img src={ex.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         </div>
       )}
@@ -897,7 +897,7 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
           </div>
           <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{ex.name}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
-            <span style={{ textTransform: 'capitalize', background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
+            <span style={{ textTransform: 'capitalize', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
             <Dots value={ex.difficulty} accent={accent} />
             <span>{t('health.browse.difficulty_n', { n: ex.difficulty })}</span>
           </div>
@@ -945,7 +945,7 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
                     <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: `${accent}26`, color: accent }}>{m.name}</span>
                   ))}
                   {secondaries.map(m => (
-                    <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.08)', color: '#9b8caa' }}>{m.name}</span>
+                    <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#9b8caa' }}>{m.name}</span>
                   ))}
                 </div>
               </div>
@@ -955,7 +955,7 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
                 {sectionLabel(t('health.browse.equipment'))}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {ex.equipment.map(e => (
-                    <span key={e.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.08)', color: '#9b8caa', textTransform: 'capitalize' }}>{e.name}</span>
+                    <span key={e.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#9b8caa', textTransform: 'capitalize' }}>{e.name}</span>
                   ))}
                 </div>
               </div>
@@ -1136,7 +1136,7 @@ export function MySubmissionsTab() {
 const fieldInputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 12,
   background: 'rgba(12, 8, 20, 0.5)', color: '#cdd6f4',
-  border: '1px solid rgba(168, 85, 247, 0.18)', borderRadius: 6, outline: 'none',
+  border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', borderRadius: 6, outline: 'none',
   colorScheme: 'dark',
 };
 
@@ -1217,8 +1217,8 @@ function Chips({ selected, options, onToggle, emptyHint }: {
         return (
           <button key={o.slug} type="button" onClick={() => onToggle(o.slug)} style={{
             borderRadius: 999, padding: '4px 10px', fontSize: 10, cursor: 'pointer', transition: 'all 0.15s',
-            border: `1px solid ${active ? '#a855f7' : 'rgba(168,85,247,0.2)'}`,
-            background: active ? 'rgba(168,85,247,0.15)' : 'transparent',
+            border: `1px solid ${active ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 20%, transparent)'}`,
+            background: active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
             color: active ? '#c084fc' : '#9b8caa',
           }}>{o.label}</button>
         );
@@ -1279,8 +1279,8 @@ export function ProfileTab() {
                 onClick={() => update({ ...p, goals: { ...p.goals, primary: active ? null : g.value } })}
                 style={{
                   textAlign: 'left', borderRadius: 10, padding: 12, cursor: 'pointer', transition: 'all 0.15s',
-                  border: `1px solid ${active ? '#a855f7' : 'rgba(168,85,247,0.18)'}`,
-                  background: active ? 'rgba(168,85,247,0.10)' : 'transparent',
+                  border: `1px solid ${active ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 18%, transparent)'}`,
+                  background: active ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
                 }}>
                 <div style={{ fontSize: 12, fontWeight: 500, color: active ? '#c084fc' : '#e9e2f4' }}>{t(g.labelKey)}</div>
                 <div style={{ fontSize: 10, color: '#9b8caa', marginTop: 4, lineHeight: 1.5 }}>{t(g.hintKey)}</div>
@@ -1509,13 +1509,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  *  stack in one long scroll. Underline-style, matching the page's chrome. */
 function DetailTabBar<T extends string>({ tabs, active, onChange }: { tabs: { key: T; label: string }[]; active: T; onChange: (k: T) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid rgba(168,85,247,0.12)' }}>
+    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
       {tabs.map(tb => (
         <button key={tb.key} onClick={() => onChange(tb.key)} style={{
           padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
           background: 'transparent', border: 'none', marginBottom: -1,
           color: active === tb.key ? '#cdd6f4' : '#6c7086',
-          borderBottom: active === tb.key ? '2px solid #a855f7' : '2px solid transparent',
+          borderBottom: active === tb.key ? '2px solid var(--accent)' : '2px solid transparent',
         }}>{tb.label}</button>
       ))}
     </div>
@@ -1544,17 +1544,17 @@ function NutritionTable({ versions }: { versions: HealthRecipeDetail['versions']
   const th: React.CSSProperties = { padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#6c7086', textAlign: 'left', whiteSpace: 'nowrap' };
   return (
     <div>
-      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid rgba(168,85,247,0.18)' }}>
+      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid rgba(168,85,247,0.18)' }}>
+            <tr style={{ borderBottom: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)' }}>
               <th style={th}>{t('health.browse.per_serving')}</th>
               {cols.map(([k]) => <th key={k} style={th}>{t(NUTRI_LABEL_KEY[k])}</th>)}
             </tr>
           </thead>
           <tbody>
             {versions.map((vv, i) => (
-              <tr key={vv.level} style={i < versions.length - 1 ? { borderBottom: '1px solid rgba(168,85,247,0.10)' } : undefined}>
+              <tr key={vv.level} style={i < versions.length - 1 ? { borderBottom: '1px solid color-mix(in srgb, var(--accent) 10%, transparent)' } : undefined}>
                 <td style={{ ...cell, textTransform: 'capitalize', color: '#9b8caa' }}>{t(`health.browse.level.${vv.level}`)}</td>
                 {cols.map(([k]) => <td key={k} style={cell}>{typeof vv.nutrition?.[k] === 'number' ? vv.nutrition[k] : '—'}</td>)}
               </tr>
@@ -1601,7 +1601,7 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Hero image — leads the overlay, bleeds to the modal edges. */}
       {r.hero_image_url && (
-        <div style={{ flexShrink: 0, height: 184, overflow: 'hidden', background: 'rgba(168,85,247,0.06)' }}>
+        <div style={{ flexShrink: 0, height: 184, overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
           <img src={r.hero_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         </div>
       )}
@@ -1617,8 +1617,8 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
           <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{r.name}</h2>
           {(r.origin_country || r.course) && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
-              {r.origin_country && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6 }}>{r.origin_country}</span>}
-              {r.course && <span style={{ background: 'rgba(168,85,247,0.1)', padding: '2px 8px', borderRadius: 6, textTransform: 'capitalize' }}>{courseLabel(r.course)}</span>}
+              {r.origin_country && <span style={{ background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6 }}>{r.origin_country}</span>}
+              {r.course && <span style={{ background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6, textTransform: 'capitalize' }}>{courseLabel(r.course)}</span>}
             </div>
           )}
         </div>
@@ -1671,7 +1671,7 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
             {((v.diets && v.diets.length > 0) || (v.dietary_flags && v.dietary_flags.length > 0)) && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
                 {v.diets.map(d => (
-                  <span key={`d-${d}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(168,85,247,0.3)', color: '#c084fc' }}>{d}</span>
+                  <span key={`d-${d}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', color: '#c084fc' }}>{d}</span>
                 ))}
                 {v.dietary_flags.map(f => (
                   <span key={`f-${f}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>{f}</span>
@@ -1686,14 +1686,14 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
             {(st.keeps_fridge_days != null || st.keeps_freezer_months != null) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                 {st.keeps_fridge_days != null && (
-                  <div style={{ borderRadius: 8, border: '1px solid rgba(168,85,247,0.18)', padding: 16 }}>
+                  <div style={{ borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', padding: 16 }}>
                     <div style={{ fontSize: 18 }} aria-hidden>❄️</div>
                     <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086', marginTop: 4 }}>{t('health.storage.fridge')}</div>
                     <div style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', marginTop: 2 }}>{st.keeps_fridge_days} {t(st.keeps_fridge_days === 1 ? 'health.storage.day' : 'health.storage.days')}</div>
                   </div>
                 )}
                 {st.keeps_freezer_months != null && (
-                  <div style={{ borderRadius: 8, border: '1px solid rgba(168,85,247,0.18)', padding: 16 }}>
+                  <div style={{ borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', padding: 16 }}>
                     <div style={{ fontSize: 18 }} aria-hidden>🧊</div>
                     <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086', marginTop: 4 }}>{t('health.storage.freezer')}</div>
                     <div style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', marginTop: 2 }}>{st.keeps_freezer_months} {t(st.keeps_freezer_months === 1 ? 'health.storage.month' : 'health.storage.months')}</div>
@@ -1704,7 +1704,7 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
             {st.from_frozen_notes && (
               <div>
                 <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086', marginBottom: 8 }}>{t('health.storage.cooking_frozen')}</div>
-                <p style={{ margin: 0, borderRadius: 8, border: '1px solid rgba(168,85,247,0.18)', padding: '12px 14px', fontSize: 13, lineHeight: 1.6, color: '#cdd6f4' }}>{st.from_frozen_notes}</p>
+                <p style={{ margin: 0, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', padding: '12px 14px', fontSize: 13, lineHeight: 1.6, color: '#cdd6f4' }}>{st.from_frozen_notes}</p>
               </div>
             )}
             <p style={{ margin: 0, fontSize: 10, color: '#6c7086' }}>{t('health.storage.disclaimer')}</p>
@@ -1719,13 +1719,13 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
 
 const primaryBtn: React.CSSProperties = {
   padding: '7px 16px', fontSize: 12, fontWeight: 600, borderRadius: 8,
-  background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc',
-  border: '1px solid rgba(168, 85, 247, 0.4)', cursor: 'pointer',
+  background: 'color-mix(in srgb, var(--accent) 20%, transparent)', color: '#c084fc',
+  border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', cursor: 'pointer',
 };
 
 const ghostBtn: React.CSSProperties = {
   padding: '4px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
-  background: 'transparent', color: '#9b8caa', border: '1px solid rgba(168, 85, 247, 0.15)',
+  background: 'transparent', color: '#9b8caa', border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
 };
 
 const EXERCISE_TYPES: HealthExerciseType[] = [
@@ -1746,9 +1746,9 @@ export function ContributeModal({ onClose }: { onClose: () => void }) {
   const kindBtn = (k: 'exercise' | 'recipe', label: string) => (
     <button onClick={() => setKind(k)} style={{
       flex: 1, padding: '8px 0', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: 8,
-      background: kind === k ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+      background: kind === k ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
       color: kind === k ? '#c084fc' : '#6c7086',
-      border: `1px solid ${kind === k ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.12)'}`,
+      border: `1px solid ${kind === k ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
     }}>{label}</button>
   );
 
@@ -1921,9 +1921,9 @@ function ChipSelect({ options, selected, onChange }: {
         return (
           <button key={o.slug} onClick={() => toggle(o.slug)} style={{
             padding: '3px 9px', fontSize: 10, cursor: 'pointer', borderRadius: 999,
-            background: on ? 'rgba(168, 85, 247, 0.18)' : 'transparent',
+            background: on ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
             color: on ? '#c084fc' : '#6c7086',
-            border: `1px solid ${on ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.12)'}`,
+            border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
           }}>{o.name}</button>
         );
       })}

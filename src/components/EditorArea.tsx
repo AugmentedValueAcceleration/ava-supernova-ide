@@ -253,7 +253,7 @@ function stripAuthoring(md: string): string {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const MD_COMPONENTS: Record<string, any> = {
   h1: (p: any) => <h1 style={{ fontSize: 26, fontWeight: 700, color: '#fff', margin: '0 0 14px', lineHeight: 1.25 }}>{p.children}</h1>,
-  h2: (p: any) => <h2 style={{ fontSize: 19, fontWeight: 600, color: '#cba6f7', margin: '26px 0 10px', paddingBottom: 6, borderBottom: '1px solid rgba(168,85,247,0.15)' }}>{p.children}</h2>,
+  h2: (p: any) => <h2 style={{ fontSize: 19, fontWeight: 600, color: '#cba6f7', margin: '26px 0 10px', paddingBottom: 6, borderBottom: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)' }}>{p.children}</h2>,
   h3: (p: any) => <h3 style={{ fontSize: 16, fontWeight: 600, color: '#cdd6f4', margin: '20px 0 8px' }}>{p.children}</h3>,
   h4: (p: any) => <h4 style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', margin: '16px 0 6px' }}>{p.children}</h4>,
   p: (p: any) => <p style={{ margin: '0 0 12px' }}>{p.children}</p>,
@@ -263,16 +263,16 @@ const MD_COMPONENTS: Record<string, any> = {
   a: (p: any) => <a href={p.href} target="_blank" rel="noreferrer" style={{ color: '#89b4fa', textDecoration: 'none' }}>{p.children}</a>,
   strong: (p: any) => <strong style={{ fontWeight: 700, color: '#fff' }}>{p.children}</strong>,
   em: (p: any) => <em style={{ fontStyle: 'italic' }}>{p.children}</em>,
-  hr: () => <hr style={{ border: 'none', borderTop: '1px solid rgba(168,85,247,0.18)', margin: '20px 0' }} />,
+  hr: () => <hr style={{ border: 'none', borderTop: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', margin: '20px 0' }} />,
   blockquote: (p: any) => <blockquote style={{ borderLeft: '3px solid #7c3aed', margin: '12px 0', padding: '4px 14px', color: '#bac2de' }}>{p.children}</blockquote>,
   code: ({ className, children, ...rest }: any) =>
     /language-/.test(className || '')
       ? <code className={className} style={{ fontFamily: 'Consolas, monospace', fontSize: 12.5 }} {...rest}>{children}</code>
-      : <code style={{ background: 'rgba(168,85,247,0.12)', padding: '2px 6px', borderRadius: 4, fontSize: 12.5, fontFamily: 'Consolas, monospace' }} {...rest}>{children}</code>,
-  pre: (p: any) => <pre style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(168,85,247,0.14)', borderRadius: 6, padding: 12, overflow: 'auto', margin: '0 0 12px' }}>{p.children}</pre>,
+      : <code style={{ background: 'color-mix(in srgb, var(--accent) 12%, transparent)', padding: '2px 6px', borderRadius: 4, fontSize: 12.5, fontFamily: 'Consolas, monospace' }} {...rest}>{children}</code>,
+  pre: (p: any) => <pre style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)', borderRadius: 6, padding: 12, overflow: 'auto', margin: '0 0 12px' }}>{p.children}</pre>,
   table: (p: any) => <table style={{ borderCollapse: 'collapse', width: '100%', margin: '0 0 14px', fontSize: 13 }}>{p.children}</table>,
-  th: (p: any) => <th style={{ border: '1px solid rgba(168,85,247,0.2)', padding: '6px 10px', textAlign: 'left', background: 'rgba(168,85,247,0.08)', fontWeight: 600 }}>{p.children}</th>,
-  td: (p: any) => <td style={{ border: '1px solid rgba(168,85,247,0.15)', padding: '6px 10px' }}>{p.children}</td>,
+  th: (p: any) => <th style={{ border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', padding: '6px 10px', textAlign: 'left', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', fontWeight: 600 }}>{p.children}</th>,
+  td: (p: any) => <td style={{ border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)', padding: '6px 10px' }}>{p.children}</td>,
   img: (p: any) => <img src={p.src} alt={p.alt} style={{ maxWidth: '100%', borderRadius: 6, margin: '8px 0' }} />,
 };
 
@@ -280,13 +280,13 @@ function MdToggle({ mode, onMode }: { mode: 'preview' | 'source'; onMode: (m: 'p
   const btn = (m: 'preview' | 'source', label: string) => (
     <button type="button" onClick={() => onMode(m)} style={{
       padding: '3px 10px', fontSize: 11, cursor: 'pointer', borderRadius: 5,
-      border: `1px solid ${mode === m ? 'rgba(168,85,247,0.5)' : 'rgba(168,85,247,0.15)'}`,
-      background: mode === m ? 'rgba(168,85,247,0.18)' : 'transparent',
+      border: `1px solid ${mode === m ? 'color-mix(in srgb, var(--accent) 50%, transparent)' : 'color-mix(in srgb, var(--accent) 15%, transparent)'}`,
+      background: mode === m ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
       color: mode === m ? '#cdd6f4' : '#6c7086',
     }}>{label}</button>
   );
   return (
-    <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', justifyContent: 'flex-end', gap: 4, padding: '6px 10px', background: 'rgba(15,10,26,0.85)', borderBottom: '1px solid rgba(168,85,247,0.1)' }}>
+    <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', justifyContent: 'flex-end', gap: 4, padding: '6px 10px', background: 'rgba(15,10,26,0.85)', borderBottom: '1px solid color-mix(in srgb, var(--accent) 10%, transparent)' }}>
       {btn('preview', 'Preview')}
       {btn('source', 'Source')}
     </div>
@@ -341,7 +341,7 @@ function FileViewer({ path }: { path: string }) {
       {isMarkdown && <MdToggle mode={mdMode} onMode={setMdMode} />}
       {lines.map((line, i) => (
         <div key={i} style={{ display: 'flex', minHeight: 20 }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168, 85, 247, 0.04)'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 4%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <span style={{
@@ -368,8 +368,8 @@ export default function EditorArea({ dashboardPage, openFiles = [], activeFilePa
   const tabStyle = (isActive: boolean): React.CSSProperties => ({
     display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px',
     background: isActive ? 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)' : 'transparent',
-    borderTop: isActive ? '1px solid #a855f7' : '1px solid transparent',
-    borderRight: '1px solid rgba(168, 85, 247, 0.12)',
+    borderTop: isActive ? '1px solid var(--accent)' : '1px solid transparent',
+    borderRight: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
     cursor: 'pointer', minWidth: 0, flexShrink: 0,
   });
 
@@ -385,7 +385,7 @@ export default function EditorArea({ dashboardPage, openFiles = [], activeFilePa
       <div style={{
         height: 36, background: 'rgba(15, 10, 26, 0.95)',
         display: 'flex', alignItems: 'stretch', flexShrink: 0, overflowX: 'auto',
-        borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
+        borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
       }}>
         {/* Dashboard tab — click to switch back from file view */}
         {dashboardPage && (

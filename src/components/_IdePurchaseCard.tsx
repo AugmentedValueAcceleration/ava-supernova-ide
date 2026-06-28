@@ -22,8 +22,8 @@ interface IdePurchaseCardProps {
 const COLOR_TEXT_PRIMARY = '#cdd6f4';
 const COLOR_TEXT_MUTED = '#6c7086';
 const COLOR_TEXT_FAINT = '#45475a';
-const COLOR_ACCENT = '#a855f7';
-const COLOR_ACCENT_FADED = 'rgba(168,85,247,0.35)';
+const COLOR_ACCENT = 'var(--accent)';
+const COLOR_ACCENT_FADED = 'color-mix(in srgb, var(--accent) 35%, transparent)';
 const COLOR_BORDER_DEFAULT = 'rgba(49, 34, 68, 0.5)';
 const COLOR_CARD_BG = '#1a1028';
 const COLOR_EMERALD = '#a6e3a1';
@@ -58,17 +58,17 @@ export function IdePurchaseCard({
   const rateStyle: CSSProperties = { fontSize: 10, color: COLOR_TEXT_MUTED, marginTop: 2, fontVariantNumeric: 'tabular-nums' };
 
   const ctaStyle: CSSProperties = {
-    marginTop: 14,
+    // Pin to the card bottom so every CTA aligns across the row regardless of
+    // how much content sits above it. One unified outlined-accent style for all
+    // cards (popular is distinguished by its border + callout, not the button).
+    marginTop: 'auto',
     padding: '8px 12px',
     borderRadius: 8,
     fontSize: 11,
-    fontWeight: 500,
+    fontWeight: 600,
     cursor: isInteractive ? 'pointer' : 'not-allowed',
-    border: 'none',
     ...(isInteractive
-      ? popular
-        ? { background: 'linear-gradient(90deg, #a855f7, #7c3aed)', color: '#fff' }
-        : { background: 'rgba(168,85,247,0.08)', color: COLOR_ACCENT, border: '1px solid rgba(168,85,247,0.2)' }
+      ? { background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: COLOR_ACCENT, border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)' }
       : { background: 'rgba(49,34,68,0.4)', color: COLOR_TEXT_FAINT, border: `1px solid ${COLOR_BORDER_DEFAULT}` }),
   };
 

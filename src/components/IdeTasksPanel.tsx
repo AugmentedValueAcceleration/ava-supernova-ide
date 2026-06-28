@@ -109,7 +109,7 @@ function timeAgo(iso: string): string {
 
 const STATUS_ICONS: Record<string, { icon: string; color: string }> = {
   pending: { icon: '○', color: '#6c7086' },
-  in_progress: { icon: '◉', color: '#a855f7' },
+  in_progress: { icon: '◉', color: 'var(--accent)' },
   completed: { icon: '✓', color: '#a6e3a1' },
 };
 
@@ -123,7 +123,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 // Subtle per-category tint; unknown / user-defined categories fall back to slate.
 const CATEGORY_COLORS: Record<string, string> = {
   personal: '#38bdf8',
-  coding: '#a855f7',
+  coding: 'var(--accent)',
   admin: '#f59e0b',
   meeting: '#34d399',
   custom: '#94a3b8',
@@ -273,7 +273,7 @@ function TaskItem({ task, onToggle, onToggleSubtask, onUpdateTask }: {
             ) : (
               <button
                 onClick={() => setEditing(true)}
-                style={{ alignSelf: 'flex-start', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6, cursor: 'pointer', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' }}
+                style={{ alignSelf: 'flex-start', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6, cursor: 'pointer', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}
               >{t('tasks.edit')}</button>
             )
           )}
@@ -298,7 +298,7 @@ function TaskEditForm({ task, onSave, onCancel }: {
   const small: React.CSSProperties = { ...INPUT_STYLE, flex: 1, minWidth: 0, fontSize: 10, cursor: 'pointer' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 8, background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.15)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)' }}>
       <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ ...INPUT_STYLE, width: '100%' }} />
       <div style={{ display: 'flex', gap: 6 }}>
         <select value={priority} onChange={(e) => setPriority(e.target.value as TodayTaskUI['priority'])} style={small}>
@@ -321,7 +321,7 @@ function TaskEditForm({ task, onSave, onCancel }: {
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <button onClick={() => onSave({ title: title.trim() || task.title, priority, category, due_date: dueDate || undefined, due_time: dueTime || undefined, recurrence, reminder_lead: reminderLead })}
-          style={{ padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600, background: '#a855f7', color: 'white', cursor: 'pointer' }}>{t('tasks.save')}</button>
+          style={{ padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600, background: 'var(--accent)', color: 'white', cursor: 'pointer' }}>{t('tasks.save')}</button>
         <button onClick={onCancel} style={{ padding: '5px 10px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, background: 'transparent', color: '#a6adc8', cursor: 'pointer' }}>{t('tasks.cancel')}</button>
       </div>
     </div>
@@ -355,7 +355,7 @@ function CollapsibleSection({ title, count, defaultOpen = true, children }: {
 
 const INPUT_STYLE: React.CSSProperties = {
   background: 'rgba(49, 34, 68, 0.5)',
-  border: '1px solid rgba(168, 85, 247, 0.2)',
+  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
   borderRadius: 6,
   color: '#cdd6f4',
   fontSize: 12,
@@ -410,11 +410,11 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
         style={{
           display: 'flex', alignItems: 'center', gap: 6, width: '100%',
           padding: '7px 10px', borderRadius: 8,
-          border: '1px dashed rgba(168,85,247,0.3)', background: 'transparent',
+          border: '1px dashed color-mix(in srgb, var(--accent) 30%, transparent)', background: 'transparent',
           color: '#a6adc8', fontSize: 11, fontWeight: 500, cursor: 'pointer',
         }}
       >
-        <span style={{ color: '#a855f7', fontSize: 14, lineHeight: 1 }}>+</span>
+        <span style={{ color: 'var(--accent)', fontSize: 14, lineHeight: 1 }}>+</span>
         {t('tasks.add_task')}
       </button>
     );
@@ -434,7 +434,7 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
         style={{
           width: 'min(480px, 92vw)', maxHeight: '88vh', overflowY: 'auto',
           background: 'linear-gradient(180deg, rgba(30,18,46,0.99) 0%, rgba(22,14,36,1) 100%)',
-          border: '1px solid rgba(168,85,247,0.3)', borderRadius: 16,
+          border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: 16,
           boxShadow: '0 24px 64px rgba(0,0,0,0.55)', padding: 24,
           display: 'flex', flexDirection: 'column', gap: 16,
         }}
@@ -508,7 +508,7 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
           )}
           <div style={{ display: 'flex', gap: 6 }}>
             <input value={subInput} onChange={(e) => setSubInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSub(); } }} placeholder={t('tasks.add_step')} style={{ ...mInput, flex: 1 }} />
-            <button onClick={addSub} style={{ padding: '0 14px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)', color: '#a855f7', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{t('tasks.add')}</button>
+            <button onClick={addSub} style={{ padding: '0 14px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: 'var(--accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{t('tasks.add')}</button>
           </div>
         </div>
 
@@ -516,7 +516,7 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
           <button
             onClick={submit}
             disabled={!title.trim()}
-            style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, background: '#a855f7', color: 'white', cursor: title.trim() ? 'pointer' : 'default', opacity: title.trim() ? 1 : 0.4 }}
+            style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, background: 'var(--accent)', color: 'white', cursor: title.trim() ? 'pointer' : 'default', opacity: title.trim() ? 1 : 0.4 }}
           >
             {t('tasks.create_task')}
           </button>
@@ -541,25 +541,25 @@ function AvaBand({ sessionTasks }: { sessionTasks: SessionTaskUI[] }) {
     <div style={{
       position: 'sticky', top: 0, zIndex: 10,
       background: 'linear-gradient(180deg, rgba(40,22,58,0.97) 0%, rgba(26,16,40,0.97) 100%)',
-      backdropFilter: 'blur(6px)', borderBottom: '1px solid rgba(168,85,247,0.18)',
+      backdropFilter: 'blur(6px)', borderBottom: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
     }}>
       <button
         onClick={() => setExpanded(e => !e)}
         style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: allDone ? '#a6e3a1' : '#a855f7', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: allDone ? '#a6e3a1' : 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4 }}>
             {!allDone && <span style={{ display: 'inline-block', animation: 'avaSpin 1.5s linear infinite' }}>⟳</span>}
             {t('tasks.ava')}
           </span>
           <span style={{ fontSize: 10, color: '#6c7086', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {allDone ? t('tasks.all_complete') : current?.title}
           </span>
-          <span style={{ fontSize: 10, fontWeight: 600, color: allDone ? '#a6e3a1' : '#a855f7', flexShrink: 0 }}>{done}/{total}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: allDone ? '#a6e3a1' : 'var(--accent)', flexShrink: 0 }}>{done}/{total}</span>
           <span style={{ fontSize: 8, color: '#585b70', transition: 'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
         </div>
-        <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'rgba(168,85,247,0.12)' }}>
-          <div style={{ height: '100%', borderRadius: 2, width: `${total > 0 ? (done / total) * 100 : 0}%`, background: allDone ? '#a6e3a1' : 'linear-gradient(90deg, #a855f7, #6366f1)', transition: 'width 0.4s ease' }} />
+        <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'color-mix(in srgb, var(--accent) 12%, transparent)' }}>
+          <div style={{ height: '100%', borderRadius: 2, width: `${total > 0 ? (done / total) * 100 : 0}%`, background: allDone ? '#a6e3a1' : 'linear-gradient(90deg, var(--accent), #6366f1)', transition: 'width 0.4s ease' }} />
         </div>
       </button>
       {expanded && (
@@ -633,7 +633,7 @@ function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onT
 function AvaRecentWork({ avaCompletedTasks }: { avaCompletedTasks: AvaCompletedTaskUI[] }) {
   useLocale();
   return (
-    <div style={{ padding: '4px 12px 12px', borderTop: '1px solid rgba(168,85,247,0.08)' }}>
+    <div style={{ padding: '4px 12px 12px', borderTop: '1px solid color-mix(in srgb, var(--accent) 8%, transparent)' }}>
       <CollapsibleSection title={t('tasks.ava_recent_work')} count={avaCompletedTasks.length} defaultOpen={false}>
         {avaCompletedTasks.slice(0, 20).map(t => <CompletedItem key={t.id} task={t} />)}
       </CollapsibleSection>
@@ -648,11 +648,11 @@ function SpineRing({ done, total }: { done: number; total: number }) {
   const circ = 2 * Math.PI * r;
   const pct = total > 0 ? done / total : 0;
   const allDone = total > 0 && done === total;
-  const color = allDone ? '#a6e3a1' : '#a855f7';
+  const color = allDone ? '#a6e3a1' : 'var(--accent)';
   return (
     <span style={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <svg width="24" height="24" viewBox="0 0 24 24" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="12" cy="12" r={r} fill="none" stroke="rgba(168,85,247,0.18)" strokeWidth="2.5" />
+        <circle cx="12" cy="12" r={r} fill="none" stroke="color-mix(in srgb, var(--accent) 18%, transparent)" strokeWidth="2.5" />
         <circle cx="12" cy="12" r={r} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${pct * circ} ${circ}`} style={{ transition: 'stroke-dasharray 0.4s ease' }} />
       </svg>
       <span style={{ position: 'absolute', fontSize: 8, fontWeight: 600, color }}>{allDone ? '✓' : `${done}/${total}`}</span>
@@ -672,8 +672,8 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
   return (
     <div style={{
       width: 34, flexShrink: 0, height: '100%', position: 'relative',
-      borderLeft: '1px solid rgba(168,85,247,0.12)',
-      background: 'radial-gradient(ellipse 120% 40% at 50% 0%, rgba(168,85,247,0.08) 0%, transparent 70%), linear-gradient(180deg, rgba(26,16,40,0.9) 0%, rgba(20,13,34,0.95) 100%)',
+      borderLeft: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+      background: 'radial-gradient(ellipse 120% 40% at 50% 0%, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 70%), linear-gradient(180deg, rgba(26,16,40,0.9) 0%, rgba(20,13,34,0.95) 100%)',
       backdropFilter: 'blur(12px)',
     }}>
       {/* Grip — straddles the border at mid-height. */}
@@ -684,7 +684,7 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
         style={{
           position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 10,
           width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', background: '#0f0a1a', border: '1px solid rgba(168,85,247,0.35)', color: '#a855f7',
+          cursor: 'pointer', background: '#0f0a1a', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', color: 'var(--accent)',
           boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
         }}
       >
@@ -702,7 +702,7 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
         {avaWorking ? (
           <SpineRing done={done} total={total} />
         ) : activeCount > 0 ? (
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 600, background: 'rgba(168,85,247,0.15)', color: '#a855f7' }}>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 600, background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)' }}>
             {activeCount > 99 ? '99+' : activeCount}
           </span>
         ) : (
@@ -764,9 +764,9 @@ export default function IdeTasksPanel({
   return (
     <div style={{
       width, flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100%',
-      background: 'radial-gradient(ellipse 90% 40% at 50% 0%, rgba(168,85,247,0.10) 0%, transparent 65%), linear-gradient(180deg, rgba(26,16,40,0.95) 0%, rgba(20,13,34,0.97) 100%)',
+      background: 'radial-gradient(ellipse 90% 40% at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 65%), linear-gradient(180deg, rgba(26,16,40,0.95) 0%, rgba(20,13,34,0.97) 100%)',
       backdropFilter: 'blur(12px)',
-      borderLeft: '1px solid rgba(168, 85, 247, 0.12)', position: 'relative',
+      borderLeft: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', position: 'relative',
     }}>
       {/* Drag handle */}
       <div
@@ -775,7 +775,7 @@ export default function IdeTasksPanel({
           position: 'absolute', left: 0, top: 0, bottom: 0, width: 4,
           cursor: 'col-resize', zIndex: 10,
         }}
-        onMouseOver={(e) => (e.currentTarget.style.background = 'rgba(168,85,247,0.4)')}
+        onMouseOver={(e) => (e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 40%, transparent)')}
         onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
       />
 
@@ -787,7 +787,7 @@ export default function IdeTasksPanel({
         style={{
           position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 20,
           width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', background: '#0f0a1a', border: '1px solid rgba(168,85,247,0.35)', color: '#a855f7',
+          cursor: 'pointer', background: '#0f0a1a', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', color: 'var(--accent)',
           boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
         }}
       >
@@ -799,7 +799,7 @@ export default function IdeTasksPanel({
       {/* Header — title only; collapse is the persistent grip on the border. */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 12px', borderBottom: '1px solid rgba(168, 85, 247, 0.12)', flexShrink: 0,
+        padding: '8px 12px', borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', flexShrink: 0,
       }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
           {t('tasks.tasks')}
@@ -810,7 +810,7 @@ export default function IdeTasksPanel({
           title={t('tasks.open_folder')}
           aria-label={t('tasks.open_folder')}
           style={{ marginLeft: 'auto', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer' }}
-          onMouseOver={(e) => { e.currentTarget.style.color = '#a855f7'; e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+          onMouseOver={(e) => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 10%, transparent)'; }}
           onMouseOut={(e) => { e.currentTarget.style.color = '#6c7086'; e.currentTarget.style.background = 'transparent'; }}
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">

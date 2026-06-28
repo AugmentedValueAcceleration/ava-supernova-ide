@@ -29,7 +29,7 @@ export type CookTime = { by_day: Record<string, MealCook> };
 const cellStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 12,
   background: 'rgba(12, 8, 20, 0.5)', color: '#cdd6f4',
-  border: '1px solid rgba(168, 85, 247, 0.18)', borderRadius: 6, outline: 'none',
+  border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', borderRadius: 6, outline: 'none',
   colorScheme: 'dark',
 };
 

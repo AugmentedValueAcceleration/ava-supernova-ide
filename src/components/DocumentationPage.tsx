@@ -28,12 +28,12 @@ const SURFACE_LABELS: Record<string, string> = { ext: 'Extension', ide: 'IDE', c
 
 // ── Palette (matches DashboardPages.tsx) ────────────────────────────────────
 
-const ACCENT = '#a855f7';
+const ACCENT = 'var(--accent)';
 const HEADING = '#cdd6f4';
 const TEXT = '#a6adc8';
 const MUTED = '#6c7086';
 const CARD = 'rgba(26, 16, 40, 0.6)';
-const BORDER = 'rgba(168, 85, 247, 0.12)';
+const BORDER = 'color-mix(in srgb, var(--accent) 12%, transparent)';
 
 // ── Adapter ─────────────────────────────────────────────────────────────────
 

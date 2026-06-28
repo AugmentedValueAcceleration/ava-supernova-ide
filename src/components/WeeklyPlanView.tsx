@@ -94,7 +94,7 @@ export function WeeklyPlanView({ view = 'week' }: { view?: 'today' | 'week' }) {
   if (!hasActive) {
     return (
       <div style={{
-        border: '1px solid rgba(168,85,247,0.25)', background: 'rgba(168,85,247,0.05)',
+        border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'color-mix(in srgb, var(--accent) 5%, transparent)',
         borderRadius: 10, padding: '28px 24px', textAlign: 'center', maxWidth: 520, margin: '8px auto',
       }}>
         <div style={{ fontSize: 28, marginBottom: 8 }}>🗓️</div>
@@ -121,7 +121,7 @@ export function WeeklyPlanView({ view = 'week' }: { view?: 'today' | 'week' }) {
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086', marginBottom: 8 }}>{t('health.week.training')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {tr.map((name, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#cdd6f4', padding: '8px 12px', borderRadius: 8, background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.12)' }}>
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#cdd6f4', padding: '8px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
                   <span aria-hidden>🏋</span>{name}
                 </div>
               ))}
@@ -157,8 +157,8 @@ export function WeeklyPlanView({ view = 'week' }: { view?: 'today' | 'week' }) {
             <div key={cell.key} style={{
               display: 'flex', flexDirection: 'column', gap: 8, minHeight: 150,
               borderRadius: 10, padding: 10,
-              border: isToday ? '1px solid rgba(168,85,247,0.6)' : '1px solid rgba(168,85,247,0.12)',
-              background: isToday ? 'rgba(168,85,247,0.08)' : 'rgba(255,255,255,0.015)',
+              border: isToday ? '1px solid color-mix(in srgb, var(--accent) 60%, transparent)' : '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+              background: isToday ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'rgba(255,255,255,0.015)',
             }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: isToday ? '#c084fc' : '#6c7086' }}>

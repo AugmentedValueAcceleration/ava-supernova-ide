@@ -24,7 +24,7 @@ const PROVIDERS = [
 ];
 
 const STEPS = stepsFor('ide'); // consent, identity, path, tailored, breadth, connect, desktop, hours, ready
-const ACCENT = '#a855f7';
+const ACCENT = 'var(--accent)';
 
 const DEST_PAGE: Record<Destination, string> = {
   chat: 'ava-chat', journal: 'journal', learning: 'learning', health: 'health', home: 'command-centre',
@@ -34,13 +34,13 @@ const DEST_PAGE: Record<Destination, string> = {
 function btnStyle(disabled?: boolean): React.CSSProperties {
   return {
     padding: '8px 22px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-    background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.25)', color: ACCENT,
+    background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: ACCENT,
     opacity: disabled ? 0.4 : 1, transition: 'background 0.15s',
   };
 }
 const btnHover = {
-  onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'rgba(168,85,247,0.2)'; },
-  onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; },
+  onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 20%, transparent)'; },
+  onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 10%, transparent)'; },
 };
 
 export default function WelcomeOverlay({ onComplete }: Props) {
@@ -80,7 +80,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
 
   const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`;
   const inputStyle: React.CSSProperties = {
-    width: '100%', height: 38, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
+    width: '100%', height: 38, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
     borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#cdd6f4', outline: 'none',
   };
 
@@ -156,7 +156,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{
         width: 'min(1100px, 94vw)', height: 'min(760px, 92vh)', display: 'flex', flexDirection: 'column',
-        background: 'linear-gradient(160deg, #1a1020 0%, #120c1a 100%)', border: '1px solid rgba(168,85,247,0.2)',
+        background: 'linear-gradient(160deg, #1a1020 0%, #120c1a 100%)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
         borderRadius: 16, boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
       }}>
         {/* Top bar: progress + skip */}
@@ -232,7 +232,7 @@ function ConsentStep({ checked, onCheck }: { checked: boolean; onCheck: (v: bool
 function IdentityStep() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', maxWidth: 640, margin: '0 auto' }}>
-      <div style={{ width: 88, height: 88, borderRadius: '50%', marginBottom: 24, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, background: 'linear-gradient(135deg, #a855f7, #6366f1)', border: `1px solid ${ACCENT}55` }}>
+      <div style={{ width: 88, height: 88, borderRadius: '50%', marginBottom: 24, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, background: 'linear-gradient(135deg, var(--accent), #6366f1)', border: `1px solid ${ACCENT}55` }}>
         <img src="/ava-avatar.jpeg" alt="Ava" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
       </div>
       <h1 style={{ fontSize: 34, fontWeight: 600, color: '#cdd6f4', marginBottom: 16 }}>{t('onboarding.identity.title')}</h1>
@@ -250,7 +250,7 @@ function PathStep({ selected, onPick }: { selected: string | null; onPick: (p: O
         {PATHS.map((p) => (
           <button key={p.id} onClick={() => onPick(p)} style={{
             textAlign: 'left', padding: 16, borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12,
-            background: selected === p.id ? 'rgba(168,85,247,0.08)' : 'transparent', border: `1px solid ${selected === p.id ? ACCENT : 'rgba(255,255,255,0.1)'}`,
+            background: selected === p.id ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent', border: `1px solid ${selected === p.id ? ACCENT : 'rgba(255,255,255,0.1)'}`,
           }}>
             <span style={{ fontSize: 26 }}>{p.icon}</span>
             <span>
@@ -278,7 +278,7 @@ function TailoredStep({ path }: { path: OnboardingPath }) {
             <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>{t(`${base}.title`)}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086' }}>{t('onboarding.try_this')}</span>
-              <code style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.1)', color: ACCENT }}>{t(`${base}.example`)}</code>
+              <code style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: ACCENT }}>{t(`${base}.example`)}</code>
             </div>
           </div>
         ))}
@@ -346,7 +346,7 @@ function ConnectStep(props: {
         ) : (
           <SignInPanel onSignedIn={onSignedIn} onSkipAccount={() => { /* BYOK column is right there */ }} />
         )}
-        <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 12, padding: 16 }}>
+        <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#a6e3a1', marginBottom: 4 }}>BYOK — No Account</div>
           <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>Your keys, full local AI</div>
           <select value={byokProvider} onChange={(e) => { setByokProvider(e.target.value); setByokSaved(false); }} style={{ ...inputStyle, height: 34, fontSize: 12, marginBottom: 8, appearance: 'auto' as React.CSSProperties['appearance'] }}>
@@ -428,9 +428,9 @@ function ReadyStep({ path, onFinish }: { path: OnboardingPath | undefined; onFin
       <p style={{ fontSize: 13, color: '#6c7086', marginBottom: 28 }}>{t('onboarding.ready.body').replace('{path}', pathLabel)}</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
         {cards.map((c) => (
-          <button key={c.nav} onClick={() => onFinish(c.nav)} style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 10, padding: '16px 8px', cursor: 'pointer', transition: 'border-color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)')}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)')}>
+          <button key={c.nav} onClick={() => onFinish(c.nav)} style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10, padding: '16px 8px', cursor: 'pointer', transition: 'border-color 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 40%, transparent)')}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)')}>
             <div style={{ fontSize: 24, marginBottom: 6 }}>{c.icon}</div>
             <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500 }}>{c.label}</div>
           </button>

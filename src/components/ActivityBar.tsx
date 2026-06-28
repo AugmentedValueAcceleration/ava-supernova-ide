@@ -128,7 +128,7 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
         paddingTop: 4,
         paddingBottom: 4,
         flexShrink: 0,
-        borderRight: '1px solid rgba(168, 85, 247, 0.12)',
+        borderRight: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
       }}
     >
       {/* Top icons */}
@@ -154,7 +154,7 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
                   height: 48,
                   background: 'transparent',
                   border: 'none',
-                  borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
+                  borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
                   color: isActive ? '#cdd6f4' : '#6c7086',
                   display: 'flex',
                   alignItems: 'center',
@@ -175,7 +175,7 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
                     position: 'absolute',
                     top: 6, right: 6,
                     minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8,
-                    background: '#a855f7', color: '#fff',
+                    background: 'var(--accent)', color: '#fff',
                     fontSize: 9, fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     lineHeight: 1, fontFamily: 'system-ui, sans-serif',

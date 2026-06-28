@@ -25,8 +25,8 @@ interface Props {
   onSkip: () => void;
 }
 
-const accent = '#a855f7';
-const border = 'rgba(168,85,247,0.25)';
+const accent = 'var(--accent)';
+const border = 'color-mix(in srgb, var(--accent) 25%, transparent)';
 
 export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSkip }: Props) {
   useLocale();
@@ -69,7 +69,7 @@ export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSk
                 onClick={() => onSubmit(o.value)}
                 style={{
                   textAlign: 'left', borderRadius: 8, padding: 10, cursor: 'pointer',
-                  background: active ? 'rgba(168,85,247,0.12)' : 'transparent',
+                  background: active ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
                   border: `1px solid ${active ? accent : border}`,
                 }}
               >
@@ -94,7 +94,7 @@ export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSk
                   onClick={() => setMulti((cur) => (on ? cur.filter((v) => v !== o.value) : [...cur, o.value]))}
                   style={{
                     borderRadius: 999, padding: '5px 11px', fontSize: 11, cursor: 'pointer',
-                    background: on ? 'rgba(168,85,247,0.18)' : 'transparent',
+                    background: on ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
                     border: `1px solid ${on ? accent : border}`,
                     color: on ? accent : '#a6adc8',
                   }}
@@ -174,7 +174,7 @@ const inputStyle: React.CSSProperties = {
 
 function Shell({ question, label, children }: { question: string; label?: string; children: React.ReactNode }) {
   return (
-    <div style={{ borderRadius: 12, border: `1px solid ${accent}66`, overflow: 'hidden', background: 'rgba(168,85,247,0.05)' }}>
+    <div style={{ borderRadius: 12, border: `1px solid ${accent}66`, overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 5%, transparent)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px' }}>
         <span style={{ fontSize: 13 }}>🧩</span>
         <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8b8398' }}>
@@ -193,7 +193,7 @@ function Actions({ onSave, onSkip, disabled }: { onSave: () => void; onSkip: () 
     <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
       <button
         type="button" disabled={disabled} onClick={onSave}
-        style={{ borderRadius: 8, border: 'none', background: disabled ? 'rgba(168,85,247,0.3)' : accent, color: '#fff', padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: disabled ? 'default' : 'pointer' }}
+        style={{ borderRadius: 8, border: 'none', background: disabled ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : accent, color: '#fff', padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: disabled ? 'default' : 'pointer' }}
       >
         {t('health.fill.save')}
       </button>

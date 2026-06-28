@@ -193,7 +193,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Safety disclaimer + Clear chat */}
-      <div style={{ flexShrink: 0, borderBottom: '1px solid var(--border, #2a2440)', background: 'rgba(168,85,247,0.06)', padding: '8px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <div style={{ flexShrink: 0, borderBottom: '1px solid var(--border, #2a2440)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', padding: '8px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div style={{ flex: 1, fontSize: 11, lineHeight: 1.4, color: 'var(--text-muted, #8b8398)' }}>
           {t('health.room.disclaimer')}{' '}
           <button
@@ -209,7 +209,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
             type="button"
             onClick={clearRoom}
             title={t('header.clear_chat')}
-            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.25)', color: '#a855f7', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -228,7 +228,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 13, color: '#cdd6f4' }}>{t('health.room.greeting', { name: '' })}</span>
             </div>
-            <div style={{ borderRadius: 14, padding: 16, marginTop: 10, background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(96,165,250,0.04))', border: '1px solid rgba(168,85,247,0.22)' }}>
+            <div style={{ borderRadius: 14, padding: 16, marginTop: 10, background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(96,165,250,0.04))', border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)' }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('health.room.starter.heading')}</div>
               <p style={{ fontSize: 12, lineHeight: 1.5, color: '#a6adc8', margin: '0 0 14px' }}>{t('health.room.starter.subheading')}</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -237,7 +237,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
                     key={s.labelKey}
                     type="button"
                     onClick={() => { setInput(t(s.promptKey)); inputRef.current?.focus(); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, background: 'rgba(26,16,40,0.5)', border: '1px solid rgba(168,85,247,0.25)', color: '#cdd6f4', cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, background: 'rgba(26,16,40,0.5)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: '#cdd6f4', cursor: 'pointer' }}
                   >
                     <span aria-hidden>{s.icon}</span>{t(s.labelKey)}
                   </button>
@@ -252,7 +252,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
                 {m.toolCalls && m.toolCalls.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
                     {m.toolCalls.map((tc, i) => (
-                      <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.25)', color: tc.status === 'error' ? '#f38ba8' : tc.status === 'done' ? '#a6e3a1' : '#a78bfa' }}>
+                      <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: tc.status === 'error' ? '#f38ba8' : tc.status === 'done' ? '#a6e3a1' : '#a78bfa' }}>
                         {tc.status === 'done' ? '✓' : tc.status === 'error' ? '✕' : '⋯'} {tc.name}
                       </span>
                     ))}
@@ -261,8 +261,8 @@ export function HealthRoomChat({ active }: { active: boolean }) {
                 {(m.text || m.role !== 'ava') && (
                   <div style={{
                     fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', padding: '10px 14px', borderRadius: 12,
-                    background: m.role === 'user' ? 'rgba(168,85,247,0.14)' : m.role === 'error' ? 'rgba(243,139,168,0.12)' : 'rgba(255,255,255,0.03)',
-                    border: m.role === 'error' ? '1px solid rgba(243,139,168,0.3)' : '1px solid rgba(168,85,247,0.12)',
+                    background: m.role === 'user' ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : m.role === 'error' ? 'rgba(243,139,168,0.12)' : 'rgba(255,255,255,0.03)',
+                    border: m.role === 'error' ? '1px solid rgba(243,139,168,0.3)' : '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
                     color: m.role === 'error' ? '#f38ba8' : '#cdd6f4',
                   }}>
                     {m.text}
@@ -292,7 +292,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
 
       {/* Composer — locked to health, static badge instead of a mode pill */}
       <div style={{ flexShrink: 0, borderTop: '1px solid var(--border, #2a2440)', padding: 10, display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-        <span style={{ flexShrink: 0, alignSelf: 'center', padding: '5px 10px', borderRadius: 8, background: 'linear-gradient(135deg,#a855f7,#7c3aed)', color: '#fff', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+        <span style={{ flexShrink: 0, alignSelf: 'center', padding: '5px 10px', borderRadius: 8, background: 'linear-gradient(135deg,var(--accent),#7c3aed)', color: '#fff', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
           {t('health.room.mode_label')}
         </span>
         <textarea
@@ -302,13 +302,13 @@ export function HealthRoomChat({ active }: { active: boolean }) {
           onKeyDown={onKeyDown}
           rows={1}
           placeholder={t('health.room.starter.subheading')}
-          style={{ flex: 1, resize: 'none', minHeight: 38, maxHeight: 160, borderRadius: 8, border: '1px solid rgba(168,85,247,0.25)', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+          style={{ flex: 1, resize: 'none', minHeight: 38, maxHeight: 160, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
         />
         <button
           type="button"
           disabled={streaming || !input.trim()}
           onClick={() => send(input)}
-          style={{ flexShrink: 0, alignSelf: 'center', padding: '8px 16px', borderRadius: 8, border: 'none', background: streaming || !input.trim() ? 'rgba(168,85,247,0.25)' : '#a855f7', color: '#fff', fontSize: 12, fontWeight: 600, cursor: streaming || !input.trim() ? 'default' : 'pointer' }}
+          style={{ flexShrink: 0, alignSelf: 'center', padding: '8px 16px', borderRadius: 8, border: 'none', background: streaming || !input.trim() ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: streaming || !input.trim() ? 'default' : 'pointer' }}
         >
           {streaming ? '…' : '↑'}
         </button>

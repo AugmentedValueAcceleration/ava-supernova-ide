@@ -238,8 +238,8 @@ export function LibraryPapersPage() {
                     fontSize: 11,
                     fontWeight: 500,
                     borderRadius: 9999,
-                    border: active ? '1px solid #a855f7' : '1px solid var(--border)',
-                    background: active ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                    border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    background: active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
                     color: active ? '#c084fc' : 'var(--text-muted)',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
@@ -257,7 +257,7 @@ export function LibraryPapersPage() {
           <div style={{
             display: 'flex',
             gap: 2,
-            borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
+            borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
             marginBottom: 16,
           }}>
             {TABS.map(t => {
@@ -275,7 +275,7 @@ export function LibraryPapersPage() {
                     fontSize: 12,
                     fontWeight: active ? 600 : 500,
                     color: active ? '#c084fc' : '#6c7086',
-                    borderBottom: active ? '2px solid #a855f7' : '2px solid transparent',
+                    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
                     marginBottom: -1,
                   }}
                 >
@@ -316,8 +316,8 @@ export function LibraryPapersPage() {
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}>
               <span style={{
                 width: 12, height: 12, borderRadius: '50%',
-                border: '1.5px solid rgba(168, 85, 247, 0.25)',
-                borderTopColor: '#a855f7',
+                border: '1.5px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                borderTopColor: 'var(--accent)',
                 animation: 'avaPapersIdeSpin 0.85s linear infinite',
                 display: 'inline-block',
               }} />
@@ -426,7 +426,7 @@ function PaperCard({
             {paper.authors.length > 0 && <span>{authorLine(paper.authors)}</span>}
             {paper.year && <span>· {paper.year}</span>}
             {disciplineLabel && (
-              <span style={{ color: '#a855f7', fontWeight: 500 }}>· {disciplineLabel}</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>· {disciplineLabel}</span>
             )}
             {paper.citation_count != null && paper.citation_count > 0 && (
               <span>· {paper.citation_count.toLocaleString()} citations</span>
@@ -435,7 +435,7 @@ function PaperCard({
           {paper.featured_note && (
             <p style={{
               marginTop: 8, fontSize: 11, fontStyle: 'italic',
-              color: 'rgba(168, 85, 247, 0.85)', lineHeight: 1.5,
+              color: 'color-mix(in srgb, var(--accent) 85%, transparent)', lineHeight: 1.5,
             }}>
               {paper.featured_note}
             </p>
@@ -453,16 +453,16 @@ function PaperCard({
           style={{
             flexShrink: 0, padding: '6px 12px',
             borderRadius: 8,
-            border: '1px solid rgba(168, 85, 247, 0.4)',
-            background: 'rgba(168, 85, 247, 0.1)',
+            border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+            background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
             color: '#c084fc',
             fontSize: 11, fontWeight: 500,
             cursor: 'pointer',
             whiteSpace: 'nowrap',
             transition: 'background 0.15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168, 85, 247, 0.2)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(168, 85, 247, 0.1)'; }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 20%, transparent)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 10%, transparent)'; }}
         >
           Read with Ava
         </button>
@@ -548,7 +548,7 @@ function PaperDetailModal({
             )}
             {paper.year && <span>· {paper.year}</span>}
             {disciplineLabel && (
-              <span style={{ color: '#a855f7', fontWeight: 500 }}>· {disciplineLabel}</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>· {disciplineLabel}</span>
             )}
             {paper.citation_count != null && paper.citation_count > 0 && (
               <span>· {paper.citation_count.toLocaleString()} citations</span>
@@ -559,10 +559,10 @@ function PaperDetailModal({
             <p style={{
               marginTop: 16, padding: '8px 12px',
               borderRadius: 10,
-              border: '1px solid rgba(168, 85, 247, 0.2)',
-              background: 'rgba(168, 85, 247, 0.05)',
+              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+              background: 'color-mix(in srgb, var(--accent) 5%, transparent)',
               fontSize: 12, fontStyle: 'italic',
-              color: 'rgba(168, 85, 247, 0.95)', lineHeight: 1.5,
+              color: 'color-mix(in srgb, var(--accent) 95%, transparent)', lineHeight: 1.5,
             }}>
               {paper.featured_note}
             </p>
@@ -602,8 +602,8 @@ function PaperDetailModal({
               onClick={onReadWithAva}
               style={{
                 padding: '6px 12px', borderRadius: 8,
-                border: '1px solid rgba(168, 85, 247, 0.4)',
-                background: 'rgba(168, 85, 247, 0.1)',
+                border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+                background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
                 color: '#c084fc',
                 fontSize: 12, fontWeight: 500,
                 cursor: 'pointer',

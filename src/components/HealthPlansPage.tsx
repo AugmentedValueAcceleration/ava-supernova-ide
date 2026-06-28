@@ -31,12 +31,12 @@ import type {
 } from '../lib/health-plans-store';
 
 // ── Palette ───────────────────────────────────────────────────────────
-const ACCENT = '#a855f7';
+const ACCENT = 'var(--accent)';
 const TEXT = '#cdd6f4';
 const TEXT2 = '#a6adc8';
 const MUTED = '#585b70';
-const BORDER = 'rgba(168,85,247,0.14)';
-const BORDER_SOFT = 'rgba(168,85,247,0.08)';
+const BORDER = 'color-mix(in srgb, var(--accent) 14%, transparent)';
+const BORDER_SOFT = 'color-mix(in srgb, var(--accent) 8%, transparent)';
 const INPUT_BG = 'rgba(49,34,68,0.4)';
 const AMBER = '#fbbf24';
 const RED = '#f38ba8';
@@ -59,8 +59,8 @@ const sectionCap: CSSProperties = { fontSize: 10, textTransform: 'uppercase', le
 function accentBtn(enabled: boolean): CSSProperties {
   return {
     borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 500,
-    border: `1px solid ${enabled ? 'rgba(168,85,247,0.4)' : BORDER}`,
-    background: enabled ? 'rgba(168,85,247,0.12)' : 'transparent',
+    border: `1px solid ${enabled ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : BORDER}`,
+    background: enabled ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
     color: enabled ? ACCENT : MUTED, cursor: enabled ? 'pointer' : 'not-allowed',
     opacity: enabled ? 1 : 0.6,
   };
@@ -301,7 +301,7 @@ function PlanSelect({ value, onChange, options }: {
         <div style={{ position: 'absolute', zIndex: 50, marginTop: 4, maxHeight: 240, width: 'max-content', minWidth: '100%', overflowY: 'auto', borderRadius: 8, border: `1px solid ${BORDER}`, background: '#1a1028', padding: 4, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
           {options.map(o => (
             <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
-              style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 12, border: 'none', cursor: 'pointer', borderRadius: 4, padding: '6px 10px', fontSize: 12, textAlign: 'left', background: o.value === value ? 'rgba(168,85,247,0.1)' : 'transparent', color: o.value === value ? TEXT : TEXT2 }}>
+              style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 12, border: 'none', cursor: 'pointer', borderRadius: 4, padding: '6px 10px', fontSize: 12, textAlign: 'left', background: o.value === value ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent', color: o.value === value ? TEXT : TEXT2 }}>
               <span style={{ whiteSpace: 'nowrap' }}>{o.label}</span>
               {o.value === value && <span style={{ color: ACCENT }}>✓</span>}
             </button>
@@ -613,7 +613,7 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
     }
     const { totals, estimated } = dayTotals({ day_index: 0, kind: 'rest', title: null, training: [], meals: allMeals, notes: null }, recipeDetails);
     const sections: DayAgendaSection[] = [
-      { key: 'training', label: t('health.plans.training'), icon: '🏋', accent: '#a855f7', items: training },
+      { key: 'training', label: t('health.plans.training'), icon: '🏋', accent: 'var(--accent)', items: training },
       { key: 'meals', label: t('health.plans.meals'), icon: '🍽', accent: '#f59e0b', items: meals },
       // ── Future sources plug in here as more sections (tasks, learning, …) ──
     ];
@@ -638,8 +638,8 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
-      <div ref={panelRef} onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, minHeight: MIN_PANEL_H, maxHeight: '88vh', ...(editing && frozenH ? { height: Math.max(frozenH, MIN_PANEL_H) } : {}), overflow: 'hidden', borderRadius: 14, border: '1px solid rgba(168,85,247,0.25)', background: 'linear-gradient(to bottom right, #100d1a, #181327)', boxShadow: '0 0 80px rgba(168,85,247,0.15)' }}>
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(168,85,247,0.14)', padding: '12px 24px' }}>
+      <div ref={panelRef} onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, minHeight: MIN_PANEL_H, maxHeight: '88vh', ...(editing && frozenH ? { height: Math.max(frozenH, MIN_PANEL_H) } : {}), overflow: 'hidden', borderRadius: 14, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'linear-gradient(to bottom right, #100d1a, #181327)', boxShadow: '0 0 80px color-mix(in srgb, var(--accent) 15%, transparent)' }}>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)', padding: '12px 24px' }}>
           <div>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.18em', color: MUTED }}>{t('health.plans.on_this_day')}</div>
             <h2 style={{ fontSize: 16, fontWeight: 600, color: TEXT, margin: 0 }}>{dateLabel}</h2>
@@ -801,7 +801,7 @@ function InlineCatalogSearch({ kind, mode, accent, results, searching, onSearch,
   }, [query]);
   const icon = kind === 'exercise' ? '🏋' : '🍽';
   return (
-    <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.05)', padding: 8 }}>
+    <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'color-mix(in srgb, var(--accent) 5%, transparent)', padding: 8 }}>
       <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
         <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
           placeholder={kind === 'exercise' ? t('health.plans.picker.search_exercises') : t('health.plans.picker.search_recipes')}
@@ -852,7 +852,7 @@ function PlanCard({ plan, onOpen, onDelete }: {
       <button type="button" onClick={onOpen} style={{ display: 'block', width: '100%', border: 'none', background: 'transparent', padding: '10px 14px', textAlign: 'left', cursor: 'pointer' }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <span style={{ borderRadius: 4, border: `1px solid ${m.accent}`, padding: '1px 6px', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', color: m.accent }}>{planTypeLabel(plan.type)}</span>
-          <span style={{ borderRadius: 4, padding: '1px 6px', fontSize: 9, background: 'rgba(168,85,247,0.12)', color: TEXT2 }}>{planStatusLabel(plan.status)}</span>
+          <span style={{ borderRadius: 4, padding: '1px 6px', fontSize: 9, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: TEXT2 }}>{planStatusLabel(plan.status)}</span>
         </div>
         <div style={{ marginTop: 8, fontSize: 13, color: TEXT }}>{plan.title}</div>
         <div style={{ marginTop: 4, fontSize: 10, color: MUTED }}>{durationLabel(plan.duration_days)} · {t('health.plans.built_by_you')}</div>
@@ -894,8 +894,8 @@ function PlanOverlay(props: {
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 24 }}>
       <div style={{
         display: 'flex', flexDirection: 'column', maxHeight: '88vh', width: '100%', maxWidth: props.planOpen ? 880 : 720,
-        overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(168,85,247,0.25)', background: PANEL_BG,
-        boxShadow: '0 0 80px rgba(168,85,247,0.15)',
+        overflow: 'hidden', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: PANEL_BG,
+        boxShadow: '0 0 80px color-mix(in srgb, var(--accent) 15%, transparent)',
       }}>
         {props.planOpen
           ? <PlanBuilder
@@ -945,7 +945,7 @@ function PlanSetup({ onCancel, onCreate }: { onCancel: () => void; onCreate: (pl
               return (
                 <button key={ty} type="button" onClick={() => setType(ty)} style={{
                   borderRadius: 8, padding: 16, textAlign: 'left', cursor: 'pointer',
-                  border: `1px solid ${on ? ACCENT : BORDER}`, background: on ? 'rgba(168,85,247,0.1)' : 'transparent',
+                  border: `1px solid ${on ? ACCENT : BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
                 }}>
                   <div style={{ marginBottom: 8, height: 3, width: 40, borderRadius: 2, background: m.accent }} />
                   <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{planTypeLabel(ty)}</div>
@@ -963,7 +963,7 @@ function PlanSetup({ onCancel, onCreate }: { onCancel: () => void; onCreate: (pl
               return (
                 <button key={days} type="button" onClick={() => setDuration(days)} style={{
                   borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                  border: `1px solid ${on ? ACCENT : BORDER}`, background: on ? 'rgba(168,85,247,0.1)' : 'transparent',
+                  border: `1px solid ${on ? ACCENT : BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
                   color: on ? ACCENT : MUTED,
                 }}>{durationLabel(days)}</button>
               );
@@ -1144,7 +1144,7 @@ function PlanBuilder(props: {
             const has = (showTraining && d.training.length > 0) || (showMeals && d.meals.length > 0);
             return (
               <button key={d.day_index} type="button" onClick={() => setSelectedDay(d.day_index)}
-                style={{ borderRadius: 8, border: `1px solid ${active ? ACCENT : BORDER}`, background: active ? 'rgba(168,85,247,0.15)' : 'transparent', padding: '6px 10px', textAlign: 'left', cursor: 'pointer' }}>
+                style={{ borderRadius: 8, border: `1px solid ${active ? ACCENT : BORDER}`, background: active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent', padding: '6px 10px', textAlign: 'left', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: active ? ACCENT : TEXT }}>
                   {t('health.plans.day_n', { n: d.day_index })}
                   {has && <span style={{ height: 6, width: 6, borderRadius: 999, background: ACCENT }} aria-hidden />}
@@ -1213,12 +1213,12 @@ function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelec
   const monthLabel = new Date(year, mon, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   const navBtn: CSSProperties = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', height: 28, width: 28,
-    borderRadius: 6, border: 'none', background: 'rgba(168,85,247,0.1)', color: TEXT2, fontSize: 14, cursor: 'pointer',
+    borderRadius: 6, border: 'none', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: TEXT2, fontSize: 14, cursor: 'pointer',
   };
 
   return (
-    <div style={{ overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(168,85,247,0.18)', background: PANEL_BG, ...(fill ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } : {}) }}>
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${BORDER}`, background: 'rgba(168,85,247,0.05)', padding: '8px 16px' }}>
+    <div style={{ overflow: 'hidden', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', background: PANEL_BG, ...(fill ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } : {}) }}>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${BORDER}`, background: 'color-mix(in srgb, var(--accent) 5%, transparent)', padding: '8px 16px' }}>
         <button type="button" aria-label={t('health.plans.prev_month')} onClick={() => onMonthChange(new Date(year, mon - 1, 1))} style={navBtn}>‹</button>
         <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{monthLabel}</span>
         <button type="button" aria-label={t('health.plans.next_month')} onClick={() => onMonthChange(new Date(year, mon + 1, 1))} style={navBtn}>›</button>
@@ -1250,8 +1250,8 @@ function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelec
                 // day's content can drag its week taller — every cell is identical.
                 // minHeight:0 + overflow:hidden lets a busy day clip instead of grow.
                 display: 'flex', flexDirection: 'column', gap: 3, minHeight: 0, boxSizing: 'border-box', overflow: 'hidden', borderRadius: 8, padding: 6, textAlign: 'left', cursor: 'pointer',
-                border: `1px solid ${isSelected ? ACCENT : hasContent ? 'rgba(168,85,247,0.22)' : BORDER_SOFT}`,
-                background: isSelected ? 'rgba(168,85,247,0.15)' : hasContent ? 'rgba(168,85,247,0.05)' : 'transparent',
+                border: `1px solid ${isSelected ? ACCENT : hasContent ? 'color-mix(in srgb, var(--accent) 22%, transparent)' : BORDER_SOFT}`,
+                background: isSelected ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : hasContent ? 'color-mix(in srgb, var(--accent) 5%, transparent)' : 'transparent',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                   <span style={{
@@ -1313,7 +1313,7 @@ function DayPanel({ day, startDate, showTraining, showMeals, recipeDetails, exer
   const dayN = t('health.plans.day_n', { n: day.day_index });
   const dateLabel = date ? `${weekdayLabel(date.getDay())} ${date.getDate()} — ${dayN}` : dayN;
   const kindLabel = day.kind === 'training' ? t('health.plans.kind.training') : day.kind === 'active_recovery' ? t('health.plans.kind.active_recovery') : t('health.plans.kind.rest');
-  const wrapStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 16, borderRadius: 8, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.05)', padding: 16 };
+  const wrapStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 16, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'color-mix(in srgb, var(--accent) 5%, transparent)', padding: 16 };
   const editBtn: CSSProperties = { ...accentBtn(true), padding: '4px 10px', fontSize: 11 };
 
   if (!editing) {
@@ -1495,7 +1495,7 @@ function ItemDetailModal({ detail, exercise, recipe, onClose }: {
   const loaded = detail.kind === 'exercise' ? !!exercise : !!recipe;
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: 'min(760px, 86vh)', width: '100%', maxWidth: 820, overflow: 'hidden', borderRadius: 16, border: '1px solid rgba(168,85,247,0.20)', background: 'linear-gradient(to bottom right, #0f0f17, #1a1625)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: 'min(760px, 86vh)', width: '100%', maxWidth: 820, overflow: 'hidden', borderRadius: 16, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'linear-gradient(to bottom right, #0f0f17, #1a1625)' }}>
         <button type="button" onClick={onClose} aria-label={t('health.plans.cancel')} style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32, width: 32, borderRadius: 999, border: 'none', background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: 18, cursor: 'pointer' }}>×</button>
         {/* The rich, tabbed catalogue detail — same component the library uses. */}
         {!loaded ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.loading')}</div>
@@ -1685,7 +1685,7 @@ function CatalogPickerPanel({ kind, results, total, searching, onSearch, onConfi
     return (
       <button key={label} type="button" onClick={() => changeCategory(value)} style={{
         borderRadius: 9999, padding: '2px 10px', fontSize: 10, fontWeight: 500, textTransform: 'capitalize', cursor: 'pointer',
-        border: `1px solid ${on ? ACCENT : BORDER}`, background: on ? 'rgba(168,85,247,0.15)' : 'transparent', color: on ? ACCENT : MUTED,
+        border: `1px solid ${on ? ACCENT : BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent', color: on ? ACCENT : MUTED,
       }}>{label}</button>
     );
   };
@@ -1730,13 +1730,13 @@ function CatalogPickerPanel({ kind, results, total, searching, onSearch, onConfi
               return (
                 <button key={r.id} type="button" onClick={() => toggle(r.slug, r.name)} style={{
                   position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 6, textAlign: 'left', cursor: 'pointer',
-                  border: `1px solid ${on ? ACCENT : BORDER}`, background: on ? 'rgba(168,85,247,0.1)' : 'transparent',
+                  border: `1px solid ${on ? ACCENT : BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
                 }}>
-                  <div style={{ aspectRatio: '4 / 3', width: '100%', overflow: 'hidden', background: 'rgba(168,85,247,0.08)' }}>
+                  <div style={{ aspectRatio: '4 / 3', width: '100%', overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
                     {img ? (
                       <img src={img} alt="" loading="lazy" style={{ height: '100%', width: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <div style={{ display: 'flex', height: '100%', width: '100%', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 600, color: 'rgba(168,85,247,0.4)' }}>
+                      <div style={{ display: 'flex', height: '100%', width: '100%', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 600, color: 'color-mix(in srgb, var(--accent) 40%, transparent)' }}>
                         {r.name.charAt(0)}
                       </div>
                     )}

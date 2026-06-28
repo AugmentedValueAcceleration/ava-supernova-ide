@@ -91,7 +91,7 @@ export default function UpdateChecker() {
     return (
       <div style={{
         position: 'fixed', bottom: 16, right: 16, zIndex: 9998,
-        background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168, 85, 247, 0.12)',
+        background: 'rgba(26, 16, 40, 0.95)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         borderRadius: 10, padding: '12px 18px',
         boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
         display: 'flex', alignItems: 'center', gap: 10,
@@ -124,7 +124,7 @@ export default function UpdateChecker() {
   return (
     <div style={{
       position: 'fixed', bottom: 16, right: 16, zIndex: 9998,
-      background: 'rgba(26, 16, 40, 0.95)', border: '1px solid rgba(168,85,247,0.3)',
+      background: 'rgba(26, 16, 40, 0.95)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
       borderRadius: 12, padding: '16px 20px', width: 320,
       boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     }}>
@@ -142,7 +142,7 @@ export default function UpdateChecker() {
 
       {/* Version info */}
       <div style={{ fontSize: 12, color: '#a6adc8', marginBottom: 12 }}>
-        <span style={{ color: '#a855f7', fontWeight: 600 }}>v{update.version}</span> is ready.
+        <span style={{ color: 'var(--accent)', fontWeight: 600 }}>v{update.version}</span> is ready.
         {update.body && (
           <div style={{ marginTop: 6, fontSize: 11, color: '#6c7086', maxHeight: 60, overflowY: 'auto', lineHeight: 1.5 }}>
             {update.body.split('\n').slice(0, 3).join('\n')}
@@ -156,7 +156,7 @@ export default function UpdateChecker() {
           <div style={{ height: 4, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden' }}>
             <div style={{
               height: '100%', borderRadius: 2, width: `${progress}%`,
-              background: 'linear-gradient(90deg, #a855f7, #6366f1)',
+              background: 'linear-gradient(90deg, var(--accent), #6366f1)',
               transition: 'width 0.3s',
             }} />
           </div>
@@ -170,11 +170,11 @@ export default function UpdateChecker() {
           <>
             <button
               onClick={() => setDismissed(true)}
-              style={{ padding: '6px 14px', background: 'none', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 6, color: '#6c7086', fontSize: 11, cursor: 'pointer' }}
+              style={{ padding: '6px 14px', background: 'none', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, color: '#6c7086', fontSize: 11, cursor: 'pointer' }}
             >Later</button>
             <button
               onClick={handleUpdate}
-              style={{ padding: '6px 14px', background: '#a855f7', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+              style={{ padding: '6px 14px', background: 'var(--accent)', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
             >Update Now</button>
           </>
         )}

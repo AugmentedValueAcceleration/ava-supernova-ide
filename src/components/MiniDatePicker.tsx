@@ -25,7 +25,7 @@ function MiniDatePicker({ value, onChange }: { value: string; onChange: (iso: st
   const navBtn: React.CSSProperties = { background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', padding: '0 4px', lineHeight: 1 };
 
   return (
-    <div style={{ width: 224, padding: 12, borderRadius: 12, border: '1px solid rgba(168, 85, 247, 0.18)', background: '#15101f', boxShadow: '0 18px 40px rgba(0,0,0,0.55)' }}>
+    <div style={{ width: 224, padding: 12, borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', background: '#15101f', boxShadow: '0 18px 40px rgba(0,0,0,0.55)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span style={{ display: 'flex', alignItems: 'center' }}>
           <button onClick={() => stepYear(-1)} title="Previous year" style={{ ...navBtn, fontSize: 13 }}>{'«'}</button>
@@ -53,8 +53,8 @@ function MiniDatePicker({ value, onChange }: { value: string; onChange: (iso: st
               style={{
                 width: 24, height: 24, margin: '0 auto', borderRadius: '50%', border: 'none', cursor: 'pointer', fontSize: 11,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: isSelected ? '#a855f7' : isToday ? 'rgba(168,85,247,0.2)' : 'transparent',
-                color: isSelected ? '#fff' : isToday ? '#a855f7' : '#a6adc8',
+                background: isSelected ? 'var(--accent)' : isToday ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'transparent',
+                color: isSelected ? '#fff' : isToday ? 'var(--accent)' : '#a6adc8',
               }}
             >
               {day}

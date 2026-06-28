@@ -77,7 +77,7 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
         userSelect: 'none',
         // @ts-expect-error Tauri window drag region CSS property
         WebkitAppRegion: 'drag',
-        borderBottom: '1px solid rgba(168, 85, 247, 0.12)',
+        borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         flexShrink: 0,
       }}
     >
@@ -109,7 +109,7 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
               left: 0,
               marginTop: 2,
               background: '#1e1e2e',
-              border: '1px solid rgba(168, 85, 247, 0.2)',
+              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
               borderRadius: 6,
               padding: '4px 0',
               minWidth: 200,
@@ -121,7 +121,7 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
               <button
                 onClick={handleOpenFolder}
                 style={menuItemStyle}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

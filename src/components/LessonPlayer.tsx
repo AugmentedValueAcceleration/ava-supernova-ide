@@ -69,7 +69,7 @@ export function LessonPlayer({ lesson, curriculumId, onComplete, onClose }: Prop
       <div>
         <BackBar onClose={onClose} title={lesson.title} progress="" />
         <div style={{
-          borderRadius: 10, border: '1px solid rgba(168,85,247,0.12)',
+          borderRadius: 10, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
           background: 'rgba(26,16,40,0.4)', padding: 24, textAlign: 'center',
         }}>
           <p style={{ fontSize: 13, color: '#a6adc8', margin: 0 }}>
@@ -90,7 +90,7 @@ export function LessonPlayer({ lesson, curriculumId, onComplete, onClose }: Prop
         <div style={{
           borderRadius: 14,
           border: '1px solid rgba(52,211,153,0.3)',
-          background: 'linear-gradient(135deg, rgba(52,211,153,0.06), rgba(168,85,247,0.05))',
+          background: 'linear-gradient(135deg, rgba(52,211,153,0.06), color-mix(in srgb, var(--accent) 5%, transparent))',
           padding: 32, textAlign: 'center',
         }}>
           <div style={{
@@ -106,7 +106,7 @@ export function LessonPlayer({ lesson, curriculumId, onComplete, onClose }: Prop
             onClick={onClose}
             style={{
               marginTop: 20, borderRadius: 10, border: 'none',
-              background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff',
+              background: 'linear-gradient(135deg, var(--accent), #7c3aed)', color: '#fff',
               padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
             }}
           >
@@ -141,7 +141,7 @@ export function LessonPlayer({ lesson, curriculumId, onComplete, onClose }: Prop
             key={k}
             style={{
               height: 4, flex: 1, borderRadius: 999, transition: 'background 0.2s',
-              background: k < i ? '#a855f7' : k === i ? '#7c3aed' : 'rgba(49,34,68,0.6)',
+              background: k < i ? 'var(--accent)' : k === i ? '#7c3aed' : 'rgba(49,34,68,0.6)',
             }}
           />
         ))}
@@ -163,7 +163,7 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
 
   return (
     <div style={{
-      borderRadius: 14, border: '1px solid rgba(168,85,247,0.12)',
+      borderRadius: 14, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
       background: 'rgba(26,16,40,0.6)', padding: 20,
     }}>
       {/* Teach */}
@@ -173,7 +173,7 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
 
       {/* Do */}
       <div style={{
-        marginTop: 16, borderRadius: 10, border: '1px solid rgba(168,85,247,0.12)',
+        marginTop: 16, borderRadius: 10, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         background: 'rgba(17,17,27,0.4)', padding: 12,
       }}>
         <p style={{ marginTop: 0, marginBottom: 10, fontSize: 12, fontWeight: 500, color: '#a6adc8' }}>
@@ -195,7 +195,7 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
                     borderRadius: 10, padding: '8px 12px', textAlign: 'left', fontSize: 12,
                     transition: 'all 0.15s', cursor: picked !== null ? 'default' : 'pointer',
                     color: '#fff',
-                    border: `1px solid ${showRight ? '#34d399' : isPicked && !correct ? '#f87171' : 'rgba(168,85,247,0.12)'}`,
+                    border: `1px solid ${showRight ? '#34d399' : isPicked && !correct ? '#f87171' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
                     background: showRight ? 'rgba(52,211,153,0.08)' : isPicked && !correct ? 'rgba(248,113,113,0.08)' : 'transparent',
                   }}
                 >
@@ -215,7 +215,7 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
             rows={3}
             style={{
               width: '100%', resize: 'vertical', borderRadius: 10,
-              border: '1px solid rgba(168,85,247,0.12)', background: 'rgba(17,17,27,0.6)',
+              border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(17,17,27,0.6)',
               padding: 10, fontSize: 12, color: '#fff', outline: 'none', boxSizing: 'border-box',
               fontFamily: 'inherit',
             }}
@@ -231,7 +231,7 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
             rows={6}
             style={{
               width: '100%', resize: 'vertical', borderRadius: 10,
-              border: '1px solid rgba(168,85,247,0.12)', background: '#11111b',
+              border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: '#11111b',
               padding: 10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               fontSize: 11, lineHeight: 1.6, color: '#cdd6f4', outline: 'none', boxSizing: 'border-box',
             }}
@@ -249,10 +249,10 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
       )}
       {!isDeterministic && revealed && step.interaction.evaluation && (
         <div style={{
-          marginTop: 12, borderRadius: 10, border: '1px solid rgba(168,85,247,0.2)',
-          background: 'rgba(168,85,247,0.05)', padding: 12,
+          marginTop: 12, borderRadius: 10, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+          background: 'color-mix(in srgb, var(--accent) 5%, transparent)', padding: 12,
         }}>
-          <p style={{ margin: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: '#a855f7' }}>
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--accent)' }}>
             What a strong answer has
           </p>
           <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 1.6, color: '#a6adc8' }}>
@@ -297,7 +297,7 @@ function ActionButton({ disabled, onClick, label }: { disabled: boolean; onClick
       onClick={onClick}
       style={{
         borderRadius: 10, border: 'none',
-        background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff',
+        background: 'linear-gradient(135deg, var(--accent), #7c3aed)', color: '#fff',
         padding: '6px 16px', fontSize: 12, fontWeight: 500,
         cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.3 : 1,
         transition: 'opacity 0.15s',

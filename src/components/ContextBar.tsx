@@ -39,7 +39,7 @@ export function ContextBar({ contextPercent, contextUsed, contextLimit, isCompre
     ? '#ef4444'
     : isWarning
       ? '#eab308'
-      : '#a855f7';
+      : 'var(--accent)';
 
   const usedDisplay = hasUsed ? formatTokens(contextUsed!) : null;
   const limitDisplay = hasLimit ? formatTokens(contextLimit!) : null;
@@ -55,7 +55,7 @@ export function ContextBar({ contextPercent, contextUsed, contextLimit, isCompre
     <div
       style={{
         width: '100%',
-        borderBottom: '1px solid rgba(168, 85, 247, 0.15)',
+        borderBottom: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
         backgroundColor: 'transparent',
       }}
     >
@@ -65,7 +65,7 @@ export function ContextBar({ contextPercent, contextUsed, contextLimit, isCompre
           position: 'relative',
           width: '100%',
           height: '4px',
-          backgroundColor: 'rgba(168, 85, 247, 0.10)',
+          backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
         }}
       >
         <div

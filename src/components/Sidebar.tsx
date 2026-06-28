@@ -298,13 +298,13 @@ function SearchPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {
   const inputStyle: React.CSSProperties = {
     width: '100%', height: 28,
     background: 'rgba(49, 34, 68, 0.5)',
-    border: '1px solid rgba(168, 85, 247, 0.12)',
+    border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
     borderRadius: 4, padding: '0 8px',
     fontSize: 13, color: '#cdd6f4', outline: 'none',
   };
   const toggleStyle = (on: boolean): React.CSSProperties => ({
     width: 24, height: 24, borderRadius: 4, border: 'none',
-    background: on ? 'rgba(168,85,247,0.25)' : 'transparent',
+    background: on ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'transparent',
     color: on ? '#cba6f7' : '#6c7086',
     cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
   });
@@ -318,8 +318,8 @@ function SearchPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search"
           style={{ ...inputStyle, flex: 1 }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
         />
       </div>
       <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center' }}>
@@ -520,7 +520,7 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
         <div style={{ padding: '12px 14px', borderRadius: 6, background: 'rgba(243,139,168,0.08)', color: '#f9b3c4', fontSize: 11, lineHeight: 1.6 }}>
           {error}
         </div>
-        <button onClick={() => void refresh()} style={{ marginTop: 12, width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.18)', background: 'rgba(49,34,68,0.5)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer' }}>Retry</button>
+        <button onClick={() => void refresh()} style={{ marginTop: 12, width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', background: 'rgba(49,34,68,0.5)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer' }}>Retry</button>
       </div>
     );
   }
@@ -535,7 +535,7 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
 
   const inputStyle: React.CSSProperties = {
     width: '100%', minHeight: 60, resize: 'vertical' as const,
-    background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
+    background: 'rgba(49, 34, 68, 0.5)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
     borderRadius: 4, padding: 8, fontSize: 12, color: '#cdd6f4', outline: 'none',
     fontFamily: 'inherit',
   };
@@ -594,7 +594,7 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
         {status.ahead != null && status.ahead > 0 && <Tooltip content="Commits ahead of upstream"><span style={{ color: '#a6e3a1' }}>↑{status.ahead}</span></Tooltip>}
         {status.behind != null && status.behind > 0 && <Tooltip content="Commits behind upstream"><span style={{ color: '#f9e2af' }}>↓{status.behind}</span></Tooltip>}
         <button onClick={() => void refresh()} disabled={busy}
-          style={{ marginLeft: 'auto', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(168,85,247,0.18)', background: 'rgba(49,34,68,0.5)', color: '#a6adc8', fontSize: 10, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>
+          style={{ marginLeft: 'auto', padding: '2px 8px', borderRadius: 4, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', background: 'rgba(49,34,68,0.5)', color: '#a6adc8', fontSize: 10, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>
           ↻
         </button>
       </div>
@@ -605,15 +605,15 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void commit(); } }}
         placeholder="Message (Ctrl+Enter to commit)"
         style={inputStyle}
-        onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
       />
       <button
         onClick={() => void commit()}
         disabled={busy || staged.length === 0 || !commitMessage.trim()}
         style={{
           marginTop: 6, width: '100%', padding: '6px 10px', borderRadius: 4,
-          border: 'none', background: staged.length > 0 && commitMessage.trim() ? '#a855f7' : 'rgba(49,34,68,0.5)',
+          border: 'none', background: staged.length > 0 && commitMessage.trim() ? 'var(--accent)' : 'rgba(49,34,68,0.5)',
           color: staged.length > 0 && commitMessage.trim() ? '#fff' : '#6c7086', fontSize: 12,
           cursor: staged.length > 0 && commitMessage.trim() ? 'pointer' : 'default', fontWeight: 500,
         }}>
@@ -687,7 +687,7 @@ function AvaPanel() {
                   width: 22,
                   height: 22,
                   borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #a855f7, #6366f1)',
+                  background: 'linear-gradient(135deg, var(--accent), #6366f1)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -714,7 +714,7 @@ function AvaPanel() {
                   </svg>
                 </div>
               )}
-              <span style={{ fontSize: 12, fontWeight: 600, color: msg.role === 'ava' ? '#a855f7' : '#cdd6f4' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: msg.role === 'ava' ? 'var(--accent)' : '#cdd6f4' }}>
                 {msg.role === 'ava' ? 'Ava' : 'You'}
               </span>
             </div>
@@ -726,7 +726,7 @@ function AvaPanel() {
       </div>
 
       {/* Input bar */}
-      <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(168, 85, 247, 0.12)' }}>
+      <div style={{ padding: '8px 12px', borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <input
             type="text"
@@ -737,21 +737,21 @@ function AvaPanel() {
               flex: 1,
               height: 32,
               background: 'rgba(49, 34, 68, 0.5)',
-              border: '1px solid rgba(168, 85, 247, 0.12)',
+              border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
               borderRadius: 6,
               padding: '0 10px',
               fontSize: 13,
               color: '#cdd6f4',
               outline: 'none',
             }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
           />
           <button
             style={{
               width: 32,
               height: 32,
-              background: '#a855f7',
+              background: 'var(--accent)',
               border: 'none',
               borderRadius: 6,
               color: '#fff',
@@ -762,7 +762,7 @@ function AvaPanel() {
               flexShrink: 0,
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" />
@@ -793,7 +793,7 @@ function ExtensionsPanel() {
           width: '100%',
           height: 28,
           background: 'rgba(49, 34, 68, 0.5)',
-          border: '1px solid rgba(168, 85, 247, 0.12)',
+          border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
           borderRadius: 4,
           padding: '0 8px',
           fontSize: 13,
@@ -801,8 +801,8 @@ function ExtensionsPanel() {
           outline: 'none',
           marginBottom: 12,
         }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
       />
       <div style={{ fontSize: 11, fontWeight: 600, color: '#a6adc8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
         Installed
@@ -825,7 +825,7 @@ function ExtensionsPanel() {
             width: 32,
             height: 32,
             borderRadius: 4,
-            background: ext.name === 'Ava Intelligence' ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'rgba(49, 34, 68, 0.5)',
+            background: ext.name === 'Ava Intelligence' ? 'linear-gradient(135deg, var(--accent), #6366f1)' : 'rgba(49, 34, 68, 0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -866,7 +866,7 @@ function DebugPanel() {
             flex: 1,
             height: 28,
             background: 'rgba(49, 34, 68, 0.5)',
-            border: '1px solid rgba(168, 85, 247, 0.12)',
+            border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
             borderRadius: 4,
             padding: '0 8px',
             fontSize: 13,
@@ -937,12 +937,12 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
   if (collapsed) {
     const initial = (email || 'A')[0].toUpperCase();
     return (
-      <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid rgba(168,85,247,0.12)', width: '100%', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', width: '100%', display: 'flex', justifyContent: 'center' }}>
         <Tooltip content={isConnected ? `${email} (${tier})` : 'Not connected — expand sidebar to sign in'} placement="top">
           <div
             style={{
               width: 32, height: 32, borderRadius: '50%',
-              background: isConnected ? 'rgba(168,85,247,0.25)' : 'rgba(49,34,68,0.5)',
+              background: isConnected ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'rgba(49,34,68,0.5)',
               color: isConnected ? '#cba6f7' : '#6c7086',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 12, fontWeight: 600, userSelect: 'none',
@@ -969,7 +969,7 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
   };
 
   const tierColors: Record<string, string> = {
-    free: '#a6adc8', pro: '#a855f7', ultra: '#f9e2af', enterprise: '#89b4fa', admin: '#f38ba8',
+    free: '#a6adc8', pro: 'var(--accent)', ultra: '#f9e2af', enterprise: '#89b4fa', admin: '#f38ba8',
   };
 
   // OAuth sign-in completed via SignInPanel — it persists the key to
@@ -993,12 +993,12 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', height: 28, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.12)',
+    width: '100%', height: 28, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
     borderRadius: 4, padding: '0 8px', fontSize: 12, color: '#cdd6f4', outline: 'none',
   };
 
   return (
-    <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.12)', padding: '10px 12px' }}>
+    <div style={{ borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '10px 12px' }}>
       {isConnected ? (
         <>
           {/* Connected state */}
@@ -1008,7 +1008,7 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
               return (
                 <div style={{
                   width: 24, height: 24, borderRadius: '50%',
-                  background: av ? 'transparent' : 'linear-gradient(135deg, #a855f7, #6366f1)',
+                  background: av ? 'transparent' : 'linear-gradient(135deg, var(--accent), #6366f1)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   overflow: 'hidden',
                 }}>
@@ -1033,9 +1033,9 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
             </div>
             <button
               onClick={handleDisconnect}
-              style={{ background: 'transparent', border: '1px solid rgba(168, 85, 247, 0.12)', borderRadius: 4, padding: '3px 8px', fontSize: 10, color: '#6c7086', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 4, padding: '3px 8px', fontSize: 10, color: '#6c7086', cursor: 'pointer' }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#f38ba8'; e.currentTarget.style.color = '#f38ba8'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; e.currentTarget.style.color = '#6c7086'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; e.currentTarget.style.color = '#6c7086'; }}
             >
               {t('dash.settings.disconnect')}
             </button>
@@ -1056,7 +1056,7 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
                   // user's own model.
                   window.dispatchEvent(new Event('ava-ide-source-changed'));
                 }}
-                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer', background: active ? '#a855f7' : 'rgba(49, 34, 68, 0.5)', color: active ? '#fff' : '#6c7086' }}>
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer', background: active ? 'var(--accent)' : 'rgba(49, 34, 68, 0.5)', color: active ? '#fff' : '#6c7086' }}>
                   {t(labelKey)}
                 </button>
               );
@@ -1069,9 +1069,9 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
             <>
               <button
                 onClick={() => setShowConnect(true)}
-                style={{ width: '100%', padding: '7px 0', borderRadius: 6, border: 'none', background: '#a855f7', color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer', marginBottom: 6 }}
+                style={{ width: '100%', padding: '7px 0', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer', marginBottom: 6 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = '#a855f7'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
               >
                 {t('dash.auth.connect')}
               </button>
@@ -1087,7 +1087,7 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
               />
               <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                 <button onClick={() => setShowConnect(false)}
-                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: '1px solid rgba(168, 85, 247, 0.12)', background: 'transparent', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'transparent', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>
                   {t('dash.support.cancel')}
                 </button>
               </div>
@@ -1118,8 +1118,8 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
               <input type="password" placeholder={`${p} API key`} value={keys[p] || ''}
                 onChange={(e) => saveKey(p, e.target.value)}
                 style={{ ...inputStyle, height: 24, fontSize: 11 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#a855f7'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.12)'; }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
               />
             </div>
           ))}
@@ -1174,7 +1174,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   width: 36, height: 36, borderRadius: 8, border: 'none',
-                  background: isActive ? 'rgba(168,85,247,0.18)' : 'transparent',
+                  background: isActive ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
                   color: isActive ? '#cba6f7' : '#a6adc8',
                   cursor: 'pointer', position: 'relative',
                   transition: 'background 0.15s, color 0.15s',
@@ -1187,7 +1187,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
                   try {
                     const count = Number(localStorage.getItem('ava-support-unread') || 0);
                     if (count > 0) return (
-                      <span style={{ position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, borderRadius: '50%', background: '#a855f7', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
+                      <span style={{ position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
                     );
                   } catch { /* */ }
                   return null;
@@ -1218,7 +1218,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
                 background: isActive ? 'rgba(49, 34, 68, 0.5)' : 'transparent',
                 color: isActive ? '#cba6f7' : '#cdd6f4', cursor: 'pointer',
                 fontSize: 13, textAlign: 'left', transition: 'background 0.15s',
-                borderLeft: isActive ? '2px solid #a855f7' : '2px solid transparent',
+                borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
               }}
               onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
               onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
@@ -1229,7 +1229,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
                   try {
                     const count = Number(localStorage.getItem('ava-support-unread') || 0);
                     if (count > 0) return (
-                      <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 14, height: 14, borderRadius: '50%', background: '#a855f7', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
+                      <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 14, height: 14, borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
                     );
                   } catch { /* */ }
                   return null;
@@ -1263,7 +1263,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
     return (
       <div style={{
         width: RAIL_WIDTH, height: '100%', flexShrink: 0,
-        background: '#181028', borderRight: '1px solid rgba(168,85,247,0.12)',
+        background: '#181028', borderRight: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         display: 'flex', flexDirection: 'column',
       }}>
         <DashboardPanel collapsed onDashboardSelect={onDashboardSelect} activePage={activeDashboardPage} />
@@ -1327,8 +1327,8 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
       style={{
         width: sidebarWidth,
         background: 'rgba(15, 10, 26, 0.95)',
-        borderRight: position === 'left' ? '1px solid rgba(168, 85, 247, 0.12)' : 'none',
-        borderLeft: position === 'right' ? '1px solid rgba(168, 85, 247, 0.12)' : 'none',
+        borderRight: position === 'left' ? '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' : 'none',
+        borderLeft: position === 'right' ? '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' : 'none',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -1344,7 +1344,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
           cursor: 'col-resize',
           [position === 'left' ? 'right' : 'left']: 0,
         }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(168,85,247,0.3)')}
+        onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 30%, transparent)')}
         onMouseLeave={e => { if (!isDragging.current) e.currentTarget.style.background = 'transparent'; }}
       />
       {/* Header */}
@@ -1497,10 +1497,10 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
 
   if (collapsed) {
     return (
-      <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.12)', padding: '10px 14px', flexShrink: 0 }}>
+      <div style={{ borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '10px 14px', flexShrink: 0 }}>
         <button onClick={toggleCollapsed} title="Show calendar" style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer', color: '#a6adc8' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: '#a855f7', color: '#fff', fontSize: 9, fontWeight: 600 }}>{now.getDate()}</span>
+            <span style={{ display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 9, fontWeight: 600 }}>{now.getDate()}</span>
             <span style={{ fontSize: 11 }}>{now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
           </span>
           <span style={{ fontSize: 9, color: '#6c7086' }}>{'▼'}</span>
@@ -1518,7 +1518,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
 
   return (
     <div style={{
-      borderTop: '1px solid rgba(168, 85, 247, 0.12)',
+      borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
       padding: '10px 14px',
       flexShrink: 0,
     }}>
@@ -1531,7 +1531,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4, fontSize: 7, color: '#6c7086' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#a855f7' }} />Training</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />Training</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />Meals</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#38bdf8' }} />Tasks</span>
       </div>
@@ -1547,7 +1547,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
           const isToday = iso === todayStr;
           const mk = planMarks.get(iso);
           const dots: string[] = [];
-          if (mk?.training) dots.push('#a855f7');
+          if (mk?.training) dots.push('var(--accent)');
           if (mk?.meals) dots.push('#f59e0b');
           if (taskDates.has(iso)) dots.push('#38bdf8');
           return (
@@ -1556,8 +1556,8 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
               onClick={() => handleDayClick(day)}
               style={{
                 width: 24, height: 24, borderRadius: '50%', border: 'none', cursor: 'pointer',
-                background: isToday ? 'rgba(168,85,247,0.25)' : 'transparent',
-                color: isToday ? '#a855f7' : '#a6adc8',
+                background: isToday ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'transparent',
+                color: isToday ? 'var(--accent)' : '#a6adc8',
                 fontSize: 9, fontWeight: isToday ? 600 : 400,
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 position: 'relative',

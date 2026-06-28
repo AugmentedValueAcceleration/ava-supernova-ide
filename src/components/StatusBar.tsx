@@ -18,7 +18,7 @@ export default function StatusBar({ onToggleTerminal, mode, onCycleMode }: Props
     <div
       style={{
         height: 24,
-        background: '#a855f7',
+        background: 'var(--accent)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',

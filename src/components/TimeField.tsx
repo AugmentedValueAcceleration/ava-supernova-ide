@@ -12,8 +12,8 @@ import { t, useLocale } from '../lib/i18n';
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
-const accent = '#a855f7';
-const border = 'rgba(168,85,247,0.25)';
+const accent = 'var(--accent)';
+const border = 'color-mix(in srgb, var(--accent) 25%, transparent)';
 
 export function TimeField({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   useLocale();
@@ -73,7 +73,7 @@ function Col({ items, sel, onPick }: { items: string[]; sel: string; onPick: (v:
             onClick={() => onPick(it)}
             style={{
               borderRadius: 6, border: 'none', padding: '5px 0', fontSize: 12, cursor: 'pointer', textAlign: 'center',
-              background: on ? 'rgba(168,85,247,0.18)' : 'transparent',
+              background: on ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
               color: on ? accent : '#a6adc8', fontWeight: on ? 600 : 400,
             }}
           >

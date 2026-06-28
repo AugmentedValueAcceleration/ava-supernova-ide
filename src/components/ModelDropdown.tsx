@@ -100,8 +100,8 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
           alignItems: 'center',
           gap: 6,
           padding: '3px 8px',
-          background: 'rgba(168, 85, 247, 0.05)',
-          border: '1px solid rgba(168, 85, 247, 0.2)',
+          background: 'color-mix(in srgb, var(--accent) 5%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
           borderRadius: 4,
           color: '#cdd6f4',
           fontSize: 11,
@@ -115,7 +115,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: isAuto || isSupernova || isAurora ? '#A855F7' : '#10b981',
+            background: isAuto || isSupernova || isAurora ? 'var(--accent)' : '#10b981',
             display: 'inline-block',
           }}
         />
@@ -133,7 +133,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
             maxHeight: 360,
             overflowY: 'auto',
             background: '#1e1b2e',
-            border: '1px solid rgba(168, 85, 247, 0.25)',
+            border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
             borderRadius: 6,
             boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             zIndex: 1000,
@@ -164,7 +164,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
                     gap: 8,
                     width: '100%',
                     padding: '8px 10px',
-                    background: enabled && isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                    background: enabled && isActive ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
                     border: 'none',
                     textAlign: 'left',
                     fontSize: 12,
@@ -173,7 +173,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
                     opacity: enabled ? 1 : 0.4,
                   }}
                   onMouseEnter={(e) => {
-                    if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168, 85, 247, 0.08)';
+                    if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)';
                   }}
                   onMouseLeave={(e) => {
                     if (enabled && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
@@ -184,7 +184,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
                       width: 5,
                       height: 5,
                       borderRadius: '50%',
-                      background: enabled && isActive ? '#A855F7' : 'rgba(255,255,255,0.15)',
+                      background: enabled && isActive ? 'var(--accent)' : 'rgba(255,255,255,0.15)',
                       flexShrink: 0,
                     }}
                   />
@@ -206,7 +206,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
 
           {rawModels.length > 0 && (
             <>
-              <div style={{ borderTop: '1px solid rgba(168, 85, 247, 0.15)', margin: '4px 0' }} />
+              <div style={{ borderTop: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)', margin: '4px 0' }} />
               <div
                 style={{
                   padding: '6px 10px',
@@ -245,7 +245,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
                     gap: 8,
                     width: '100%',
                     padding: '6px 10px',
-                    background: m.available && isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                    background: m.available && isActive ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
                     border: 'none',
                     textAlign: 'left',
                     fontSize: 12,
@@ -254,7 +254,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
                     opacity: m.available ? 1 : 0.35,
                   }}
                   onMouseEnter={(e) => {
-                    if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168, 85, 247, 0.08)';
+                    if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)';
                   }}
                   onMouseLeave={(e) => {
                     if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
@@ -265,7 +265,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
                       width: 5,
                       height: 5,
                       borderRadius: '50%',
-                      background: isActive && m.available ? '#A855F7' : m.available ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                      background: isActive && m.available ? 'var(--accent)' : m.available ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
                       flexShrink: 0,
                     }}
                   />

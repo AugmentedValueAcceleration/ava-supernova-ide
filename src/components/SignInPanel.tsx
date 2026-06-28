@@ -33,7 +33,7 @@ export function SignInPanel({ onSignedIn, onSkipAccount }: SignInPanelProps) {
   if (pending) {
     return (
       <div style={{
-        background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.3)',
+        background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
         borderRadius: 12, padding: 20, textAlign: 'center',
       }}>
         <style>{`@keyframes ava-spin { to { transform: rotate(360deg); } }`}</style>
@@ -41,11 +41,11 @@ export function SignInPanel({ onSignedIn, onSkipAccount }: SignInPanelProps) {
           <div style={{ position: 'relative', width: 40, height: 40 }}>
             <div style={{
               position: 'absolute', inset: 0, borderRadius: '50%',
-              border: '2px solid rgba(168, 85, 247, 0.2)',
+              border: '2px solid color-mix(in srgb, var(--accent) 20%, transparent)',
             }} />
             <div style={{
               position: 'absolute', inset: 0, borderRadius: '50%',
-              border: '2px solid transparent', borderTopColor: '#a855f7',
+              border: '2px solid transparent', borderTopColor: 'var(--accent)',
               animation: 'ava-spin 1s linear infinite',
             }} />
           </div>
@@ -62,7 +62,7 @@ export function SignInPanel({ onSignedIn, onSkipAccount }: SignInPanelProps) {
           onClick={cancel}
           style={{
             padding: '6px 16px', fontSize: 11, background: 'transparent',
-            border: '1px solid rgba(168,85,247,0.3)', borderRadius: 6,
+            border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: 6,
             color: '#cdd6f4', cursor: 'pointer',
           }}
         >
@@ -75,10 +75,10 @@ export function SignInPanel({ onSignedIn, onSkipAccount }: SignInPanelProps) {
   // ── Idle state ─────────────────────────────────────────────────────────
   return (
     <div style={{
-      background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(168, 85, 247, 0.12)',
+      background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
       borderRadius: 12, padding: 16,
     }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#a855f7', marginBottom: 4 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>
         Platform Account
       </div>
       <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>
@@ -119,7 +119,7 @@ export function SignInPanel({ onSignedIn, onSkipAccount }: SignInPanelProps) {
       <button
         onClick={() => start('email')}
         style={{
-          width: '100%', height: 34, borderRadius: 6, border: '1px solid rgba(168, 85, 247, 0.35)',
+          width: '100%', height: 34, borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
           background: 'transparent', color: '#cdd6f4', fontSize: 12, fontWeight: 500,
           cursor: 'pointer', marginBottom: 12,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,

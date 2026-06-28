@@ -30,7 +30,7 @@ const CARD_WIDTH = 280;
 const cardStyle: React.CSSProperties = {
   flex: `0 0 ${CARD_WIDTH}px`,
   background: 'rgba(26, 16, 40, 0.6)',
-  border: '1px solid rgba(168, 85, 247, 0.12)',
+  border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
   borderRadius: 12,
   padding: 12,
   display: 'flex',
@@ -47,7 +47,7 @@ const pillBase: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 500,
   cursor: 'pointer',
-  border: '1px solid rgba(168, 85, 247, 0.2)',
+  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
   background: 'rgba(49, 34, 68, 0.5)',
   color: '#cdd6f4',
   fontFamily: 'inherit',
@@ -131,7 +131,7 @@ export function CreativeOutputCard({ item, onRegenerate, onDelete }: OutputCardP
         <button
           onClick={handleCopy}
           style={pillBase}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.15)'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
         >
           {copied ? '✓ Copied' : 'Copy prompt'}
@@ -139,7 +139,7 @@ export function CreativeOutputCard({ item, onRegenerate, onDelete }: OutputCardP
         <button
           onClick={handleDownload}
           style={pillBase}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.15)'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
         >
           Download
@@ -148,7 +148,7 @@ export function CreativeOutputCard({ item, onRegenerate, onDelete }: OutputCardP
           <button
             onClick={() => onRegenerate(item)}
             style={pillBase}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(168,85,247,0.15)'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(49, 34, 68, 0.5)'; }}
           >
             Regenerate
@@ -263,7 +263,7 @@ export function CreativeGalleryStrip({ items, onRegenerate, onDelete, emptyHint 
     return (
       <div style={{
         background: 'rgba(26, 16, 40, 0.6)',
-        border: '1px dashed rgba(168, 85, 247, 0.2)',
+        border: '1px dashed color-mix(in srgb, var(--accent) 20%, transparent)',
         borderRadius: 12,
         padding: '40px 20px',
         textAlign: 'center',

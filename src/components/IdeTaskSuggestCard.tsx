@@ -24,7 +24,7 @@ const REMINDER_OPTIONS: { value: number; label: string }[] = [
 const REMINDER_ENUM_TO_MIN: Record<string, number> = { at_time: 0, '10m': 10, '30m': 30, '1h': 60, '1d': 1440 };
 
 const INPUT: React.CSSProperties = {
-  background: 'rgba(49, 34, 68, 0.5)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: 6,
+  background: 'rgba(49, 34, 68, 0.5)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', borderRadius: 6,
   color: '#cdd6f4', fontSize: 11, padding: '5px 8px', outline: 'none',
 };
 
@@ -55,14 +55,14 @@ export function IdeTaskSuggestCard({ args, onAdd, onDismiss }: Props) {
   });
 
   const chip = (label: string) => (
-    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 8, fontWeight: 600, color: '#bac2de', background: 'rgba(168,85,247,0.14)' }}>{label}</span>
+    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 8, fontWeight: 600, color: '#bac2de', background: 'color-mix(in srgb, var(--accent) 14%, transparent)' }}>{label}</span>
   );
 
   return (
-    <div style={{ borderRadius: 12, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.07)', padding: 14, maxWidth: 420 }}>
+    <div style={{ borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'color-mix(in srgb, var(--accent) 7%, transparent)', padding: 14, maxWidth: 420 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
         <span style={{ fontSize: 13 }}>🗒️</span>
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: '#a855f7' }}>Ava suggests a task</span>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--accent)' }}>Ava suggests a task</span>
       </div>
 
       {!editing ? (
@@ -114,9 +114,9 @@ export function IdeTaskSuggestCard({ args, onAdd, onDismiss }: Props) {
       )}
 
       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <button onClick={add} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, background: '#a855f7', color: 'white', cursor: 'pointer' }}>Add</button>
+        <button onClick={add} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, background: 'var(--accent)', color: 'white', cursor: 'pointer' }}>Add</button>
         {!editing && (
-          <button onClick={() => setEditing(true)} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500, color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', background: 'transparent', cursor: 'pointer' }}>Edit &amp; add</button>
+          <button onClick={() => setEditing(true)} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500, color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'transparent', cursor: 'pointer' }}>Edit &amp; add</button>
         )}
         <button onClick={onDismiss} style={{ marginLeft: 'auto', padding: '6px 10px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 500, background: 'transparent', color: '#a6adc8', cursor: 'pointer' }}>Dismiss</button>
       </div>
