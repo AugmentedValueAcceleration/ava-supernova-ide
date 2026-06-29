@@ -9182,7 +9182,7 @@ function CourseStat({ icon, label, sub }: { icon: string; label: string; sub: st
 
 export function LearningLibraryPage() {
   useLocale();
-  const { data, loading } = useApiData<{ paths: any[]; total: number }>('/learning/library?limit=30', { paths: [], total: 0 });
+  const { data, loading, refetch } = useApiData<{ paths: any[]; total: number }>('/learning/library?limit=30', { paths: [], total: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [search, setSearch] = useState('');
@@ -9387,9 +9387,14 @@ export function LearningLibraryPage() {
     <div style={pageWrapper}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div style={pageTitle}>{t('dash.learning_library.title')}</div>
-        <button onClick={() => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }))} style={{ background: 'none', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, padding: '4px 12px', color: '#a6adc8', cursor: 'pointer', fontSize: 11 }}>
-          {t('dash.learning_library.my_learning')}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => refetch()} title="Refresh" style={{ background: 'none', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, padding: '4px 12px', color: '#a6adc8', cursor: 'pointer', fontSize: 11 }}>
+            Refresh
+          </button>
+          <button onClick={() => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }))} style={{ background: 'none', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, padding: '4px 12px', color: '#a6adc8', cursor: 'pointer', fontSize: 11 }}>
+            {t('dash.learning_library.my_learning')}
+          </button>
+        </div>
       </div>
       <div style={pageSubtitle}>{t('dash.learning_library.subtitle')}</div>
 
