@@ -11,9 +11,14 @@
 // that's a catalogue you browse and fork from, not your own data. Forking
 // copies a course into this local store.
 
-import { readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { accountRoot } from './account-scope';
 
-const LEARNING_PATH = '.ava/learning.json';
+// Account-scoped path — ~/.ava/users/<id>/learning.json when signed in (the SAME
+// file the extension + @ava/core write), ~/.ava/learning.json for BYOK/no-account.
+// Previously this read the flat ~/.ava/learning.json, so a signed-in user's
+// courses (written to the scoped dir by Ava) never showed up in the IDE.
+const learningPath = async (): Promise<string> => `${await accountRoot()}/learning.json`;
 
 // The store is loosely typed — it's the same JSON @ava/core owns; we only
 // touch the fields the player needs.
@@ -23,7 +28,7 @@ const LEARNING_PATH = '.ava/learning.json';
  *  empty list (not an error) when the file is missing or unreadable. */
 export async function readLocalLearning(): Promise<any[]> {
   try {
-    const raw = await readTextFile(LEARNING_PATH, { baseDir: BaseDirectory.Home });
+    const raw = await readTextFile(await learningPath(), { baseDir: BaseDirectory.Home });
     const store = JSON.parse(raw);
     return Array.isArray(store?.curriculums) ? store.curriculums : [];
   } catch {
@@ -31,15 +36,65 @@ export async function readLocalLearning(): Promise<any[]> {
   }
 }
 
+/** Read the whole local store (curriculums + streaks) — what deriveProgression
+ *  needs. Local-first: returns an empty-but-valid store when missing/unreadable. */
+export async function readLocalLearningStore(): Promise<any> {
+  try {
+    const store = JSON.parse(await readTextFile(await learningPath(), { baseDir: BaseDirectory.Home }));
+    if (!Array.isArray(store?.curriculums)) store.curriculums = [];
+    if (!store.streaks) store.streaks = { current: 0, longest: 0, lastActiveDate: null };
+    return store;
+  } catch {
+    return { curriculums: [], streaks: { current: 0, longest: 0, lastActiveDate: null } };
+  }
+}
+
 /** Persist the curriculums array back to the local store, preserving any other
  *  top-level fields (streaks etc.) @ava/core keeps there. */
 async function writeLocalCurriculums(curriculums: any[]): Promise<void> {
+  const path = await learningPath();
   let store: any = { curriculums: [] };
   try {
-    store = JSON.parse(await readTextFile(LEARNING_PATH, { baseDir: BaseDirectory.Home }));
+    store = JSON.parse(await readTextFile(path, { baseDir: BaseDirectory.Home }));
   } catch { /* fresh store */ }
   store.curriculums = curriculums;
-  await writeTextFile(LEARNING_PATH, JSON.stringify(store, null, 2), { baseDir: BaseDirectory.Home });
+  await mkdir(await accountRoot(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+  await writeTextFile(path, JSON.stringify(store, null, 2), { baseDir: BaseDirectory.Home });
+}
+
+/** Set ONE course active (what Ava teaches in the Learning room); demote any
+ *  other active course to 'paused'. Completed courses are never touched. Returns
+ *  the updated curriculums so the UI can re-derive the active course + thread.
+ *  Mirrors the extension's setActiveCourse + the core learning_teach set_active. */
+export async function setActiveCourse(id: string): Promise<any[]> {
+  try {
+    const curriculums = await readLocalLearning();
+    for (const c of curriculums) {
+      const cid = c?.id || c?._id;
+      if (cid === id) {
+        if (c.status !== 'completed') c.status = 'active';
+      } else if (c.status === 'active') {
+        c.status = 'paused';
+      }
+    }
+    await writeLocalCurriculums(curriculums);
+    return curriculums;
+  } catch {
+    return [];
+  }
+}
+
+/** Delete a course from the local store. Returns the updated curriculums so the
+ *  UI can drop it without a re-read. Writes to the same account-scoped file the
+ *  extension uses, so a delete here is reflected everywhere. */
+export async function deleteCourse(id: string): Promise<any[]> {
+  try {
+    const curriculums = (await readLocalLearning()).filter((c) => (c?.id || c?._id) !== id);
+    await writeLocalCurriculums(curriculums);
+    return curriculums;
+  } catch {
+    return [];
+  }
 }
 
 function locateLesson(curriculums: any[], curriculumId: string, lessonId: string): any {

@@ -1,22 +1,30 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Paperclip as PhPaperclip } from '@phosphor-icons/react';
 import { t, useLocale } from '../lib/i18n';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
-import { ProfileFieldCard } from './ProfileFieldCard';
 import { RoomModelPicker } from './RoomModelPicker';
+import {
+  GraduationCap as PhGraduationCap,
+  BookOpen as PhBookOpen,
+  Lightbulb as PhLightbulb,
+  ArrowsClockwise as PhArrowsClockwise,
+  Paperclip as PhPaperclip,
+} from '@phosphor-icons/react';
 
 interface RoomAttachment { name: string; dataUri: string; mimeType: string }
 
 /**
- * Ava Health & Fitness room — a purpose-built, slim chat surface for the IDE
- * Health page. It is NOT the main AvaChatPage: it runs on the health lane (its
- * own sidecar conversation thread), is locked to health (no mode switch, no
- * Tasks, no model picker), and renders only its own stream by filtering events
- * for `lane === 'health'`. Mirrors the extension's focused room.
+ * Ava Learning room — the IDE Learning page's "Ava" tab. A slim, focused chat
+ * surface that runs on the *learning* lane (its own per-course sidecar thread),
+ * is locked to Teach mode (no mode switch / Tasks / model picker), and renders
+ * only its own stream by filtering events for `lane === 'learning'`. Mirrors the
+ * extension's focused Learning room.
  *
- * Sends via getSidecar().sendMessage(content, undefined, undefined, 'health').
- * The sidecar applies getHealthRoomPrefix + the profile summary and replies on
- * the health lane; AvaChatPage ignores lane==='health' so the two never cross.
+ * Per-course threading: each course owns its own conversation. The `courseId`
+ * prop keys both the sidecar thread (sent on every turn) and this component's
+ * message persistence, so switching the active course swaps the whole chat. The
+ * page remounts this component via a React `key` on courseId, so internal state
+ * is naturally scoped per course; the caches below are the cross-navigation /
+ * reload safety net. `__lobby__` is the no-active-course landing thread.
  */
 
 interface ToolChip { name: string; status: 'running' | 'done' | 'error' }
@@ -26,72 +34,64 @@ interface RoomMessage {
   text: string;
   toolCalls?: ToolChip[];
 }
-interface PendingConfirm { id: string; toolName: string; question: string; profileField?: { field: string; question: string; currentValue?: unknown } }
+interface PendingConfirm { id: string; toolName: string; question: string }
 
 let _rid = 0;
-const rid = () => `hr-${++_rid}-${Date.now()}`;
+const rid = () => `lr-${++_rid}-${Date.now()}`;
 
-/**
- * Persistence for the Health room's messages. The HealthPage (and this room)
- * unmounts on navigation AND a full webview reload wipes JS memory — both would
- * otherwise clear the conversation. Two layers: a module cache for instant
- * restore across navigation, and sessionStorage of the messages so a reload
- * survives too (it clears when the webview truly closes, lining up with the
- * sidecar starting a fresh healthConversation). Cleared by the Clear button.
- */
-let healthRoomMessagesCache: RoomMessage[] | null = null;
-const HR_MSGS_KEY = 'ava-health-room-messages';
+const LOBBY = '__lobby__';
 
-// Main-chat → Health room handoff seed (the user's specific request, carried
-// from open_health_room's `primer`). Set by the handoff button before
-// navigating; drained on mount/activation and auto-sent so the conversation
-// continues. Module-level to survive the post-navigation mount. Consume-once,
-// empty-thread only.
-let pendingHealthSeed: string | null = null;
-export function seedHealthRoom(primer: string): void { pendingHealthSeed = primer ? primer.trim() : null; }
-function readRoomMessages(): RoomMessage[] | null {
-  try { const raw = sessionStorage.getItem(HR_MSGS_KEY); const v = raw ? JSON.parse(raw) : null; return Array.isArray(v) && v.length ? v : null; } catch { return null; }
+// Main-chat → Learning room handoff seed. The handoff button sets this (the
+// user's specific request, carried from open_learning_room's `primer`) right
+// before navigating; the room drains it on mount and auto-sends it so the
+// conversation continues instead of starting cold. Module-level so it survives
+// the page mount that happens after navigation. Consumed once, only into an
+// empty thread.
+let pendingLearningSeed: string | null = null;
+export function seedLearningRoom(primer: string): void { pendingLearningSeed = primer ? primer.trim() : null; }
+
+// Per-course message persistence. A module cache gives instant restore across
+// navigation; sessionStorage (keyed by course) survives a full webview reload,
+// lining up with the sidecar keeping a per-course conversation alive. Cleared
+// by the Clear button for that course only.
+const roomCache = new Map<string, RoomMessage[]>();
+const msgsKey = (courseId?: string) => `ava-learning-room-messages:${courseId || LOBBY}`;
+function readRoomMessages(courseId?: string): RoomMessage[] | null {
+  try { const raw = sessionStorage.getItem(msgsKey(courseId)); const v = raw ? JSON.parse(raw) : null; return Array.isArray(v) && v.length ? v : null; } catch { return null; }
 }
-function writeRoomMessages(messages: RoomMessage[]): void {
-  try { sessionStorage.setItem(HR_MSGS_KEY, JSON.stringify(messages)); } catch { /* quota / unavailable */ }
-}
-function clearRoomMessages(): void {
-  try { sessionStorage.removeItem(HR_MSGS_KEY); } catch { /* ignore */ }
+function writeRoomMessages(courseId: string | undefined, messages: RoomMessage[]): void {
+  try { sessionStorage.setItem(msgsKey(courseId), JSON.stringify(messages)); } catch { /* quota / unavailable */ }
 }
 
-const STARTERS: Array<{ icon: string; labelKey: string; promptKey: string }> = [
-  { icon: '🏋', labelKey: 'health.room.starter.fitness',   promptKey: 'health.room.starter.fitness_prompt' },
-  { icon: '🍳', labelKey: 'health.room.starter.meal',      promptKey: 'health.room.starter.meal_prompt' },
-  { icon: '🔥', labelKey: 'health.room.starter.combined',  promptKey: 'health.room.starter.combined_prompt' },
-  { icon: '🩹', labelKey: 'health.room.starter.injury',    promptKey: 'health.room.starter.injury_prompt' },
-  { icon: '🥗', labelKey: 'health.room.starter.nutrition', promptKey: 'health.room.starter.nutrition_prompt' },
-  { icon: '💪', labelKey: 'health.room.starter.exercise',  promptKey: 'health.room.starter.exercise_prompt' },
+const STARTERS: Array<{ Icon: typeof PhBookOpen; labelKey: string; promptKey: string }> = [
+  { Icon: PhGraduationCap,    labelKey: 'learning.room.starter.course',  promptKey: 'learning.room.starter.course_prompt' },
+  { Icon: PhArrowsClockwise,  labelKey: 'learning.room.starter.resume',  promptKey: 'learning.room.starter.resume_prompt' },
+  { Icon: PhLightbulb,        labelKey: 'learning.room.starter.explain', promptKey: 'learning.room.starter.explain_prompt' },
+  { Icon: PhBookOpen,         labelKey: 'learning.room.starter.learn',   promptKey: 'learning.room.starter.learn_prompt' },
 ];
 
-export function HealthRoomChat({ active }: { active: boolean }) {
+export function LearningRoomChat({ active, courseId }: { active: boolean; courseId?: string }) {
   useLocale();
-  // Rehydrate so the conversation survives navigation (module cache) and a
-  // full reload (sessionStorage messages).
-  const [messages, setMessages] = useState<RoomMessage[]>(() => healthRoomMessagesCache ?? readRoomMessages() ?? []);
+  const [messages, setMessages] = useState<RoomMessage[]>(() => roomCache.get(courseId || LOBBY) ?? readRoomMessages(courseId) ?? []);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<RoomAttachment[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const [confirmText, setConfirmText] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Snapshot messages (cheap module cache for navigation); persist to
-  // sessionStorage once a turn settles (gated on !streaming to avoid a
-  // serialize-per-token storm) so a reload restores them.
+  // Snapshot to the module cache every change; persist to sessionStorage once a
+  // turn settles (gated on !streaming to avoid a serialize-per-token storm).
   useEffect(() => {
-    healthRoomMessagesCache = messages;
-    if (!streaming) writeRoomMessages(messages);
-  }, [messages, streaming]);
+    roomCache.set(courseId || LOBBY, messages);
+    if (!streaming) writeRoomMessages(courseId, messages);
+  }, [messages, streaming, courseId]);
 
-  // Subscribe to the sidecar, processing ONLY health-lane events.
+  // Subscribe to the sidecar, processing ONLY learning-lane events.
   useEffect(() => {
     const handler = (event: SidecarEvent) => {
-      if (event.lane !== 'health') return;
+      if (event.lane !== 'learning') return;
       switch (event.event) {
         case 'stream_delta':
           if (event.content) {
@@ -104,19 +104,14 @@ export function HealthRoomChat({ active }: { active: boolean }) {
           }
           break;
         case 'confirm_required':
-          // health_profile_ask (and ask_user) need user input in the room.
-          // Render an inline card; the answer resolves the sidecar's pending
-          // confirmation. Without this the agent would hang on the health lane.
+          // ask_user needs an answer in the room — without this the agent hangs.
           if (event.id) {
-            const pf = event.profileField;
-            const question = pf?.question || (event.args?.question as string) || '';
-            setPendingConfirm({ id: event.id, toolName: event.toolName || '', question, profileField: pf });
+            const question = (event.args?.question as string) || '';
+            setPendingConfirm({ id: event.id, toolName: event.toolName || '', question });
+            setConfirmText('');
           }
           break;
         case 'tool_call_start':
-          // The profile-fill card IS the surface for health_profile_ask — don't
-          // also show a tool chip for it.
-          if (event.toolName === 'health_profile_ask') break;
           setMessages((prev) => {
             const copy = [...prev];
             const last = copy[copy.length - 1];
@@ -163,8 +158,8 @@ export function HealthRoomChat({ active }: { active: boolean }) {
     setStreaming(true);
     setInput('');
     setAttachments([]);
-    getSidecar().sendMessage(text || '(see attachment)', atts, undefined, 'health').catch(() => setStreaming(false));
-  }, [streaming, attachments]);
+    getSidecar().sendMessage(text || '(see attachment)', atts, undefined, 'learning', courseId).catch(() => setStreaming(false));
+  }, [streaming, courseId, attachments]);
 
   const handleAttach = useCallback(() => {
     const picker = document.createElement('input');
@@ -187,102 +182,77 @@ export function HealthRoomChat({ active }: { active: boolean }) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
   };
 
+  // Course-path sidebar seeds a lesson via this window event — send it straight
+  // to Ava so clicking a lesson delivers it in the chat.
+  useEffect(() => {
+    const onSeed = (e: Event) => {
+      const text = (e as CustomEvent).detail as string;
+      if (text) send(text);
+    };
+    window.addEventListener('ava-learning-seed', onSeed);
+    return () => window.removeEventListener('ava-learning-seed', onSeed);
+  }, [send]);
+
   // Drain the main-chat handoff seed on mount/activation: if this is a fresh
   // thread, auto-send the user's carried request so Ava continues the
   // conversation. Consume-once (null after) + empty-thread guard. The user's
-  // message shows immediately so it never looks frozen, but the actual send
-  // waits for the in-flight main-chat turn to finish — otherwise the sidecar
-  // would fold it into that turn as an interjection.
+  // message + a streaming placeholder show immediately so it never looks frozen,
+  // but the actual send waits for the in-flight main-chat turn to finish —
+  // otherwise the sidecar would fold it into that turn as an interjection.
   useEffect(() => {
-    if (active && pendingHealthSeed && messages.length === 0) {
-      const seed = pendingHealthSeed;
-      pendingHealthSeed = null;
+    if (active && pendingLearningSeed && messages.length === 0) {
+      const seed = pendingLearningSeed;
+      pendingLearningSeed = null;
       setMessages([{ id: rid(), role: 'user', text: seed }, { id: rid(), role: 'ava', text: '', toolCalls: [] }]);
       setStreaming(true);
       getSidecar().waitForIdle().then(() => {
-        getSidecar().sendMessage(seed, undefined, undefined, 'health').catch(() => setStreaming(false));
+        getSidecar().sendMessage(seed, undefined, undefined, 'learning', courseId).catch(() => setStreaming(false));
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // Answer / skip a profile-fill (or generic) confirmation card.
-  const respondConfirm = useCallback((value: unknown) => {
+  const respondConfirm = useCallback(() => {
     setPendingConfirm((pc) => {
       if (!pc) return null;
-      if (pc.toolName === 'health_profile_ask' && pc.profileField) {
-        getSidecar().confirm(pc.id, true, JSON.stringify({ field: pc.profileField.field, value })).catch(() => {});
-      } else {
-        getSidecar().confirm(pc.id, true, typeof value === 'string' ? value : JSON.stringify(value)).catch(() => {});
-      }
+      getSidecar().confirm(pc.id, true, confirmText.trim()).catch(() => {});
       return null;
     });
-  }, []);
+    setConfirmText('');
+  }, [confirmText]);
   const skipConfirm = useCallback(() => {
     setPendingConfirm((pc) => {
       if (!pc) return null;
-      if (pc.toolName === 'health_profile_ask' && pc.profileField) {
-        getSidecar().confirm(pc.id, true, JSON.stringify({ field: pc.profileField.field, skipped: true })).catch(() => {});
-      } else {
-        getSidecar().confirm(pc.id, false).catch(() => {});
-      }
+      getSidecar().confirm(pc.id, false).catch(() => {});
       return null;
     });
-  }, []);
-
-  // Clear ONLY this room's thread (the health lane). The main chat is untouched.
-  const clearRoom = useCallback(() => {
-    setMessages([]);
-    setPendingConfirm(null);
-    healthRoomMessagesCache = null;
-    clearRoomMessages();
-    getSidecar().clear('health').catch(() => {});
+    setConfirmText('');
   }, []);
 
   const hasSpoken = messages.some((m) => m.role === 'user');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* Safety disclaimer + model picker + Clear chat */}
-      <div style={{ flexShrink: 0, borderBottom: '1px solid var(--border, #2a2440)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', padding: '8px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ flex: 1, fontSize: 11, lineHeight: 1.4, color: 'var(--text-muted, #8b8398)' }}>
-          {t('health.room.disclaimer')}{' '}
-          <button
-            type="button"
-            onClick={() => { try { window.open('https://ava-supernova.com/health/safety', '_blank'); } catch { /* no window */ } }}
-            style={{ border: 'none', background: 'transparent', padding: 0, color: '#a78bfa', textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer', fontSize: 11 }}
-          >
-            {t('health.browse.safety_link')}
-          </button>
+      {/* Header — mode badge + model picker. No "clear chat": the Learning room
+          is course-based (the thread IS the course), so clearing it isn't offered. */}
+      <div style={{ flexShrink: 0, borderBottom: '1px solid var(--border, #2a2440)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, lineHeight: 1.4, color: 'var(--text-muted, #8b8398)' }}>
+          <PhGraduationCap size={14} weight="duotone" style={{ color: 'var(--accent)' }} />
+          {t('learning.room.intro')}
         </div>
         <RoomModelPicker />
-        {messages.length > 0 && (
-          <button
-            type="button"
-            onClick={clearRoom}
-            title={t('header.clear_chat')}
-            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-            </svg>
-            {t('header.clear_chat')}
-          </button>
-        )}
       </div>
 
       {/* Stream */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
-        {/* Full-width content, matching the extension room (w-full). */}
         {!hasSpoken ? (
           <div style={{ width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, color: '#cdd6f4' }}>{t('health.room.greeting', { name: '' })}</span>
+              <span style={{ fontSize: 13, color: '#cdd6f4' }}>{t('learning.room.greeting')}</span>
             </div>
             <div style={{ borderRadius: 14, padding: 16, marginTop: 10, background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(96,165,250,0.04))', border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('health.room.starter.heading')}</div>
-              <p style={{ fontSize: 12, lineHeight: 1.5, color: '#a6adc8', margin: '0 0 14px' }}>{t('health.room.starter.subheading')}</p>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('learning.room.starter.heading')}</div>
+              <p style={{ fontSize: 12, lineHeight: 1.5, color: '#a6adc8', margin: '0 0 14px' }}>{t('learning.room.starter.subheading')}</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {STARTERS.map((s) => (
                   <button
@@ -291,7 +261,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
                     onClick={() => { setInput(t(s.promptKey)); inputRef.current?.focus(); }}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, background: 'rgba(26,16,40,0.5)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: '#cdd6f4', cursor: 'pointer' }}
                   >
-                    <span aria-hidden>{s.icon}</span>{t(s.labelKey)}
+                    <s.Icon size={14} weight="duotone" style={{ color: 'var(--accent)' }} />{t(s.labelKey)}
                   </button>
                 ))}
               </div>
@@ -323,26 +293,32 @@ export function HealthRoomChat({ active }: { active: boolean }) {
               </div>
             ))}
             {streaming && messages[messages.length - 1]?.text === '' && !pendingConfirm && (
-              <div style={{ fontSize: 12, color: '#8b8398', fontStyle: 'italic' }}>{t('health.room.mode_label')} · …</div>
+              <div style={{ fontSize: 12, color: '#8b8398', fontStyle: 'italic' }}>{t('learning.room.mode_label')} · …</div>
             )}
           </div>
         )}
-        {/* Inline confirmation — the profile-fill card (or a generic prompt) */}
+        {/* Inline ask_user confirmation */}
         {pendingConfirm && (
-          <div style={{ marginTop: 12 }}>
-            <ProfileFieldCard
-              field={pendingConfirm.profileField?.field ?? ''}
-              question={pendingConfirm.question}
-              currentValue={pendingConfirm.profileField?.currentValue}
-              onSubmit={respondConfirm}
-              onSkip={skipConfirm}
+          <div style={{ marginTop: 12, borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)' }}>
+            {pendingConfirm.question && <div style={{ fontSize: 13, color: '#cdd6f4', marginBottom: 10 }}>{pendingConfirm.question}</div>}
+            <textarea
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); respondConfirm(); } }}
+              rows={2}
+              autoFocus
+              style={{ width: '100%', boxSizing: 'border-box', resize: 'none', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', padding: '8px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
             />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button type="button" onClick={respondConfirm} disabled={!confirmText.trim()} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: confirmText.trim() ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 25%, transparent)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: confirmText.trim() ? 'pointer' : 'default' }}>{t('ask.submit')}</button>
+              <button type="button" onClick={skipConfirm} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'transparent', color: 'var(--text-muted, #8b8398)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{t('ask.skip')}</button>
+            </div>
           </div>
         )}
         <div ref={endRef} />
       </div>
 
-      {/* Composer — locked to health. Minimal action set: attach + send only. */}
+      {/* Composer — locked to Teach. Minimal action set: attach + send only. */}
       <div style={{ flexShrink: 0, borderTop: '1px solid var(--border, #2a2440)', padding: 10 }}>
         {/* Pending attachments preview */}
         {attachments.length > 0 && (
@@ -361,7 +337,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
         )}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
           <span style={{ flexShrink: 0, alignSelf: 'center', padding: '5px 10px', borderRadius: 8, background: 'linear-gradient(135deg,var(--accent),#7c3aed)', color: '#fff', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {t('health.room.mode_label')}
+            {t('learning.room.mode_label')}
           </span>
           <textarea
             ref={inputRef}
@@ -369,7 +345,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
             rows={1}
-            placeholder={t('health.room.starter.subheading')}
+            placeholder={t('learning.room.starter.subheading')}
             style={{ flex: 1, resize: 'none', minHeight: 38, maxHeight: 160, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
           />
           <button

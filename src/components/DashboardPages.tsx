@@ -23,6 +23,8 @@ import {
   Key as PhKey,
   Lock as PhLock,
   Brain as PhBrain,
+  GraduationCap as PhGraduationCap,
+  ArrowsClockwise as PhArrowsClockwise,
   Lightbulb as PhLightbulb,
   TestTube as PhTestTube,
   CreditCard as PhCreditCard,
@@ -42,8 +44,12 @@ import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sideca
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
 import { Tooltip } from './Tooltip';
-import { LessonPlayer, SAMPLE_LESSON, type PlayableLesson, type LessonStep } from './LessonPlayer';
-import { readLocalLearning } from '../lib/learning-store';
+import { LessonPlayer, type PlayableLesson, type LessonStep } from './LessonPlayer';
+import { LearningRoomChat, seedLearningRoom } from './LearningRoomChat';
+import { seedHealthRoom } from './HealthRoomChat';
+import { CoursePath } from './CoursePath';
+import { Progression } from './Progression';
+import { readLocalLearning, setActiveCourse, deleteCourse } from '../lib/learning-store';
 import IdeTasksPanel, { IdeTasksSpine, type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI, type CreateTaskInput as TaskCreateInput, type UpdateTaskInput as TaskUpdateInput } from './IdeTasksPanel';
 import { readLocalTasks, createLocalTask, toggleLocalTask, toggleLocalSubtask, updateLocalTask, tasksFolderPath } from '../lib/task-store';
 import { startTaskReminderScheduler } from '../lib/task-reminders';
@@ -2048,6 +2054,11 @@ export function AvaChatPage() {
     { id: 'desktop', label: 'Desktop Automation', icon: '@@', prefix: '[Desktop Automation Mode] ', placeholder: 'Open Notepad, launch Chrome, control your screen...' },
   ];
 
+  // Modes selectable from the main-chat picker. Teach is kept in MODES (so the
+  // paper-discussion handoff + mode resolution still work) but hidden here — it
+  // now lives in the focused Learning room, like Health.
+  const visibleModes = MODES.filter((m) => m.id !== 'teach');
+
   // ── Desktop-capable model IDs ─────────────────────────────────────────────
   // Mirrors the `desktopCapable: true` flag set in @ava/core's model
   // definitions. Models clicking, typing, and launching apps need (a)
@@ -2184,7 +2195,12 @@ export function AvaChatPage() {
     }
     return stored;
   });
-  const [mode, setMode] = useState<AvaMode>(() => (localStorage.getItem('ava-ide-chat-mode') as AvaMode) || 'work');
+  const [mode, setMode] = useState<AvaMode>(() => {
+    const stored = localStorage.getItem('ava-ide-chat-mode') as AvaMode | null;
+    // 'teach' is no longer a main-chat picker mode (it moved to the Learning
+    // room); a stale persisted teach falls back to work on load.
+    return stored && stored !== 'teach' ? stored : 'work';
+  });
   // Desktop permission level — shared with the Settings page via a hook
   // backed by localStorage + a window event. Either picker (chat-bar pill
   // or Settings page) updates both. 'watch' = narrate only, 'ask' = confirm
@@ -2705,6 +2721,14 @@ export function AvaChatPage() {
     try { localStorage.setItem('ava-ide-chat-mode', mode); } catch { /* */ }
     window.dispatchEvent(new CustomEvent('ava-mode-changed'));
   }, [mode]);
+  // Sync the model when a focused room's picker changes it (shared sidecar model).
+  useEffect(() => {
+    const onModelChanged = () => {
+      try { const m = localStorage.getItem('ava-ide-chat-model'); if (m && m !== model) setModel(m); } catch { /* */ }
+    };
+    window.addEventListener('ava-ide-model-changed', onModelChanged);
+    return () => window.removeEventListener('ava-ide-model-changed', onModelChanged);
+  }, [model]);
 
   // Listen for mode changes from status bar
   useEffect(() => {
@@ -2905,9 +2929,9 @@ export function AvaChatPage() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
         const idx = parseInt(e.key) - 1;
-        if (idx < MODES.length) {
+        if (idx < visibleModes.length) {
           e.preventDefault();
-          setMode(MODES[idx].id);
+          setMode(visibleModes[idx].id);
           setModeMenuOpen(false);
         }
       }
@@ -3235,9 +3259,10 @@ export function AvaChatPage() {
 
   // ── Sidecar event handler (for local mode streaming) ──────────────────
   const handleSidecarEvent = useCallback((event: SidecarEvent) => {
-    // Health-room turns run on their own lane and render in the Ava room on the
-    // Health page — never in the main chat. Ignore them here.
-    if (event.lane === 'health') return;
+    // Room turns (Health, Learning) run on their own lanes and render in their
+    // own Ava rooms — never in the main chat. Main chat only accepts main-lane
+    // (or unlabelled) events; anything with a non-main lane is ignored here.
+    if (event.lane && event.lane !== 'main') return;
     switch (event.event) {
       case 'stream_start':
         setStatusText('');
@@ -5127,6 +5152,7 @@ export function AvaChatPage() {
                   {/* Main-chat → Health room handoff (open_health_room) */}
                   {msg.toolCalls?.filter(tc => tc.name === 'open_health_room').slice(0, 1).map((tc, idx) => {
                     const planType = tc.args?.plan_type as string | undefined;
+                    const primer = (tc.args?.primer as string | undefined)?.trim() || undefined;
                     const titleKey = planType === 'fitness' ? 'health.handoff.title.fitness'
                       : planType === 'meal' ? 'health.handoff.title.meal'
                       : planType === 'combined' ? 'health.handoff.title.combined'
@@ -5139,13 +5165,39 @@ export function AvaChatPage() {
                         </div>
                         <p style={{ margin: '0 0 12px', fontSize: 11, lineHeight: 1.5, color: '#8b8398' }}>{t('health.handoff.body')}</p>
                         <button type="button" onClick={() => {
+                          if (primer) seedHealthRoom(primer);
                           requestHealthRoomTab();
                           try {
                             window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'health' }));
-                            window.dispatchEvent(new CustomEvent('ava-open-health-room', { detail: planType }));
+                            window.dispatchEvent(new CustomEvent('ava-open-health-room', { detail: { planType, primer } }));
                           } catch { /* no window */ }
                         }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                           {t('health.handoff.button')} <span aria-hidden>→</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {/* Main-chat → Learning room handoff (open_learning_room) */}
+                  {msg.toolCalls?.filter(tc => tc.name === 'open_learning_room').slice(0, 1).map((tc, idx) => {
+                    const topic = (tc.args?.topic as string | undefined)?.trim() || undefined;
+                    const primer = (tc.args?.primer as string | undefined)?.trim() || undefined;
+                    return (
+                      <div key={`lr-${idx}`} style={{ marginTop: 8, borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', padding: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <PhGraduationCap size={16} weight="duotone" style={{ color: 'var(--accent)' }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('learning.room.title')}</span>
+                        </div>
+                        <p style={{ margin: '0 0 12px', fontSize: 11, lineHeight: 1.5, color: '#8b8398' }}>{t('learning.handoff.body')}</p>
+                        <button type="button" onClick={() => {
+                          if (primer) seedLearningRoom(primer);
+                          requestLearningRoomTab();
+                          try {
+                            window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }));
+                            window.dispatchEvent(new CustomEvent('ava-open-learning-room', { detail: { topic, primer } }));
+                          } catch { /* no window */ }
+                        }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                          {t('learning.handoff.button')} <span aria-hidden>→</span>
                         </button>
                       </div>
                     );
@@ -6133,7 +6185,7 @@ export function AvaChatPage() {
                   background: 'rgba(26, 16, 40, 0.95)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', borderRadius: 10,
                   padding: 6, minWidth: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                 }}>
-                  {MODES.map((m, idx) => (
+                  {visibleModes.map((m, idx) => (
                     <button key={m.id} onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
@@ -6917,9 +6969,7 @@ function isMemoryStale(entry: any): boolean {
 
 export function MemoryPage() {
   useLocale();
-  const { data: rawMemories, loading, error } = useApiData<any[]>('/memories', []);
   const [memories, setMemories] = useState<any[]>([]);
-  const [localMemories, setLocalMemories] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<MemoryViewMode>('active');
@@ -6928,28 +6978,26 @@ export function MemoryPage() {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(MEMORY_PAGE_SIZE);
+  // Memory is LOCAL-ONLY — no cloud fetch. These satisfy the loading/error
+  // branches in the render without any network call.
+  const loading = false;
+  const error: string | null = null;
 
-  // Load local memories from ~/.ava/memory.json via Tauri FS
-  useEffect(() => {
-    (async () => {
-      try {
-        const { readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-        const raw = await readTextFile('.ava/memory.json', { baseDir: BaseDirectory.Home });
-        const parsed = JSON.parse(raw || '{}');
-        const entries = parsed.entries || [];
-        setLocalMemories(entries);
-      } catch { /* file may not exist yet */ }
-    })();
+  // Load memories from the sidecar's MemoryManager — the authoritative v3 graph
+  // (flat ~/.ava/memory/, the SAME store the extension reads), local-only.
+  // Read memories straight from the authoritative v3 graph file
+  // (~/.ava/memory/graph.json) — its `nodes` ARE memory entries. This is the
+  // SAME flat store the agent + extension use, local-only. Reading the file
+  // directly (instead of a sidecar round-trip) is reliable + needs no chat init.
+  const reloadMemories = useCallback(async () => {
+    try {
+      const { readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+      const raw = await readTextFile('.ava/memory/graph.json', { baseDir: BaseDirectory.Home });
+      const g = JSON.parse(raw || '{}');
+      setMemories(Array.isArray(g.nodes) ? g.nodes : []);
+    } catch { setMemories([]); }
   }, []);
-
-  // Merge cloud + local memories (deduplicated)
-  useEffect(() => {
-    const cloudList = Array.isArray(rawMemories) ? rawMemories : (rawMemories as any)?.entries || (rawMemories as any)?.memories || [];
-    const cloudIds = new Set(cloudList.map((m: any) => m.id || m._id));
-    const localOnly = localMemories.filter((m: any) => !cloudIds.has(m.id || m._id));
-    const merged = [...cloudList, ...localOnly];
-    if (merged.length > 0 || (!loading && localMemories.length === 0)) setMemories(merged);
-  }, [rawMemories, loading, localMemories]);
+  useEffect(() => { void reloadMemories(); }, [reloadMemories]);
 
   const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
     pattern:      { bg: 'rgba(59,130,246,0.10)', text: '#60a5fa', border: 'rgba(59,130,246,0.20)' },
@@ -7030,22 +7078,11 @@ export function MemoryPage() {
 
   const handleDelete = async (id: string | number) => {
     try {
-      // Delete the cloud copy too when cloud sync is on.
-      if (cloudSyncEnabled()) {
-        await apiFetch(`/memories/${id}`, { method: 'DELETE' });
-      }
-      // Always delete from the local store — local-first.
-      {
-        try {
-          const { readTextFile, writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-          const raw = await readTextFile('.ava/memory.json', { baseDir: BaseDirectory.Home });
-          const parsed = JSON.parse(raw || '{}');
-          parsed.entries = (parsed.entries || []).filter((m: any) => m.id !== id && m._id !== id);
-          parsed.lastModified = new Date().toISOString();
-          await writeTextFile('.ava/memory.json', JSON.stringify(parsed), { baseDir: BaseDirectory.Home });
-          setLocalMemories(parsed.entries);
-        } catch { /* file may not exist */ }
-      }
+      // Delete through the MemoryManager (keeps the v3 graph authoritative),
+      // scoped to the entry's graph. Local-only — never the cloud.
+      const entry = memories.find((m: any) => (m.id || m._id) === id);
+      const scope: 'global' | 'project' = entry?.scope === 'project' ? 'project' : 'global';
+      await getSidecar().deleteMemory(id, scope);
       setMemories(prev => prev.filter(m => (m.id || m._id) !== id));
       setConfirmDeleteId(null);
     } catch (err: any) {
@@ -7053,44 +7090,14 @@ export function MemoryPage() {
     }
   };
 
-  const deleteLocal = async () => {
-    try {
-      const { writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-      const emptyStore = JSON.stringify({ version: 2, lastModified: new Date().toISOString(), entries: [] });
-      await writeTextFile('.ava/memory.json', emptyStore, { baseDir: BaseDirectory.Home }).catch(() => {});
-    } catch { /* not in Tauri or fs plugin not available */ }
-    try { window.dispatchEvent(new CustomEvent('ava-clear-memory')); } catch {}
-  };
-
-  const deleteCloud = async () => {
-    try {
-      const key = getPlatformKey();
-      if (key) {
-        const API = 'https://ava-supernova.com/api';
-        const deviceId = localStorage.getItem('ava-ide-device-id') || '';
-        for (let i = 0; i < 100; i++) {
-          const res = await fetch(`${API}/memories`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Ava-Platform': 'ide', 'X-Ava-Device': deviceId },
-          });
-          const data = await res.json().catch(() => ({}));
-          if (data?.remaining === 0 || data?.deleted === 0) break;
-        }
-      }
-    } catch { /* best-effort */ }
-  };
-
   const handleDeleteAll = async () => {
     setDeletingAll(true);
     setConfirmDeleteAll(false);
-    // Wipe everything — local store + the cloud copy. deleteCloud() self-guards
-    // on the platform key (no account => no-op), so we always call it. Gating
-    // on a connection/sync flag let cloud memories survive and reappear on the
-    // next reload — the bug this fixes.
-    await deleteLocal();
-    await deleteCloud();
+    // Local-only wipe via the MemoryManager — clears every scope, resets the
+    // store. Nothing in the cloud (memory never leaves the device).
+    await getSidecar().clearMemory();
+    try { window.dispatchEvent(new CustomEvent('ava-clear-memory')); } catch { /* no window */ }
     setMemories([]);
-    setLocalMemories([]);
     setDeletingAll(false);
   };
 
@@ -8406,30 +8413,163 @@ export function JournalPage() {
 }
 
 /* ===== 6. Learning ===== */
+// ── Learning room — the consolidated Learning home (mirrors the extension) ──
+//
+// Three tabs, like the Health room:
+//   - Courses     → the curated catalogue (LearningLibraryPage), moved here from Library.
+//   - My Learning → the learner's enrolled curriculums + lessons (LearningPage) and,
+//                   in a later pass, the Progression CV.
+//   - Ava         → a focused Teach-mode chat on the learning lane (per-course thread),
+//                   alongside the course-path sidebar. Main chat hands off here.
+// The Ava room is always mounted (hidden off-tab) so its conversation survives tab
+// switches; it runs its own lane (surface:'learning'), separate from the main chat.
+
+// Set when the main-chat → Learning room handoff wants the page to open on Ava.
+let pendingLearningRoomOpen = false;
+export function requestLearningRoomTab(): void { pendingLearningRoomOpen = true; }
+
+type LearningRoomTab = 'courses' | 'my-learning' | 'ava';
+
+export function LearningRoomPage() {
+  useLocale();
+  const [tab, setTab] = useState<LearningRoomTab>(pendingLearningRoomOpen ? 'ava' : 'courses');
+
+  // The single active course keys the Ava-tab thread (so switching the active
+  // course swaps the conversation) and drives the course-path sidebar.
+  const [curricula, setCurricula] = useState<any[]>([]);
+  const refreshCurricula = useCallback(() => { void readLocalLearning().then(setCurricula); }, []);
+  useEffect(() => { refreshCurricula(); }, [refreshCurricula]);
+  const activeCourse = curricula.find((c: any) => c.status === 'active');
+  const activeCourseId: string | undefined = activeCourse?.id || activeCourse?._id;
+
+  // Lobby → first-course thread adoption: when an active course first appears
+  // (Ava built it mid-chat) carry the lobby conversation over so it's not lost
+  // on the keyed remount. Guarded, synchronous before the re-keyed chat mounts.
+  const prevActiveRef = useRef<string | undefined>(activeCourseId);
+  if (prevActiveRef.current !== activeCourseId) {
+    if (!prevActiveRef.current && activeCourseId) {
+      try {
+        const lobby = sessionStorage.getItem('ava-learning-room-messages:__lobby__');
+        const destKey = `ava-learning-room-messages:${activeCourseId}`;
+        if (lobby && !sessionStorage.getItem(destKey)) {
+          sessionStorage.setItem(destKey, lobby);
+          sessionStorage.removeItem('ava-learning-room-messages:__lobby__');
+        }
+      } catch { /* sessionStorage unavailable */ }
+    }
+    prevActiveRef.current = activeCourseId;
+  }
+
+  // Open the Ava tab on the handoff request — module flag covers a fresh mount,
+  // the event covers an already-mounted page. Re-read curricula when entering
+  // My Learning / Ava so an Ava-built course shows without a manual refresh.
+  useEffect(() => {
+    if (pendingLearningRoomOpen) { pendingLearningRoomOpen = false; setTab('ava'); }
+    const onOpenRoom = () => setTab('ava');
+    window.addEventListener('ava-open-learning-room', onOpenRoom);
+    return () => window.removeEventListener('ava-open-learning-room', onOpenRoom);
+  }, []);
+  useEffect(() => { if (tab === 'my-learning' || tab === 'ava') refreshCurricula(); }, [tab, refreshCurricula]);
+
+  // Refresh after a learning-lane turn settles — Ava may have created a course,
+  // set a new active, or completed a lesson; the course-path + active badge
+  // should reflect it without a manual reload.
+  useEffect(() => {
+    const handler = (event: SidecarEvent) => {
+      if (event.lane === 'learning' && (event.event === 'done' || event.event === 'stopped')) refreshCurricula();
+    };
+    getSidecar().onAny(handler);
+    return () => getSidecar().offAny(handler);
+  }, [refreshCurricula]);
+
+  const tabBtnStyle = (active: boolean): React.CSSProperties => ({
+    padding: '8px 16px', borderRadius: 0, border: 'none', cursor: 'pointer',
+    fontSize: 12, fontWeight: active ? 600 : 500,
+    background: 'transparent',
+    color: active ? '#c084fc' : '#6c7086',
+    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+    marginBottom: -1,
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{
+        padding: '20px 32px 0', flexShrink: 0,
+        borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+        background: 'rgba(12, 8, 20, 0.4)',
+      }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4', margin: 0, marginBottom: 2 }}>{t('learning.room.title')}</h1>
+          <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>{t('learning.room.intro')}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 2 }}>
+          <button onClick={() => setTab('courses')} style={tabBtnStyle(tab === 'courses')}>{t('learning.room.tab.courses')}</button>
+          <button onClick={() => setTab('my-learning')} style={tabBtnStyle(tab === 'my-learning')}>{t('learning.room.tab.my_learning')}</button>
+          <button onClick={() => setTab('ava')} style={tabBtnStyle(tab === 'ava')}>{t('learning.room.tab.ava')}</button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        {/* Browse tabs — own scroll inside their own pages. */}
+        <div style={{ height: '100%', overflow: 'hidden', display: tab === 'courses' ? 'block' : 'none' }}>
+          <LearningLibraryPage />
+        </div>
+        <div style={{ height: '100%', overflow: 'hidden', display: tab === 'my-learning' ? 'block' : 'none' }}>
+          <MyLearningTab />
+        </div>
+        {/* Ava room — always mounted so the conversation survives tab switches.
+            Chat (keyed by active course) alongside the course-path sidebar. */}
+        <div style={{ height: '100%', display: tab === 'ava' ? 'flex' : 'none', minHeight: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <LearningRoomChat key={`learning-${activeCourseId ?? 'lobby'}`} active={tab === 'ava'} courseId={activeCourseId} />
+          </div>
+          <CoursePath curriculum={activeCourse ?? null} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// My Learning tab — two inner tabs (mirrors the extension's MyLearning):
+//   Progression → the learner CV; My Courses → the course manager (LearningPage).
+function MyLearningTab() {
+  useLocale();
+  const [inner, setInner] = useState<'progression' | 'courses'>('progression');
+  const innerBtn = (active: boolean): React.CSSProperties => ({
+    padding: '6px 14px', borderRadius: 999, border: `1px solid ${active ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
+    background: active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+    color: active ? '#c084fc' : '#6c7086', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+  });
+  return (
+    <div style={{ height: '100%', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', gap: 8, padding: '16px 32px 0' }}>
+        <button onClick={() => setInner('progression')} style={innerBtn(inner === 'progression')}>{t('learning.tab.progression')}</button>
+        <button onClick={() => setInner('courses')} style={innerBtn(inner === 'courses')}>{t('learning.tab.my_courses')}</button>
+      </div>
+      {inner === 'progression'
+        ? <div style={{ padding: '16px 32px 32px' }}><Progression /></div>
+        : <LearningPage />}
+    </div>
+  );
+}
+
 export function LearningPage() {
   useLocale();
-  const { data: rawData, loading, error } = useApiData<any>('/learning', null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [playingLessonId, setPlayingLessonId] = useState<string | null>(null);
-  const [playingSample, setPlayingSample] = useState(false);
 
-  // Local-first: the user's curriculums + progress live in the SHARED
-  // ~/.ava/learning.json (the same file the CLI, extension and @ava/core use),
-  // read via Tauri fs — works with no account and no connection. Cloud is
-  // additive (merged in when signed in), never required.
+  // LOCAL-ONLY: the user's curriculums + progress live ONLY in the account-scoped
+  // ~/.ava/.../learning.json (the same file the CLI, extension and @ava/core use),
+  // read via Tauri fs. Learning never touches the cloud — local-first is sacred
+  // here. (Previously this merged a cloud copy from /api/learning, which made a
+  // deleted course re-appear because the local delete left the cloud row intact.)
   const [localCurricula, setLocalCurricula] = useState<any[]>([]);
+  const loading = false;
+  const error = null;
   useEffect(() => { void readLocalLearning().then(setLocalCurricula); }, []);
 
-  const cloudCurricula: any[] = Array.isArray(rawData) ? rawData : rawData?.curricula || rawData?.courses || [];
-
-  // Merge: local first (the source of truth), plus any cloud-only curriculums.
-  const curricula: any[] = useMemo(() => {
-    if (cloudCurricula.length === 0) return localCurricula;
-    const localIds = new Set(localCurricula.map((c: any) => c.id || c._id));
-    const cloudOnly = cloudCurricula.filter((c: any) => !localIds.has(c.id || c._id));
-    return [...localCurricula, ...cloudOnly];
-  }, [localCurricula, cloudCurricula]);
+  const curricula: any[] = localCurricula;
 
   const levelColors: Record<string, { color: string; bg: string }> = {
     beginner:     { color: '#34d399', bg: 'rgba(52,211,153,0.10)' },
@@ -8459,16 +8599,30 @@ export function LearningPage() {
 
   const selected = curricula.find((c: any) => (c.id || c._id) === selectedId);
 
-  // Sample lesson — playable with zero setup, from anywhere in the view.
-  if (playingSample) {
-    return (
-      <div style={pageWrapper}>
-        <div style={{ width: '100%' }}>
-          <LessonPlayer lesson={SAMPLE_LESSON} onClose={() => setPlayingSample(false)} />
-        </div>
-      </div>
-    );
-  }
+  // Per-card delete confirmation (only one card confirms at a time).
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+
+  // Set a course active (what Ava teaches) and jump to the Ava room. Single
+  // active is enforced in the store; refresh the local list so the badge moves.
+  const onSetActive = async (id: string) => {
+    const updated = await setActiveCourse(id);
+    if (updated.length) setLocalCurricula(updated);
+    try {
+      window.dispatchEvent(new CustomEvent('ava-open-learning-room'));
+    } catch { /* no window */ }
+  };
+  // Active course → just jump to the Ava room (already active).
+  const onContinue = () => { try { window.dispatchEvent(new CustomEvent('ava-open-learning-room')); } catch { /* no window */ } };
+  // Delete a course (after inline confirm) + drop it from the list.
+  const onDelete = async (id: string) => {
+    const updated = await deleteCourse(id);
+    setLocalCurricula(updated);
+    setConfirmingDelete(null);
+  };
+  // One shared pill so every card action matches — outlined-accent, plus a
+  // danger-tinted variant for delete (same shape, clearly destructive).
+  const cardBtnStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 7, border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent)', padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer' };
+  const dangerBtnStyle: React.CSSProperties = { ...cardBtnStyle, border: '1px solid rgba(243,139,168,0.4)', background: 'rgba(243,139,168,0.1)', color: '#f38ba8' };
 
   // Detail view
   if (selected) {
@@ -8637,26 +8791,16 @@ export function LearningPage() {
       <div style={{ width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={pageTitle}>{t('dash.learning.title')}</div>
+          <button
+            type="button"
+            onClick={() => { void readLocalLearning().then(setLocalCurricula); }}
+            title={t('learning.courses.refresh')}
+            style={cardBtnStyle}
+          >
+            <PhArrowsClockwise size={13} weight="duotone" />{t('learning.courses.refresh')}
+          </button>
         </div>
         <div style={pageSubtitle}>{t('dash.learning.subtitle')}</div>
-
-        {/* Try a sample interactive lesson — playable with zero data */}
-        <button
-          onClick={() => setPlayingSample(true)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20,
-            borderRadius: 10, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'color-mix(in srgb, var(--accent) 5%, transparent)',
-            padding: '10px 16px', textAlign: 'left', cursor: 'pointer', transition: 'background 0.15s',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent) 10%, transparent)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent) 5%, transparent)'; }}
-        >
-          <span style={{ fontSize: 16 }}>&#9654;</span>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>Try a sample interactive lesson</div>
-            <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>See the new step-by-step format — teach, do, check.</div>
-          </div>
-        </button>
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 28 }}>
@@ -8679,84 +8823,124 @@ export function LearningPage() {
         {loading ? <LoadingSpinner /> : error ? <ErrorBanner message={error} /> : (
           <>
             {curricula.length === 0 ? (
-              <>
-                {/* How it works */}
-                <div style={{ ...card, marginBottom: 16 }}>
-                  <div style={{ ...sectionTitle, marginBottom: 14 }}>{t('dash.learning.how_it_works')}</div>
-                  {[
-                    { icon: '\uD83D\uDCAC', title: t('dash.learning.step1'), desc: t('dash.learning.step1_desc') },
-                    { icon: '\uD83E\uDDE0', title: t('dash.learning.step2'), desc: t('dash.learning.step2_desc') },
-                    { icon: '\uD83D\uDCDA', title: t('dash.learning.step3'), desc: t('dash.learning.step3_desc') },
-                    { icon: '\uD83C\uDF93', title: t('dash.learning.step4'), desc: t('dash.learning.step4_desc') },
-                  ].map(step => (
-                    <div key={step.title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{step.icon}</span>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>{step.title}</div>
-                        <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{step.desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{
-                  background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12,
-                  padding: '24px 20px', textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: 13, color: '#6c7086' }}>
-                    {t('dash.learning.empty')}
-                  </div>
-                </div>
-              </>
+              <div style={{
+                background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed color-mix(in srgb, var(--accent) 25%, transparent)', borderRadius: 14,
+                padding: '40px 28px', textAlign: 'center',
+              }}>
+                <PhGraduationCap size={40} weight="duotone" style={{ color: 'var(--accent)', marginBottom: 12 }} />
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>{t('learning.courses.empty_title')}</div>
+                <div style={{ fontSize: 12, color: '#9b8caa', maxWidth: 420, margin: '0 auto 18px', lineHeight: 1.6 }}>{t('learning.courses.empty_body')}</div>
+                <button
+                  type="button"
+                  onClick={() => { try { window.dispatchEvent(new CustomEvent('ava-open-learning-room')); } catch { /* no window */ } }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', padding: '9px 18px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {t('learning.courses.start')} <span aria-hidden>&rarr;</span>
+                </button>
+              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {curricula.map((curr: any) => {
-                  const id = curr.id || curr._id;
-                  const progress = curr.progress_percent ?? curr.progress ?? 0;
-                  const lc = levelColors[curr.level] || levelColors.mixed;
-                  const modules: any[] = curr.modules || [];
-                  const moduleCount = modules.length;
-                  const lessonCount = modules.reduce((s: number, mod: any) => s + (mod.lessons?.length || 0), curr.total_lessons || curr.lessons || 0);
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {([
+                  { key: 'active', label: t('learning.courses.active'), items: curricula.filter((c: any) => c.status === 'active') },
+                  { key: 'in_progress', label: t('learning.courses.in_progress'), items: curricula.filter((c: any) => c.status !== 'active' && c.status !== 'completed') },
+                  { key: 'completed', label: t('learning.courses.completed'), items: curricula.filter((c: any) => c.status === 'completed') },
+                ] as const).filter(g => g.items.length > 0).map(group => (
+                  <div key={group.key}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.4, color: '#6c7086', marginBottom: 10 }}>
+                      {group.label} &middot; {group.items.length}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {group.items.map((curr: any) => {
+                        const id = curr.id || curr._id;
+                        const progress = curr.progress_percent ?? curr.progress ?? 0;
+                        const lc = levelColors[curr.level] || levelColors.mixed;
+                        const modules: any[] = curr.modules || [];
+                        const moduleCount = modules.length;
+                        const lessonCount = modules.reduce((s: number, mod: any) => s + (mod.lessons?.length || 0), curr.total_lessons || curr.lessons || 0);
+                        const isActive = curr.status === 'active';
+                        const isCompleted = curr.status === 'completed';
 
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => { setSelectedId(id); setExpandedModules(new Set()); }}
-                      style={{
-                        width: '100%', background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12,
-                        padding: '16px 20px', textAlign: 'left', cursor: 'pointer', transition: 'border-color 0.15s',
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 30%, transparent)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{
-                          fontSize: 8, fontWeight: 700, textTransform: 'uppercase' as const,
-                          color: lc.color, background: lc.bg, padding: '2px 8px', borderRadius: 10,
-                        }}>
-                          {curr.level || 'mixed'}
-                        </span>
-                        {curr.subject && <span style={{ fontSize: 10, color: '#6c7086' }}>{curr.subject}</span>}
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 8 }}>{curr.title}</div>
+                        return (
+                          <div
+                            key={id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => { setSelectedId(id); setExpandedModules(new Set()); }}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(id); setExpandedModules(new Set()); } }}
+                            style={{
+                              width: '100%', background: 'rgba(26, 16, 40, 0.6)', borderRadius: 12,
+                              border: `1px solid ${isActive ? 'color-mix(in srgb, var(--accent) 45%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
+                              padding: '16px 20px', textAlign: 'left', cursor: 'pointer', transition: 'border-color 0.15s',
+                            }}
+                            onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 30%, transparent)'; }}
+                            onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                              <span style={{
+                                fontSize: 8, fontWeight: 700, textTransform: 'uppercase' as const,
+                                color: lc.color, background: lc.bg, padding: '2px 8px', borderRadius: 10,
+                              }}>
+                                {curr.level || 'mixed'}
+                              </span>
+                              {curr.subject && <span style={{ fontSize: 10, color: '#6c7086' }}>{curr.subject}</span>}
+                              {isActive && (
+                                <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 14%, transparent)', padding: '2px 8px', borderRadius: 10 }}>
+                                  <PhGraduationCap size={10} weight="duotone" />{t('learning.courses.active_tag')}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 8 }}>{curr.title}</div>
 
-                      {/* Progress bar */}
-                      <div style={{ height: 4, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
-                        <div style={{
-                          width: `${progress}%`, height: '100%', borderRadius: 2,
-                          background: 'linear-gradient(90deg, var(--accent), #6366f1)',
-                          transition: 'width 0.3s',
-                        }} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: 9, color: '#6c7086' }}>
-                          {curr.status === 'completed' ? 'Completed' : `${Math.round(progress)}% complete`}
-                        </span>
-                        {moduleCount > 0 && <span style={{ fontSize: 9, color: '#6c7086' }}>{moduleCount} {t('dash.learning.modules')}</span>}
-                        {lessonCount > 0 && <span style={{ fontSize: 9, color: '#6c7086' }}>{lessonCount} {t('dash.learning.lessons')}</span>}
-                      </div>
-                    </button>
-                  );
-                })}
+                            {/* Progress bar */}
+                            <div style={{ height: 4, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
+                              <div style={{
+                                width: `${progress}%`, height: '100%', borderRadius: 2,
+                                background: 'linear-gradient(90deg, var(--accent), #6366f1)',
+                                transition: 'width 0.3s',
+                              }} />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                              <span style={{ fontSize: 9, color: '#6c7086' }}>
+                                {isCompleted ? t('learning.courses.completed') : `${Math.round(progress)}% complete`}
+                              </span>
+                              {moduleCount > 0 && <span style={{ fontSize: 9, color: '#6c7086' }}>{moduleCount} {t('dash.learning.modules')}</span>}
+                              {lessonCount > 0 && <span style={{ fontSize: 9, color: '#6c7086' }}>{lessonCount} {t('dash.learning.lessons')}</span>}
+                            </div>
+
+                            {/* Actions — all matching pills; delete behind an inline confirm */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                              {confirmingDelete === id ? (
+                                <>
+                                  <span style={{ fontSize: 11, color: '#a6adc8' }}>{t('learning.courses.delete_confirm')}</span>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); void onDelete(id); }} style={dangerBtnStyle}>{t('learning.courses.delete')}</button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmingDelete(null); }} style={cardBtnStyle}>{t('learning.courses.cancel')}</button>
+                                </>
+                              ) : (
+                                <>
+                                  {isActive ? (
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); onContinue(); }} style={cardBtnStyle}>
+                                      <PhGraduationCap size={12} weight="duotone" />{t('learning.courses.continue')} →
+                                    </button>
+                                  ) : (
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); void onSetActive(id); }} style={cardBtnStyle}>
+                                      <PhGraduationCap size={12} weight="duotone" />{isCompleted ? t('learning.courses.revisit') : t('learning.courses.set_active')}
+                                    </button>
+                                  )}
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedId(id); setExpandedModules(new Set()); }} style={cardBtnStyle}>
+                                    {t('learning.courses.view')}
+                                  </button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmingDelete(id); }} style={dangerBtnStyle}>
+                                    {t('learning.courses.delete')}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </>
@@ -9297,21 +9481,26 @@ export function LearningLibraryPage() {
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                {/* Identity band */}
+                {/* Identity band — cover image when present, else gradient + icon */}
                 <div style={{
-                  height: 78, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '0 16px', position: 'relative',
-                  background: `linear-gradient(135deg, ${id.from}, ${id.to})`,
+                  height: 96, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                  padding: '12px 14px', position: 'relative',
+                  background: p.cover_image_url
+                    ? `linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.45)), center/cover no-repeat url(${p.cover_image_url})`
+                    : `linear-gradient(135deg, ${id.from}, ${id.to})`,
                 }}>
-                  <div style={{
-                    width: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', fontSize: 22, background: 'rgba(0,0,0,0.18)',
-                  }}>
-                    {id.icon}
-                  </div>
+                  {!p.cover_image_url && (
+                    <div style={{
+                      width: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', fontSize: 22, background: 'rgba(0,0,0,0.18)',
+                    }}>
+                      {id.icon}
+                    </div>
+                  )}
                   <span style={{
+                    marginLeft: 'auto',
                     padding: '3px 9px', borderRadius: 999, fontSize: 9, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px',
-                    background: 'rgba(0,0,0,0.22)', color: '#fff',
+                    background: 'rgba(0,0,0,0.32)', color: '#fff',
                   }}>
                     {p.source === 'curated' ? 'Curated' : 'Community'}
                   </span>
@@ -9342,9 +9531,9 @@ export function LearningLibraryPage() {
 
                   {/* Footer stats */}
                   <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#6c7086', borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', paddingTop: 10, marginTop: 'auto' }}>
-                    {p.estimated_hours && <span>\u23f1 {p.estimated_hours}h</span>}
-                    <span>\ud83d\udc65 {p.fork_count}</span>
-                    {avgRating && <span style={{ color: '#fbbf24' }}>\u2605 {avgRating}</span>}
+                    {p.estimated_hours && <span>{'\u23f1'} {p.estimated_hours}h</span>}
+                    <span>{'\ud83d\udc65'} {p.fork_count}</span>
+                    {avgRating && <span style={{ color: '#fbbf24' }}>{'\u2605'} {avgRating}</span>}
                   </div>
                 </div>
               </button>
@@ -9373,9 +9562,9 @@ export function LearningLibraryPage() {
 // exposes a separate entry — both surfaces are reached via Library.
 export function LibraryPage() {
   useLocale();
-  // Default tab is Courses — Library is a learning-first surface; the
-  // curated material (courses + papers) is what makes it valuable.
-  const [tab, setTab] = useState<'courses' | 'papers' | 'assets' | 'documents'>('courses');
+  // Courses moved to the top-level Learning room (mirrors the extension);
+  // Library now leads with Papers, then the user's assets and documents.
+  const [tab, setTab] = useState<'papers' | 'assets' | 'documents'>('papers');
 
   const tabBtnStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 16px', borderRadius: 0, border: 'none', cursor: 'pointer',
@@ -9402,7 +9591,6 @@ export function LibraryPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
-          <button onClick={() => setTab('courses')} style={tabBtnStyle(tab === 'courses')}>{t('dash.library.tab.courses')}</button>
           <button onClick={() => setTab('papers')} style={tabBtnStyle(tab === 'papers')}>{t('dash.library.tab.papers')}</button>
           <button onClick={() => setTab('assets')} style={tabBtnStyle(tab === 'assets')}>{t('dash.library.tab.assets')}</button>
           <button onClick={() => setTab('documents')} style={tabBtnStyle(tab === 'documents')}>{t('dash.library.tab.documents')}</button>
@@ -9410,7 +9598,6 @@ export function LibraryPage() {
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {tab === 'courses' && <LearningLibraryPage />}
         {tab === 'papers' && <LibraryPapersPage />}
         {tab === 'assets' && <LibraryAssetsView kind="assets" />}
         {tab === 'documents' && <LibraryAssetsView kind="documents" />}
@@ -14421,18 +14608,19 @@ interface IdeRoadmapTheme {
 export function PlannerPage() {
   // Plans also live in Account \u2192 "{name}'s profile"; the Planner surfaces the
   // same library here too (mirrors the extension's Planner Plans tab).
-  const [tab, setTab] = useState<'tasks' | 'journal' | 'learning' | 'plans'>('tasks');
+  // Learning moved out to its own top-level Learning room (mirrors the
+  // extension) \u2014 the Planner keeps tasks, journal and health plans.
+  const [tab, setTab] = useState<'tasks' | 'journal' | 'plans'>('tasks');
   const tabs = [
     { key: 'tasks' as const, icon: '\u2713', label: 'Tasks' },
     { key: 'journal' as const, icon: '\u270E', label: 'Journal' },
-    { key: 'learning' as const, icon: '\u2605', label: 'Learning' },
     { key: 'plans' as const, icon: '\u2630', label: 'Plans' },
   ];
   return (
     <div style={pageWrapper}>
       <div style={{ marginBottom: 16 }}>
         <h2 style={pageTitle}>Planner</h2>
-        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Tasks, reflections, learning paths, and health plans</p>
+        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Tasks, reflections, and health plans</p>
       </div>
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
         {tabs.map(t => (
@@ -14446,7 +14634,6 @@ export function PlannerPage() {
       </div>
       {tab === 'tasks' && <TasksPageInner />}
       {tab === 'journal' && <JournalPageInner />}
-      {tab === 'learning' && <LearningPageInner />}
       {tab === 'plans' && <HealthPlansPage />}
     </div>
   );
@@ -14455,7 +14642,6 @@ export function PlannerPage() {
 // Inner components — reuse existing page content without the outer wrapper
 function TasksPageInner() { return <TasksPage />; }
 function JournalPageInner() { return <JournalPage />; }
-function LearningPageInner() { return <LearningPage />; }
 
 export function AccountPage() {
   const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality' | 'profile'>('settings');

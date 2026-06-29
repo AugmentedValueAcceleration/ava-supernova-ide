@@ -79,9 +79,10 @@ export interface SidecarUsage {
 export interface SidecarEvent {
   event: string;
   /** Conversation lane this event belongs to — 'health' for the Ava Health
-   *  & Fitness room (its own thread), 'main'/undefined for the main chat.
-   *  The IDE's two chat surfaces filter on this so they never cross-render. */
-  lane?: 'main' | 'health';
+   *  & Fitness room, 'learning' for the Learning room (per-course thread),
+   *  'main'/undefined for the main chat. The IDE's chat surfaces filter on
+   *  this so they never cross-render. */
+  lane?: 'main' | 'health' | 'learning';
   // stream events
   content?: string;
   // tool events
@@ -159,6 +160,11 @@ export class SidecarManager {
   private child: Child | null = null;
   private listeners = new Map<string, Set<EventListener>>();
   private wildcardListeners = new Set<EventListener>();
+  // Turn-in-flight tracker — true between a turn's start and its terminal
+  // event, across any lane. Lets callers (e.g. the room handoff seed) wait for
+  // the sidecar to be idle before sending, so a programmatic send isn't
+  // swallowed as an interjection into a still-running turn.
+  private busy = false;
   private ready = false;
   private sidecarPath: string = '';
   private isDev: boolean;
@@ -322,7 +328,7 @@ export class SidecarManager {
   /**
    * Send a chat message to the agent.
    */
-  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health'): Promise<void> {
+  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning', courseId?: string): Promise<void> {
     // For large attachments (images), write to temp files to avoid stdin buffer limits
     let processedAttachments = attachments;
     if (attachments?.length) {
@@ -345,7 +351,7 @@ export class SidecarManager {
         }
       }
     }
-    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined, surface });
+    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined, surface, courseId });
   }
 
   async setWorkingHours(start: number, end: number): Promise<void> {
@@ -400,10 +406,11 @@ export class SidecarManager {
 
   /**
    * Clear conversation (new chat). Pass surface:'health' to clear only the
-   * Ava Health room thread, leaving the main chat untouched.
+   * Ava Health room thread, or surface:'learning' (+ courseId) to clear one
+   * course's Learning thread — both leave the main chat untouched.
    */
-  async clear(surface?: 'main' | 'health'): Promise<void> {
-    await this.send({ cmd: 'clear', surface });
+  async clear(surface?: 'main' | 'health' | 'learning', courseId?: string): Promise<void> {
+    await this.send({ cmd: 'clear', surface, courseId });
   }
 
   /**
@@ -497,6 +504,28 @@ export class SidecarManager {
    */
   async clearMemory(): Promise<void> {
     await this.send({ cmd: 'clear_memory' });
+  }
+
+  /** Authoritative memory list from the sidecar's MemoryManager (the v3 graph,
+   *  global + project scopes) — the SAME source the extension reads. Resolves
+   *  with the entries from the one-shot `memories` event. Local-only. */
+  async getMemories(timeoutMs = 8000): Promise<any[]> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (entries: any[]) => { if (done) return; done = true; this.offAny(handler); clearTimeout(timer); resolve(entries); };
+      const handler = (event: SidecarEvent) => {
+        if (event.event === 'memories') finish(Array.isArray((event as any).entries) ? (event as any).entries : []);
+      };
+      const timer = setTimeout(() => finish([]), timeoutMs);
+      this.onAny(handler);
+      this.send({ cmd: 'get_memories' }).catch(() => finish([]));
+    });
+  }
+
+  /** Delete one memory by id + scope, through the MemoryManager (keeps the v3
+   *  graph authoritative). Local-only — never touches the cloud. */
+  async deleteMemory(id: string | number, scope: 'global' | 'project'): Promise<void> {
+    await this.send({ cmd: 'delete_memory', id, scope });
   }
 
   /** Data sovereignty — seal everything under ~/.ava. Result arrives as a
@@ -690,7 +719,25 @@ export class SidecarManager {
     await this.child.write(payload);
   }
 
+  /** Resolves once no turn is in flight (immediately if already idle). Used by
+   *  programmatic sends (the room handoff seed) so they run as their own turn
+   *  instead of being injected into a still-streaming one. Times out as a
+   *  safety net if a terminal event never arrives. */
+  waitForIdle(timeoutMs = 20000): Promise<void> {
+    if (!this.busy) return Promise.resolve();
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (done) return; done = true; this.wildcardListeners.delete(probe); clearTimeout(timer); resolve(); };
+      const probe: EventListener = () => { if (!this.busy) finish(); };
+      const timer = setTimeout(finish, timeoutMs);
+      this.wildcardListeners.add(probe);
+    });
+  }
+
   private emitEvent(type: string, event: SidecarEvent): void {
+    // Track turn lifecycle so waitForIdle() can tell when the sidecar is free.
+    if (type === 'stream_start' || type === 'auto_agent_start' || type === 'orchestration_start') this.busy = true;
+    else if (type === 'done' || type === 'stopped' || type === 'cancelled' || type === 'error') this.busy = false;
     // Typed listeners
     const listeners = this.listeners.get(type);
     if (listeners) {

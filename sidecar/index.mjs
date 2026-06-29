@@ -70,6 +70,17 @@ try {
 }
 const { NodeHealthPlanStore } = healthCore;
 
+// Learning subpath — pure progression derivation + the system-prompt context
+// formatter, shared with the extension so both build identical Teach context.
+let learningCore;
+try {
+  learningCore = await import('@ava/core/learning');
+} catch {
+  const learningPath = join(__dirname, '..', '..', 'core', 'dist', 'learning', 'index.js');
+  learningCore = await import(`file://${learningPath.replace(/\\/g, '/')}`);
+}
+const { deriveProgression, formatLearnerContext } = learningCore;
+
 const {
   Agent,
   Conversation,
@@ -87,6 +98,7 @@ const {
   buildPersonalityPrefix,
   loadPersonality,
   getHealthRoomPrefix,
+  getTeachModePrefix,
   HEALTH_PROFILE_FIELDS,
   humaniseSlug,
   summariseCookingTime,
@@ -188,6 +200,12 @@ let isRunning = false;
 // filter by `activeLane` (stamped on every emitted event). One run pipeline
 // (the isRunning guard) → no concurrency, so a scalar lane is safe.
 let healthConversation = null;
+// Learning room — the focused "Ava Teach" lane. Unlike Health (one thread),
+// each course owns its own conversation thread so progress + chat history are
+// scoped per course (mirrors the extension's AvaViewProvider.learningConversations).
+// Keyed by courseId, or '__lobby__' for the no-active-course landing thread.
+const learningConversations = new Map();
+const LEARNING_LOBBY_KEY = '__lobby__';
 let activeLane = 'main';
 
 // Bracket tags the core agent's detectModeFromMessages() looks for at the
@@ -759,6 +777,27 @@ function getHealthPlansSummary() {
   }
 }
 
+/** Learning-room context for the Teach prefix — the learner's active courses,
+ *  full course list and skills profile (earned + self-listed). Reads the same
+ *  learning.json / learner.json the learning tools write, then defers to the
+ *  shared core formatter so the IDE and extension build identical context.
+ *  Returns undefined when there's nothing to inject. */
+function getLearningContext() {
+  try {
+    if (typeof formatLearnerContext !== 'function') return undefined;
+    let store;
+    try { store = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'learning.json'), 'utf-8')); } catch { return undefined; }
+    let selfSkills = [];
+    try {
+      const learner = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'learner.json'), 'utf-8'));
+      if (Array.isArray(learner?.self?.skills)) selfSkills = learner.self.skills;
+    } catch { /* no learner profile yet */ }
+    return formatLearnerContext(store, selfSkills);
+  } catch {
+    return undefined;
+  }
+}
+
 // ── Profile-fill (health_profile_ask) ────────────────────────────────────────
 // Mirror of the extension's AvaViewProvider flow. The card payload + save both
 // resolve the field shape from the shared core HEALTH_PROFILE_FIELDS registry,
@@ -1201,7 +1240,11 @@ async function handleInit(data) {
     let projectInstructions = null;
     try {
       memoryManager = new MemoryManager({
-        globalDir: ACCOUNT_ROOT,
+        // Memory is FLAT, local-only — one store per machine at ~/.ava/memory/,
+        // the SAME store the extension + CLI use. (Account-scoping memory was
+        // pointless once cloud sync was removed, and it split the IDE off from
+        // the extension's memory.)
+        globalDir: AVA_HOME,
         projectRoot,
         // Opt-in local semantic recall — dormant until the IDE front-end sends
         // these prefs; off by default → keyword recall, no dependency.
@@ -1804,7 +1847,9 @@ async function handleMessage(data) {
   // lazily, sharing the main system prompt) and is restored in the finally.
   // The isRunning guard guarantees no overlapping turn, so a pointer swap is
   // safe. activeLane (set here, cleared in finally) tags outbound events.
-  const surface = data.surface === 'health' ? 'health' : 'main';
+  const surface = data.surface === 'health' ? 'health'
+    : data.surface === 'learning' ? 'learning'
+    : 'main';
   activeLane = surface;
   const mainConversation = conversation;
   if (surface === 'health') {
@@ -1814,6 +1859,19 @@ async function handleMessage(data) {
       if (sysMsg) healthConversation.setSystemPrompt(typeof sysMsg.content === 'string' ? sysMsg.content : '');
     }
     conversation = healthConversation;
+  } else if (surface === 'learning') {
+    // Per-course thread: each course owns its own history so switching the
+    // active course swaps the whole conversation. '__lobby__' is the
+    // no-course-yet landing thread (adopted by the first course created).
+    const courseKey = data.courseId || LEARNING_LOBBY_KEY;
+    let lc = learningConversations.get(courseKey);
+    if (!lc) {
+      lc = new Conversation();
+      const sysMsg = conversation.getMessages().find(m => m.role === 'system');
+      if (sysMsg) lc.setSystemPrompt(typeof sysMsg.content === 'string' ? sysMsg.content : '');
+      learningConversations.set(courseKey, lc);
+    }
+    conversation = lc;
   }
 
   // Clear any active desktop-trajectory plan AND the per-turn mutative
@@ -1935,6 +1993,8 @@ async function handleMessage(data) {
     // mode-tag path below stays empty for this lane.
     const effectiveContent = activeLane === 'health'
       ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary())
+      : activeLane === 'learning'
+      ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
       : data.content;
 
     // Build multimodal content if attachments are present (images, files)
@@ -2318,9 +2378,10 @@ async function handleMessage(data) {
   } finally {
     isRunning = false;
     currentAbort = null;
-    // Restore the main thread + lane after a health-room turn. The health
-    // thread keeps its appended messages (same object); only the active pointer
-    // flips back so the main chat owns `conversation` again between turns.
+    // Restore the main thread + lane after a room turn (health or learning).
+    // The room thread keeps its appended messages (same object, still held in
+    // healthConversation / learningConversations); only the active pointer flips
+    // back so the main chat owns `conversation` again between turns.
     conversation = mainConversation;
     activeLane = 'main';
 
@@ -2504,6 +2565,15 @@ function handleClear(data) {
       if (systemMsg) healthConversation.setSystemPrompt(systemMsg.content);
     }
     emit({ event: 'cleared', lane: 'health' });
+    return;
+  }
+  if (data && data.surface === 'learning') {
+    // Drop only the targeted course's thread (by courseId, or the lobby) so the
+    // next learning turn for that course rebuilds fresh. Other courses' threads
+    // and the main chat are untouched.
+    const courseKey = data.courseId || LEARNING_LOBBY_KEY;
+    learningConversations.delete(courseKey);
+    emit({ event: 'cleared', lane: 'learning' });
     return;
   }
   if (isRunning) {
@@ -2909,13 +2979,46 @@ rl.on('line', async (line) => {
       if (memoryManager) {
         try {
           await memoryManager.clearEverything();
-          memoryManager = new MemoryManager({ globalDir: ACCOUNT_ROOT, projectRoot: cwd });
+          memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot: cwd });
           emit({ event: 'info', message: 'Memory cleared and manager reset' });
         } catch (err) {
           emitError(`Failed to clear memory: ${err.message}`);
         }
       }
+      emit({ event: 'memories', entries: [] });
       break;
+    case 'get_memories': {
+      // Authoritative memory list — straight from MemoryManager (the v3 graph,
+      // both scopes), the SAME source the extension reads. Local-only; the
+      // dashboard's old file-read of the legacy v2 memory.json under-reported.
+      // The dashboard can open before/without a chat session, so the agent's
+      // memoryManager may not exist yet — lazily build a read manager on the
+      // flat store. Fetch each scope independently so a project-graph hiccup
+      // can't zero out the global memories.
+      if (!memoryManager) {
+        try { memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot: cwd }); }
+        catch { emit({ event: 'memories', entries: [] }); break; }
+      }
+      {
+        const entries = [];
+        try { for (const e of await memoryManager.getEntries('global')) entries.push({ ...e, scope: 'global' }); } catch { /* skip */ }
+        try { for (const e of await memoryManager.getEntries('project')) entries.push({ ...e, scope: 'project' }); } catch { /* skip */ }
+        emit({ event: 'memories', entries });
+      }
+      break;
+    }
+    case 'delete_memory': {
+      if (memoryManager && data.id) {
+        try {
+          const scope = data.scope === 'project' ? 'project' : 'global';
+          await memoryManager.deleteEntry(scope, data.id);
+          emit({ event: 'memory_deleted', id: data.id });
+        } catch (err) {
+          emitError(`Failed to delete memory: ${err.message}`);
+        }
+      }
+      break;
+    }
     case 'desktop_response': {
       const pending = pendingDesktop.get(data.requestId);
       if (pending) {
@@ -2954,7 +3057,7 @@ rl.on('line', async (line) => {
         const projectRoot = detectProjectRoot(newCwd) ?? undefined;
         if (memoryManager) {
           try {
-            memoryManager = new MemoryManager({ globalDir: ACCOUNT_ROOT, projectRoot });
+            memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot });
             if (globalThis._sharedState) globalThis._sharedState.memoryManager = memoryManager;
           } catch { /* non-fatal */ }
         }
