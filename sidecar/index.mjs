@@ -1397,6 +1397,25 @@ async function handleInit(data) {
       // ~/.ava/health/plans/*.json, the same files the renderer's
       // Tauri-fs store reads/writes. See COMMAND_PALETTE_PLAN.md §10.
       healthPlanStore: new NodeHealthPlanStore({ baseDir: join(ACCOUNT_ROOT, 'health', 'plans') }),
+      // Server-side plan generation — health_plan_create calls this when no
+      // inline days are passed. Hits /api/health/generate/plan, which charges
+      // the flat per-plan fee (single 5 credits/week, combined 10/week),
+      // builds the whole plan from the exercise/recipe library, and returns days.
+      generateHealthPlanDays: async (i) => {
+        if (!config.platformKey) throw new Error('Sign in to your Ava account to generate a plan.');
+        let profile = '';
+        try {
+          profile = JSON.stringify(JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'health', 'profile.json'), 'utf-8'))).slice(0, 1500);
+        } catch { /* no local profile — the server handles its absence */ }
+        const res = await fetch('https://ava-supernova.com/api/health/generate/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.platformKey}` },
+          body: JSON.stringify({ type: i.type, duration_days: i.duration_days, goal: i.goal, title: i.title, profile }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `Plan generation failed (${res.status})`);
+        return { days: data.days ?? [], credits_charged: data.credits_charged ?? 0 };
+      },
       projectIndexer,
       platformKey: config.platformKey,
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
