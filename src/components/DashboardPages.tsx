@@ -5004,16 +5004,26 @@ export function AvaChatPage() {
                   )}
                 </div>
 
-                {/* Message bubble — Ava reads as a clean accent left-rule (matches the
-                    tool rows); the user keeps the solid purple bubble, errors the red card. */}
+                {/* Message bubble — clean containers with the accent rule on both
+                    sides: Ava in the purple accent, the user in blue, errors red. */}
                 <div style={{
-                  padding: isAva ? '2px 0 2px 14px' : '10px 16px',
-                  borderRadius: isUser ? '16px 16px 4px 16px' : isError ? '16px 16px 16px 4px' : 0,
-                  background: isUser ? '#7c3aed' : isError ? 'rgba(239,68,68,0.1)' : 'transparent',
+                  padding: '10px 16px',
+                  borderRadius: isError ? '16px 16px 16px 4px' : 10,
+                  background: isUser
+                    ? 'color-mix(in srgb, #60a5fa 13%, transparent)'
+                    : isError ? 'rgba(239,68,68,0.1)'
+                    : 'color-mix(in srgb, var(--accent) 6%, transparent)',
                   color: isError ? '#fca5a5' : '#cdd6f4',
                   fontSize: 14, lineHeight: 1.65,
-                  border: isUser ? 'none' : isError ? '1px solid rgba(239,68,68,0.25)' : 'none',
-                  borderLeft: isAva ? '2px solid color-mix(in srgb, var(--accent) 38%, transparent)' : undefined,
+                  border: isError ? '1px solid rgba(239,68,68,0.25)' : 'none',
+                  borderLeft: isUser
+                    ? '2px solid color-mix(in srgb, #60a5fa 55%, transparent)'
+                    : isError ? undefined
+                    : '2px solid color-mix(in srgb, var(--accent) 45%, transparent)',
+                  borderRight: isUser
+                    ? '2px solid color-mix(in srgb, #60a5fa 55%, transparent)'
+                    : isError ? undefined
+                    : '2px solid color-mix(in srgb, var(--accent) 45%, transparent)',
                   position: 'relative',
                 }}>
                   {/* Rendered text with markdown + inline secret reveal */}
