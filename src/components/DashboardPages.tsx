@@ -5088,12 +5088,13 @@ export function AvaChatPage() {
                       readable labels ("Edit foo.tsx" instead of "file_edit")
                       matching the VSCode extension's v0.39.0 UX. */}
                   {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div style={{ marginTop: 10, borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', paddingTop: 8 }}>
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
                       {msg.toolCalls.map((tc, idx) => {
                         const header = getToolHeader(tc.name, tc.args);
                         return (
                           <div key={idx} style={{
-                            display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
+                            display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0 3px 10px',
+                            borderLeft: `2px solid ${tc.status === 'error' ? '#f85149' : 'color-mix(in srgb, var(--accent) 38%, transparent)'}`,
                             fontSize: 11, color: '#6c7086',
                           }}>
                             <span style={{
