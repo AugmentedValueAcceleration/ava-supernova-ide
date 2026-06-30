@@ -5004,14 +5004,16 @@ export function AvaChatPage() {
                   )}
                 </div>
 
-                {/* Message bubble */}
+                {/* Message bubble — Ava reads as a clean accent left-rule (matches the
+                    tool rows); the user keeps the solid purple bubble, errors the red card. */}
                 <div style={{
-                  padding: '10px 16px',
-                  borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                  background: isUser ? '#7c3aed' : isError ? 'rgba(239,68,68,0.1)' : '#181825',
+                  padding: isAva ? '2px 0 2px 14px' : '10px 16px',
+                  borderRadius: isUser ? '16px 16px 4px 16px' : isError ? '16px 16px 16px 4px' : 0,
+                  background: isUser ? '#7c3aed' : isError ? 'rgba(239,68,68,0.1)' : 'transparent',
                   color: isError ? '#fca5a5' : '#cdd6f4',
                   fontSize: 14, lineHeight: 1.65,
-                  border: isUser ? 'none' : isError ? '1px solid rgba(239,68,68,0.25)' : '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+                  border: isUser ? 'none' : isError ? '1px solid rgba(239,68,68,0.25)' : 'none',
+                  borderLeft: isAva ? '2px solid color-mix(in srgb, var(--accent) 38%, transparent)' : undefined,
                   position: 'relative',
                 }}>
                   {/* Rendered text with markdown + inline secret reveal */}
