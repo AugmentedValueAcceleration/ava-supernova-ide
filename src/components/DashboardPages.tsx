@@ -9234,9 +9234,25 @@ export function LearningLibraryPage() {
   const handleFork = async (id: string) => {
     setForking(true);
     try {
-      const key = getPlatformKey();
-      if (!key) return;
-      await apiFetch(`/learning/library/${id}/fork`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } });
+      // Local-first: the course content is public, so build the curriculum
+      // locally and write it to the local store — BYOK / not-signed-in users
+      // can start library courses too. Server fork (learner count) is a
+      // best-effort extra when signed in. No account gate.
+      const res = await fetch(`https://ava-supernova.com/api/learning/library/${id}`);
+      const d = await res.json();
+      if (d?.title) {
+        const [{ libraryPathToCurriculum }, { addLocalCourse }] = await Promise.all([
+          import('@ava/core/learning'),
+          import('../lib/learning-store'),
+        ]);
+        await addLocalCourse(libraryPathToCurriculum(d));
+        const key = getPlatformKey();
+        if (key) {
+          apiFetch(`/learning/library/${id}/fork`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } }).catch(() => { /* analytics only */ });
+        }
+        // Jump to the Learning room — My Courses re-reads the local store on mount.
+        window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }));
+      }
     } catch { /* */ }
     setForking(false);
   };
@@ -9381,8 +9397,10 @@ export function LearningLibraryPage() {
             padding: 18,
           }}>
             <button onClick={() => handleFork(detail.id)} disabled={forking} style={{
-              padding: '11px 26px', borderRadius: 10, border: 'none', cursor: forking ? 'wait' : 'pointer',
-              background: `linear-gradient(135deg, ${id.from}, ${id.to})`, color: '#fff', fontSize: 14, fontWeight: 600,
+              padding: '11px 26px', borderRadius: 10, cursor: forking ? 'wait' : 'pointer',
+              border: '1px solid color-mix(in srgb, var(--accent) 45%, transparent)',
+              background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 600,
+              opacity: forking ? 0.7 : 1, transition: 'opacity 0.15s',
             }}>
               {forking ? 'Starting...' : 'Start Learning'}
             </button>

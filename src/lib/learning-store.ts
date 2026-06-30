@@ -97,6 +97,20 @@ export async function deleteCourse(id: string): Promise<any[]> {
   }
 }
 
+/** Add a fully-built curriculum to the local store (used by the library fork —
+ *  local-first, no account needed). New course goes to the top. Returns the
+ *  updated curriculums so the UI can show it without a re-read. */
+export async function addLocalCourse(curriculum: any): Promise<any[]> {
+  try {
+    const curriculums = await readLocalLearning();
+    curriculums.unshift(curriculum);
+    await writeLocalCurriculums(curriculums);
+    return curriculums;
+  } catch {
+    return [];
+  }
+}
+
 function locateLesson(curriculums: any[], curriculumId: string, lessonId: string): any {
   const curr = curriculums.find((c) => c?.id === curriculumId);
   for (const mod of curr?.modules ?? []) {
