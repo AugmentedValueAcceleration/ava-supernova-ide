@@ -312,9 +312,11 @@ export function HealthRoomChat({ active }: { active: boolean }) {
                 )}
                 {(m.text || m.role !== 'ava') && (
                   <div style={{
-                    fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', padding: '10px 14px', borderRadius: 12,
-                    background: m.role === 'user' ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : m.role === 'error' ? 'rgba(243,139,168,0.12)' : 'rgba(255,255,255,0.03)',
-                    border: m.role === 'error' ? '1px solid rgba(243,139,168,0.3)' : '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+                    fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', padding: '10px 14px', borderRadius: 10,
+                    background: m.role === 'user' ? 'color-mix(in srgb, #60a5fa 13%, transparent)' : m.role === 'error' ? 'rgba(243,139,168,0.12)' : 'color-mix(in srgb, var(--accent) 6%, transparent)',
+                    border: m.role === 'error' ? '1px solid rgba(243,139,168,0.3)' : 'none',
+                    borderLeft: m.role === 'user' ? '2px solid color-mix(in srgb, #60a5fa 55%, transparent)' : m.role === 'error' ? undefined : '2px solid color-mix(in srgb, var(--accent) 45%, transparent)',
+                    borderRight: m.role === 'user' ? '2px solid color-mix(in srgb, #60a5fa 55%, transparent)' : m.role === 'error' ? undefined : '2px solid color-mix(in srgb, var(--accent) 45%, transparent)',
                     color: m.role === 'error' ? '#f38ba8' : '#cdd6f4',
                   }}>
                     {m.text}
