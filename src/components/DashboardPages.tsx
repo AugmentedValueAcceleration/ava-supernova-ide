@@ -2079,7 +2079,7 @@ export function AvaChatPage() {
     // Platform Mistral (Aurora's fleet, available on platform)
     'mistral-large-3-platform', 'mistral-small-4-platform',
     // Anthropic ('claude-fable-5' DISABLED 2026-06-14, US-gov restriction — re-add to re-enable)
-    'claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+    'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001',
     // Kimi
     'kimi-k2.6', 'kimi-k2.5',
     // Mistral
@@ -4298,7 +4298,7 @@ export function AvaChatPage() {
                       'MiniMax-M3': 1048576, 'MiniMax-M2.7': 204800, 'MiniMax-M2.7-highspeed': 204800,
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
                       'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
-                      'claude-opus-4-8': 200000, 'claude-sonnet-4-6': 200000,
+                      'claude-opus-4-8': 200000, 'claude-sonnet-5': 200000,
                       'claude-haiku-4-5-20251001': 200000, 'glm-5.2': 1000000, 'glm-4.5-air': 128000,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
@@ -12752,7 +12752,7 @@ export function SettingsPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const PROVIDERS = [
-    { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.8, Sonnet 4.6, Haiku 4.5' },
+    { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.8, Sonnet 5, Haiku 4.5' },
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4 Pro and V4 Flash \u2014 1M context, MIT open-weight' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.7 Code \u2014 agentic coding leader' },
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M3 flagship, M2.7 standard' },
