@@ -2089,6 +2089,8 @@ export function AvaChatPage() {
     'glm-5.2',
     // Xiaomi MiMo
     'mimo-v2.5-pro', 'mimo-v2.5',
+    // Tencent Hunyuan / NVIDIA (BYOK)
+    'hy3-preview', 'nvidia/nemotron-3-ultra-550b-a55b',
   ]);
   const isDesktopCapable = (modelId: string | undefined): boolean =>
     !!modelId && DESKTOP_CAPABLE_MODEL_IDS.has(modelId);
@@ -2675,7 +2677,7 @@ export function AvaChatPage() {
   // providers alphabetical by label, models sorted by name, extension display
   // labels (Kimi / GLM, not Moonshot / Zhipu), availability per BYOK key.
   const MODEL_CATALOGUE = useMemo(() => {
-    const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', anthropic: 'Anthropic', minimax: 'MiniMax', xiaomi: 'Xiaomi' };
+    const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', anthropic: 'Anthropic', minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA' };
     const STORE: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral' };
     return Object.entries(ALL_MODELS)
       .map(([id, models]) => ({
@@ -4300,6 +4302,7 @@ export function AvaChatPage() {
                       'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
                       'claude-opus-4-8': 200000, 'claude-sonnet-5': 200000,
                       'claude-haiku-4-5-20251001': 200000, 'glm-5.2': 1000000, 'glm-4.5-air': 128000,
+                      'hy3-preview': 262144, 'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
                     setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
@@ -12759,6 +12762,8 @@ export function SettingsPage() {
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5.2 \u2014 open-weights, 1M context, top-tier coding' },
     { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.7 Plus and 3.7 Max — vision, 1M context' },
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4, Codestral, Devstral 2' },
+    { id: 'tencent', name: 'Tencent Hunyuan', placeholder: '...', signupUrl: 'https://tokenhub.tencentmaas.com', description: 'Hunyuan Hy3 — open-weight MoE, agentic, 262K context, very cheap' },
+    { id: 'nvidia', name: 'NVIDIA', placeholder: 'nvapi-...', signupUrl: 'https://build.nvidia.com', description: 'Nemotron 3 Ultra — open-weight, 1M context, frontier reasoning (BYOK)' },
   ];
 
   const LANGUAGES = [

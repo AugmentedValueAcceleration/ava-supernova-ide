@@ -54,7 +54,7 @@ export interface ModelCatalogueGroup {
 /** Build the per-provider catalogue — alphabetical providers, models sorted by
  *  name, availability per BYOK key. Identical logic to AvaChatPage.MODEL_CATALOGUE. */
 export function buildModelCatalogue(keyedProviders: Set<string>): ModelCatalogueGroup[] {
-  const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', anthropic: 'Anthropic', minimax: 'MiniMax', xiaomi: 'Xiaomi' };
+  const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', anthropic: 'Anthropic', minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA' };
   const STORE: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral' };
   return Object.entries(ALL_MODELS)
     .map(([id, models]) => ({
