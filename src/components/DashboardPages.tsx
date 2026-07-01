@@ -56,6 +56,7 @@ import { readLocalTasks, createLocalTask, toggleLocalTask, toggleLocalSubtask, u
 import { startTaskReminderScheduler } from '../lib/task-reminders';
 import { IdeTaskSuggestCard } from './IdeTaskSuggestCard';
 import {
+  readDay as readJournalDay,
   readMonth as readJournalMonth, addEntry as addJournalEntry, updateEntry as updateJournalEntry,
   deleteEntry as deleteJournalEntry, searchJournal, listKinds as listJournalKinds, kindOf,
   addKind as addJournalKind, deleteKind as deleteJournalKind, readYearSummaries,
@@ -1798,7 +1799,33 @@ export function CommandCentrePage() {
   // ── Platform API data (tasks, journal, learning, memory, release) ──
   const { data: rawTasks2, loading: tasksLoading, refetch: refetchTasks } = useApiData<any>('/tasks', null);
   const tasks: TaskEntry[] = Array.isArray(rawTasks2) ? rawTasks2 : (rawTasks2?.tasks ?? rawTasks2?.data ?? []);
-  const { data: journalDay, loading: journalLoading } = useApiData<JournalDay | null>(`/journal?date=${new Date().toISOString().slice(0, 10)}`, null);
+  // Journal is local-first — read today's entries from the shared journal
+  // store (~/.ava[/users/<id>]/journal/<date>.json), the same files the
+  // extension + sidecar use. The Command Centre previously hit the platform
+  // API, which never holds these local entries, so it always showed empty.
+  const [journalDay, setJournalDay] = useState<JournalDay | null>(null);
+  const [journalLoading, setJournalLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      const today = new Date().toISOString().slice(0, 10);
+      readJournalDay(today).then(entries => {
+        if (cancelled) return;
+        const users = entries.filter(e => e.author === 'user');
+        const avas = entries.filter(e => e.author === 'ava');
+        setJournalDay({
+          user_entry: users.length ? { content: users.map(e => e.content).join('\n').trim(), mood: [...users].reverse().find(e => e.mood != null)?.mood } : undefined,
+          ava_entry: avas.length ? { content: avas.map(e => e.content).join('\n').trim() } : undefined,
+        });
+        setJournalLoading(false);
+      }).catch(() => { if (!cancelled) setJournalLoading(false); });
+    };
+    load();
+    // Re-read once the account id resolves (fresh sign-in) so the
+    // account-scoped journal isn't missed on first paint.
+    window.addEventListener('ava-auth-changed', load);
+    return () => { cancelled = true; window.removeEventListener('ava-auth-changed', load); };
+  }, []);
   // Learning is local-first — read the shared ~/.ava/learning.json (no account needed).
   const [curriculums, setCurriculums] = useState<LearningCurriculum[]>([]);
   const [learningLoading, setLearningLoading] = useState(true);
