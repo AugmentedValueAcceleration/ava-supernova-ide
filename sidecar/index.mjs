@@ -94,6 +94,7 @@ const {
   migrateGlobalTasksToSubfolder,
   JournalManager,
   CheckpointManager,
+  HistoryManager,
   buildSystemPrompt,
   buildPersonalityPrefix,
   loadPersonality,
@@ -180,6 +181,10 @@ let agent = null;
 let conductor = null;
 let autoCoordinator = null;
 let conversation = null;
+// Conversation history → the SAME account-scoped ~/.ava/users/<id>/history/*.json
+// files the extension + CLI write, via core's HistoryManager. So a user who
+// switches extension → IDE picks up their conversations with zero effort.
+let historyManager = null;
 let toolRegistry = null;
 let memoryManager = null;
 let journalManager = null;
@@ -1259,6 +1264,15 @@ async function handleInit(data) {
     }
     emit({ event: 'info', message: 'Memory manager created' });
 
+    // Conversation history — account-scoped (ACCOUNT_ROOT/history), byte-identical
+    // to the extension's HistoryManager so the files are cross-surface compatible.
+    try {
+      historyManager = new HistoryManager(projectRoot, ACCOUNT_ROOT);
+      await historyManager.init();
+    } catch {
+      historyManager = null;
+    }
+
     // Personality
     let personalityPrefix = '';
     try {
@@ -2307,6 +2321,13 @@ async function handleMessage(data) {
 
     conversation.setMessages(updated);
 
+    // Persist the full conversation to the shared local history files (best-effort,
+    // non-blocking) — same format + location the extension uses, so a user who
+    // switches extension → IDE picks up right where they left off.
+    if (historyManager && conversation) {
+      historyManager.saveConversation(conversation).catch(() => { /* local-first, best-effort */ });
+    }
+
     // Path B (distil) — after a desktop turn, capture the desktop_* action
     // sequence AND how each step went (worked / tried-but-failed), saved as a
     // global 'pattern' so the next similar task recalls the learned path —
@@ -2850,6 +2871,59 @@ function truncateResult(result) {
 
 // ─── stdin Command Router ───────────────────────────────────────────────────
 
+// ── Conversation history (the shared ~/.ava/.../history/*.json files) ────────
+// Read/manage the same account-scoped transcripts the extension writes. The
+// renderer uses these to list + resume conversations instead of its old
+// localStorage silo, so history carries across CLI / extension / IDE.
+async function handleListHistory(data) {
+  try {
+    if (!historyManager) { emit({ event: 'history_list', conversations: [] }); return; }
+    const conversations = data?.query
+      ? await historyManager.searchConversations(String(data.query), false)
+      : await historyManager.listConversations(false);
+    emit({ event: 'history_list', conversations });
+  } catch (err) {
+    emit({ event: 'history_list', conversations: [], error: err?.message });
+  }
+}
+
+async function handleLoadHistory(data) {
+  try {
+    if (!historyManager || !data?.id) { emit({ event: 'history_loaded', id: data?.id ?? null, record: null }); return; }
+    const record = await historyManager.resumeConversation(String(data.id));
+    emit({ event: 'history_loaded', id: data.id, record });
+  } catch (err) {
+    emit({ event: 'history_loaded', id: data?.id ?? null, record: null, error: err?.message });
+  }
+}
+
+async function handleDeleteHistory(data) {
+  try {
+    if (historyManager && data?.id) await historyManager.deleteConversation(String(data.id));
+    emit({ event: 'history_deleted', id: data?.id ?? null });
+  } catch (err) {
+    emit({ event: 'history_deleted', id: data?.id ?? null, error: err?.message });
+  }
+}
+
+async function handleRenameHistory(data) {
+  try {
+    if (historyManager && data?.id) await historyManager.renameConversation(String(data.id), String(data.title || ''));
+    emit({ event: 'history_renamed', id: data?.id ?? null, title: data?.title });
+  } catch (err) {
+    emit({ event: 'history_renamed', id: data?.id ?? null, error: err?.message });
+  }
+}
+
+async function handlePinHistory(data) {
+  try {
+    if (historyManager && data?.id) await historyManager.pinConversation(String(data.id), !!data.pinned);
+    emit({ event: 'history_pinned', id: data?.id ?? null, pinned: !!data?.pinned });
+  } catch (err) {
+    emit({ event: 'history_pinned', id: data?.id ?? null, error: err?.message });
+  }
+}
+
 const rl = createInterface({ input: process.stdin, terminal: false });
 
 rl.on('line', async (line) => {
@@ -2887,6 +2961,21 @@ rl.on('line', async (line) => {
       break;
     case 'clear':
       handleClear(data);
+      break;
+    case 'list_history':
+      handleListHistory(data).catch((err) => emit({ event: 'history_list', conversations: [], error: err?.message }));
+      break;
+    case 'load_history':
+      handleLoadHistory(data).catch((err) => emit({ event: 'history_loaded', id: data?.id ?? null, record: null, error: err?.message }));
+      break;
+    case 'delete_history':
+      handleDeleteHistory(data).catch(() => {});
+      break;
+    case 'rename_history':
+      handleRenameHistory(data).catch(() => {});
+      break;
+    case 'pin_history':
+      handlePinHistory(data).catch(() => {});
       break;
     case 'creative_generation':
       handleCreativeGeneration(data).catch(() => {});

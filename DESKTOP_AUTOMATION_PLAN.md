@@ -73,3 +73,26 @@ Carried through every phase — no listening service, first-party auditable tool
 
 ## BYOK note
 Desktop automation is **free for everyone, BYOK included** — their model (their key) + local Holo (open, $0) + accessibility tree (free) = $0 to the platform, full capability to the user.
+
+---
+
+## Appendix — C3 vision layer: what transfers from UI-Voyager (Tencent)
+Reference for the PERCEPTION tier-3 (Holo vision) + the learn-from-failure loop. Source: UI-Voyager, arXiv 2603.24533 (Tencent Hunyuan, self-evolving GUI agent).
+
+**What UI-Voyager is:** a **4B** VL model (Qwen3-VL-4B) that hits **81% on AndroidWorld — above the 80% human baseline**, beating 235B models. Pure **pixel grounding** (`click(x,y)` from raw screenshots, no a11y tree), single forward pass per step. The win is not a big model — it's one training trick.
+
+**The crown jewel — GRSD (Group Relative Self-Distillation), = our compounding-memory flywheel for GUI actions:**
+1. Run each task many times → keep **both** successful and failed trajectories.
+2. Find the **fork point** — the step where a success and a failure were in the *same screen state* (matched via **SSIM on grayscale thumbnails**) but took *different actions*.
+3. Train example: `[failed run history] → [correct action from the successful run]`.
+4. Fine-tune. Converts "task failed" into "THIS step was wrong, here's the right click" — dense, surgical supervision.
+
+**What transfers to Ava C3 (we can't fine-tune — BYOK, no own model yet — so run it at RUNTIME via retrieval):**
+1. **Runtime fork-point memory (the differentiator).** On action failure store `(screen-state → action → outcome)`; on a successful retry store the correction. At inference retrieve *"last time this screen looked like X, clicking Y failed and Z worked."* Same learning signal, no fine-tune — our memory system doing GRSD's job. Feeds the procedural-memory tier already in the architecture above.
+2. **SSIM state-matching — steal verbatim.** Grayscale-thumbnail + hash-prefilter + SSIM = cheap, model-free "have I seen this screen before?" Powers the retrieval above + dedup. No LLM.
+3. **A small VL grounding model is enough.** 4B beat 235B → Holo tier-3 can be small/cheap/local, not frontier. Fits $0-to-platform.
+4. **Build the action verifier first — ours beats theirs.** Their success signal is a rule-based `adb` state check; on Windows the **UIA tree** is a richer "did that action do what I expected?" than adb. The verifier is what *feeds* the failure loop.
+
+**What NOT to copy:** not pure-pixel grounding (they skip a11y because Android's is weak; Windows UIA is rich — our **UIA-first, vision-fallback** hybrid is stronger for desktop; C3 vision is only the fallback for canvas/game/custom UIs). Not their offline SFT loop (needs a training pipeline + reward env we don't have — the runtime-retrieval version gets ~80% of the value at ~0% infra).
+
+**C3 shape:** `UIA-first → if element not exposed → small VL grounds click(x,y) → verify via UIA state change → on failure store the fork; on next similar state retrieve the learned correction.`
