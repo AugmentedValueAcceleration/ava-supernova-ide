@@ -1679,11 +1679,18 @@ export function CommandCentrePage() {
       if (detail?.event === 'audit_findings' && Array.isArray(detail.findings)) setCcFindings(detail.findings);
     };
     window.addEventListener('ava-audit-event', handler);
+    // The Command Centre is the launch page, so on first mount the sidecar is
+    // usually still spawning. Request now if it's already up, and also request
+    // the moment it fires 'ready' — a fixed timer would race the spawn.
+    const sc = getSidecar();
     const ask = () => { try { getSidecar().getAuditFindings(); } catch { /* not ready */ } };
-    ask();
-    // The sidecar may not be ready on first mount — retry once shortly after.
-    const retry = setTimeout(ask, 900);
-    return () => { clearTimeout(retry); window.removeEventListener('ava-audit-event', handler); };
+    if (sc.isReady) ask();
+    const onReady = () => ask();
+    sc.on('ready', onReady);
+    return () => {
+      window.removeEventListener('ava-audit-event', handler);
+      try { sc.off('ready', onReady); } catch { /* */ }
+    };
   }, []);
 
   const connected = checkConnected();
