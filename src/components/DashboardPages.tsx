@@ -1674,21 +1674,23 @@ export function CommandCentrePage() {
   // when there's something worth flagging, so the log staying clean is silent.
   const [ccFindings, setCcFindings] = useState<any[]>([]);
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.event === 'audit_findings' && Array.isArray(detail.findings)) setCcFindings(detail.findings);
-    };
-    window.addEventListener('ava-audit-event', handler);
-    // The Command Centre is the launch page, so on first mount the sidecar is
-    // usually still spawning. Request now if it's already up, and also request
-    // the moment it fires 'ready' — a fixed timer would race the spawn.
     const sc = getSidecar();
+    // Subscribe DIRECTLY to the sidecar's audit_findings event — the dashboard
+    // event bus keys on event type, so this fires regardless of which page's
+    // window-forward is mounted. No dependency on the chat component.
+    const onFindings = (event: any) => {
+      if (Array.isArray(event?.findings)) setCcFindings(event.findings);
+    };
+    sc.on('audit_findings', onFindings);
+    // The Command Centre is the launch page, so on first mount the sidecar is
+    // usually still spawning. Request now if it's up, and again on 'ready' — a
+    // fixed timer would race the spawn.
     const ask = () => { try { getSidecar().getAuditFindings(); } catch { /* not ready */ } };
     if (sc.isReady) ask();
     const onReady = () => ask();
     sc.on('ready', onReady);
     return () => {
-      window.removeEventListener('ava-audit-event', handler);
+      try { sc.off('audit_findings', onFindings); } catch { /* */ }
       try { sc.off('ready', onReady); } catch { /* */ }
     };
   }, []);
