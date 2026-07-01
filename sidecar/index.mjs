@@ -338,16 +338,26 @@ const DESKTOP_TIMEOUTS = {
 
 function desktopRequest(action, args = {}) {
   return new Promise((resolve, reject) => {
+    // Kill-switch: reject immediately if the turn is already aborted, and
+    // reject the moment it aborts mid-flight — so a long request (a slow
+    // navigate, a stuck UIA call) can't outlive Ctrl+Alt+K.
+    const sig = currentAbort?.signal;
+    if (sig?.aborted) { reject(new Error('aborted')); return; }
     const requestId = `du_${++desktopRequestId}`;
     const timeoutMs = DESKTOP_TIMEOUTS[action] ?? 15000;
+    let onAbort;
+    const cleanup = () => { clearTimeout(timeout); if (sig && onAbort) sig.removeEventListener('abort', onAbort); };
     const timeout = setTimeout(() => {
       pendingDesktop.delete(requestId);
+      cleanup();
       reject(new Error(`Desktop automation request timed out: ${action}`));
     }, timeoutMs);
+    onAbort = () => { pendingDesktop.delete(requestId); cleanup(); reject(new Error('aborted')); };
+    if (sig) sig.addEventListener('abort', onAbort, { once: true });
 
     pendingDesktop.set(requestId, {
-      resolve: (result) => { clearTimeout(timeout); resolve(result); },
-      reject: (err) => { clearTimeout(timeout); reject(err); },
+      resolve: (result) => { cleanup(); resolve(result); },
+      reject: (err) => { cleanup(); reject(err); },
     });
 
     emit({ event: 'desktop_request', requestId, action, ...args });
@@ -384,12 +394,20 @@ const visionBridge = {
   //             broken promise, not a fallback.
   //   'cloud' — Fast: user's own H Company key if present, else the free
   //             platform proxy (signed-in).
-  isAvailable() {
+  /** Structured lane + honesty (verified?) via the shared core probe, so Scout
+   *  advertises vision truthfully — the local Holo lane is unverified until
+   *  H Company confirms it, and the shippable verified lane is cloud-BYOK. */
+  capability() {
     const ss = globalThis._sharedState || {};
-    const mode = ss.desktopVisionMode || 'off';
-    if (mode === 'off') return false;
-    if (mode === 'local') return !!ss.localVisionEndpoint; // set when the on-device model is installed
-    return !!(ss.hcompanyApiKey || ss.platformKey);
+    return desktopCore.probeVisionCapability({
+      visionMode: ss.desktopVisionMode || 'off',
+      localModelInstalled: !!ss.localVisionEndpoint,
+      hasHCompanyKey: !!ss.hcompanyApiKey,
+      hasPlatformKey: !!ss.platformKey,
+    });
+  },
+  isAvailable() {
+    return this.capability().available;
   },
   async localize(targetDescription) {
     const ss = globalThis._sharedState || {};
