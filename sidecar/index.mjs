@@ -989,6 +989,9 @@ async function handleInit(data) {
     // Change Node.js working directory so relative paths resolve correctly
     try { process.chdir(cwd); } catch { /* non-fatal */ }
     const projectRoot = detectProjectRoot(cwd) ?? undefined;
+    // Stash for the audit security lens (out-of-workspace detection) — the
+    // get_audit_log handler runs outside this scope.
+    globalThis.__avaProjectRoot = projectRoot ?? cwd;
     currentMode = config.mode || 'work';
 
     // Register providers from BYOK keys
@@ -3010,10 +3013,11 @@ rl.on('line', async (line) => {
       try {
         const audit = await import('@ava/core/audit');
         entries = audit.readEntries({ limit: 1000 });
-        // Verify file-mutation entries against disk + detect nudge findings,
-        // both via the same shared engine the extension uses so the two
-        // surfaces never drift.
+        // Verify file-mutation entries against disk, classify the security
+        // lens, and detect nudge findings — all via the same shared engine the
+        // extension uses so the two surfaces never drift.
         try { entries = audit.annotateIntegrity(entries); } catch { /* keep raw */ }
+        try { entries = audit.annotateSecurity(entries, globalThis.__avaProjectRoot); } catch { /* keep */ }
         try { findings = audit.detectPatterns(entries); } catch { findings = []; }
       } catch { /* fall through */ }
       if (!entries || entries.length === 0) {

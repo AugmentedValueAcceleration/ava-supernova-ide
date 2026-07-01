@@ -16209,12 +16209,20 @@ interface IdeAuditEntry {
   cost?: { mode: 'platform' | 'byok'; credits?: number; usd?: number; tokens?: { input: number; output: number }; provider?: string; model?: string };
   fileMutation?: { path: string; gitSha?: string; bytesBefore?: number; bytesAfter?: number; sha256Before?: string; sha256After?: string };
   integrity?: 'unchanged' | 'modified' | 'deleted' | 'unverifiable';
+  security?: Array<'network' | 'out-of-workspace' | 'secret-access' | 'dangerous'>;
 }
 interface IdeAuditFinding {
   severity: 'info' | 'warning' | 'critical';
   message: string;
   suggestion?: string;
 }
+// Security-lens concern presentation — small chip per boundary crossed.
+const IDE_SECURITY_META: Record<'network' | 'out-of-workspace' | 'secret-access' | 'dangerous', { label: string; color: string; bg: string }> = {
+  network:            { label: 'network',     color: '#60a5fa', bg: 'rgba(59,130,246,0.15)' },
+  'out-of-workspace': { label: 'out-of-scope', color: '#fbbf24', bg: 'rgba(251,191,36,0.15)' },
+  'secret-access':    { label: 'secret',      color: '#f38ba8', bg: 'rgba(243,139,168,0.15)' },
+  dangerous:          { label: 'dangerous',   color: '#fab387', bg: 'rgba(250,179,135,0.15)' },
+};
 // Integrity badge presentation — verdict from the shared engine, glyph + tint.
 const IDE_INTEGRITY_META: Record<NonNullable<IdeAuditEntry['integrity']>, { glyph: string; color: string; label: string }> = {
   unchanged:    { glyph: '✓', color: '#34d399', label: 'Unchanged — as Ava left it' },
@@ -16248,19 +16256,22 @@ function IdeAuditView({
   onExport: (format: 'markdown' | 'json') => void;
   onRefresh: () => void;
 }) {
+  const [securityOnly, setSecurityOnly] = useState(false);
+  const securityCount = useMemo(() => entries.filter(e => e.security && e.security.length > 0).length, [entries]);
   const filtered = useMemo(() => entries.filter(e => {
+    if (securityOnly && !(e.security && e.security.length > 0)) return false;
     if (search && !e.toolName.toLowerCase().includes(search.toLowerCase()) && !e.argsSummary.toLowerCase().includes(search.toLowerCase())) return false;
     if (riskFilter !== 'all' && e.riskLevel !== riskFilter) return false;
     if (statusFilter !== 'all' && e.status !== statusFilter) return false;
     return true;
-  }), [entries, search, riskFilter, statusFilter]);
+  }), [entries, search, riskFilter, statusFilter, securityOnly]);
 
   // Pagination — audit logs grow fast; rendering 1000+ entries was
   // janky. 25/page is the sweet spot with the existing row height.
   // Page resets to 0 whenever filters change so the user isn't
   // stranded on an empty page after narrowing the result set.
   const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [search, riskFilter, statusFilter]);
+  useEffect(() => { setPage(0); }, [search, riskFilter, statusFilter, securityOnly]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
   const pageStart = safePage * AUDIT_PAGE_SIZE;
@@ -16331,6 +16342,17 @@ function IdeAuditView({
             { value: 'denied', label: 'Denied' },
           ]}
         />
+        {securityCount > 0 && (
+          <button
+            onClick={() => setSecurityOnly(v => !v)}
+            title="Security lens — show only calls that crossed a sandbox boundary: network, out-of-workspace writes, secret access, dangerous tools"
+            style={{
+              ...btnStyle,
+              border: securityOnly ? '1px solid var(--accent)' : btnStyle.border,
+              background: securityOnly ? 'color-mix(in srgb, var(--accent) 22%, transparent)' : btnStyle.background,
+            }}
+          >🛡 Security <span style={{ opacity: 0.7 }}>({securityCount})</span></button>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           <button onClick={onRefresh} style={btnStyle} title="Refresh — re-verify file integrity and load new entries">↻ Refresh</button>
           <button onClick={() => onExport('markdown')} style={btnStyle} title="Export as Markdown — human-readable, never leaves your machine">Export .md</button>
@@ -16377,6 +16399,9 @@ function IdeAuditView({
                         {IDE_INTEGRITY_META[entry.integrity].glyph}
                       </span>
                     )}
+                    {securityOnly && entry.security?.map(c => (
+                      <span key={c} style={{ flexShrink: 0, fontSize: 8, fontWeight: 600, padding: '1px 4px', borderRadius: 4, color: IDE_SECURITY_META[c].color, background: IDE_SECURITY_META[c].bg }}>{IDE_SECURITY_META[c].label}</span>
+                    ))}
                   </span>
                   <span style={{ color: '#a6adc8' }}>{catLabels[entry.category] || entry.category}</span>
                   <span style={{ color: riskColors[entry.riskLevel] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.riskLevel}</span>
