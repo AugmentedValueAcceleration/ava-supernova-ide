@@ -6668,21 +6668,23 @@ export function ChatHistoryPage() {
     }
   }, [activeTab]);
 
-  // List conversations from the shared local history files via the sidecar
-  // (the SAME transcripts the extension + CLI write) — so a user switching
-  // extension → IDE sees their conversations here with zero effort. Waits
-  // briefly for the sidecar to be ready before listing.
+  // List conversations by reading the shared account-scoped history files
+  // DIRECTLY via Tauri fs (the SAME files the extension + CLI + sidecar write) —
+  // the reliable, network-free path learning/journal use. No sidecar round-trip.
+  // Re-fetches on tab-activate + window focus so new/incoming convos show up.
   useEffect(() => {
+    if (activeTab !== 'conversations') return;
     let cancelled = false;
-    (async () => {
-      const sidecar = getSidecar();
-      for (let i = 0; i < 12 && !sidecar.isReady; i++) { await new Promise(r => setTimeout(r, 300)); }
-      if (cancelled) return;
-      const list = await sidecar.listHistory().catch(() => [] as any[]);
+    const refresh = async () => {
+      const { readHistoryList } = await import('../lib/history-store');
+      const list = await readHistoryList();
       if (!cancelled) setConversations(list);
-    })();
-    return () => { cancelled = true; };
-  }, []);
+    };
+    void refresh();
+    const onFocus = () => { void refresh(); };
+    window.addEventListener('focus', onFocus);
+    return () => { cancelled = true; window.removeEventListener('focus', onFocus); };
+  }, [activeTab]);
 
   const filtered = search
     ? conversations.filter(c => c.title?.toLowerCase().includes(search.toLowerCase()))
@@ -6691,7 +6693,7 @@ export function ChatHistoryPage() {
   const deleteConversation = (id: string) => {
     const updated = conversations.filter(c => c.id !== id);
     setConversations(updated);
-    getSidecar().deleteHistory(id).catch(() => { /* best-effort; file already gone or sidecar down */ });
+    import('../lib/history-store').then(m => m.deleteHistoryConversation(id)).catch(() => { /* best-effort */ });
     // When the operator deletes the conversation currently loaded in the
     // chat panel, OR clears history entirely (last conv deleted), the chat
     // panel needs to reset to a fresh state — otherwise the chat shows a
@@ -6936,10 +6938,10 @@ export function ChatHistoryPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {filtered.map((conv: any) => {
-              const msgCount = conv.messages?.length || 0;
+              const msgCount = conv.messageCount ?? (conv.messages?.length || 0);
               const date = conv.updatedAt ? new Date(conv.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
               const time = conv.updatedAt ? new Date(conv.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-              const preview = conv.messages?.find((m: any) => m.role === 'ava')?.text?.slice(0, 120) || '';
+              const preview = conv.preview ?? (conv.messages?.find((m: any) => m.role === 'ava')?.text?.slice(0, 120) || '');
 
               return (
                 <div key={conv.id} style={{
@@ -6947,10 +6949,11 @@ export function ChatHistoryPage() {
                   padding: '14px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
                 }}
                   onClick={async () => {
-                    // Pull the full transcript from the shared history file, map
-                    // core messages → the chat display shape, then hand off to
-                    // AvaChatPage (localStorage handoff + navigate).
-                    const rec = await getSidecar().loadHistory(conv.id).catch(() => null);
+                    // Read the full transcript file, map core messages → the chat
+                    // display shape, then hand off to AvaChatPage (localStorage
+                    // handoff + navigate).
+                    const { readHistoryConversation } = await import('../lib/history-store');
+                    const rec = await readHistoryConversation(conv.id);
                     const messages = rec?.messages?.length
                       ? (rec.messages as any[]).map((m, i) => coreMsgToChatMsg(m, i)).filter(Boolean)
                       : (conv.messages || []);
