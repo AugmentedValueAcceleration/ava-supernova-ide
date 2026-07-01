@@ -16156,8 +16156,9 @@ function IdeAuditView({
     borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#cdd6f4', outline: 'none',
   };
   const btnStyle: React.CSSProperties = {
-    padding: '6px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
-    background: 'rgba(49,34,68,0.5)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer',
+    padding: '7px 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+    background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent)', fontSize: 11, fontWeight: 600,
+    cursor: 'pointer', transition: 'background 0.15s',
   };
   const sevColors: Record<IdeAuditFinding['severity'], { bg: string; border: string; text: string }> = {
     info:     { bg: 'rgba(49,34,68,0.5)',    border: 'color-mix(in srgb, var(--accent) 18%, transparent)', text: '#a6adc8' },
@@ -16181,18 +16182,28 @@ function IdeAuditView({
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', background: 'rgba(26,16,40,0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: 10 }}>
         <input type="text" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Filter by tool name or argument..." style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-        <select value={riskFilter} onChange={(e) => onRiskFilterChange(e.target.value)} style={inputStyle}>
-          <option value="all">All risk</option>
-          <option value="safe">Safe</option>
-          <option value="write">Write</option>
-          <option value="dangerous">Dangerous</option>
-        </select>
-        <select value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value)} style={inputStyle}>
-          <option value="all">All status</option>
-          <option value="success">Success</option>
-          <option value="failed">Failed</option>
-          <option value="denied">Denied</option>
-        </select>
+        <CustomSelect
+          value={riskFilter}
+          onChange={onRiskFilterChange}
+          width={130}
+          options={[
+            { value: 'all', label: 'All risk' },
+            { value: 'safe', label: 'Safe' },
+            { value: 'write', label: 'Write' },
+            { value: 'dangerous', label: 'Dangerous' },
+          ]}
+        />
+        <CustomSelect
+          value={statusFilter}
+          onChange={onStatusFilterChange}
+          width={130}
+          options={[
+            { value: 'all', label: 'All status' },
+            { value: 'success', label: 'Success' },
+            { value: 'failed', label: 'Failed' },
+            { value: 'denied', label: 'Denied' },
+          ]}
+        />
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           <button onClick={() => onExport('markdown')} style={btnStyle} title="Export as Markdown — human-readable, never leaves your machine">Export .md</button>
           <button onClick={() => onExport('json')} style={btnStyle} title="Export as JSON — for SIEM ingest or programmatic analysis">Export .json</button>
