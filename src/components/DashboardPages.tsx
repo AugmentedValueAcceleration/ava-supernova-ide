@@ -16070,12 +16070,21 @@ interface IdeAuditEntry {
   fullArgs?: Record<string, unknown>;
   result?: string;
   cost?: { mode: 'platform' | 'byok'; credits?: number; usd?: number; tokens?: { input: number; output: number }; provider?: string; model?: string };
+  fileMutation?: { path: string; gitSha?: string; bytesBefore?: number; bytesAfter?: number; sha256Before?: string; sha256After?: string };
+  integrity?: 'unchanged' | 'modified' | 'deleted' | 'unverifiable';
 }
 interface IdeAuditFinding {
   severity: 'info' | 'warning' | 'critical';
   message: string;
   suggestion?: string;
 }
+// Integrity badge presentation — verdict from the shared engine, glyph + tint.
+const IDE_INTEGRITY_META: Record<NonNullable<IdeAuditEntry['integrity']>, { glyph: string; color: string; label: string }> = {
+  unchanged:    { glyph: '✓', color: '#34d399', label: 'Unchanged — as Ava left it' },
+  modified:     { glyph: '⚠', color: '#fbbf24', label: 'Modified since' },
+  deleted:      { glyph: '🗑', color: '#f87171', label: 'Deleted since' },
+  unverifiable: { glyph: '•', color: '#6c7086', label: 'Unverifiable' },
+};
 function ideFormatAuditCost(cost: IdeAuditEntry['cost']): string {
   if (!cost) return '—';
   if (cost.mode === 'platform' && cost.credits != null) return `${cost.credits} cr`;
@@ -16218,7 +16227,14 @@ function IdeAuditView({
               <div key={i}>
                 <button onClick={() => onToggleExpand(i)} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 60px 90px 80px 60px', gap: 8, width: '100%', padding: '8px 12px', textAlign: 'left', fontSize: 11, border: 'none', background: 'transparent', cursor: 'pointer' }}>
                   <span style={{ color: '#6c7086', fontFamily: 'monospace', fontSize: 10 }}>{time}</span>
-                  <span style={{ color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.toolName}</span>
+                  <span style={{ color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.toolName}</span>
+                    {entry.fileMutation && entry.integrity && (
+                      <span style={{ flexShrink: 0, fontSize: 10, color: IDE_INTEGRITY_META[entry.integrity].color }} title={IDE_INTEGRITY_META[entry.integrity].label}>
+                        {IDE_INTEGRITY_META[entry.integrity].glyph}
+                      </span>
+                    )}
+                  </span>
                   <span style={{ color: '#a6adc8' }}>{catLabels[entry.category] || entry.category}</span>
                   <span style={{ color: riskColors[entry.riskLevel] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.riskLevel}</span>
                   <span style={{ color: approvalColors[entry.approvalMethod] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.approvalMethod}</span>
@@ -16227,6 +16243,35 @@ function IdeAuditView({
                 </button>
                 {isExp && (
                   <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {entry.fileMutation && (() => {
+                      const meta = entry.integrity ? IDE_INTEGRITY_META[entry.integrity] : null;
+                      const tint = entry.integrity === 'unchanged' ? 'rgba(52,211,153,0.08)'
+                        : entry.integrity === 'modified' ? 'rgba(251,191,36,0.08)'
+                        : entry.integrity === 'deleted' ? 'rgba(248,113,113,0.08)'
+                        : 'rgba(49,34,68,0.3)';
+                      const border = entry.integrity === 'unchanged' ? 'rgba(52,211,153,0.3)'
+                        : entry.integrity === 'modified' ? 'rgba(251,191,36,0.3)'
+                        : entry.integrity === 'deleted' ? 'rgba(248,113,113,0.3)'
+                        : 'color-mix(in srgb, var(--accent) 12%, transparent)';
+                      return (
+                        <div style={{ background: tint, border: `1px solid ${border}`, borderRadius: 8, padding: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: '#6c7086', letterSpacing: 1, textTransform: 'uppercase' as const }}>File integrity</span>
+                            {meta && (
+                              <span style={{ fontSize: 9, fontWeight: 600, color: meta.color }}>{meta.glyph} {meta.label}</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#a6adc8', fontFamily: 'monospace', wordBreak: 'break-all' }}>{entry.fileMutation.path}</div>
+                          {entry.fileMutation.sha256After && (
+                            <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 8, rowGap: 2, fontSize: 9, fontFamily: 'monospace', color: '#6c7086' }}>
+                              <span>SHA-256 (after)</span><span style={{ color: '#a6adc8', wordBreak: 'break-all' }}>{entry.fileMutation.sha256After}</span>
+                              {entry.fileMutation.gitSha && (<><span>Git HEAD</span><span style={{ color: '#a6adc8', wordBreak: 'break-all' }}>{entry.fileMutation.gitSha}</span></>)}
+                              {typeof entry.fileMutation.bytesAfter === 'number' && (<><span>Size</span><span style={{ color: '#a6adc8' }}>{entry.fileMutation.bytesAfter.toLocaleString()} B</span></>)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div style={{ background: 'rgba(49,34,68,0.3)', borderRadius: 8, padding: 10 }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#6c7086', marginBottom: 4 }}>Arguments</div>
                       <pre style={{ fontSize: 10, color: '#a6adc8', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 160, overflowY: 'auto', margin: 0 }}>

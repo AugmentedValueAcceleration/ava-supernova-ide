@@ -3010,8 +3010,10 @@ rl.on('line', async (line) => {
       try {
         const audit = await import('@ava/core/audit');
         entries = audit.readEntries({ limit: 1000 });
-        // Detect nudge findings here with the same shared engine the
-        // extension uses, so the two surfaces never drift on thresholds.
+        // Verify file-mutation entries against disk + detect nudge findings,
+        // both via the same shared engine the extension uses so the two
+        // surfaces never drift.
+        try { entries = audit.annotateIntegrity(entries); } catch { /* keep raw */ }
         try { findings = audit.detectPatterns(entries); } catch { findings = []; }
       } catch { /* fall through */ }
       if (!entries || entries.length === 0) {
