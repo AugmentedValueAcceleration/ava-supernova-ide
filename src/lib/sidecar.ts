@@ -133,6 +133,10 @@ export interface SidecarEvent {
   amount?: number;
   endX?: number;
   endY?: number;
+  // visual preview (Phase 0D) — highlight box geometry + duration
+  w?: number;
+  h?: number;
+  ms?: number;
   // desktop safety gate — richer payload on confirm_required events
   toolCategory?: string;
   desktopClassification?: {
@@ -666,6 +670,14 @@ export class SidecarManager {
           break;
         case 'drag':
           await invoke('drag', { x: event.x, y: event.y, endX: event.endX, endY: event.endY });
+          result = 'ok';
+          break;
+        // ── Visual preview (Phase 0D) — flash a click-through highlight box on
+        // the target before Ava acts in Drive. Blocks ~ms; the click follows.
+        case 'highlight_rect':
+          await invoke('highlight_rect', {
+            x: event.x, y: event.y, w: event.w, h: event.h, ms: event.ms,
+          });
           result = 'ok';
           break;
 

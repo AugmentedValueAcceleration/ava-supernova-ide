@@ -308,6 +308,166 @@ fn drag(x: i32, y: i32, end_x: i32, end_y: i32) -> Result<(), String> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Visual preview overlay (Phase 0D)
+//
+// In Drive mode Ava acts on her own, so before each click/type/drag she flashes
+// a hollow, click-through rectangle on the exact target for a few hundred ms —
+// the honest "here's where I'm about to act" signal that makes autonomous
+// operation legible instead of a mystery cursor jump. It's a native layered
+// Win32 window (fast, no webview, no frontend asset), always-on-top and
+// transparent to the mouse (WS_EX_TRANSPARENT), so the click still lands on the
+// app underneath. Windows-first; mac/Linux get an overlay in Phase 5.
+//
+// Coordinates are physical screen pixels — the SAME space enigo clicks in — so
+// the box lands where the action lands. Multi-DPI / multi-monitor correctness
+// is a hands-on verify item (the process is DPI-aware, so top-level window
+// coords are physical, but confirm on a scaled secondary display).
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn overlay_wndproc(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    msg: u32,
+    wparam: windows_sys::Win32::Foundation::WPARAM,
+    lparam: windows_sys::Win32::Foundation::LPARAM,
+) -> windows_sys::Win32::Foundation::LRESULT {
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::Graphics::Gdi::{
+        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, PAINTSTRUCT,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DefWindowProcW, DestroyWindow, GetClientRect, PostQuitMessage, WM_DESTROY, WM_PAINT,
+        WM_TIMER,
+    };
+
+    const BORDER: i32 = 3;
+    // Ava purple, as COLORREF 0x00BBGGRR (R=0x8C G=0x64 B=0xFF).
+    const ACCENT: u32 = 0x00FF_648C;
+    const KEY: u32 = 0x0000_0000; // black is keyed out → the centre is transparent
+
+    match msg {
+        WM_PAINT => {
+            let mut ps: PAINTSTRUCT = std::mem::zeroed();
+            let hdc = BeginPaint(hwnd, &mut ps);
+            let mut rc: RECT = std::mem::zeroed();
+            GetClientRect(hwnd, &mut rc);
+            // Fill the whole client with the accent, then punch a transparent
+            // hole in the middle → a BORDER-thick frame around the target.
+            let accent = CreateSolidBrush(ACCENT);
+            FillRect(hdc, &rc, accent);
+            let inner = RECT {
+                left: rc.left + BORDER,
+                top: rc.top + BORDER,
+                right: rc.right - BORDER,
+                bottom: rc.bottom - BORDER,
+            };
+            let hole = CreateSolidBrush(KEY);
+            FillRect(hdc, &inner, hole);
+            DeleteObject(accent as _);
+            DeleteObject(hole as _);
+            EndPaint(hwnd, &ps);
+            0
+        }
+        WM_TIMER => {
+            DestroyWindow(hwnd);
+            0
+        }
+        WM_DESTROY => {
+            PostQuitMessage(0);
+            0
+        }
+        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+    }
+}
+
+/// Flash a click-through highlight box on (x, y, w, h) for `ms` milliseconds.
+/// Blocks for the duration so the Actor's preview reads as "show → then act".
+#[tauri::command]
+fn highlight_rect(x: i32, y: i32, w: i32, h: i32, ms: u32) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::ptr::{null, null_mut};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, RegisterClassW, SetTimer,
+            SetLayeredWindowAttributes, ShowWindow, TranslateMessage, IDC_ARROW, LWA_COLORKEY, MSG,
+            SW_SHOWNA, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+            WS_EX_TRANSPARENT, WS_POPUP,
+        };
+
+        // Ignore degenerate rects rather than spawning a zero-size window.
+        if w <= 0 || h <= 0 {
+            return Ok(());
+        }
+        let dur = ms.clamp(120, 3000);
+        const BORDER: i32 = 3;
+        let class_name: Vec<u16> = "AvaHighlightOverlay\0".encode_utf16().collect();
+
+        // SAFETY: register the class exactly once (the guard), then create a
+        // transient overlay we own end-to-end — every handle is created and
+        // destroyed within this call, on this thread's own message pump.
+        unsafe {
+            static REGISTERED: AtomicBool = AtomicBool::new(false);
+            if !REGISTERED.swap(true, Ordering::SeqCst) {
+                let wc = WNDCLASSW {
+                    style: 0,
+                    lpfnWndProc: Some(overlay_wndproc),
+                    cbClsExtra: 0,
+                    cbWndExtra: 0,
+                    hInstance: null_mut(),
+                    hIcon: null_mut(),
+                    hCursor: LoadCursorW(null_mut(), IDC_ARROW),
+                    hbrBackground: null_mut(),
+                    lpszMenuName: null(),
+                    lpszClassName: class_name.as_ptr(),
+                };
+                RegisterClassW(&wc);
+            }
+
+            let ex_style = WS_EX_LAYERED
+                | WS_EX_TRANSPARENT
+                | WS_EX_TOPMOST
+                | WS_EX_TOOLWINDOW
+                | WS_EX_NOACTIVATE;
+            let hwnd = CreateWindowExW(
+                ex_style,
+                class_name.as_ptr(),
+                null(),
+                WS_POPUP,
+                x - BORDER,
+                y - BORDER,
+                w + BORDER * 2,
+                h + BORDER * 2,
+                null_mut(),
+                null_mut(),
+                null_mut(),
+                null(),
+            );
+            if hwnd.is_null() {
+                return Err("highlight overlay creation failed".into());
+            }
+            // Black → transparent, so only the accent frame shows.
+            SetLayeredWindowAttributes(hwnd, 0x0000_0000, 0, LWA_COLORKEY);
+            ShowWindow(hwnd, SW_SHOWNA); // show WITHOUT stealing focus
+            SetTimer(hwnd, 1, dur, None); // self-destruct after `dur` ms
+
+            // Pump this thread's messages until the timer destroys the window
+            // (WM_TIMER → DestroyWindow → WM_DESTROY → PostQuitMessage → GetMessage 0).
+            let mut msg: MSG = std::mem::zeroed();
+            while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Phase 5: native AX/AT-SPI overlay. Degrade silently — no preview is
+        // better than a crash, and Drive still confirms irreversible actions.
+        let _ = (x, y, w, h, ms);
+        Ok(())
+    }
+}
+
 /// Get info about the currently active window.
 #[tauri::command]
 fn get_active_window() -> Result<ActiveWindowInfo, String> {
@@ -1870,6 +2030,7 @@ pub fn run() {
             scroll,
             move_mouse,
             drag,
+            highlight_rect,
             get_active_window,
             get_dpi_scale,
             list_ui_elements,
