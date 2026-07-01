@@ -6789,6 +6789,7 @@ export function ChatHistoryPage() {
               const sidecar = getSidecar();
               if (sidecar.isReady) sidecar.exportAuditLog(format).catch(() => {});
             }}
+            onRefresh={() => { try { getSidecar().getAuditLog(); } catch { /* offline */ } }}
           />
         )}
 
@@ -12165,6 +12166,7 @@ export function UsagePage() {
                   const sidecar = getSidecar();
                   if (sidecar.isReady) sidecar.exportAuditLog(format).catch(() => {});
                 }}
+                onRefresh={() => { try { getSidecar().getAuditLog(); } catch { /* offline */ } }}
               />
             ) : (
               <>
@@ -16096,7 +16098,7 @@ const AUDIT_PAGE_SIZE = 25;
 function IdeAuditView({
   entries, findings, expandedIdx, onToggleExpand,
   search, onSearchChange, riskFilter, onRiskFilterChange, statusFilter, onStatusFilterChange,
-  onExport,
+  onExport, onRefresh,
 }: {
   entries: IdeAuditEntry[];
   findings: IdeAuditFinding[];
@@ -16109,6 +16111,7 @@ function IdeAuditView({
   statusFilter: string;
   onStatusFilterChange: (v: string) => void;
   onExport: (format: 'markdown' | 'json') => void;
+  onRefresh: () => void;
 }) {
   const filtered = useMemo(() => entries.filter(e => {
     if (search && !e.toolName.toLowerCase().includes(search.toLowerCase()) && !e.argsSummary.toLowerCase().includes(search.toLowerCase())) return false;
@@ -16190,6 +16193,7 @@ function IdeAuditView({
           ]}
         />
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <button onClick={onRefresh} style={btnStyle} title="Refresh — re-verify file integrity and load new entries">↻ Refresh</button>
           <button onClick={() => onExport('markdown')} style={btnStyle} title="Export as Markdown — human-readable, never leaves your machine">Export .md</button>
           <button onClick={() => onExport('json')} style={btnStyle} title="Export as JSON — for SIEM ingest or programmatic analysis">Export .json</button>
         </div>

@@ -3028,7 +3028,9 @@ rl.on('line', async (line) => {
       // chooser) — sidecar's job is just to format the bytes.
       try {
         const audit = await import('@ava/core/audit');
-        const entries = audit.readEntries({});
+        // Annotate integrity so the exported proof carries the disk-verified
+        // verdicts, not just the recorded hashes.
+        const entries = audit.annotateIntegrity(audit.readEntries({}));
         const bundle = audit.buildExport(entries, data?.format === 'json' ? 'json' : 'markdown');
         emit({ event: 'audit_export_ready', bundle });
       } catch (err) {
