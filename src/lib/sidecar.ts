@@ -593,6 +593,10 @@ export class SidecarManager {
     await this.send({ cmd: 'get_audit_log' });
   }
 
+  async getAuditFindings(): Promise<void> {
+    await this.send({ cmd: 'get_audit_findings' });
+  }
+
   async getCategoryPermissions(): Promise<void> {
     await this.send({ cmd: 'get_category_permissions' });
   }

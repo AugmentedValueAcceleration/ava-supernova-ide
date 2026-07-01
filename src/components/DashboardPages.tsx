@@ -35,6 +35,7 @@ import {
   GearSix as PhGear,
   Paperclip as PhPaperclip,
   X as PhX,
+  ShieldCheck as PhShieldCheck,
 } from '@phosphor-icons/react';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
@@ -1590,6 +1591,54 @@ function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
   );
 }
 
+// ── Command Centre trust nudges ─────────────────────────────────────────────
+// Surfaces the audit engine's findings at the top of the daily lens so the
+// user sees what's worth a second look without opening the audit tab. The
+// findings ship an English message/suggestion from core; the IDE renders them
+// directly (no per-surface i18n here, matching the IDE audit view). Renders
+// nothing when the log is clean.
+function CCTrustNudges({ findings, onReview }: { findings: any[]; onReview: () => void }) {
+  if (!findings || findings.length === 0) return null;
+  const rank: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+  const sorted = [...findings].sort((a, b) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3));
+  const shown = sorted.slice(0, 3);
+  const extra = sorted.length - shown.length;
+  const worst = sorted[0].severity;
+  const tint = worst === 'critical' ? 'rgba(243,139,168,0.08)' : worst === 'warning' ? 'rgba(249,226,175,0.08)' : 'rgba(26,16,40,0.6)';
+  const border = worst === 'critical' ? 'rgba(243,139,168,0.4)' : worst === 'warning' ? 'rgba(249,226,175,0.35)' : 'color-mix(in srgb, var(--accent) 18%, transparent)';
+  const dotColor = (sev: string) => sev === 'critical' ? '#f38ba8' : sev === 'warning' ? '#f9e2af' : 'var(--accent)';
+  const headColor = worst === 'critical' ? '#f38ba8' : worst === 'warning' ? '#f9e2af' : 'var(--accent)';
+  return (
+    <div style={{ marginBottom: 16, background: tint, border: `1px solid ${border}`, borderRadius: 12, padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <PhShieldCheck size={16} weight="duotone" color={headColor} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Worth a look</span>
+        </div>
+        <button onClick={onReview} style={{
+          height: 28, padding: '0 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+          background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent)', fontSize: 11, fontWeight: 600,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+        }}>Review in audit</button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {shown.map((f, i) => (
+          <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11, lineHeight: 1.6 }}>
+            <span style={{ marginTop: 6, height: 6, width: 6, flexShrink: 0, borderRadius: '50%', background: dotColor(f.severity) }} />
+            <div>
+              <span style={{ color: '#a6adc8' }}>{f.message}</span>
+              {f.suggestion && <span style={{ color: '#6c7086' }}> {f.suggestion}</span>}
+            </div>
+          </div>
+        ))}
+        {extra > 0 && (
+          <button onClick={onReview} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: 'var(--accent)', fontSize: 11, cursor: 'pointer', padding: 0 }}>+{extra} more</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Command Centre Page ────────────────────────────────────────────────
 
 type CcTab = 'daily' | 'briefing' | 'reflect' | 'health';
@@ -1619,6 +1668,23 @@ export function CommandCentrePage() {
     return () => window.removeEventListener('ava-auth-changed', handler);
   }, []);
   void authRefresh;
+
+  // Audit trust-nudges for the daily lens — request the lightweight findings
+  // from the shared engine and listen for the sidecar's reply. Rendered only
+  // when there's something worth flagging, so the log staying clean is silent.
+  const [ccFindings, setCcFindings] = useState<any[]>([]);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.event === 'audit_findings' && Array.isArray(detail.findings)) setCcFindings(detail.findings);
+    };
+    window.addEventListener('ava-audit-event', handler);
+    const ask = () => { try { getSidecar().getAuditFindings(); } catch { /* not ready */ } };
+    ask();
+    // The sidecar may not be ready on first mount — retry once shortly after.
+    const retry = setTimeout(ask, 900);
+    return () => { clearTimeout(retry); window.removeEventListener('ava-audit-event', handler); };
+  }, []);
 
   const connected = checkConnected();
   const dateStr = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -1922,6 +1988,10 @@ export function CommandCentrePage() {
         {/* ── Daily tab ─────────────────────────────────────────────── */}
         {tab === 'daily' && (
           <>
+            <CCTrustNudges
+              findings={ccFindings}
+              onReview={() => { try { sessionStorage.setItem('ava-ide-usage-tab', 'audit'); } catch { /* storage off */ } window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'usage' })); }}
+            />
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
               {connected ? (
                 <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
@@ -11837,7 +11907,16 @@ export function CloudSyncPage() {
 export function UsagePage() {
   useLocale();
   const connected = checkConnected();
-  const [activeTab, setActiveTab] = useState<'session' | 'alltime' | 'audit'>('session');
+  const [activeTab, setActiveTab] = useState<'session' | 'alltime' | 'audit'>(() => {
+    // Deep-link from the Command Centre's "Review in audit" nudge.
+    try {
+      if (sessionStorage.getItem('ava-ide-usage-tab') === 'audit') {
+        sessionStorage.removeItem('ava-ide-usage-tab');
+        return 'audit';
+      }
+    } catch { /* storage off */ }
+    return 'session';
+  });
   const { data: usage, loading, error } = useApiData<any>('/usage/summary', null);
 
   // Audit log state
