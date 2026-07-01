@@ -6636,6 +6636,7 @@ export function ChatHistoryPage() {
   // filter / expand state because UsagePage's audit state lives in a
   // different component tree.
   const [historyAuditEntries, setHistoryAuditEntries] = useState<any[]>([]);
+  const [historyAuditFindings, setHistoryAuditFindings] = useState<any[]>([]);
   const [historyAuditExpanded, setHistoryAuditExpanded] = useState<number | null>(null);
   const [historyAuditSearch, setHistoryAuditSearch] = useState('');
   const [historyAuditRiskFilter, setHistoryAuditRiskFilter] = useState<string>('all');
@@ -6648,6 +6649,7 @@ export function ChatHistoryPage() {
       const detail = (e as CustomEvent).detail;
       if (detail?.event === 'audit_log' && Array.isArray(detail.entries)) {
         setHistoryAuditEntries(detail.entries);
+        setHistoryAuditFindings(Array.isArray(detail.findings) ? detail.findings : []);
       }
       if (detail?.event === 'audit_entry' && detail.entry) {
         setHistoryAuditEntries(prev => [...prev, detail.entry].slice(-1000));
@@ -6774,6 +6776,7 @@ export function ChatHistoryPage() {
         {activeTab === 'audit' && (
           <IdeAuditView
             entries={historyAuditEntries}
+            findings={historyAuditFindings}
             expandedIdx={historyAuditExpanded}
             onToggleExpand={(i) => setHistoryAuditExpanded(historyAuditExpanded === i ? null : i)}
             search={historyAuditSearch}
@@ -11838,6 +11841,9 @@ export function UsagePage() {
 
   // Audit log state
   const [auditEntries, setAuditEntries] = useState<any[]>([]);
+  // Nudge findings computed by the shared @ava/core/audit engine in the
+  // sidecar and forwarded with the entries (kept in sync with the extension).
+  const [auditFindings, setAuditFindings] = useState<any[]>([]);
   const [auditExpanded, setAuditExpanded] = useState<number | null>(null);
 
   // Audit-tab UI state — search + filter live next to the entries
@@ -11855,6 +11861,7 @@ export function UsagePage() {
       const detail = (e as CustomEvent).detail;
       if (detail?.event === 'audit_log' && Array.isArray(detail.entries)) {
         setAuditEntries(detail.entries);
+        setAuditFindings(Array.isArray(detail.findings) ? detail.findings : []);
       }
       if (detail?.event === 'audit_entry' && detail.entry) {
         setAuditEntries(prev => [...prev, detail.entry].slice(-500));
@@ -12145,6 +12152,7 @@ export function UsagePage() {
             ) : activeTab === 'audit' ? (
               <IdeAuditView
                 entries={auditEntries}
+                findings={auditFindings}
                 expandedIdx={auditExpanded}
                 onToggleExpand={(i) => setAuditExpanded(auditExpanded === i ? null : i)}
                 search={auditSearch}
@@ -16074,46 +16082,15 @@ function ideFormatAuditCost(cost: IdeAuditEntry['cost']): string {
   if (cost.mode === 'byok' && cost.usd != null) return `$${cost.usd.toFixed(cost.usd >= 0.01 ? 4 : 6)}`;
   return '—';
 }
-function ideDetectAuditPatterns(entries: IdeAuditEntry[]): IdeAuditFinding[] {
-  const findings: IdeAuditFinding[] = [];
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const recent = entries.filter(e => e.timestamp >= sevenDaysAgo);
-  if (recent.length === 0) return [];
-  const byTool = new Map<string, { auto: number; autoFailed: number }>();
-  for (const e of recent) {
-    if (e.approvalMethod !== 'auto') continue;
-    const t = byTool.get(e.toolName) ?? { auto: 0, autoFailed: 0 };
-    t.auto++;
-    if (e.status === 'failed' || e.status === 'denied') t.autoFailed++;
-    byTool.set(e.toolName, t);
-  }
-  for (const [tool, s] of byTool) {
-    if (s.auto >= 5 && s.autoFailed / s.auto > 0.2) {
-      findings.push({
-        severity: 'warning',
-        message: `You auto-approve ${tool} but ${Math.round((s.autoFailed / s.auto) * 100)}% of those calls fail (${s.autoFailed} of ${s.auto} this week).`,
-        suggestion: 'Consider tightening the approval rule to first-time, so failures get a second look.',
-      });
-    }
-  }
-  const dangerousSucceeded = recent.filter(e => e.riskLevel === 'dangerous' && e.status === 'success');
-  if (dangerousSucceeded.length > 0) {
-    findings.push({
-      severity: 'critical',
-      message: `${dangerousSucceeded.length} dangerous tool call${dangerousSucceeded.length === 1 ? '' : 's'} succeeded this week.`,
-      suggestion: 'Review these in the audit table to confirm they touched only what you expected.',
-    });
-  }
-  return findings;
-}
 const AUDIT_PAGE_SIZE = 25;
 
 function IdeAuditView({
-  entries, expandedIdx, onToggleExpand,
+  entries, findings, expandedIdx, onToggleExpand,
   search, onSearchChange, riskFilter, onRiskFilterChange, statusFilter, onStatusFilterChange,
   onExport,
 }: {
   entries: IdeAuditEntry[];
+  findings: IdeAuditFinding[];
   expandedIdx: number | null;
   onToggleExpand: (i: number) => void;
   search: string;
@@ -16124,7 +16101,6 @@ function IdeAuditView({
   onStatusFilterChange: (v: string) => void;
   onExport: (format: 'markdown' | 'json') => void;
 }) {
-  const findings = useMemo(() => ideDetectAuditPatterns(entries), [entries]);
   const filtered = useMemo(() => entries.filter(e => {
     if (search && !e.toolName.toLowerCase().includes(search.toLowerCase()) && !e.argsSummary.toLowerCase().includes(search.toLowerCase())) return false;
     if (riskFilter !== 'all' && e.riskLevel !== riskFilter) return false;

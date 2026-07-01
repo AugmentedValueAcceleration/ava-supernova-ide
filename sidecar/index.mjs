@@ -3006,14 +3006,18 @@ rl.on('line', async (line) => {
       // in-memory buffer if the persistent read errors or is empty
       // (first run, fs error, etc.).
       let entries = [];
+      let findings = [];
       try {
         const audit = await import('@ava/core/audit');
         entries = audit.readEntries({ limit: 1000 });
+        // Detect nudge findings here with the same shared engine the
+        // extension uses, so the two surfaces never drift on thresholds.
+        try { findings = audit.detectPatterns(entries); } catch { findings = []; }
       } catch { /* fall through */ }
       if (!entries || entries.length === 0) {
         entries = globalThis.__avaAuditLog || [];
       }
-      emit({ event: 'audit_log', entries });
+      emit({ event: 'audit_log', entries, findings });
       break;
     }
     case 'export_audit_log': {
