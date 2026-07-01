@@ -36,7 +36,10 @@ export default function App() {
   const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => load('sidebarPos', 'left'));
   const [bottomPanelOpen, setBottomPanelOpen] = useState(() => load('panelOpen', false));
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>(() => load('panelTab', 'terminal'));
-  const [dashboardPage, setDashboardPage] = useState<DashboardPageId | null>(() => load('dashPage', 'command-centre'));
+  // Always open on the Command Centre on a fresh load (matches the extension,
+  // which hard-defaults to 'overview'). We intentionally do NOT restore the
+  // last page — opening the app is a "where am I today" moment.
+  const [dashboardPage, setDashboardPage] = useState<DashboardPageId | null>('command-centre');
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 

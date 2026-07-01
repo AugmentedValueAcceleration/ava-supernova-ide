@@ -1135,17 +1135,19 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
 // Flat nav — Phosphor duotone icons replacing the previous emoji glyphs.
 // Same lineup the extension sidebar uses; identity-mapped one-to-one.
 const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string }[] = [
-  { id: 'command-centre',  Icon: PhCommand,  label: 'Command Centre', desc: 'Your daily overview' },
-  { id: 'ava-chat',        Icon: PhChat,     label: 'Chat',           desc: 'Talk, build, create' },
-  { id: 'planner',         Icon: PhPlanner,  label: 'Planner',        desc: 'Tasks and journal' },
-  { id: 'library',         Icon: PhLibrary,  label: 'Library',        desc: 'Papers, assets, documents' },
-  { id: 'learning',        Icon: PhLearning, label: 'Learning',       desc: 'Courses, lessons, and teaching' },
+  // Order + naming mirror the extension sidebar exactly (Health before
+  // Learning; "Ava Chat", "Usage & History", extension descriptions).
+  { id: 'command-centre',  Icon: PhCommand,  label: 'Command Centre',     desc: 'Overview of everything' },
+  { id: 'ava-chat',        Icon: PhChat,     label: 'Ava Chat',           desc: 'Full-width AI chat' },
+  { id: 'planner',         Icon: PhPlanner,  label: 'Planner',            desc: 'Tasks, journal, learning' },
+  { id: 'library',         Icon: PhLibrary,  label: 'Library',            desc: 'Images and documents' },
   { id: 'health',          Icon: PhHealth,   label: 'Health & Nutrition', desc: 'Exercises, recipes, plans' },
-  { id: 'creative-studio', Icon: PhCreative, label: 'Creative Studio', desc: 'Images, music, video, voice' },
-  { id: 'memory',          Icon: PhMemory,   label: 'Memory',         desc: 'Patterns, preferences, decisions' },
-  { id: 'chat-history',    Icon: PhHistory,  label: 'History',        desc: 'Credits, sessions, models' },
-  { id: 'account',         Icon: PhAccount,  label: 'Account',        desc: 'Settings, billing, personalisation' },
-  { id: 'help',            Icon: PhHelp,     label: 'Help',           desc: 'Support, releases, roadmap' },
+  { id: 'learning',        Icon: PhLearning, label: 'Learning',           desc: 'Courses, lessons, and teaching' },
+  { id: 'creative-studio', Icon: PhCreative, label: 'Creative Studio',    desc: 'Images, music, video, voice' },
+  { id: 'memory',          Icon: PhMemory,   label: 'Memory',             desc: 'View and manage memories' },
+  { id: 'chat-history',    Icon: PhHistory,  label: 'Usage & History',    desc: 'Credits, sessions, models' },
+  { id: 'account',         Icon: PhAccount,  label: 'Account',            desc: 'Settings, billing, personalisation' },
+  { id: 'help',            Icon: PhHelp,     label: 'Help',               desc: 'Support, releases, roadmap' },
 ];
 
 function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { onDashboardSelect?: (page: string) => void; activePage?: string | null; collapsed?: boolean }) {
