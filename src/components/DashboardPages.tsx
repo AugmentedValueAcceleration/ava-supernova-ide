@@ -3817,7 +3817,9 @@ export function AvaChatPage() {
 
       case 'audit_log':
       case 'audit_entry':
-        // Forward audit events to window so UsagePage can pick them up
+      case 'audit_findings':
+        // Forward audit events to window so UsagePage + the Command Centre
+        // trust-nudge card can pick them up.
         window.dispatchEvent(new CustomEvent('ava-audit-event', { detail: event }));
         break;
 
