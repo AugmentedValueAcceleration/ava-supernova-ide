@@ -6616,6 +6616,18 @@ export function ChatHistoryPage() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'conversations' | 'usage' | 'audit'>('conversations');
+  // Inline rename of a conversation card. Writes the new title into the shared
+  // history file so the rename shows up in the extension + CLI too.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const saveRename = async (id: string) => {
+    const t = editTitle.trim();
+    setEditingId(null);
+    if (!t) return;
+    const { renameHistoryConversation } = await import('../lib/history-store');
+    await renameHistoryConversation(id, t);
+    setConversations((prev: any[]) => prev.map((c) => (c.id === id ? { ...c, title: t } : c)));
+  };
   const { data: usage } = useApiData<any>('/usage/summary', null);
 
   // ── Audit tab state — hoisted to History page so the Audit tab is
@@ -6949,6 +6961,9 @@ export function ChatHistoryPage() {
                   padding: '14px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
                 }}
                   onClick={async () => {
+                    // Don't open while this card is being renamed — a drag-select
+                    // in the title input can end on the card and fire this click.
+                    if (editingId === conv.id) return;
                     // Read the full transcript file, map core messages → the chat
                     // display shape, then hand off to AvaChatPage (localStorage
                     // handoff + navigate).
@@ -6965,9 +6980,26 @@ export function ChatHistoryPage() {
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; e.currentTarget.style.boxShadow = 'none'; }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{conv.title || 'Untitled'}</div>
+                    {editingId === conv.id ? (
+                      <input
+                        autoFocus
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void saveRename(conv.id); } else if (e.key === 'Escape') { setEditingId(null); } }}
+                        onBlur={() => void saveRename(conv.id)}
+                        style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#cdd6f4', background: 'rgba(49,34,68,0.6)', border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', borderRadius: 6, padding: '3px 8px', outline: 'none', marginRight: 8 }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{conv.title || 'Untitled'}</div>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 10, color: '#585b70' }}>{date} {time}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditTitle(conv.title || ''); setEditingId(conv.id); }}
+                        style={{ background: 'none', border: 'none', color: '#585b70', cursor: 'pointer', fontSize: 12, padding: '2px 4px' }}
+                        title="Rename conversation"
+                      >✎</button>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
                         style={{ background: 'none', border: 'none', color: '#585b70', cursor: 'pointer', fontSize: 12, padding: '2px 4px' }}

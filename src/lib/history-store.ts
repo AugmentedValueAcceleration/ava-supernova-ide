@@ -8,7 +8,7 @@
 // conversations across CLI / extension / IDE with zero effort, no sidecar
 // round-trip, no account network fetch.
 
-import { readTextFile, readDir, remove, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, readDir, remove, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { accountRoot } from './account-scope';
 
 const historyDir = async (): Promise<string> => `${await accountRoot()}/history`;
@@ -80,4 +80,17 @@ export async function deleteHistoryConversation(id: string): Promise<void> {
     const dir = await historyDir();
     await remove(`${dir}/${id}.json`, { baseDir: BaseDirectory.Home });
   } catch { /* already gone */ }
+}
+
+/** Rename a conversation — writes the new title back into the shared file, so
+ *  the rename shows in the extension + CLI too. Preserves everything else. */
+export async function renameHistoryConversation(id: string, title: string): Promise<void> {
+  try {
+    const dir = await historyDir();
+    const path = `${dir}/${id}.json`;
+    const rec = JSON.parse(await readTextFile(path, { baseDir: BaseDirectory.Home }));
+    rec.title = title;
+    rec.updatedAt = new Date().toISOString();
+    await writeTextFile(path, JSON.stringify(rec, null, 2), { baseDir: BaseDirectory.Home });
+  } catch { /* best-effort */ }
 }
