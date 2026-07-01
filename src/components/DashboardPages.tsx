@@ -6799,14 +6799,18 @@ export function ChatHistoryPage() {
     return () => window.removeEventListener('ava-audit-event', handler);
   }, []);
 
-  // Pull persistent log when entering the audit tab.
-  useEffect(() => {
-    if (activeTab !== 'audit') return;
-    const sidecar = getSidecar();
-    if (sidecar.isReady) {
-      sidecar.getAuditLog().catch(() => { /* offline / not ready */ });
-    }
-  }, [activeTab]);
+  // Read the persistent log DIRECTLY via Tauri fs when entering the audit tab —
+  // the sidecar only runs on the chat page, so getAuditLog() throws "Sidecar
+  // not running" here. The local reader annotates integrity + security +
+  // findings, exactly like the sidecar path did. Same local-first fix as the
+  // Command Centre nudges / journal / memory.
+  const loadHistoryAudit = useCallback(() => {
+    import('../lib/audit-store')
+      .then(m => m.readAuditEntries(localStorage.getItem('ava-ide-project-folder') || undefined))
+      .then(({ entries, findings }) => { setHistoryAuditEntries(entries); setHistoryAuditFindings(findings); })
+      .catch(() => { /* local-first: leave empty on read failure */ });
+  }, []);
+  useEffect(() => { if (activeTab === 'audit') loadHistoryAudit(); }, [activeTab, loadHistoryAudit]);
 
   // List conversations by reading the shared account-scoped history files
   // DIRECTLY via Tauri fs (the SAME files the extension + CLI + sidecar write) —
@@ -6911,11 +6915,8 @@ export function ChatHistoryPage() {
             onRiskFilterChange={setHistoryAuditRiskFilter}
             statusFilter={historyAuditStatusFilter}
             onStatusFilterChange={setHistoryAuditStatusFilter}
-            onExport={(format) => {
-              const sidecar = getSidecar();
-              if (sidecar.isReady) sidecar.exportAuditLog(format).catch(() => {});
-            }}
-            onRefresh={() => { try { getSidecar().getAuditLog(); } catch { /* offline */ } }}
+            onExport={(format) => { void exportAuditLocal(historyAuditEntries, format); }}
+            onRefresh={loadHistoryAudit}
           />
         )}
 
@@ -12024,16 +12025,17 @@ export function UsagePage() {
     return () => window.removeEventListener('ava-audit-event', handler);
   }, []);
 
-  // Pull the persistent audit log when the audit tab opens so prior
-  // sessions are visible. Without this, the tab only shows entries
-  // captured in the current process's lifetime.
-  useEffect(() => {
-    if (activeTab !== 'audit') return;
-    const sidecar = getSidecar();
-    if (sidecar.isReady) {
-      sidecar.getAuditLog().catch(() => { /* offline / not ready */ });
-    }
-  }, [activeTab]);
+  // Read the persistent audit log DIRECTLY via Tauri fs when the audit tab
+  // opens — the sidecar isn't running on this page, so getAuditLog() throws.
+  // Local reader annotates integrity + security + findings. (Same fix as the
+  // History-page audit view / Command Centre nudges.)
+  const loadUsageAudit = useCallback(() => {
+    import('../lib/audit-store')
+      .then(m => m.readAuditEntries(localStorage.getItem('ava-ide-project-folder') || undefined))
+      .then(({ entries, findings }) => { setAuditEntries(entries); setAuditFindings(findings); })
+      .catch(() => { /* local-first: leave empty on read failure */ });
+  }, []);
+  useEffect(() => { if (activeTab === 'audit') loadUsageAudit(); }, [activeTab, loadUsageAudit]);
 
   // Live session stats from shared store
   const [session, setSession] = useState<SessionStats>(getSessionStats);
@@ -12297,11 +12299,8 @@ export function UsagePage() {
                 onRiskFilterChange={setAuditRiskFilter}
                 statusFilter={auditStatusFilter}
                 onStatusFilterChange={setAuditStatusFilter}
-                onExport={(format) => {
-                  const sidecar = getSidecar();
-                  if (sidecar.isReady) sidecar.exportAuditLog(format).catch(() => {});
-                }}
-                onRefresh={() => { try { getSidecar().getAuditLog(); } catch { /* offline */ } }}
+                onExport={(format) => { void exportAuditLocal(auditEntries, format); }}
+                onRefresh={loadUsageAudit}
               />
             ) : (
               <>
@@ -16196,6 +16195,27 @@ export function _CreativeLibraryTab() {
    here as a small component (rather than a separate file) so it's
    colocated with UsagePage that owns the audit state.
    ====================================================================== */
+// Build + save an audit export in the renderer — the sidecar's export path
+// isn't available on the History/Usage pages (sidecar not running). Uses the
+// webview-safe @ava/core/audit/export buildExport over the already-read
+// entries (integrity + security included) and the Tauri save dialog.
+async function exportAuditLocal(entries: any[], format: 'markdown' | 'json') {
+  try {
+    const [{ buildExport }, dialog, fs] = await Promise.all([
+      import('@ava/core/audit/export'),
+      import('@tauri-apps/plugin-dialog'),
+      import('@tauri-apps/plugin-fs'),
+    ]);
+    const bundle = buildExport(entries, format);
+    const target = await dialog.save({
+      defaultPath: bundle.filename,
+      filters: [{ name: format === 'json' ? 'JSON' : 'Markdown', extensions: [format === 'json' ? 'json' : 'md'] }],
+    });
+    if (!target) return;
+    await fs.writeTextFile(target, bundle.content);
+  } catch { /* cancelled or fs error — non-fatal */ }
+}
+
 interface IdeAuditEntry {
   timestamp: string;
   toolName: string;
