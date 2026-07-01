@@ -1331,7 +1331,9 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
   }, [tasks, today]);
 
   const handleComplete = async (id: string) => {
+    // Local-first: toggle in the local store (the source the widget now reads).
     if (!cloudSyncEnabled()) {
+      try { await toggleLocalTask(id); } catch { /* ignore */ }
       onRefresh();
       return;
     }
@@ -1797,8 +1799,18 @@ export function CommandCentrePage() {
   }, []);
 
   // ── Platform API data (tasks, journal, learning, memory, release) ──
-  const { data: rawTasks2, loading: tasksLoading, refetch: refetchTasks } = useApiData<any>('/tasks', null);
-  const tasks: TaskEntry[] = Array.isArray(rawTasks2) ? rawTasks2 : (rawTasks2?.tasks ?? rawTasks2?.data ?? []);
+  // Tasks are local-first — read the local task store (~/.ava[/users/<id>]/
+  // tasks/tasks.json + the workspace store), the same files the Planner uses.
+  // The platform API never holds these, so the Command Centre showed empty.
+  const [tasks, setTasks] = useState<TaskEntry[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const refetchTasks = useCallback(() => {
+    readLocalTasks().then(list => {
+      setTasks(list.map(t => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, due_date: t.dueDate })));
+      setTasksLoading(false);
+    }).catch(() => setTasksLoading(false));
+  }, []);
+  useEffect(() => { refetchTasks(); }, [refetchTasks]);
   // Journal is local-first — read today's entries from the shared journal
   // store (~/.ava[/users/<id>]/journal/<date>.json), the same files the
   // extension + sidecar use. The Command Centre previously hit the platform
@@ -1830,8 +1842,25 @@ export function CommandCentrePage() {
   const [curriculums, setCurriculums] = useState<LearningCurriculum[]>([]);
   const [learningLoading, setLearningLoading] = useState(true);
   useEffect(() => { void readLocalLearning().then(c => { setCurriculums(c as LearningCurriculum[]); setLearningLoading(false); }); }, []);
-  const { data: rawMemories2, loading: memoriesLoading } = useApiData<any>('/memories', null);
-  const memories: MemoryEntry[] = Array.isArray(rawMemories2) ? rawMemories2 : (rawMemories2?.memories ?? rawMemories2?.entries ?? rawMemories2?.data ?? []);
+  // Memory is local-first — read the authoritative v3 graph (~/.ava/memory/
+  // graph.json, the flat store the agent + extension + the Memory page use);
+  // its `nodes` ARE the entries. The platform API never holds these.
+  const [memories, setMemories] = useState<MemoryEntry[]>([]);
+  const [memoriesLoading, setMemoriesLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    import('@tauri-apps/plugin-fs')
+      .then(fs => fs.readTextFile('.ava/memory/graph.json', { baseDir: fs.BaseDirectory.Home }))
+      .then(raw => {
+        if (cancelled) return;
+        const g = JSON.parse(raw || '{}');
+        const nodes: any[] = Array.isArray(g.nodes) ? g.nodes : [];
+        setMemories(nodes.map(n => ({ content: n.content, archived: n.archived, created_at: n.createdAt, updated_at: n.updatedAt })));
+        setMemoriesLoading(false);
+      })
+      .catch(() => { if (!cancelled) setMemoriesLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
   const [releaseData, setReleaseData] = useState<any>(null);
   const [releaseLoading, setReleaseLoading] = useState(true);
   const refetchRelease = useCallback(() => {
