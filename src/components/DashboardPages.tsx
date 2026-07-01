@@ -6597,6 +6597,19 @@ export function AvaChatPage() {
 }
 
 /* ===== 2b. Chat History ===== */
+// Map a core Message (from the shared ~/.ava history files) → the IDE chat
+// display shape. System/tool messages are dropped; assistant → 'ava'. Output is
+// JSON-stashed for AvaChatPage to setMessages, so a loose shape is fine.
+function coreMsgToChatMsg(m: any, i: number): any | null {
+  if (!m || m.role === 'system' || m.role === 'tool') return null;
+  const text = typeof m.content === 'string'
+    ? m.content
+    : Array.isArray(m.content)
+      ? m.content.filter((b: any) => b?.type === 'text').map((b: any) => b.text || '').join('')
+      : '';
+  return { id: `hist-${i}-${m.role}`, role: m.role === 'user' ? 'user' : 'ava', text, timestamp: Date.now() };
+}
+
 export function ChatHistoryPage() {
   useLocale();
   const connected = checkConnected();
@@ -6655,11 +6668,20 @@ export function ChatHistoryPage() {
     }
   }, [activeTab]);
 
+  // List conversations from the shared local history files via the sidecar
+  // (the SAME transcripts the extension + CLI write) — so a user switching
+  // extension → IDE sees their conversations here with zero effort. Waits
+  // briefly for the sidecar to be ready before listing.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('ava-ide-chat-history') || '[]';
-      setConversations(JSON.parse(raw));
-    } catch { setConversations([]); }
+    let cancelled = false;
+    (async () => {
+      const sidecar = getSidecar();
+      for (let i = 0; i < 12 && !sidecar.isReady; i++) { await new Promise(r => setTimeout(r, 300)); }
+      if (cancelled) return;
+      const list = await sidecar.listHistory().catch(() => [] as any[]);
+      if (!cancelled) setConversations(list);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const filtered = search
@@ -6669,7 +6691,7 @@ export function ChatHistoryPage() {
   const deleteConversation = (id: string) => {
     const updated = conversations.filter(c => c.id !== id);
     setConversations(updated);
-    try { localStorage.setItem('ava-ide-chat-history', JSON.stringify(updated)); } catch {}
+    getSidecar().deleteHistory(id).catch(() => { /* best-effort; file already gone or sidecar down */ });
     // When the operator deletes the conversation currently loaded in the
     // chat panel, OR clears history entirely (last conv deleted), the chat
     // panel needs to reset to a fresh state — otherwise the chat shows a
@@ -6924,9 +6946,15 @@ export function ChatHistoryPage() {
                   background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10,
                   padding: '14px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
                 }}
-                  onClick={() => {
-                    // Store the conversation to load, navigate to chat
-                    localStorage.setItem('ava-ide-load-conversation', JSON.stringify(conv));
+                  onClick={async () => {
+                    // Pull the full transcript from the shared history file, map
+                    // core messages → the chat display shape, then hand off to
+                    // AvaChatPage (localStorage handoff + navigate).
+                    const rec = await getSidecar().loadHistory(conv.id).catch(() => null);
+                    const messages = rec?.messages?.length
+                      ? (rec.messages as any[]).map((m, i) => coreMsgToChatMsg(m, i)).filter(Boolean)
+                      : (conv.messages || []);
+                    localStorage.setItem('ava-ide-load-conversation', JSON.stringify({ id: conv.id, title: conv.title, messages }));
                     window.dispatchEvent(new CustomEvent('ava-load-conversation'));
                     window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'ava-chat' }));
                   }}

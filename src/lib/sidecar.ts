@@ -354,6 +354,36 @@ export class SidecarManager {
     await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined, surface, courseId });
   }
 
+  // ── Conversation history (the shared ~/.ava/.../history/*.json files) ────────
+  // The sidecar reads/writes the SAME account-scoped transcripts the extension
+  // + CLI use, so history carries across surfaces. Request/response over the
+  // event stream; resolves a safe fallback on timeout so the UI never hangs.
+  private requestHistory<T>(cmd: string, respEvent: string, extra: Record<string, unknown>, pick: (e: any) => T, fallback: T): Promise<T> {
+    return new Promise<T>((resolve) => {
+      let timer: ReturnType<typeof setTimeout>;
+      const handler = (event: SidecarEvent) => {
+        clearTimeout(timer);
+        this.off(respEvent, handler);
+        try { resolve(pick(event)); } catch { resolve(fallback); }
+      };
+      timer = setTimeout(() => { this.off(respEvent, handler); resolve(fallback); }, 6000);
+      this.on(respEvent, handler);
+      this.send({ cmd, ...extra }).catch(() => { clearTimeout(timer); this.off(respEvent, handler); resolve(fallback); });
+    });
+  }
+
+  async listHistory(query?: string): Promise<Array<{ id: string; title: string; updatedAt: string; pinned?: boolean; projectPath?: string }>> {
+    return this.requestHistory('list_history', 'history_list', query ? { query } : {}, (e) => e.conversations ?? [], []);
+  }
+
+  async loadHistory(id: string): Promise<{ id: string; title: string; messages: unknown[] } | null> {
+    return this.requestHistory('load_history', 'history_loaded', { id }, (e) => e.record ?? null, null);
+  }
+
+  async deleteHistory(id: string): Promise<void> { await this.send({ cmd: 'delete_history', id }).catch(() => { /* best-effort */ }); }
+  async renameHistory(id: string, title: string): Promise<void> { await this.send({ cmd: 'rename_history', id, title }).catch(() => { /* best-effort */ }); }
+  async pinHistory(id: string, pinned: boolean): Promise<void> { await this.send({ cmd: 'pin_history', id, pinned }).catch(() => { /* best-effort */ }); }
+
   async setWorkingHours(start: number, end: number): Promise<void> {
     await this.send({ cmd: 'set_working_hours', start, end });
   }
