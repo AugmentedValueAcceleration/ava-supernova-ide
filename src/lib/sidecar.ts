@@ -128,6 +128,11 @@ export interface SidecarEvent {
   // vision lane — coordinate click for visually-located elements
   x?: number;
   y?: number;
+  // input primitives — scroll + drag
+  direction?: 'up' | 'down' | 'left' | 'right';
+  amount?: number;
+  endX?: number;
+  endY?: number;
   // desktop safety gate — richer payload on confirm_required events
   toolCategory?: string;
   desktopClassification?: {
@@ -646,6 +651,22 @@ export class SidecarManager {
           break;
         case 'click':
           result = await invoke('click', { x: event.x, y: event.y });
+          break;
+        case 'double_click':
+          await invoke('double_click', { x: event.x, y: event.y });
+          result = 'ok';
+          break;
+        case 'right_click':
+          await invoke('right_click', { x: event.x, y: event.y });
+          result = 'ok';
+          break;
+        case 'scroll':
+          await invoke('scroll', { direction: event.direction, amount: event.amount });
+          result = 'ok';
+          break;
+        case 'drag':
+          await invoke('drag', { x: event.x, y: event.y, endX: event.endX, endY: event.endY });
+          result = 'ok';
           break;
 
         // ── Browser automation — Playwright-backed headed Chromium driven

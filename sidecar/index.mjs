@@ -361,6 +361,10 @@ const inputBridge = {
   async typeText(text) { await desktopRequest('type_text', { text }); },
   async keyPress(key) { await desktopRequest('key_press', { key }); },
   async click(x, y) { await desktopRequest('click', { x, y }); },
+  async doubleClick(x, y) { await desktopRequest('double_click', { x, y }); },
+  async rightClick(x, y) { await desktopRequest('right_click', { x, y }); },
+  async scroll(direction, amount) { await desktopRequest('scroll', { direction, amount }); },
+  async drag(x, y, endX, endY) { await desktopRequest('drag', { x, y, endX, endY }); },
 };
 
 /**
