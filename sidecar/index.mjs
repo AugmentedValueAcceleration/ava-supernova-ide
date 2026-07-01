@@ -3022,17 +3022,6 @@ rl.on('line', async (line) => {
       emit({ event: 'audit_log', entries, findings });
       break;
     }
-    case 'get_audit_findings': {
-      // Lightweight path for the Command Centre trust-nudge card — just the
-      // findings, no full entry payload and no integrity hashing.
-      let findings = [];
-      try {
-        const audit = await import('@ava/core/audit');
-        findings = audit.detectPatterns(audit.readEntries({ limit: 1000 }));
-      } catch { findings = []; }
-      emit({ event: 'audit_findings', findings });
-      break;
-    }
     case 'export_audit_log': {
       // Build the export bundle and send it back to the frontend; the
       // Tauri save dialog runs IDE-side (so the user sees a native

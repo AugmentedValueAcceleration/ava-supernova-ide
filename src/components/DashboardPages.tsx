@@ -1674,25 +1674,16 @@ export function CommandCentrePage() {
   // when there's something worth flagging, so the log staying clean is silent.
   const [ccFindings, setCcFindings] = useState<any[]>([]);
   useEffect(() => {
-    const sc = getSidecar();
-    // Subscribe DIRECTLY to the sidecar's audit_findings event — the dashboard
-    // event bus keys on event type, so this fires regardless of which page's
-    // window-forward is mounted. No dependency on the chat component.
-    const onFindings = (event: any) => {
-      if (Array.isArray(event?.findings)) setCcFindings(event.findings);
-    };
-    sc.on('audit_findings', onFindings);
-    // The Command Centre is the launch page, so on first mount the sidecar is
-    // usually still spawning. Request now if it's up, and again on 'ready' — a
-    // fixed timer would race the spawn.
-    const ask = () => { try { getSidecar().getAuditFindings(); } catch { /* not ready */ } };
-    if (sc.isReady) ask();
-    const onReady = () => ask();
-    sc.on('ready', onReady);
-    return () => {
-      try { sc.off('audit_findings', onFindings); } catch { /* */ }
-      try { sc.off('ready', onReady); } catch { /* */ }
-    };
+    // Read the audit log directly via Tauri fs and run the shared detector —
+    // the Command Centre is the launch page, where the sidecar (started only
+    // by the chat page) isn't running. This mirrors how History / learning
+    // read their data: local-first, no sidecar, works on first paint.
+    let cancelled = false;
+    import('../lib/audit-store')
+      .then(m => m.readAuditFindings())
+      .then(findings => { if (!cancelled) setCcFindings(findings); })
+      .catch(() => { /* local-first: no card on read failure */ });
+    return () => { cancelled = true; };
   }, []);
 
   const connected = checkConnected();
@@ -3826,9 +3817,7 @@ export function AvaChatPage() {
 
       case 'audit_log':
       case 'audit_entry':
-      case 'audit_findings':
-        // Forward audit events to window so UsagePage + the Command Centre
-        // trust-nudge card can pick them up.
+        // Forward audit events to window so UsagePage can pick them up.
         window.dispatchEvent(new CustomEvent('ava-audit-event', { detail: event }));
         break;
 
