@@ -334,6 +334,9 @@ const DESKTOP_TIMEOUTS = {
   browser_launch: 60000,
   browser_send: 45000,   // navigate/snapshot ride this — page loads + first Chromium boot
   browser_close: 20000,
+  // A human decision, not an I/O operation — the operator may be away from
+  // the desk. 3 minutes, then the caller treats it as declined (safe default).
+  native_confirm: 180000,
 };
 
 function desktopRequest(action, args = {}) {
@@ -1690,27 +1693,47 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
     };
   };
 
-  // Reuse the existing confirm card + pendingConfirmations resolution.
-  const requestApproval = ({ action, classification, element }) => {
-    const id = crypto.randomUUID().slice(0, 8);
-    emit({
-      event: 'confirm_required',
-      id,
-      toolName: 'desktop_action',
-      toolCategory: 'desktop',
-      args: {
-        kind: action.kind,
-        // Non-targeted actions still deserve a subject on the card: navigate
-        // shows its URL, launch its app, type its text, key its key.
-        target: element?.name || action.target
-          || String(action.params?.url ?? action.params?.app ?? action.params?.text ?? action.params?.key ?? ''),
-        risk: classification.riskClass,
-        reasoning: action.reasoning,
-      },
-    });
-    return new Promise((resolve) => {
-      pendingConfirmations.set(id, { resolve: (v) => resolve(!!v), toolName: 'desktop_action' });
-    });
+  // Mid-run approvals go to a NATIVE always-on-top card (Phase 0F-2): by this
+  // point minimize_all may have hidden the IDE, so an in-chat card would force
+  // the operator to restore the IDE on top of the very desktop being automated
+  // — the exact dance the up-front chain approval exists to avoid. The native
+  // dialog floats over everything; the IDE stays minimized. Falls back to the
+  // in-chat card if the native path fails; a timeout counts as declined.
+  const requestApproval = async ({ action, classification, element }) => {
+    const target = element?.name || action.target
+      || String(action.params?.url ?? action.params?.app ?? action.params?.text ?? action.params?.key ?? '');
+    try {
+      const lines = [`Ava wants to: ${action.kind}${target ? ` — "${target}"` : ''}`, ''];
+      lines.push(`Risk: ${classification.riskClass}${classification.reason ? ` (${classification.reason})` : ''}`);
+      if (action.reasoning) lines.push(`Why: ${action.reasoning}`);
+      lines.push('', 'Allow this action?');
+      const res = await desktopRequest('native_confirm', { title: 'Ava — approval needed', message: lines.join('\n') });
+      const approved = !!(res?.approved ?? res?.data?.approved);
+      emit({ event: 'info', message: `Desktop approval (${action.kind}${target ? ` → ${target}` : ''}): ${approved ? 'allowed' : 'declined'}` });
+      return approved;
+    } catch (err) {
+      // Kill-switch fired while the card was up — the turn is dead; deny,
+      // don't fall through to a second wait in the chat.
+      if ((err?.message || '') === 'aborted' || currentAbort?.signal?.aborted) return false;
+      // Native card unavailable (non-Windows host, timeout, or bridge error) —
+      // fall back to the in-chat confirm card.
+      const id = crypto.randomUUID().slice(0, 8);
+      emit({
+        event: 'confirm_required',
+        id,
+        toolName: 'desktop_action',
+        toolCategory: 'desktop',
+        args: {
+          kind: action.kind,
+          target,
+          risk: classification.riskClass,
+          reasoning: action.reasoning,
+        },
+      });
+      return new Promise((resolve) => {
+        pendingConfirmations.set(id, { resolve: (v) => resolve(!!v), toolName: 'desktop_action' });
+      });
+    }
   };
 
   // Narrator lines + per-step lines stream as Ava's message content.

@@ -621,6 +621,51 @@ unsafe extern "system" fn minimize_own_window(
     1 // keep enumerating
 }
 
+/// Native, always-on-top approval dialog (Phase 0F-2).
+///
+/// Mid-trajectory irreversible confirms (send / pay / delete) used to render
+/// inside the IDE — which minimize_all just minimized, so approving meant
+/// restoring the IDE on top of the very desktop being automated. This card is
+/// OS-level: it floats over whatever is on screen, the IDE stays minimized,
+/// one click answers it. Stock MessageBox by design — an OS-native dialog is
+/// a trust signal (UAC-familiar), immune to webview/DPI/occlusion issues.
+/// Runs on a blocking thread so the async runtime never stalls.
+#[tauri::command]
+async fn native_confirm(title: String, message: String) -> Result<bool, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let res = tauri::async_runtime::spawn_blocking(move || {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                MessageBoxW, IDYES, MB_ICONWARNING, MB_SETFOREGROUND, MB_SYSTEMMODAL, MB_YESNO,
+            };
+            let mut t: Vec<u16> = title.encode_utf16().collect();
+            t.push(0);
+            let mut m: Vec<u16> = message.encode_utf16().collect();
+            m.push(0);
+            // SAFETY: null-terminated UTF-16 buffers outlive the call; MessageBoxW
+            // blocks this (dedicated) thread until the user answers.
+            // MB_SYSTEMMODAL = topmost — visible over the automated app.
+            let answer = unsafe {
+                MessageBoxW(
+                    std::ptr::null_mut(),
+                    m.as_ptr(),
+                    t.as_ptr(),
+                    MB_YESNO | MB_ICONWARNING | MB_SYSTEMMODAL | MB_SETFOREGROUND,
+                )
+            };
+            answer == IDYES
+        })
+        .await
+        .map_err(|e| format!("approval dialog thread failed: {e}"))?;
+        Ok(res)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (title, message);
+        Err("native approval dialog is Windows-only until the Phase 5 per-OS work".into())
+    }
+}
+
 /// Minimize every window to reveal the desktop — so desktop icons (Recycle
 /// Bin, This PC, files, shortcuts) become visible to UI Automation and
 /// clickable. This is what "Show desktop" / Win+M do, driven via the taskbar's
@@ -2334,6 +2379,7 @@ pub fn run() {
             drag,
             highlight_rect,
             minimize_all,
+            native_confirm,
             get_active_window,
             get_dpi_scale,
             list_ui_elements,

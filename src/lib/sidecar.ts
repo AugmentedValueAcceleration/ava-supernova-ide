@@ -137,6 +137,8 @@ export interface SidecarEvent {
   w?: number;
   h?: number;
   ms?: number;
+  // floating approval card (Phase 0F-2)
+  title?: string;
   // desktop safety gate — richer payload on confirm_required events
   toolCategory?: string;
   desktopClassification?: {
@@ -685,6 +687,14 @@ export class SidecarManager {
         case 'minimize_all':
           await invoke('minimize_all');
           result = 'ok';
+          break;
+        // ── Floating approval card (Phase 0F-2) — native always-on-top
+        // Yes/No for mid-run irreversible confirms; the IDE stays minimized.
+        case 'native_confirm':
+          result = { approved: await invoke<boolean>('native_confirm', {
+            title: event.title ?? 'Ava — approval needed',
+            message: event.message ?? '',
+          }) };
           break;
 
         // ── Browser automation — Playwright-backed headed Chromium driven
