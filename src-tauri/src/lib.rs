@@ -1463,10 +1463,14 @@ fn local_vision_status() -> Result<LocalVisionStatus, String> {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .map_err(|_| "no home directory".to_string())?;
-    let dir = std::path::PathBuf::from(home).join(".ava").join("models");
+    let ava = std::path::PathBuf::from(home).join(".ava");
+    let dir = ava.join("models");
     let model = dir.join("holo-3.1-08b-Q4_K_M.gguf");
     let mmproj = dir.join("mmproj-holo-3.1-08b-f16.gguf");
-    let installed = model.exists() && mmproj.exists();
+    // "Installed" = the lane actually WORKS: models AND the runner binary.
+    // Without llama-server.exe the Private pill would unlock a dead engine.
+    let runner = ava.join("bin").join("llama-server.exe");
+    let installed = model.exists() && mmproj.exists() && runner.exists();
     let size_mb = if installed {
         let m = std::fs::metadata(&model).map(|m| m.len()).unwrap_or(0);
         let p = std::fs::metadata(&mmproj).map(|m| m.len()).unwrap_or(0);

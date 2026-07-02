@@ -13891,7 +13891,7 @@ export function SettingsPage() {
                   ? 'Installed ✓'
                   : visionDownload && !visionDownload.error
                     ? `Downloading… ${visionDownload.pct}%`
-                    : 'Download local model (≈840 MB)'}
+                    : 'Download local model (≈870 MB)'}
               </button>
               {localVision?.installed ? (
                 <span style={{ color: '#a6e3a1' }}>

@@ -498,28 +498,38 @@ process.on('exit', () => { try { localVisionProc?.kill(); } catch { /* gone */ }
 // by accident.
 const LOCAL_VISION_BASE_URL = process.env.AVA_VISION_MODEL_BASE
   || 'https://github.com/AugmentedValueAcceleration/ava-models/releases/download/holo-vision-v1';
+// Published 2026-07-03 at github.com/AugmentedValueAcceleration/ava-models
+// (holo-vision-v1). Exact byte sizes from the release assets — used for
+// download progress. The runner zip extracts into ~/.ava/bin (llama-server
+// is a thin exe over a family of DLLs; shipping the whole build is the only
+// robust shape) via Windows' native bsdtar.
 const LOCAL_VISION_FILES = [
-  { name: 'holo-3.1-08b-Q4_K_M.gguf', bytes: 673_000_000 },
-  { name: 'mmproj-holo-3.1-08b-f16.gguf', bytes: 207_000_000 },
+  { name: 'holo-3.1-08b-Q4_K_M.gguf', bytes: 672_330_784, dir: 'models' },
+  { name: 'mmproj-holo-3.1-08b-f16.gguf', bytes: 204_987_776, dir: 'models' },
+  { name: 'llama-server-win-x64.zip', bytes: 32_155_384, dir: 'bin', extract: true },
 ];
 
 /** One-time Private-lane model download with progress events. */
 async function handleDownloadLocalVisionModel() {
-  const { mkdir, rename } = await import('node:fs/promises');
+  const { mkdir, rename, unlink } = await import('node:fs/promises');
   const { createWriteStream, existsSync } = await import('node:fs');
-  const dir = join(AVA_HOME, 'models');
-  await mkdir(dir, { recursive: true });
+  const modelsDir = join(AVA_HOME, 'models');
+  const binDir = join(AVA_HOME, 'bin');
+  await mkdir(modelsDir, { recursive: true });
+  await mkdir(binDir, { recursive: true });
   const totalBytes = LOCAL_VISION_FILES.reduce((s, f) => s + f.bytes, 0);
   let doneBytes = 0;
   try {
     for (const f of LOCAL_VISION_FILES) {
-      const dest = join(dir, f.name);
-      if (existsSync(dest)) { doneBytes += f.bytes; continue; }
+      const destDir = f.dir === 'bin' ? binDir : modelsDir;
+      const dest = join(destDir, f.name);
+      // For the runner zip, "already installed" means the EXTRACTED binary
+      // exists (the zip itself is deleted after extraction).
+      const already = f.extract ? existsSync(join(binDir, 'llama-server.exe')) : existsSync(dest);
+      if (already) { doneBytes += f.bytes; continue; }
       const resp = await fetch(`${LOCAL_VISION_BASE_URL}/${f.name}`);
       if (resp.status === 404) {
-        // Honest, not cryptic: the model package is deliberately unpublished
-        // while the on-device lane awaits verification with H Company.
-        throw new Error('The on-device model package isn\'t published yet — the Private lane is still being verified. Cloud vision (your own H Company key) works today.');
+        throw new Error(`The model package is missing '${f.name}' — the release at ${LOCAL_VISION_BASE_URL} may be incomplete. Cloud vision (your own H Company key) works today.`);
       }
       if (!resp.ok || !resp.body) throw new Error(`download failed (${resp.status}) for ${f.name}`);
       const tmp = `${dest}.part`;
@@ -536,6 +546,23 @@ async function handleDownloadLocalVisionModel() {
       }
       await new Promise((res, rej) => out.end((err) => err ? rej(err) : res()));
       await rename(tmp, dest);
+      if (f.extract) {
+        // Windows ships bsdtar (System32\tar.exe), which extracts zips —
+        // no unzip dependency needed. The runner is llama-server.exe plus
+        // its DLL family; everything lands flat in ~/.ava/bin.
+        const { spawnSync } = await import('node:child_process');
+        const tar = process.platform === 'win32'
+          ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
+          : 'tar';
+        const res = spawnSync(tar, ['-xf', dest, '-C', destDir]);
+        if (res.status !== 0) {
+          throw new Error(`runner extraction failed: ${(res.stderr?.toString() || res.error?.message || 'unknown').slice(0, 140)}`);
+        }
+        await unlink(dest).catch(() => {}); // the zip has served its purpose
+        if (!existsSync(join(binDir, 'llama-server.exe'))) {
+          throw new Error('runner extracted but llama-server.exe is missing — the package may be malformed');
+        }
+      }
     }
     emit({ event: 'local_vision_download_done' });
     emit({ event: 'info', message: 'Private vision: model downloaded and installed.' });
