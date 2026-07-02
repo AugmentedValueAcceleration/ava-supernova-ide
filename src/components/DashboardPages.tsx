@@ -13776,7 +13776,11 @@ export function SettingsPage() {
                 onClick={() => {
                   if (localVision?.installed || visionDownload) return;
                   setVisionDownload({ pct: 0 });
-                  getSidecar().downloadLocalVisionModel().catch(() => {});
+                  // Never let a failed send strand the button at "0%" — if the
+                  // sidecar isn't up (it starts with the chat page), say so.
+                  getSidecar().downloadLocalVisionModel().catch(() => {
+                    setVisionDownload({ pct: 0, error: 'Ava isn\'t running yet — open the Ava chat page once, then retry.' });
+                  });
                 }}
                 disabled={!!localVision?.installed || (!!visionDownload && !visionDownload.error)}
                 style={{

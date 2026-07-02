@@ -506,6 +506,11 @@ async function handleDownloadLocalVisionModel() {
       const dest = join(dir, f.name);
       if (existsSync(dest)) { doneBytes += f.bytes; continue; }
       const resp = await fetch(`${LOCAL_VISION_BASE_URL}/${f.name}`);
+      if (resp.status === 404) {
+        // Honest, not cryptic: the model package is deliberately unpublished
+        // while the on-device lane awaits verification with H Company.
+        throw new Error('The on-device model package isn\'t published yet — the Private lane is still being verified. Cloud vision (your own H Company key) works today.');
+      }
       if (!resp.ok || !resp.body) throw new Error(`download failed (${resp.status}) for ${f.name}`);
       const tmp = `${dest}.part`;
       const out = createWriteStream(tmp);
