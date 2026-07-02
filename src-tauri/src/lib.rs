@@ -836,6 +836,38 @@ struct UIElementInfo {
     /// tells the Planner the bin is ALREADY empty; without this bit Ava
     /// clicks dead menu items and can't reach that conclusion.
     enabled: bool,
+    /// Another window is physically covering this element's centre point —
+    /// a click would hit THAT window instead. Desktop icons are the classic
+    /// case: the shell enumerates them even when an app covers them, so
+    /// they look "visible" while being untouchable (observed: right-click
+    /// meant for the Recycle Bin landing on the VS Code window above it).
+    occluded: bool,
+}
+
+/// Mark elements[from..] whose centre point is covered by a DIFFERENT
+/// top-level window than the surface they belong to. WindowFromPoint is a
+/// cheap, local query — no cross-process calls.
+#[cfg(target_os = "windows")]
+fn mark_occlusion(
+    elements: &mut [UIElementInfo],
+    from: usize,
+    owner: windows_sys::Win32::Foundation::HWND,
+) {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetAncestor, WindowFromPoint, GA_ROOT};
+    if owner.is_null() {
+        return;
+    }
+    // SAFETY: pure queries on valid points/handles; owner is null-checked.
+    unsafe {
+        let owner_root = GetAncestor(owner, GA_ROOT);
+        for el in elements[from..].iter_mut() {
+            let under = WindowFromPoint(POINT { x: el.cx, y: el.cy });
+            if !under.is_null() && GetAncestor(under, GA_ROOT) != owner_root {
+                el.occluded = true;
+            }
+        }
+    }
 }
 
 /// Append a line to ~/.ava/uia-debug.log. The Tauri app runs detached from any
@@ -1058,18 +1090,25 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
                 if let Ok(el) = automation
                     .element_from_handle(uiautomation::types::Handle::from(*menu_hwnd as isize))
                 {
+                    let from = elements.len();
                     collect_elements(&walker, &el, &mut elements, 0, 8);
+                    mark_occlusion(&mut elements, from, *menu_hwnd);
                 }
             }
             let menu_count = elements.len();
 
             // 2 — Desktop icons (before the shell fg walk, so taskbar noise
-            // can't crowd them out of the element budget).
+            // can't crowd them out of the element budget). Occlusion matters
+            // most here: the shell enumerates icons even when an app window
+            // covers them, so without the check they look clickable while a
+            // click would land on the covering app.
             if !iconview.is_null() {
                 if let Ok(el) = automation
                     .element_from_handle(uiautomation::types::Handle::from(iconview as isize))
                 {
+                    let from = elements.len();
                     collect_elements(&walker, &el, &mut elements, 0, 8);
+                    mark_occlusion(&mut elements, from, iconview);
                 }
             }
             let icon_count = elements.len() - menu_count;
@@ -1080,7 +1119,9 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
                 if let Ok(el) = automation.element_from_handle(
                     uiautomation::types::Handle::from(foreground_hwnd as isize),
                 ) {
+                    let from = elements.len();
                     collect_elements(&walker, &el, &mut elements, 0, 8);
+                    mark_occlusion(&mut elements, from, foreground_hwnd);
                 }
             } else if iconview.is_null() && menus.is_empty() {
                 let root = automation
@@ -1181,6 +1222,7 @@ fn collect_element_recursive(
             cx: x + w / 2,
             cy: y + h / 2,
             enabled: element.is_enabled().unwrap_or(true),
+            occluded: false, // set by mark_occlusion per surface
         });
     }
 
