@@ -274,6 +274,127 @@ fn position_cursor(x: i32, y: i32) -> Result<(), String> {
         .map_err(|e| format!("Move failed: {e}"))
 }
 
+// ─── Local vision model download (Rust-native, no sidecar needed) ───────────
+//
+// The Download button must work from a COLD app — Settings is reachable
+// before the chat page ever spawns the sidecar, and "open the chat first,
+// then retry" is not a launch-state UX. Uses OS-shipped binaries only
+// (System32\curl.exe to fetch, System32\tar.exe to extract) — zero new
+// crate dependencies. Progress is real: the poller reads the growing .part
+// file against exact known asset sizes.
+
+#[cfg(target_os = "windows")]
+const LOCAL_VISION_ASSETS: &[(&str, u64, bool)] = &[
+    // (asset name, exact bytes, is_runner_zip)
+    ("holo-3.1-08b-Q4_K_M.gguf", 672_330_784, false),
+    ("mmproj-holo-3.1-08b-f16.gguf", 204_987_776, false),
+    ("llama-server-win-x64.zip", 32_155_384, true),
+];
+#[cfg(target_os = "windows")]
+const LOCAL_VISION_BASE: &str =
+    "https://github.com/AugmentedValueAcceleration/ava-models/releases/download/holo-vision-v1";
+
+#[tauri::command]
+async fn download_local_vision_model(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let res = tauri::async_runtime::spawn_blocking(move || {
+            let emit_pct = |pct: u64| {
+                let _ = app.emit("local_vision_download_progress", serde_json::json!({ "pct": pct }));
+            };
+            let home = std::env::var("USERPROFILE").map_err(|_| "no home directory".to_string())?;
+            let ava = std::path::PathBuf::from(&home).join(".ava");
+            let models = ava.join("models");
+            let bin = ava.join("bin");
+            std::fs::create_dir_all(&models).map_err(|e| e.to_string())?;
+            std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
+            let sys32 = std::path::PathBuf::from(
+                std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into()),
+            )
+            .join("System32");
+
+            let total: u64 = LOCAL_VISION_ASSETS.iter().map(|(_, b, _)| *b).sum();
+            let mut done: u64 = 0;
+
+            for (name, bytes, is_zip) in LOCAL_VISION_ASSETS {
+                let dest_dir = if *is_zip { &bin } else { &models };
+                let dest = dest_dir.join(name);
+                let already = if *is_zip { bin.join("llama-server.exe").exists() } else { dest.exists() };
+                if already {
+                    done += bytes;
+                    emit_pct((done * 100 / total).min(99));
+                    continue;
+                }
+                let part = dest_dir.join(format!("{name}.part"));
+                let url = format!("{LOCAL_VISION_BASE}/{name}");
+                let mut child = silent_command(sys32.join("curl.exe").to_string_lossy().as_ref())
+                    .args(["-L", "--fail", "--silent", "--show-error", "-o"])
+                    .arg(&part)
+                    .arg(&url)
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+                    .map_err(|e| format!("could not start curl: {e}"))?;
+                // Poll the growing .part for honest progress while curl runs.
+                loop {
+                    match child.try_wait().map_err(|e| e.to_string())? {
+                        Some(status) => {
+                            if !status.success() {
+                                let mut err = String::new();
+                                if let Some(mut s) = child.stderr.take() {
+                                    use std::io::Read;
+                                    let _ = s.read_to_string(&mut err);
+                                }
+                                let _ = std::fs::remove_file(&part);
+                                return Err(format!("download failed for {name}: {}", err.trim().chars().take(160).collect::<String>()));
+                            }
+                            break;
+                        }
+                        None => {
+                            let part_size = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+                            emit_pct(((done + part_size.min(*bytes)) * 100 / total).min(99));
+                            std::thread::sleep(std::time::Duration::from_millis(400));
+                        }
+                    }
+                }
+                std::fs::rename(&part, &dest).map_err(|e| format!("finalise {name}: {e}"))?;
+                if *is_zip {
+                    let status = silent_command(sys32.join("tar.exe").to_string_lossy().as_ref())
+                        .args(["-xf"])
+                        .arg(&dest)
+                        .args(["-C"])
+                        .arg(&bin)
+                        .status()
+                        .map_err(|e| format!("could not start tar: {e}"))?;
+                    if !status.success() {
+                        return Err("runner extraction failed".into());
+                    }
+                    let _ = std::fs::remove_file(&dest);
+                    if !bin.join("llama-server.exe").exists() {
+                        return Err("runner extracted but llama-server.exe is missing".into());
+                    }
+                }
+                done += bytes;
+                emit_pct((done * 100 / total).min(99));
+            }
+            let _ = app.emit("local_vision_download_done", serde_json::json!({}));
+            Ok(())
+        })
+        .await
+        .map_err(|e| format!("download task failed: {e}"))?;
+        if let Err(ref msg) = res {
+            // The renderer listens for the error event; the Result also returns it.
+            // (app was moved into the closure; the event above covers UI updates.)
+            return Err(msg.clone());
+        }
+        res
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        Err("local vision download is Windows-only until the cross-platform phase".into())
+    }
+}
+
 /// Tiny grayscale thumbnail of the virtual desktop for screen keying
 /// (Phase 3 fork-point learning): 32×32 luma bytes, ~1KB. NOT a screenshot a
 /// human could read anything from — but it IS derived from one, so the
@@ -2535,6 +2656,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             capture_screen,
             screen_thumb,
+            download_local_vision_model,
             click,
             double_click,
             right_click,

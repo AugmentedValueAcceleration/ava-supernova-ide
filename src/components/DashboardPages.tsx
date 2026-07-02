@@ -12953,6 +12953,9 @@ export function SettingsPage() {
     }
   }, [hcKey]);
   useEffect(() => {
+    // The download runs in RUST (works from a cold app — no sidecar needed);
+    // progress arrives as Tauri events. The sidecar listeners remain for the
+    // legacy path so nothing regresses if it ever fires from there.
     const sidecar = getSidecar();
     const onProgress = (e: SidecarEvent) => setVisionDownload({ pct: (e as unknown as { pct?: number }).pct ?? 0 });
     const onDone = () => setVisionDownload(null);
@@ -12960,10 +12963,16 @@ export function SettingsPage() {
     sidecar.on('local_vision_download_progress', onProgress);
     sidecar.on('local_vision_download_done', onDone);
     sidecar.on('local_vision_download_error', onError);
+    const unlistens: UnlistenFn[] = [];
+    listen<{ pct?: number }>('local_vision_download_progress', (ev) => setVisionDownload({ pct: ev.payload?.pct ?? 0 }))
+      .then((fn) => unlistens.push(fn)).catch(() => {});
+    listen('local_vision_download_done', () => setVisionDownload(null))
+      .then((fn) => unlistens.push(fn)).catch(() => {});
     return () => {
       sidecar.off('local_vision_download_progress', onProgress);
       sidecar.off('local_vision_download_done', onDone);
       sidecar.off('local_vision_download_error', onError);
+      unlistens.forEach((fn) => fn());
     };
   }, []);
   // Inner-tab grouping for the Settings page. Sections render in source
@@ -13870,10 +13879,11 @@ export function SettingsPage() {
                 onClick={() => {
                   if (localVision?.installed || visionDownload) return;
                   setVisionDownload({ pct: 0 });
-                  // Never let a failed send strand the button at "0%" — if the
-                  // sidecar isn't up (it starts with the chat page), say so.
-                  getSidecar().downloadLocalVisionModel().catch(() => {
-                    setVisionDownload({ pct: 0, error: 'Ava isn\'t running yet — open the Ava chat page once, then retry.' });
+                  // Rust-native download — works from a cold app, no sidecar
+                  // required. Progress arrives via Tauri events; a rejected
+                  // invoke carries the honest reason.
+                  invoke('download_local_vision_model').catch((err) => {
+                    setVisionDownload({ pct: 0, error: String(err ?? 'download failed') });
                   });
                 }}
                 disabled={!!localVision?.installed || (!!visionDownload && !visionDownload.error)}
