@@ -842,6 +842,19 @@ struct UIElementInfo {
     /// they look "visible" while being untouchable (observed: right-click
     /// meant for the Recycle Bin landing on the VS Code window above it).
     occluded: bool,
+    /// Which surface this element came from: "menu" (an open context menu /
+    /// dropdown), "desktop-icon" (the shell's icon list), or "app" (the
+    /// foreground window / desktop root). Without this the Verifier reads a
+    /// context menu as "a list of search results" and misjudges the step.
+    surface: &'static str,
+}
+
+/// Stamp elements[from..] with the surface they were collected from.
+#[cfg(target_os = "windows")]
+fn stamp_surface(elements: &mut [UIElementInfo], from: usize, surface: &'static str) {
+    for el in elements[from..].iter_mut() {
+        el.surface = surface;
+    }
 }
 
 /// Mark elements[from..] whose centre point is covered by a DIFFERENT
@@ -1093,6 +1106,7 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
                     let from = elements.len();
                     collect_elements(&walker, &el, &mut elements, 0, 8);
                     mark_occlusion(&mut elements, from, *menu_hwnd);
+                    stamp_surface(&mut elements, from, "menu");
                 }
             }
             let menu_count = elements.len();
@@ -1109,6 +1123,7 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
                     let from = elements.len();
                     collect_elements(&walker, &el, &mut elements, 0, 8);
                     mark_occlusion(&mut elements, from, iconview);
+                    stamp_surface(&mut elements, from, "desktop-icon");
                 }
             }
             let icon_count = elements.len() - menu_count;
@@ -1222,7 +1237,8 @@ fn collect_element_recursive(
             cx: x + w / 2,
             cy: y + h / 2,
             enabled: element.is_enabled().unwrap_or(true),
-            occluded: false, // set by mark_occlusion per surface
+            occluded: false,   // set by mark_occlusion per surface
+            surface: "app",    // overridden by stamp_surface per walk
         });
     }
 

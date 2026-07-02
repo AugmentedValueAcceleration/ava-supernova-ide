@@ -1754,6 +1754,22 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
     else if (ev.type === 'step') {
       pushLine(ev.step?.userUpdate?.line);
       if (ev.header) emit({ event: 'desktop_budget', header: ev.header });
+      // Phase 2c — every executed conductor action lands in the audit log
+      // (the conductor bypasses the ToolRegistry, so nothing else writes it).
+      const a = ev.step?.proposedAction || {};
+      const ex = ev.step?.executionResult || {};
+      const vr = ev.step?.verificationResult || {};
+      const dangerous = a.riskClass === 'mutative-irreversible' || a.riskClass === 'privileged';
+      void appendDesktopAudit({
+        timestamp: new Date().toISOString(),
+        toolName: `desktop_${a.kind || 'action'}`,
+        category: 'desktop',
+        riskLevel: dangerous ? 'dangerous' : a.riskClass === 'mutative-reversible' ? 'write' : 'safe',
+        approvalMethod: dangerous ? 'user-approved' : 'auto',
+        status: ex.ok ? 'success' : 'failed',
+        argsSummary: `${a.kind || '?'}${a.target ? ` → ${String(a.target).slice(0, 60)}` : ''}`
+          + `${a.origin === 'observed' ? ' [screen-prompted]' : ''} · verify: ${vr.status || '?'}`,
+      });
     } else if (ev.type === 'error') {
       emit({ event: 'agent_error', message: ev.message });
     }
@@ -1834,6 +1850,28 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
 }
 
 /**
+ * Desktop audit writer (Phase 2c) — the conductor path doesn't go through the
+ * ToolRegistry, so its actions never hit the registry's audit callback. This
+ * helper writes the same AuditEntry shape to the same ~/.ava/audit-log.jsonl
+ * (and mirrors into the in-memory buffer the UI reads). Release bar #6: every
+ * executed action audited. Fail-safe — audit must never break a turn.
+ */
+let _appendAuditEntry = null;
+async function appendDesktopAudit(entry) {
+  try {
+    if (!_appendAuditEntry) {
+      const audit = await import('@ava/core/audit');
+      _appendAuditEntry = audit.appendEntry;
+    }
+    _appendAuditEntry(entry);
+    if (Array.isArray(globalThis.__avaAuditLog)) {
+      globalThis.__avaAuditLog.push(entry);
+      if (globalThis.__avaAuditLog.length > 500) globalThis.__avaAuditLog.shift();
+    }
+  } catch { /* never break a turn on audit failure */ }
+}
+
+/**
  * Path B (distil) for the conductor — turn a completed trajectory into a
  * global 'pattern' memory: the action sequence, how each step verified, and
  * the outcome. Mirrors the agent-flow distil but reads ProposedAction steps
@@ -1873,7 +1911,8 @@ async function distilDesktopTrajectory(trajectory, rawContent) {
       + `**On this machine — what was tried and how it went:**\n${sequence}`
       + `\n\n_Outcome: ${trajectory.outcome}._`
       + (anyFailed ? `\n\n_✗ = tried and didn't verify; informative, not a hard rule — conditions change, so weigh it, don't blindly avoid it._` : '');
-    await memoryManager.saveEntry({
+    const memoryNodeIds = [];
+    const saved = await memoryManager.saveEntry({
       scope: 'global',
       category: 'pattern',
       layer: 'workflow',
@@ -1881,6 +1920,77 @@ async function distilDesktopTrajectory(trajectory, rawContent) {
       tags: ['desktop', String(appName).toLowerCase().slice(0, 40)],
       content,
     });
+    if (saved?.id) memoryNodeIds.push(String(saved.id));
+
+    // ── Phase 2b: TYPED memory beside the free-text block ─────────────────
+    // Free-text stays (the Planner reads it); the typed stores are what the
+    // Phase 3 fork-point retrieval needs — structured, confidence-weighted,
+    // and queryable by task/app instead of by prose similarity.
+    const taskType = cleanTask.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 80);
+    const project = String(appName).toLowerCase().slice(0, 40);
+    try {
+      if (trajectory.outcome === 'completed') {
+        // Procedural pattern — same task done the same way repeatedly
+        // crystallises into reusable know-how (3+ observations).
+        if (core.ProceduralObserver) {
+          if (!globalThis._desktopProcedural) {
+            globalThis._desktopProcedural = new core.ProceduralObserver(AVA_HOME);
+            await globalThis._desktopProcedural.load();
+          }
+          const pattern = globalThis._desktopProcedural.observe({
+            toolSequence: trajectory.steps.map(s => `desktop:${s.proposedAction?.kind || '?'}`),
+            taskType,
+            project,
+          });
+          await globalThis._desktopProcedural.save();
+          if (pattern?.id) memoryNodeIds.push(`procedural:${pattern.id}`);
+        }
+        if (core.addLearning) {
+          const learning = await core.addLearning(AVA_HOME, {
+            type: 'technique',
+            category: 'desktop',
+            context: `app:${project}; task:${taskType}`,
+            learned: `Worked on this machine: ${trajectory.steps.map(s => s.proposedAction?.kind).filter(Boolean).join(' → ').slice(0, 160)}`,
+            confidence: 0.4,
+            source: 'observation',
+          });
+          if (learning?.id) memoryNodeIds.push(`learning:${learning.id}`);
+        }
+      } else if (core.addLearning) {
+        // Failure is signal too (the flywheel learns from both) — record the
+        // FIRST failed step with its reason so Phase 3 can pair it with a
+        // later correction.
+        const failed = trajectory.steps.find(s => !(s.executionResult?.ok && s.verificationResult?.status === 'verified'));
+        if (failed) {
+          const fa = failed.proposedAction || {};
+          const reason = failed.executionResult?.error || failed.verificationResult?.deviation || failed.verificationResult?.detail || 'did not verify';
+          const learning = await core.addLearning(AVA_HOME, {
+            type: 'error-recovery',
+            category: 'desktop',
+            context: `app:${project}; task:${taskType}`,
+            learned: `Failed here: ${fa.kind}${fa.target ? ` → ${String(fa.target).slice(0, 50)}` : ''} — ${String(reason).replace(/\s+/g, ' ').slice(0, 120)}`,
+            confidence: 0.35,
+            source: 'feedback-negative',
+          });
+          if (learning?.id) memoryNodeIds.push(`learning:${learning.id}`);
+        }
+      }
+    } catch { /* typed stores are additive — their failure never blocks distil */ }
+
+    // ── Phase 2c: audit ⇄ memory back-link ────────────────────────────────
+    // One summary row per trajectory carrying the ids of every memory it
+    // produced: the audit log can answer "what did Ava learn from this run?"
+    void appendDesktopAudit({
+      timestamp: new Date().toISOString(),
+      toolName: 'desktop_trajectory',
+      category: 'desktop',
+      riskLevel: 'safe',
+      approvalMethod: 'auto',
+      status: trajectory.outcome === 'completed' ? 'success' : 'failed',
+      argsSummary: `"${cleanTask.slice(0, 60)}" · ${trajectory.steps.length} step${trajectory.steps.length === 1 ? '' : 's'} · outcome: ${trajectory.outcome}`,
+      memoryNodeIds: memoryNodeIds.length > 0 ? memoryNodeIds : undefined,
+    });
+
     emit({ event: 'info', message: `Learned the desktop steps for "${cleanTask.slice(0, 40)}" (${trajectory.steps.length} action${trajectory.steps.length === 1 ? '' : 's'}${anyFailed ? ', incl. failures' : ''})` });
   } catch (err) {
     emit({ event: 'info', message: `Desktop trajectory distil skipped: ${err.message}` });
@@ -2027,6 +2137,34 @@ async function handleMessage(data) {
       if (blocks.length > 0) {
         desktopMemoryPrefix = `[What Ava knows about this machine]\n${blocks.join('\n\n')}`;
         emit({ event: 'info', message: `Recalled ${blocks.length} learned desktop pattern${blocks.length === 1 ? '' : 's'} for this task` });
+      }
+
+      // Phase 2b — typed recall beside the free-text block:
+      // (1) a crystallised procedural pattern for this exact task (3+
+      //     identical successful runs) tells the Planner the known-good
+      //     action sequence up front;
+      // (2) confidence-weighted desktop learnings (incl. failures) from the
+      //     self-improvement store, matched by task keywords.
+      const typedBits = [];
+      try {
+        const taskType = cleanDesktopTask(data.content).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 80);
+        if (core.ProceduralObserver) {
+          if (!globalThis._desktopProcedural) {
+            globalThis._desktopProcedural = new core.ProceduralObserver(AVA_HOME);
+            await globalThis._desktopProcedural.load();
+          }
+          const pattern = globalThis._desktopProcedural.findBestPattern(taskType);
+          if (pattern?.crystallised) {
+            typedBits.push(`[Proven sequence for this exact task — done successfully ${pattern.observationCount}× on this machine]\n${pattern.toolSequence.map(s => s.replace(/^desktop:/, '')).join(' → ')}`);
+          }
+        }
+        if (core.buildSelfImprovementPrompt) {
+          const learnings = core.buildSelfImprovementPrompt(AVA_HOME, `desktop ${taskType}`);
+          if (learnings) typedBits.push(learnings);
+        }
+      } catch { /* typed recall is additive — never blocks the turn */ }
+      if (typedBits.length > 0) {
+        desktopMemoryPrefix = [desktopMemoryPrefix, ...typedBits].filter(Boolean).join('\n\n');
       }
     } catch (err) {
       emit({ event: 'info', message: `Desktop memory recall skipped: ${err.message}` });
