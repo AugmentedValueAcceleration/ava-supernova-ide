@@ -13741,23 +13741,32 @@ export function SettingsPage() {
                 { id: 'cloud' as const, label: 'Fast' },
               ]).map((opt) => {
                 const active = desktopVisionMode === opt.id;
-                return (
+                // Private IS the on-device model — a lane you can't run yet
+                // must not be selectable, or the pill promises privacy the
+                // machine can't deliver. Unlocks the moment the download lands.
+                const locked = opt.id === 'local' && !localVision?.installed;
+                const btn = (
                   <button
                     key={opt.id}
-                    onClick={() => setDesktopVisionMode(opt.id)}
+                    onClick={() => { if (!locked) setDesktopVisionMode(opt.id); }}
+                    disabled={locked}
                     style={{
                       padding: '5px 14px',
                       background: active ? 'linear-gradient(135deg, #89b4fa, #739df2)' : 'transparent',
                       border: active ? 'none' : '1px solid #45475a',
                       borderRadius: 6,
-                      color: active ? '#11111b' : '#9399b2',
+                      color: active ? '#11111b' : locked ? '#585b70' : '#9399b2',
                       fontSize: 11, fontWeight: active ? 700 : 500,
-                      cursor: 'pointer', letterSpacing: 0.3, textTransform: 'uppercase',
+                      cursor: locked ? 'not-allowed' : 'pointer', letterSpacing: 0.3, textTransform: 'uppercase',
+                      opacity: locked ? 0.6 : 1,
                     }}
                   >
                     {opt.label}
                   </button>
                 );
+                return locked
+                  ? <Tooltip key={opt.id} content="Private runs the on-device model — download it below first.">{btn}</Tooltip>
+                  : btn;
               })}
             </div>
             <div style={{ fontSize: 11, color: '#9399b2', lineHeight: 1.5 }}>
