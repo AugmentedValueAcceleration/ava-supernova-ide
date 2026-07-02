@@ -2331,9 +2331,9 @@ export function AvaChatPage() {
   });
   // Desktop permission level — shared with the Settings page via a hook
   // backed by localStorage + a window event. Either picker (chat-bar pill
-  // or Settings page) updates both. 'watch' = narrate only, 'ask' = confirm
-  // each mutative tool (default), 'drive' = run reversible plan steps
-  // silently after one approval; irreversibles always re-prompt regardless.
+  // or Settings page) updates both. 'watch' = approve the task once up
+  // front then Ava runs it (default), 'drive' = no up-front card;
+  // irreversibles always re-prompt regardless.
   const [desktopPermLevel, setDesktopPermLevel] = useDesktopPermLevel();
   // Perception (vision) setting — pushed to the sidecar on desktop-mode entry.
   const [desktopVisionMode] = useDesktopVisionMode();
@@ -6192,14 +6192,16 @@ export function AvaChatPage() {
              meaning, quick-starts, and the kill-switch. Stacks above the input
              instead of cramming everything into the strip. */}
           {mode === 'desktop' && (() => {
-            const LEVELS: Array<{ id: 'watch' | 'ask' | 'drive'; label: string }> = [
+            // Two levels, deliberately — a third "Ask" shipped for a while but
+            // was behaviourally identical to Watch (one up-front approval →
+            // run), and a duplicate label implies a safety distinction that
+            // doesn't exist. The irreversible floor + Ctrl+Alt+K cover both.
+            const LEVELS: Array<{ id: 'watch' | 'drive'; label: string }> = [
               { id: 'watch', label: 'Watch' },
-              { id: 'ask', label: 'Ask' },
               { id: 'drive', label: 'Drive' },
             ];
             const MEANING: Record<string, string> = {
-              watch: 'Watch · approve the task once, then watch Ava work it step by step, narrated as she goes. Anything that can\'t be undone (Send, Pay, Delete…) still asks.',
-              ask: 'Ask · approve the task once, then Ava handles the steps herself. Anything that can\'t be undone (Send, Pay, Delete…) still asks.',
+              watch: 'Watch · approve the task once, then watch Ava work it, narrated as she goes. Anything that can\'t be undone (Send, Pay, Delete…) still asks.',
               drive: 'Drive · Ava just goes — no upfront card. Anything that can\'t be undone still always asks.',
             };
             const QUICK: Array<{ label: string; fill: string }> = [
@@ -13681,7 +13683,6 @@ export function SettingsPage() {
             >
               {([
                 { id: 'watch' as const, label: t('dash.desktop.level.watch'),  desc: t('dash.desktop.level.watch_desc') },
-                { id: 'ask'   as const, label: t('dash.desktop.level.ask'),    desc: t('dash.desktop.level.ask_desc') },
                 { id: 'drive' as const, label: t('dash.desktop.level.drive'),  desc: t('dash.desktop.level.drive_desc') },
               ]).map(l => {
                 const active = desktopPermLevel === l.id;
@@ -13715,7 +13716,6 @@ export function SettingsPage() {
             </div>
             <div style={{ fontSize: 11, color: '#9399b2', marginTop: 8, lineHeight: 1.5 }}>
               {desktopPermLevel === 'watch' && 'Approve the task once, then watch Ava work it step by step — every action narrated as it happens. Anything that can\'t be undone (Send, Pay, Delete…) still asks individually.'}
-              {desktopPermLevel === 'ask'   && 'Approve the task once up front, then Ava handles the steps without interrupting you. Anything that can\'t be undone (Send, Pay, Delete…) still asks individually.'}
               {desktopPermLevel === 'drive' && 'Ava just goes — no upfront card. Anything that can\'t be undone still always asks.'}
             </div>
           </div>

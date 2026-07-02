@@ -498,11 +498,11 @@ export class SidecarManager {
   /**
    * Update the desktop permission level mid-session. Triggers a system
    * prompt rebuild on the sidecar so the level Ava reads matches the one
-   * the operator set. 'watch' = narrate only, 'ask' = confirm each
-   * mutative action, 'drive' = run reversible plan steps silently after
-   * one approval; irreversibles always re-prompt regardless.
+   * the operator set. 'watch' = approve the task once up front, then Ava
+   * runs it; 'drive' = no up-front card; irreversibles always re-prompt
+   * in both.
    */
-  async setDesktopPermissionLevel(level: 'watch' | 'ask' | 'drive'): Promise<void> {
+  async setDesktopPermissionLevel(level: 'watch' | 'drive'): Promise<void> {
     await this.send({ cmd: 'set_desktop_permission_level', level });
   }
 

@@ -18,14 +18,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getSidecar } from './sidecar';
 
-export type DesktopPermLevel = 'watch' | 'ask' | 'drive';
+// Two levels, deliberately. A third "Ask" existed for a while but was
+// behaviourally identical to Watch (one up-front approval → run); the
+// duplicate label implied a safety distinction that didn't exist. A stored
+// legacy 'ask' coerces to 'watch'.
+export type DesktopPermLevel = 'watch' | 'drive';
 
 const STORAGE_KEY = 'ava-ide-desktop-perm-level';
 const SYNC_EVENT = 'ava-desktop-perm-changed';
 
 function readStored(): DesktopPermLevel {
   const v = typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
-  return v === 'watch' || v === 'drive' ? v : 'ask';
+  return v === 'drive' ? 'drive' : 'watch';
 }
 
 interface SyncDetail { level: DesktopPermLevel; source: number }

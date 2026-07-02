@@ -1487,7 +1487,9 @@ async function handleInit(data) {
       // the approval handler emits a confirm_required NDJSON event and
       // awaits the IDE response, reusing the pendingConfirmations map
       // the generic ToolRegistry confirmation path already uses.
-      desktopPermissionLevel: config.desktopPermissionLevel || 'ask',
+      // Two levels only (watch | drive) — legacy persisted 'ask' coerces to
+      // watch (they were behaviourally identical: one up-front approval → run).
+      desktopPermissionLevel: config.desktopPermissionLevel === 'drive' ? 'drive' : 'watch',
       desktopPrivilegedOptIn: !!config.desktopPrivilegedOptIn,
       desktopBudget: BudgetTracker ? new BudgetTracker() : undefined,
       desktopApprovalHandler: async (toolName, args, classification) => {
@@ -1726,13 +1728,14 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
 
   emit({ event: 'stream_start' });
 
-  // Chain approval — Watch and Ask confirm the TASK once, up front. NO mode
-  // asks per step: mid-run approval cards steal foreground from the very
-  // window being automated, breaking the trajectory they're gating. After
-  // the chain is approved, reversible actions flow; irreversible actions
-  // STILL confirm individually in EVERY mode — that gate never graduates.
-  // Declining stops before anything is touched. Drive skips the upfront card.
-  let permissionLevel = ss.desktopPermissionLevel ?? 'ask';
+  // Chain approval — Watch confirms the TASK once, up front. NO mode asks
+  // per step: mid-run approval cards steal foreground from the very window
+  // being automated, breaking the trajectory they're gating. After the chain
+  // is approved, reversible actions flow; irreversible actions STILL confirm
+  // individually in EVERY mode — that gate never graduates. Declining stops
+  // before anything is touched. Drive skips the upfront card. (Legacy 'ask'
+  // coerces to watch — the two were identical.)
+  let permissionLevel = ss.desktopPermissionLevel === 'drive' ? 'drive' : 'watch';
   if (permissionLevel !== 'drive') {
     const chainId = crypto.randomUUID().slice(0, 8);
     emit({
@@ -2697,10 +2700,10 @@ function handleSetDesktopVisionMode(data) {
 }
 
 function handleSetDesktopPermissionLevel(data) {
-  const VALID = new Set(['watch', 'ask', 'drive']);
-  const level = VALID.has(data?.level) ? data.level : 'ask';
+  // Two levels only — anything that isn't 'drive' (incl. legacy 'ask') is watch.
+  const level = data?.level === 'drive' ? 'drive' : 'watch';
   const sharedState = globalThis._sharedState || {};
-  const previousLevel = sharedState.desktopPermissionLevel ?? 'ask';
+  const previousLevel = sharedState.desktopPermissionLevel ?? 'watch';
   sharedState.desktopPermissionLevel = level;
   emit({ event: 'desktop_permission_level_changed', level });
 
