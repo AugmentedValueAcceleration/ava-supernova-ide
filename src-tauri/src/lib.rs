@@ -997,53 +997,41 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
                 }
             }
 
-            // When the DESKTOP is what's showing — nothing focused, or
-            // Progman/WorkerW is foreground (e.g. right after minimize_all) —
-            // walk the shell's icon list directly so Recycle Bin / This PC /
-            // shortcuts are enumerated. They live in SysListView32, never the
-            // foreground window, so the normal walk returns nothing on a bare
-            // desktop.
+            // After minimize_all, WHICH window ends up foreground is a lottery
+            // — the desktop (Progman/WorkerW), the primary taskbar
+            // (Shell_TrayWnd), the second monitor's taskbar
+            // (Shell_SecondaryTrayWnd), or a Start/search host (XamlWindow).
+            // Perception must not depend on who won: if the foreground is ANY
+            // shell surface (or nothing), the desktop's icon list is included,
+            // full stop. Icons live in SysListView32, never the foreground
+            // window.
             let fg_class = if foreground_hwnd.is_null() {
                 String::from("<null>")
             } else {
                 window_class_name(foreground_hwnd)
             };
-            let showing_desktop =
-                foreground_hwnd.is_null() || matches!(fg_class.as_str(), "Progman" | "WorkerW");
-            let iconview = if showing_desktop {
+            let fg_shellish = foreground_hwnd.is_null()
+                || matches!(
+                    fg_class.as_str(),
+                    "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd" | "XamlWindow"
+                );
+            let iconview = if fg_shellish {
                 desktop_iconview_hwnd()
             } else {
                 std::ptr::null_mut()
             };
-            let target_hwnd = if showing_desktop && !iconview.is_null() {
-                iconview
-            } else {
-                foreground_hwnd
-            };
-            uia_debug_log(&format!(
-                "list_ui_elements: fg_class={fg_class:?} showing_desktop={showing_desktop} iconview_null={} target_null={}",
-                iconview.is_null(),
-                target_hwnd.is_null()
-            ));
-
-            let start_element = if !target_hwnd.is_null() {
-                automation
-                    .element_from_handle(uiautomation::types::Handle::from(target_hwnd as isize))
-                    .ok()
-            } else {
-                None
-            };
-            let root = automation
-                .get_root_element()
-                .map_err(|e| format!("Root failed: {e}"))?;
-            let start = start_element.as_ref().unwrap_or(&root);
+            // The foreground app is still worth walking (a taskbar/Start host
+            // has real clickable items) — except Progman/WorkerW, which the
+            // icon view already covers.
+            let fg_worth_walking = !foreground_hwnd.is_null()
+                && !matches!(fg_class.as_str(), "Progman" | "WorkerW");
 
             let mut elements = Vec::new();
 
-            // Open context menus / dropdowns FIRST — a popped menu is the
+            // 1 — Open context menus / dropdowns FIRST: a popped menu is the
             // actionable surface right now ("right-click X, pick Y" lives or
             // dies on seeing its items), and it's a transient top-level window
-            // the foreground/desktop walk never visits.
+            // no other walk visits.
             let menus = popup_menu_hwnds();
             for menu_hwnd in &menus {
                 if let Ok(el) = automation
@@ -1054,13 +1042,38 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
             }
             let menu_count = elements.len();
 
-            collect_elements(&walker, start, &mut elements, 0, 8);
+            // 2 — Desktop icons (before the shell fg walk, so taskbar noise
+            // can't crowd them out of the element budget).
+            if !iconview.is_null() {
+                if let Ok(el) = automation
+                    .element_from_handle(uiautomation::types::Handle::from(iconview as isize))
+                {
+                    collect_elements(&walker, &el, &mut elements, 0, 8);
+                }
+            }
+            let icon_count = elements.len() - menu_count;
+
+            // 3 — The foreground window itself; desktop root as the last
+            // resort when there's nothing else to read.
+            if fg_worth_walking {
+                if let Ok(el) = automation.element_from_handle(
+                    uiautomation::types::Handle::from(foreground_hwnd as isize),
+                ) {
+                    collect_elements(&walker, &el, &mut elements, 0, 8);
+                }
+            } else if iconview.is_null() && menus.is_empty() {
+                let root = automation
+                    .get_root_element()
+                    .map_err(|e| format!("Root failed: {e}"))?;
+                collect_elements(&walker, &root, &mut elements, 0, 8);
+            }
+
             uia_debug_log(&format!(
-                "list_ui_elements: collected {} raw elements ({} from {} open menu(s); start_from_desktop={})",
+                "list_ui_elements: fg_class={fg_class:?} shellish={fg_shellish} → {} elements ({} menu, {} desktop-icon, {} fg/root)",
                 elements.len(),
                 menu_count,
-                menus.len(),
-                start_element.is_some() && showing_desktop
+                icon_count,
+                elements.len() - menu_count - icon_count
             ));
 
             Ok(elements)
