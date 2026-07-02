@@ -905,6 +905,44 @@ fn desktop_iconview_hwnd() -> windows_sys::Win32::Foundation::HWND {
     }
 }
 
+/// Open popup-menu windows (context menus, dropdowns), oldest-first.
+///
+/// A popped context menu is a transient TOP-LEVEL window — it is neither the
+/// foreground app nor the desktop icon list, so the normal perception walk
+/// never sees it and "right-click X then pick Y" dies at step 2 with the menu
+/// sitting right there on screen. Classic menus are class "#32768"; Win11's
+/// modern (rounded) menus are XAML popups hosted in their own classes.
+#[cfg(target_os = "windows")]
+fn popup_menu_hwnds() -> Vec<windows_sys::Win32::Foundation::HWND> {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, IsWindowVisible};
+
+    unsafe extern "system" fn collect(
+        hwnd: HWND,
+        lparam: LPARAM,
+    ) -> windows_sys::Win32::Foundation::BOOL {
+        if IsWindowVisible(hwnd) != 0 {
+            let out = &mut *(lparam as *mut Vec<HWND>);
+            let class = window_class_name(hwnd);
+            if matches!(
+                class.as_str(),
+                "#32768" | "Xaml_WindowedPopupClass" | "Microsoft.UI.Content.PopupWindowSiteBridge"
+            ) {
+                out.push(hwnd);
+            }
+        }
+        1
+    }
+
+    let mut found: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only runs during EnumWindows; the Vec pointer
+    // outlives the call. IsWindowVisible is a pure query.
+    unsafe {
+        EnumWindows(Some(collect), &mut found as *mut Vec<HWND> as LPARAM);
+    }
+    found
+}
+
 /// List all clickable UI elements in the foreground window.
 /// Returns structured data: name, type, bounding box, centre coordinates.
 ///
@@ -1001,10 +1039,27 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
             let start = start_element.as_ref().unwrap_or(&root);
 
             let mut elements = Vec::new();
+
+            // Open context menus / dropdowns FIRST — a popped menu is the
+            // actionable surface right now ("right-click X, pick Y" lives or
+            // dies on seeing its items), and it's a transient top-level window
+            // the foreground/desktop walk never visits.
+            let menus = popup_menu_hwnds();
+            for menu_hwnd in &menus {
+                if let Ok(el) = automation
+                    .element_from_handle(uiautomation::types::Handle::from(*menu_hwnd as isize))
+                {
+                    collect_elements(&walker, &el, &mut elements, 0, 8);
+                }
+            }
+            let menu_count = elements.len();
+
             collect_elements(&walker, start, &mut elements, 0, 8);
             uia_debug_log(&format!(
-                "list_ui_elements: collected {} raw elements (start_from_desktop={})",
+                "list_ui_elements: collected {} raw elements ({} from {} open menu(s); start_from_desktop={})",
                 elements.len(),
+                menu_count,
+                menus.len(),
                 start_element.is_some() && showing_desktop
             ));
 
