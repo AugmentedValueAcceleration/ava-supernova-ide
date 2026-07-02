@@ -601,6 +601,37 @@ fn highlight_rect(x: i32, y: i32, w: i32, h: i32, ms: u32) -> Result<(), String>
     }
 }
 
+/// Minimize every window to reveal the desktop — so desktop icons (Recycle
+/// Bin, This PC, files, shortcuts) become visible to UI Automation and
+/// clickable. This is what "Show desktop" / Win+M do, driven via the taskbar's
+/// documented MIN_ALL command so no COM apartment is needed.
+#[tauri::command]
+fn minimize_all() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_COMMAND};
+        // Explorer command 419 = MIN_ALL, sent to the taskbar ("Shell_TrayWnd").
+        const MIN_ALL: usize = 419;
+        let class: Vec<u16> = "Shell_TrayWnd\0".encode_utf16().collect();
+        // SAFETY: FindWindowW/PostMessageW take simple args; the tray handle is
+        // null-checked so we never post to a bogus window.
+        unsafe {
+            let tray = FindWindowW(class.as_ptr(), std::ptr::null());
+            if tray.is_null() {
+                return Err("taskbar not found — can't minimize windows".into());
+            }
+            if PostMessageW(tray, WM_COMMAND, MIN_ALL, 0) == 0 {
+                return Err("failed to post minimize-all to the taskbar".into());
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("minimize_all is Windows-only until the Phase 5 per-OS work".into())
+    }
+}
+
 /// Get info about the currently active window.
 #[tauri::command]
 fn get_active_window() -> Result<ActiveWindowInfo, String> {
@@ -2164,6 +2195,7 @@ pub fn run() {
             move_mouse,
             drag,
             highlight_rect,
+            minimize_all,
             get_active_window,
             get_dpi_scale,
             list_ui_elements,

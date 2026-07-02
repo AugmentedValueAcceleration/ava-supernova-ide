@@ -376,6 +376,7 @@ const inputBridge = {
   async scroll(direction, amount) { await desktopRequest('scroll', { direction, amount }); },
   async drag(x, y, endX, endY) { await desktopRequest('drag', { x, y, endX, endY }); },
   async highlight(x, y, w, h, ms) { await desktopRequest('highlight_rect', { x, y, w, h, ms }); },
+  async minimizeAll() { await desktopRequest('minimize_all'); },
 };
 
 /**

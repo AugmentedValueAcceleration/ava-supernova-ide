@@ -680,6 +680,12 @@ export class SidecarManager {
           });
           result = 'ok';
           break;
+        // ── Reveal the desktop (Phase 0E) — minimize all windows so desktop
+        // icons become visible + clickable.
+        case 'minimize_all':
+          await invoke('minimize_all');
+          result = 'ok';
+          break;
 
         // ── Browser automation — Playwright-backed headed Chromium driven
         // through Rust. Lives alongside UIA so the desktop agent can drive
