@@ -12937,12 +12937,18 @@ export function SettingsPage() {
   const [hcKey, setHcKey] = useState('');
   const [hcKeySaved, setHcKeySaved] = useState<boolean | null>(null); // null = unknown yet
   useEffect(() => {
-    readHCompanyKey().then((k) => { setHcKeySaved(!!k); if (k) setHcKey(k); }).catch(() => setHcKeySaved(false));
+    readHCompanyKey().then((k) => {
+      setHcKeySaved(!!k);
+      if (k) setHcKey(k);
+      // Mirror into the API Keys page row — one key, two surfaces, one truth.
+      setProviderKeys(prev => ({ ...prev, hcompany: !!k }));
+    }).catch(() => setHcKeySaved(false));
   }, []);
   const saveHcKey = useCallback(async () => {
     const ok = await writeHCompanyKey(hcKey).catch(() => false);
     if (ok) {
       setHcKeySaved(!!hcKey.trim());
+      setProviderKeys(prev => ({ ...prev, hcompany: !!hcKey.trim() })); // keep the API Keys row in step
       getSidecar().setHCompanyKey(hcKey).catch(() => {}); // live-apply; config covers next boot
     }
   }, [hcKey]);
@@ -13027,6 +13033,11 @@ export function SettingsPage() {
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4, Codestral, Devstral 2' },
     { id: 'tencent', name: 'Tencent Hunyuan', placeholder: '...', signupUrl: 'https://tokenhub.tencentmaas.com', description: 'Hunyuan Hy3 — open-weight MoE, agentic, 262K context, very cheap' },
     { id: 'nvidia', name: 'NVIDIA', placeholder: 'nvapi-...', signupUrl: 'https://build.nvidia.com', description: 'Nemotron 3 Ultra — open-weight, 1M context, frontier reasoning (BYOK)' },
+    // Not a chat provider — powers Desktop mode's Fast vision lane (Holo).
+    // Saved LOCALLY only (~/.ava/config.json), never synced to the cloud:
+    // this key authorises screenshots of the user's screen to leave the
+    // machine, so it stays on the machine.
+    { id: 'hcompany', name: 'H Company (Holo Vision)', placeholder: '...', signupUrl: 'https://www.hcompany.ai', description: 'Holo 3.1 — visual grounding for Desktop mode’s Fast vision lane (BYOK, key stays on this device)' },
   ];
 
   const LANGUAGES = [
@@ -13072,10 +13083,19 @@ export function SettingsPage() {
     const key = providerInputs[providerId]?.trim();
     if (!key) return;
     setSavingProvider(providerId);
-    // Provider keys never leave the device in Local mode. OS keychain
-    // on the extension holds the BYOK keys locally; mirroring to cloud
-    // is opt-in via Data Mode.
-    if (connected && cloudSyncEnabled()) {
+    // H Company is the desktop-vision key — LOCAL ONLY, never cloud-synced
+    // (it authorises screenshots to leave the machine, so it stays on the
+    // machine). Same storage as the Desktop settings field; live-applied.
+    if (providerId === 'hcompany') {
+      writeHCompanyKey(key).then((ok) => {
+        if (ok) getSidecar().setHCompanyKey(key).catch(() => {});
+      }).catch(() => {});
+      setHcKeySaved(true);
+      setHcKey(key);
+    } else if (connected && cloudSyncEnabled()) {
+      // Provider keys never leave the device in Local mode. OS keychain
+      // on the extension holds the BYOK keys locally; mirroring to cloud
+      // is opt-in via Data Mode.
       apiFetch('/settings/provider-key', {
         method: 'POST',
         body: JSON.stringify({ provider: providerId, apiKey: key }),
@@ -13088,7 +13108,12 @@ export function SettingsPage() {
   };
 
   const handleRemoveProviderKey = (providerId: string) => {
-    if (connected && cloudSyncEnabled()) {
+    if (providerId === 'hcompany') {
+      writeHCompanyKey('').catch(() => {});
+      getSidecar().setHCompanyKey('').catch(() => {});
+      setHcKeySaved(false);
+      setHcKey('');
+    } else if (connected && cloudSyncEnabled()) {
       apiFetch('/settings/provider-key', {
         method: 'DELETE',
         body: JSON.stringify({ provider: providerId }),
