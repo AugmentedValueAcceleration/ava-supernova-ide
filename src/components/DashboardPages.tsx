@@ -3373,6 +3373,12 @@ export function AvaChatPage() {
       const level = event.payload?.level ?? 'stop';
       const sidecar = getSidecar();
       sidecar.cancel().catch(() => {});
+      // Force the chat back to idle NOW rather than waiting on the trajectory's
+      // terminal event — which is exactly what "kill" should mean. Without this
+      // the "Ava is working…" spinner hangs after a kill if the done/stopped
+      // event is delayed or filtered.
+      setStreaming(false);
+      setStatusText('');
       if (level === 'panic') {
         // Hardest stop — also wipe any in-flight approval so the UI
         // doesn't hang waiting for the user to click something that no
