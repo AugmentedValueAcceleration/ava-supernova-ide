@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ALL_MODELS } from '@ava/core/models';
 import { APP_VERSION } from '../version';
 // Phosphor icons (duotone weight) — distinctive layered fill that reads
@@ -2329,6 +2330,10 @@ export function AvaChatPage() {
     // room); a stale persisted teach falls back to work on load.
     return stored && stored !== 'teach' ? stored : 'work';
   });
+  // Live mirror for callbacks with frozen deps (handleSidecarEvent closes over
+  // [redactSecrets] only — reading `mode` there would be a stale snapshot).
+  const modeRef = useRef(mode);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
   // Desktop permission level — shared with the Settings page via a hook
   // backed by localStorage + a window event. Either picker (chat-bar pill
   // or Settings page) updates both. 'watch' = approve the task once up
@@ -3776,6 +3781,15 @@ export function AvaChatPage() {
         setStreaming(false);
         setStatusText('');
         textareaRef.current?.focus();
+
+        // Desktop mode: the trajectory may have minimized the IDE to reveal
+        // the desktop (minimize_all). Bring it back when the task finishes —
+        // the restore IS the "done, back to you" signal. (modeRef, not mode:
+        // this callback's deps are frozen, mode would be stale.)
+        if (modeRef.current === 'desktop') {
+          const win = getCurrentWindow();
+          win.unminimize().then(() => win.setFocus()).catch(() => {});
+        }
 
         // Fallback per-session token estimate when no 'usage' event fired
         // this turn (provider didn't include usage in stream chunks). A

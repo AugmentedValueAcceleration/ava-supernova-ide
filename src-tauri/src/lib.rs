@@ -969,7 +969,7 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
             // Start menu is open, or no window has focus).
             // SAFETY: GetForegroundWindow is a parameter-free Win32 query that
             // returns NULL when no window has focus. Null is checked below.
-            let foreground_hwnd =
+            let mut foreground_hwnd =
                 unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
 
             // NEVER walk our OWN window (the IDE). Querying this process's UIA
@@ -989,11 +989,28 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
                     );
                 }
                 if fg_pid == our_pid {
+                    // Our own window has focus — e.g. focus bounced back to the
+                    // (minimized) IDE the instant the native approval card
+                    // closed. Going blind here is what made the Verifier
+                    // narrate "elements dropped to 0" on a task that had just
+                    // SUCCEEDED. Never walk our own tree (deadlock risk) —
+                    // substitute the last real automated target; if there isn't
+                    // one, fall through as "nothing focused" so the shell
+                    // surfaces (menus + desktop icons) still get read.
+                    let last = LAST_FOCUSED_HWND
+                        .lock()
+                        .ok()
+                        .and_then(|g| *g)
+                        .map(|h| h as windows_sys::Win32::Foundation::HWND)
+                        .filter(|h| unsafe {
+                            windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible(*h) != 0
+                        });
                     uia_debug_log(&format!(
-                        "list_ui_elements: foreground is OUR window (class={}) — skip-own-window early return (0 elements)",
-                        window_class_name(foreground_hwnd)
+                        "list_ui_elements: foreground is OUR window (class={}) — substituting last target (found={})",
+                        window_class_name(foreground_hwnd),
+                        last.is_some()
                     ));
-                    return Ok(Vec::new());
+                    foreground_hwnd = last.unwrap_or(std::ptr::null_mut());
                 }
             }
 
