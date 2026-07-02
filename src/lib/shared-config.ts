@@ -99,6 +99,32 @@ export async function writeSharedPlatformKey(key: string): Promise<void> {
   }
 }
 
+/** Read the user's own H Company key (desktop vision, BYOK-only) from
+ *  ~/.ava/config.json → providers.hcompany.apiKey. */
+export async function readHCompanyKey(): Promise<string | null> {
+  const outcome = await readConfig();
+  if (outcome.status !== 'ok') return null;
+  const providers = outcome.config.providers as Record<string, { apiKey?: string }> | undefined;
+  const key = providers?.hcompany?.apiKey;
+  return typeof key === 'string' && key.trim() ? key : null;
+}
+
+/** Write (or clear, with '') the H Company key into ~/.ava/config.json,
+ *  preserving all sibling config. Same never-clobber rules as the platform key. */
+export async function writeHCompanyKey(key: string): Promise<boolean> {
+  const outcome = await readConfig();
+  if (outcome.status === 'unreadable') return false;
+  const base = outcome.status === 'ok' ? outcome.config : {};
+  const providers = { ...(base.providers as Record<string, unknown> | undefined) };
+  if (key.trim()) {
+    providers.hcompany = { ...(providers.hcompany as Record<string, unknown> | undefined), apiKey: key.trim() };
+  } else {
+    delete providers.hcompany;
+  }
+  await writeConfig({ ...base, providers });
+  return true;
+}
+
 /** Clear the platform key from ~/.ava/config.json on sign-out. */
 export async function clearSharedPlatformKey(): Promise<void> {
   const outcome = await readConfig();

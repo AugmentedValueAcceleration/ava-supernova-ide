@@ -408,7 +408,11 @@ const visionBridge = {
       visionMode: ss.desktopVisionMode || 'off',
       localModelInstalled: !!ss.localVisionEndpoint,
       hasHCompanyKey: !!ss.hcompanyApiKey,
-      hasPlatformKey: !!ss.platformKey,
+      // BYOK-only (operator decision 2026-07-02): cloud vision runs on the
+      // user's OWN H Company key, never on a platform key — Ava stays out of
+      // the screenshot data path. The lane may return later as a priced
+      // feature; until then the probe never sees a platform key.
+      hasPlatformKey: false,
     });
   },
   isAvailable() {
@@ -421,7 +425,10 @@ const visionBridge = {
     const { image, width, height, originX = 0, originY = 0 } = shot?.data ?? shot ?? {};
     if (!image) return null;
 
-    // Normalized [0,1000] from the ONE lane the user consented to.
+    // Normalized [0,1000] from the ONE lane the user consented to. Cloud is
+    // BYOK-ONLY (operator decision 2026-07-02): the screenshot goes straight
+    // from this machine to H Company under the USER'S key — no platform-key
+    // fallback, Ava's servers are never in the data path.
     const mode = ss.desktopVisionMode || 'off';
     let norm = null;
     if (mode === 'local') {
@@ -429,7 +436,7 @@ const visionBridge = {
     } else if (ss.hcompanyApiKey) {
       norm = await holoLocalizeDirect(ss.hcompanyApiKey, image, targetDescription);
     } else {
-      norm = await holoLocalizePlatform(ss.platformKey, image, targetDescription);
+      return null; // no own key = no cloud vision; capability() already reported this honestly
     }
     if (!norm) return null;
     // Map normalized [0,1000] back to PHYSICAL virtual-screen pixels: the image
@@ -598,20 +605,9 @@ async function holoLocalizeDirect(apiKey, imageB64, targetDescription) {
   return parseHoloCoords(data?.choices?.[0]?.message?.content);
 }
 
-/** Platform free lane — signed-in users, no key, no charge. */
-async function holoLocalizePlatform(platformKey, imageB64, targetDescription) {
-  const resp = await fetch('https://ava-supernova.com/api/desktop/vision', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${platformKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: imageB64, target: targetDescription }),
-  });
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => '');
-    throw new Error(`Platform vision request failed (${resp.status}): ${errText.slice(0, 160)}`);
-  }
-  const data = await resp.json();
-  return data?.found ? { x: Number(data.x), y: Number(data.y) } : null;
-}
+// (The platform-hosted vision lane was removed 2026-07-02 — cloud vision is
+// BYOK-only so Ava's servers are never in the screenshot data path. If it
+// returns, it returns as a deliberately priced feature, not a fallback.)
 
 /** App launcher bridge — narrow scoped replacement for `bash` in desktop mode. */
 const appLauncherBridge = {
@@ -1704,6 +1700,11 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
       || String(action.params?.url ?? action.params?.app ?? action.params?.text ?? action.params?.key ?? '');
     try {
       const lines = [`Ava wants to: ${action.kind}${target ? ` — "${target}"` : ''}`, ''];
+      // Anti-injection banner (Phase 1): the operator must SEE that the screen,
+      // not their own instructions, asked for this action.
+      if (action.origin === 'observed') {
+        lines.push('⚠ This came from the PAGE, not from you — something on the screen asked for this action.', '');
+      }
       const riskWhy = Array.isArray(classification.reasons) ? classification.reasons.join('; ') : '';
       lines.push(`Risk: ${classification.riskClass}${riskWhy ? ` (${riskWhy})` : ''}`);
       if (action.reasoning) lines.push(`Why: ${action.reasoning}`);
@@ -1729,6 +1730,7 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
           target,
           risk: classification.riskClass,
           reasoning: action.reasoning,
+          origin: action.origin,
         },
       });
       return new Promise((resolve) => {
@@ -3208,6 +3210,15 @@ rl.on('line', async (line) => {
           pending.resolve({ data: data.result });
         }
       }
+      break;
+    }
+    case 'set_hcompany_key': {
+      // Live-apply the user's own H Company key (desktop vision, BYOK-only) —
+      // persisted by the renderer into ~/.ava/config.json; this makes it take
+      // effect without a sidecar restart. Empty clears it.
+      const key = typeof data.key === 'string' && data.key.trim() ? data.key.trim() : undefined;
+      if (globalThis._sharedState) globalThis._sharedState.hcompanyApiKey = key;
+      emit({ event: 'info', message: key ? 'H Company key set — Fast vision available.' : 'H Company key cleared.' });
       break;
     }
     case 'update_desktop_automation_settings': {

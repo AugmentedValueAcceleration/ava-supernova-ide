@@ -508,6 +508,12 @@ export class SidecarManager {
     await this.send({ cmd: 'set_desktop_permission_level', level });
   }
 
+  /** Live-apply the user's own H Company key (desktop vision, BYOK-only).
+   *  Pass '' to clear. Persistence is the renderer's job (shared-config). */
+  async setHCompanyKey(key: string): Promise<void> {
+    await this.send({ cmd: 'set_hcompany_key', key });
+  }
+
   /** Perception setting (Phase C3): off = never capture the screen; local =
    *  on-device vision only (Private); cloud = account/BYOK Holo (Fast). */
   async setDesktopVisionMode(mode: 'off' | 'local' | 'cloud'): Promise<void> {
