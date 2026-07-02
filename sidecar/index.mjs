@@ -1482,10 +1482,12 @@ async function handleInit(data) {
       browserProvider: browserBridge,
       // Phase C3 — visual grounding. Gated by desktopVisionMode ('off' until
       // the user opts in via the perception setting); cloud lane uses the
-      // H Company key (BYOK config or HAI_API_KEY env).
+      // user's OWN H Company key from BYOK config ONLY (~/.ava/config.json,
+      // written by the IDE's key UI). No env fallback: exactly one way a
+      // vision key exists, so "whose key is this?" always has one answer.
       visionProvider: visionBridge,
       desktopVisionMode: config.desktopVisionMode || 'off',
-      hcompanyApiKey: config.providers?.hcompany?.apiKey || process.env.HAI_API_KEY,
+      hcompanyApiKey: config.providers?.hcompany?.apiKey,
       // Desktop safety gate — the @ava/core tools call these on every
       // mutative action. Permission level and budget are read per call;
       // the approval handler emits a confirm_required NDJSON event and
