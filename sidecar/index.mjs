@@ -414,7 +414,7 @@ const visionBridge = {
     const ss = globalThis._sharedState || {};
     if (!this.isAvailable()) return null;
     const shot = await desktopRequest('capture_screen');
-    const { image, width, height } = shot?.data ?? shot ?? {};
+    const { image, width, height, originX = 0, originY = 0 } = shot?.data ?? shot ?? {};
     if (!image) return null;
 
     // Normalized [0,1000] from the ONE lane the user consented to.
@@ -428,9 +428,12 @@ const visionBridge = {
       norm = await holoLocalizePlatform(ss.platformKey, image, targetDescription);
     }
     if (!norm) return null;
+    // Map normalized [0,1000] back to PHYSICAL virtual-screen pixels: the image
+    // spans the whole virtual desktop, so add its origin (negative when a
+    // monitor sits left of/above primary). This is the space SetCursorPos clicks.
     return {
-      x: Math.round((norm.x / 1000) * (width || 0)),
-      y: Math.round((norm.y / 1000) * (height || 0)),
+      x: Math.round(originX + (norm.x / 1000) * (width || 0)),
+      y: Math.round(originY + (norm.y / 1000) * (height || 0)),
     };
   },
 };

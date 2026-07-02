@@ -103,14 +103,16 @@ struct ActiveWindowInfo {
 fn capture_screen() -> Result<serde_json::Value, String> {
     use screenshots::image::imageops::FilterType;
 
-    let screens = screenshots::Screen::all().map_err(|e| format!("Failed to list screens: {e}"))?;
-    let screen = screens.into_iter().next().ok_or("No screens found")?;
-    let capture = screen.capture().map_err(|e| format!("Failed to capture screen: {e}"))?;
+    // Capture the ENTIRE virtual desktop (every monitor), not just the primary,
+    // so Ava can see and act on any screen. origin_{x,y} is the virtual-screen
+    // top-left (negative when a monitor sits left of / above the primary); the
+    // caller maps normalized vision coords back to physical pixels as
+    // origin + norm*size — exactly the space SetCursorPos clicks in.
+    let (capture, orig_width, orig_height, origin_x, origin_y) = capture_virtual_desktop()?;
 
-    let orig_width = capture.width();
-    let orig_height = capture.height();
-
-    // Resize for Holo3 — max 1280px wide, maintain aspect ratio
+    // Resize for Holo3 — max 1280px wide, maintain aspect ratio. Normalized
+    // [0,1000] coords are resolution-independent, so we still report the full
+    // virtual dimensions + origin for mapping.
     let max_width: u32 = 1280;
     let (out_width, out_height) = if orig_width > max_width {
         let scale = max_width as f64 / orig_width as f64;
@@ -122,7 +124,7 @@ fn capture_screen() -> Result<serde_json::Value, String> {
     let resized = if out_width != orig_width {
         screenshots::image::imageops::resize(&capture, out_width, out_height, FilterType::Triangle)
     } else {
-        capture.clone()
+        capture
     };
 
     let mut buf = Cursor::new(Vec::new());
@@ -135,15 +137,149 @@ fn capture_screen() -> Result<serde_json::Value, String> {
         "image": b64,
         "width": orig_width,
         "height": orig_height,
+        "originX": origin_x,
+        "originY": origin_y,
     }))
+}
+
+/// Capture the full virtual desktop as one image + its virtual-screen origin.
+/// Windows: a single BitBlt over the virtual-screen rect grabs all monitors in
+/// physical pixels, perfectly aligned with SetCursorPos coordinates (so mixed-
+/// DPI layouts land correctly — the compositor already positioned each monitor
+/// in physical space). Returns (image, width, height, origin_x, origin_y).
+#[cfg(target_os = "windows")]
+fn capture_virtual_desktop(
+) -> Result<(screenshots::image::RgbaImage, u32, u32, i32, i32), String> {
+    use std::ptr::null_mut;
+    use windows_sys::Win32::Graphics::Gdi::{
+        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC,
+        GetDIBits, ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
+        SRCCOPY,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+        SM_YVIRTUALSCREEN,
+    };
+
+    // SAFETY: every GDI object created here (DC, bitmap) is released on every
+    // path before returning; handles are null-checked; GetDIBits writes at most
+    // vw*vh*4 bytes into a buffer sized exactly that.
+    unsafe {
+        let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        let vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        let vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        let vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        if vw <= 0 || vh <= 0 {
+            return Err("virtual screen has no size".into());
+        }
+
+        let hscreen = GetDC(null_mut());
+        if hscreen.is_null() {
+            return Err("GetDC(screen) failed".into());
+        }
+        let hdc = CreateCompatibleDC(hscreen);
+        let hbmp = CreateCompatibleBitmap(hscreen, vw, vh);
+        if hdc.is_null() || hbmp.is_null() {
+            if !hdc.is_null() {
+                DeleteDC(hdc);
+            }
+            ReleaseDC(null_mut(), hscreen);
+            return Err("failed to allocate capture bitmap".into());
+        }
+        let old = SelectObject(hdc, hbmp as _);
+        let blitted = BitBlt(hdc, 0, 0, vw, vh, hscreen, vx, vy, SRCCOPY);
+
+        let mut bmi: BITMAPINFO = std::mem::zeroed();
+        bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+        bmi.bmiHeader.biWidth = vw;
+        bmi.bmiHeader.biHeight = -vh; // negative → top-down rows (no vertical flip)
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB as u32;
+
+        let mut pixels = vec![0u8; (vw as usize) * (vh as usize) * 4];
+        let scanlines = if blitted != 0 {
+            GetDIBits(
+                hdc,
+                hbmp,
+                0,
+                vh as u32,
+                pixels.as_mut_ptr() as *mut _,
+                &mut bmi,
+                DIB_RGB_COLORS,
+            )
+        } else {
+            0
+        };
+
+        SelectObject(hdc, old);
+        DeleteObject(hbmp as _);
+        DeleteDC(hdc);
+        ReleaseDC(null_mut(), hscreen);
+
+        if blitted == 0 {
+            return Err("BitBlt of the virtual desktop failed".into());
+        }
+        if scanlines == 0 {
+            return Err("GetDIBits failed".into());
+        }
+
+        // GDI hands back BGRA; the image crate wants RGBA. Swap R/B, force opaque.
+        for px in pixels.chunks_exact_mut(4) {
+            px.swap(0, 2);
+            px[3] = 255;
+        }
+        let img = screenshots::image::RgbaImage::from_raw(vw as u32, vh as u32, pixels)
+            .ok_or("failed to build capture image from pixels")?;
+        Ok((img, vw as u32, vh as u32, vx, vy))
+    }
+}
+
+/// Non-Windows: primary screen only until the Phase 5 per-OS capture lands.
+#[cfg(not(target_os = "windows"))]
+fn capture_virtual_desktop(
+) -> Result<(screenshots::image::RgbaImage, u32, u32, i32, i32), String> {
+    let screens = screenshots::Screen::all().map_err(|e| format!("Failed to list screens: {e}"))?;
+    let screen = screens.into_iter().next().ok_or("No screens found")?;
+    let capture = screen.capture().map_err(|e| format!("Failed to capture screen: {e}"))?;
+    let (w, h) = (capture.width(), capture.height());
+    Ok((capture, w, h, 0, 0))
+}
+
+/// Position the cursor in ABSOLUTE virtual-desktop coordinates.
+///
+/// This is the multi-monitor fix: enigo's `Coordinate::Abs` normalizes to the
+/// PRIMARY monitor's bounds, so a click meant for a second screen lands in the
+/// wrong place (clamped onto the primary). `SetCursorPos` takes true physical
+/// virtual-screen pixels and moves the cursor onto whichever monitor actually
+/// contains that point. Non-Windows keeps enigo until the Phase 5 per-OS work.
+#[cfg(target_os = "windows")]
+fn position_cursor(x: i32, y: i32) -> Result<(), String> {
+    // SAFETY: SetCursorPos takes two ints and returns a BOOL — no memory ops.
+    unsafe {
+        if windows_sys::Win32::UI::WindowsAndMessaging::SetCursorPos(x, y) == 0 {
+            return Err(format!("SetCursorPos({x}, {y}) failed"));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn position_cursor(x: i32, y: i32) -> Result<(), String> {
+    use enigo::{Coordinate, Enigo, Mouse, Settings};
+    let mut enigo =
+        Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
+    enigo
+        .move_mouse(x, y, Coordinate::Abs)
+        .map_err(|e| format!("Move failed: {e}"))
 }
 
 /// Simulate a left click at (x, y).
 #[tauri::command]
 fn click(x: i32, y: i32) -> Result<(), String> {
-    use enigo::{Enigo, Mouse, Settings, Coordinate};
+    use enigo::{Enigo, Mouse, Settings};
+    position_cursor(x, y)?;
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
-    enigo.move_mouse(x, y, Coordinate::Abs).map_err(|e| format!("Move failed: {e}"))?;
     enigo.button(enigo::Button::Left, enigo::Direction::Click).map_err(|e| format!("Click failed: {e}"))?;
     Ok(())
 }
@@ -151,9 +287,9 @@ fn click(x: i32, y: i32) -> Result<(), String> {
 /// Simulate a double click at (x, y).
 #[tauri::command]
 fn double_click(x: i32, y: i32) -> Result<(), String> {
-    use enigo::{Enigo, Mouse, Settings, Coordinate};
+    use enigo::{Enigo, Mouse, Settings};
+    position_cursor(x, y)?;
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
-    enigo.move_mouse(x, y, Coordinate::Abs).map_err(|e| format!("Move failed: {e}"))?;
     enigo.button(enigo::Button::Left, enigo::Direction::Click).map_err(|e| format!("Click 1 failed: {e}"))?;
     enigo.button(enigo::Button::Left, enigo::Direction::Click).map_err(|e| format!("Click 2 failed: {e}"))?;
     Ok(())
@@ -162,9 +298,9 @@ fn double_click(x: i32, y: i32) -> Result<(), String> {
 /// Simulate a right click at (x, y).
 #[tauri::command]
 fn right_click(x: i32, y: i32) -> Result<(), String> {
-    use enigo::{Enigo, Mouse, Settings, Coordinate};
+    use enigo::{Enigo, Mouse, Settings};
+    position_cursor(x, y)?;
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
-    enigo.move_mouse(x, y, Coordinate::Abs).map_err(|e| format!("Move failed: {e}"))?;
     enigo.button(enigo::Button::Right, enigo::Direction::Click).map_err(|e| format!("Right click failed: {e}"))?;
     Ok(())
 }
@@ -283,25 +419,22 @@ fn scroll(direction: String, amount: Option<i32>) -> Result<(), String> {
 /// Move the mouse to (x, y) without clicking.
 #[tauri::command]
 fn move_mouse(x: i32, y: i32) -> Result<(), String> {
-    use enigo::{Enigo, Mouse, Settings, Coordinate};
-    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
-    enigo.move_mouse(x, y, Coordinate::Abs).map_err(|e| format!("Move failed: {e}"))?;
-    Ok(())
+    position_cursor(x, y)
 }
 
 /// Click and drag from (x, y) to (end_x, end_y).
 #[tauri::command]
 fn drag(x: i32, y: i32, end_x: i32, end_y: i32) -> Result<(), String> {
-    use enigo::{Enigo, Mouse, Settings, Coordinate, Button, Direction};
+    use enigo::{Enigo, Mouse, Settings, Button, Direction};
+    position_cursor(x, y)?;
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo init failed: {e}"))?;
-    enigo.move_mouse(x, y, Coordinate::Abs).map_err(|e| format!("Move start failed: {e}"))?;
     enigo.button(Button::Left, Direction::Press).map_err(|e| format!("Press failed: {e}"))?;
-    // Smooth drag in steps
+    // Smooth drag in steps — virtual-desktop coords so a drag can cross monitors.
     let steps = 10;
     for i in 1..=steps {
         let cx = x + (end_x - x) * i / steps;
         let cy = y + (end_y - y) * i / steps;
-        enigo.move_mouse(cx, cy, Coordinate::Abs).map_err(|e| format!("Drag step failed: {e}"))?;
+        position_cursor(cx, cy).map_err(|e| format!("Drag step failed: {e}"))?;
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     enigo.button(Button::Left, Direction::Release).map_err(|e| format!("Release failed: {e}"))?;
