@@ -601,6 +601,26 @@ fn highlight_rect(x: i32, y: i32, w: i32, h: i32, ms: u32) -> Result<(), String>
     }
 }
 
+/// EnumWindows callback: minimize any visible top-level window owned by THIS
+/// process (the IDE). Used by minimize_all so our own window steps aside and
+/// the desktop is genuinely revealed.
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn minimize_own_window(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    _lparam: windows_sys::Win32::Foundation::LPARAM,
+) -> windows_sys::Win32::Foundation::BOOL {
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowThreadProcessId, IsWindowVisible, ShowWindow, SW_MINIMIZE,
+    };
+    let mut pid: u32 = 0;
+    GetWindowThreadProcessId(hwnd, &mut pid);
+    if pid == GetCurrentProcessId() && IsWindowVisible(hwnd) != 0 {
+        ShowWindow(hwnd, SW_MINIMIZE);
+    }
+    1 // keep enumerating
+}
+
 /// Minimize every window to reveal the desktop — so desktop icons (Recycle
 /// Bin, This PC, files, shortcuts) become visible to UI Automation and
 /// clickable. This is what "Show desktop" / Win+M do, driven via the taskbar's
@@ -609,21 +629,30 @@ fn highlight_rect(x: i32, y: i32, w: i32, h: i32, ms: u32) -> Result<(), String>
 fn minimize_all() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_COMMAND};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, FindWindowW, PostMessageW, WM_COMMAND,
+        };
         // Explorer command 419 = MIN_ALL, sent to the taskbar ("Shell_TrayWnd").
         const MIN_ALL: usize = 419;
         let class: Vec<u16> = "Shell_TrayWnd\0".encode_utf16().collect();
-        // SAFETY: FindWindowW/PostMessageW take simple args; the tray handle is
-        // null-checked so we never post to a bogus window.
+        // SAFETY: FindWindowW/PostMessageW/EnumWindows take simple args; handles
+        // are null-checked.
         unsafe {
             let tray = FindWindowW(class.as_ptr(), std::ptr::null());
-            if tray.is_null() {
-                return Err("taskbar not found — can't minimize windows".into());
+            if !tray.is_null() {
+                PostMessageW(tray, WM_COMMAND, MIN_ALL, 0);
             }
-            if PostMessageW(tray, WM_COMMAND, MIN_ALL, 0) == 0 {
-                return Err("failed to post minimize-all to the taskbar".into());
-            }
+            // MIN_ALL minimizes OTHER apps but leaves our own Tauri window up —
+            // and while the IDE is foreground, perception returns nothing (the
+            // skip-own-window rule) and a click would land on the IDE, not the
+            // desktop. So explicitly minimize every visible top-level window we
+            // own. The sidecar keeps driving while minimized; the desktop is now
+            // truly revealed + clickable.
+            EnumWindows(Some(minimize_own_window), 0);
         }
+        // Let the foreground settle onto the desktop before the conductor's
+        // immediate re-scout reads it (minimize is near-instant but not free).
+        std::thread::sleep(std::time::Duration::from_millis(250));
         Ok(())
     }
     #[cfg(not(target_os = "windows"))]
@@ -760,6 +789,77 @@ struct UIElementInfo {
     cy: i32,
 }
 
+/// Append a line to ~/.ava/uia-debug.log. The Tauri app runs detached from any
+/// console on Windows, so eprintln! vanishes — a file is the only way to see
+/// what the perception layer decided at runtime. Best-effort; never fails.
+#[cfg(target_os = "windows")]
+fn uia_debug_log(msg: &str) {
+    use std::io::Write;
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        let path = format!("{profile}\\.ava\\uia-debug.log");
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+            let _ = writeln!(f, "{msg}");
+        }
+    }
+}
+
+/// Class name of a window (empty on failure). Used to recognise the desktop.
+#[cfg(target_os = "windows")]
+fn window_class_name(hwnd: windows_sys::Win32::Foundation::HWND) -> String {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetClassNameW;
+    let mut buf = [0u16; 256];
+    // SAFETY: GetClassNameW writes at most nMaxCount wchars and returns the count.
+    let n = unsafe { GetClassNameW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };
+    if n <= 0 {
+        String::new()
+    } else {
+        String::from_utf16_lossy(&buf[..n as usize])
+    }
+}
+
+/// Handle of the desktop's icon list (SysListView32 under Progman or, when a
+/// wallpaper slideshow is active, under a WorkerW). Null if not found. This is
+/// where Recycle Bin / This PC / file shortcuts live — NOT any app window, so
+/// reading the foreground window never surfaces them.
+#[cfg(target_os = "windows")]
+fn desktop_iconview_hwnd() -> windows_sys::Win32::Foundation::HWND {
+    use std::ptr::null_mut;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowExW, FindWindowW};
+    let progman_c: Vec<u16> = "Progman\0".encode_utf16().collect();
+    let workerw_c: Vec<u16> = "WorkerW\0".encode_utf16().collect();
+    let defview_c: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
+    let listview_c: Vec<u16> = "SysListView32\0".encode_utf16().collect();
+    // SAFETY: all Find* calls take valid null-terminated class pointers; every
+    // returned handle is checked before use.
+    unsafe {
+        let progman = FindWindowW(progman_c.as_ptr(), null_mut());
+        let mut defview = if progman.is_null() {
+            null_mut()
+        } else {
+            FindWindowExW(progman, null_mut(), defview_c.as_ptr(), null_mut())
+        };
+        if defview.is_null() {
+            // Slideshow case: SHELLDLL_DefView is parented under a WorkerW.
+            let mut worker = null_mut();
+            loop {
+                worker = FindWindowExW(null_mut(), worker, workerw_c.as_ptr(), null_mut());
+                if worker.is_null() {
+                    break;
+                }
+                let d = FindWindowExW(worker, null_mut(), defview_c.as_ptr(), null_mut());
+                if !d.is_null() {
+                    defview = d;
+                    break;
+                }
+            }
+        }
+        if defview.is_null() {
+            return null_mut();
+        }
+        FindWindowExW(defview, null_mut(), listview_c.as_ptr(), null_mut())
+    }
+}
+
 /// List all clickable UI elements in the foreground window.
 /// Returns structured data: name, type, bounding box, centre coordinates.
 ///
@@ -806,13 +906,46 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
                     );
                 }
                 if fg_pid == our_pid {
+                    uia_debug_log(&format!(
+                        "list_ui_elements: foreground is OUR window (class={}) — skip-own-window early return (0 elements)",
+                        window_class_name(foreground_hwnd)
+                    ));
                     return Ok(Vec::new());
                 }
             }
 
-            let start_element = if !foreground_hwnd.is_null() {
+            // When the DESKTOP is what's showing — nothing focused, or
+            // Progman/WorkerW is foreground (e.g. right after minimize_all) —
+            // walk the shell's icon list directly so Recycle Bin / This PC /
+            // shortcuts are enumerated. They live in SysListView32, never the
+            // foreground window, so the normal walk returns nothing on a bare
+            // desktop.
+            let fg_class = if foreground_hwnd.is_null() {
+                String::from("<null>")
+            } else {
+                window_class_name(foreground_hwnd)
+            };
+            let showing_desktop =
+                foreground_hwnd.is_null() || matches!(fg_class.as_str(), "Progman" | "WorkerW");
+            let iconview = if showing_desktop {
+                desktop_iconview_hwnd()
+            } else {
+                std::ptr::null_mut()
+            };
+            let target_hwnd = if showing_desktop && !iconview.is_null() {
+                iconview
+            } else {
+                foreground_hwnd
+            };
+            uia_debug_log(&format!(
+                "list_ui_elements: fg_class={fg_class:?} showing_desktop={showing_desktop} iconview_null={} target_null={}",
+                iconview.is_null(),
+                target_hwnd.is_null()
+            ));
+
+            let start_element = if !target_hwnd.is_null() {
                 automation
-                    .element_from_handle(uiautomation::types::Handle::from(foreground_hwnd as isize))
+                    .element_from_handle(uiautomation::types::Handle::from(target_hwnd as isize))
                     .ok()
             } else {
                 None
@@ -824,6 +957,11 @@ fn list_ui_elements() -> Result<Vec<UIElementInfo>, String> {
 
             let mut elements = Vec::new();
             collect_elements(&walker, start, &mut elements, 0, 8);
+            uia_debug_log(&format!(
+                "list_ui_elements: collected {} raw elements (start_from_desktop={})",
+                elements.len(),
+                start_element.is_some() && showing_desktop
+            ));
 
             Ok(elements)
         })
