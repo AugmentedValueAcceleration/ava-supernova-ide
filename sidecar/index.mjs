@@ -1967,7 +1967,12 @@ async function distilDesktopTrajectory(trajectory, rawContent) {
     const sequence = trajectory.steps.map((s, i) => {
       const a = s.proposedAction || {};
       const p = a.params || {};
-      let target = a.target || p.app || p.text || p.key || p.url || '';
+      // NEVER let typed CONTENT reach memory (Phase 4 hardening): a `type`
+      // action's params.text could be a password or secret — memory stores
+      // the FIELD (a.target), never what went into it. Keys/URLs/app names
+      // are navigational, not content, and stay.
+      let target = a.target || p.app || p.key || p.url
+        || (a.kind === 'type' ? '(a text field — typed content is never stored)' : '');
       if (target && isSelectorish(String(target))) {
         const el = (s.screenState?.elements || []).find((e) => e.id === a.target);
         target = (el?.name || '').trim() || 'an on-screen element';
