@@ -1770,6 +1770,23 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
         argsSummary: `${a.kind || '?'}${a.target ? ` → ${String(a.target).slice(0, 60)}` : ''}`
           + `${a.origin === 'observed' ? ' [screen-prompted]' : ''} · verify: ${vr.status || '?'}`,
       });
+      // Phase 3 — the fork-point write trigger IS the Verifier verdict:
+      // deviated/failed records the failure at this screen; a verified
+      // success records/reinforces a correction on any matching fork-point.
+      // (Observed-origin actions never teach — enforced inside core.)
+      const key = ev.step?.screenKey;
+      if (key && _forkStore && a.kind) {
+        try {
+          const act = { kind: a.kind, target: a.target, origin: a.origin };
+          const verifiedOk = ex.ok && vr.status === 'verified';
+          if (verifiedOk) {
+            if (desktopCore.recordSuccess(_forkStore, key, act).length > 0) _forkStoreDirty = true;
+          } else {
+            const reason = ex.error || vr.deviation || vr.detail || 'did not verify';
+            if (desktopCore.recordFailure(_forkStore, key, { ...act, reason: String(reason) })) _forkStoreDirty = true;
+          }
+        } catch { /* learning must never break a turn */ }
+      }
     } else if (ev.type === 'error') {
       emit({ event: 'agent_error', message: ev.message });
     }
@@ -1812,6 +1829,26 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
     permissionLevel = 'drive';
   }
 
+  // Phase 3 — screen keying + fork-point hindsight. The thumbnail is derived
+  // from a screenshot, so it is CONSENT-GATED: vision off = no capture at all
+  // (the conductor degrades to a textual app+task key on its own).
+  await ensureForkStore().catch(() => {});
+  const captureScreenKey = async () => {
+    if ((globalThis._sharedState?.desktopVisionMode || 'off') === 'off') return null;
+    try {
+      const t = await desktopRequest('screen_thumb');
+      const d = t?.data ?? t ?? {};
+      if (!d.gray) return null;
+      return desktopCore.imageKey(desktopCore.base64ToBytes(d.gray), d.w || 32, d.h || 32);
+    } catch { return null; }
+  };
+  const forkPointHint = async (key) => {
+    try {
+      const store = await ensureForkStore();
+      return desktopCore.retrieveHints(store, key);
+    } catch { return null; }
+  };
+
   let trajectory = null;
   try {
     trajectory = await desktopCore.runDesktopTrajectory({
@@ -1824,6 +1861,8 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
       requestApproval,
       emit: conductorEmit,
       signal,
+      captureScreenKey,
+      forkPointHint,
       // Trace to a real file — the sidecar's stderr doesn't surface in the
       // Tauri dev output, so console.error alone leaves us blind on WHY a
       // trajectory chose what it chose. Fire-and-forget append; never blocks.
@@ -1835,6 +1874,8 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
   } catch (err) {
     emit({ event: 'agent_error', message: err?.message || String(err) });
   }
+  // Persist any fork-point lessons this run produced (best-effort).
+  void saveForkStore();
   emit({ event: 'stream_end' });
 
   const finalContent = fullContent.trim() || 'Done.';
@@ -1847,6 +1888,39 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
   } catch { /* conversation API mismatch — non-fatal */ }
 
   return trajectory;
+}
+
+/**
+ * Fork-point store (Phase 3) — the runtime GRSD loop. Failures and their
+ * later corrections, keyed by SSIM screen fingerprint, persisted at
+ * ~/.ava/desktop-forkpoints.json. All matching/pairing logic is pure
+ * @ava/core (fork-points.ts); this is just the I/O.
+ */
+let _forkStore = null;
+let _forkStoreDirty = false;
+const FORK_STORE_PATH = () => join(AVA_HOME, 'desktop-forkpoints.json');
+async function ensureForkStore() {
+  if (_forkStore) return _forkStore;
+  try {
+    const { readFile } = await import('node:fs/promises');
+    const raw = await readFile(FORK_STORE_PATH(), 'utf-8');
+    _forkStore = JSON.parse(raw);
+    if (!_forkStore || _forkStore.version !== 1 || !Array.isArray(_forkStore.points)) {
+      _forkStore = desktopCore.createEmptyForkPointStore();
+    }
+  } catch {
+    _forkStore = desktopCore.createEmptyForkPointStore();
+  }
+  try { desktopCore.decayStore(_forkStore); } catch { /* decay is best-effort */ }
+  return _forkStore;
+}
+async function saveForkStore() {
+  if (!_forkStore || !_forkStoreDirty) return;
+  try {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(FORK_STORE_PATH(), JSON.stringify(_forkStore, null, 2), 'utf-8');
+    _forkStoreDirty = false;
+  } catch { /* a failed save loses a lesson, never a turn */ }
 }
 
 /**

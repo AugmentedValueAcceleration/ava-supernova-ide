@@ -661,6 +661,11 @@ export class SidecarManager {
         case 'capture_screen':
           result = await invoke('capture_screen');
           break;
+        // ── Screen keying (Phase 3) — 32×32 grayscale thumbnail for
+        // fork-point matching; gated by the vision consent sidecar-side.
+        case 'screen_thumb':
+          result = await invoke('screen_thumb');
+          break;
         case 'click':
           result = await invoke('click', { x: event.x, y: event.y });
           break;

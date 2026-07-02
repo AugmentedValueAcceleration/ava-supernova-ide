@@ -274,6 +274,20 @@ fn position_cursor(x: i32, y: i32) -> Result<(), String> {
         .map_err(|e| format!("Move failed: {e}"))
 }
 
+/// Tiny grayscale thumbnail of the virtual desktop for screen keying
+/// (Phase 3 fork-point learning): 32×32 luma bytes, ~1KB. NOT a screenshot a
+/// human could read anything from — but it IS derived from one, so the
+/// sidecar only calls this when the user's vision setting permits capture.
+#[tauri::command]
+fn screen_thumb() -> Result<serde_json::Value, String> {
+    use screenshots::image::imageops::{grayscale, resize, FilterType};
+    let (capture, _w, _h, _ox, _oy) = capture_virtual_desktop()?;
+    let small = resize(&capture, 32, 32, FilterType::Triangle);
+    let gray = grayscale(&small);
+    let b64 = base64::engine::general_purpose::STANDARD.encode(gray.into_raw());
+    Ok(serde_json::json!({ "gray": b64, "w": 32, "h": 32 }))
+}
+
 /// Simulate a left click at (x, y).
 #[tauri::command]
 fn click(x: i32, y: i32) -> Result<(), String> {
@@ -2516,6 +2530,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             capture_screen,
+            screen_thumb,
             click,
             double_click,
             right_click,
