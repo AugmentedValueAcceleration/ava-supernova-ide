@@ -1704,7 +1704,8 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
       || String(action.params?.url ?? action.params?.app ?? action.params?.text ?? action.params?.key ?? '');
     try {
       const lines = [`Ava wants to: ${action.kind}${target ? ` — "${target}"` : ''}`, ''];
-      lines.push(`Risk: ${classification.riskClass}${classification.reason ? ` (${classification.reason})` : ''}`);
+      const riskWhy = Array.isArray(classification.reasons) ? classification.reasons.join('; ') : '';
+      lines.push(`Risk: ${classification.riskClass}${riskWhy ? ` (${riskWhy})` : ''}`);
       if (action.reasoning) lines.push(`Why: ${action.reasoning}`);
       lines.push('', 'Allow this action?');
       const res = await desktopRequest('native_confirm', { title: 'Ava — approval needed', message: lines.join('\n') });
