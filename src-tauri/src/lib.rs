@@ -832,6 +832,10 @@ struct UIElementInfo {
     /// Centre point for clicking
     cx: i32,
     cy: i32,
+    /// UIA IsEnabled — false = greyed out. A disabled "Empty Recycle Bin"
+    /// tells the Planner the bin is ALREADY empty; without this bit Ava
+    /// clicks dead menu items and can't reach that conclusion.
+    enabled: bool,
 }
 
 /// Append a line to ~/.ava/uia-debug.log. The Tauri app runs detached from any
@@ -1176,6 +1180,7 @@ fn collect_element_recursive(
             height: h,
             cx: x + w / 2,
             cy: y + h / 2,
+            enabled: element.is_enabled().unwrap_or(true),
         });
     }
 
