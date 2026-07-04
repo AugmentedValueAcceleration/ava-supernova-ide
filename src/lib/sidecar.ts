@@ -492,8 +492,15 @@ export class SidecarManager {
 
   /**
    * Switch model (hot-swap without restart).
+   *
+   * Also folds the pick into the cached `lastConfig`: the crash-respawn path
+   * restarts the sidecar from that snapshot, so without this a respawn after
+   * a hot-swap silently reverted the user to the model from the last full
+   * start() — the exact silent-model-revert bug class the persistence audit
+   * flagged (2026-07-04).
    */
   async setModel(model: string): Promise<void> {
+    if (this.lastConfig) this.lastConfig = { ...this.lastConfig, activeModel: model };
     await this.send({ cmd: 'set_model', model });
   }
 
