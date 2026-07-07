@@ -1,0 +1,1362 @@
+import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type CSSProperties } from 'react';
+import { PenNib, Paperclip as PhPaperclip } from '@phosphor-icons/react';
+import { getSidecar, type SidecarEvent } from '../lib/sidecar';
+import { logDiag } from '../lib/sidecar-log';
+import { RoomModelPicker } from './RoomModelPicker';
+import { Select } from './Select';
+import { buildShapeSvg, svgToPngDataUrl } from '../lib/asset-forge/icon-svg';
+import { searchShapes, getShape, type ShapeHit } from '../lib/asset-forge/shape-library';
+import { activeKit, loadKits, upsertKit, type BrandKit } from '../lib/asset-forge/brand-kit';
+import { MATERIALS, armatureSvg, composeIconPrompt, ICON_NEGATIVE } from '../lib/asset-forge/generate';
+import { useCreativeGallery } from '../lib/creative-gallery';
+import { apiFetch, isConnected } from '../lib/api';
+import { t } from '../lib/i18n';
+
+/**
+ * Design Studio (IDE) — guided icon design, mirrored faithfully from the VS Code
+ * extension's dashboard-ui/pages/DesignStudio.tsx (Tailwind → inline styles).
+ *
+ * Ava (the "Design Architect" persona, design lane) drives this canvas: she finds
+ * a Lucide shape, authors an art-direction, and generates an on-brand icon via
+ * "shape-as-dial" (Lucide armature → qwen-image-edit-max → server matte →
+ * transparent PNG on the canvas). The design_* tools reach the canvas through the
+ * sidecar's designControl → a `design_tool` event we handle here; the generation
+ * itself runs host-side (sidecar) via assetForgeGenerate → `asset_forge_result`.
+ *
+ * The bottom Design Architect DOCK is a self-contained chat wired to the sidecar
+ * on the 'design' surface (mirrors HealthRoomChat, lane === 'design').
+ */
+
+type GenOutcome = { ok: boolean; dataUrl?: string; error?: string };
+
+const CHECKER = 'repeating-conic-gradient(#221a30 0% 25%, #181123 0% 50%) 50% / 16px 16px';
+const PNG_SIZES = [1024, 512, 256, 128, 64, 32];
+// Collapsed height of the chat dock (handle + static composer). The dock is
+// bottom-anchored and animates its height COLLAPSED ⇄ 58% so the composer stays
+// pinned at the bottom while the conversation slides above it.
+const DOCK_COLLAPSED = 112;
+
+const BORDER = 'var(--border, #2a2440)';
+const CARD_BORDER = 'color-mix(in srgb, var(--accent) 20%, transparent)';
+
+// ── HSV↔hex helpers for the custom colour picker ────────────────────────────
+function clamp(n: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, n)); }
+function hsvToHex(h: number, s: number, v: number): string {
+  const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+  const to = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+  return `#${to(r)}${to(g)}${to(b)}`.toUpperCase();
+}
+function hexToHsv(hex: string): { h: number; s: number; v: number } {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return { h: 0, s: 0, v: 1 };
+  const int = parseInt(m[1], 16);
+  const r = ((int >> 16) & 255) / 255, g = ((int >> 8) & 255) / 255, b = (int & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d) { if (max === r) h = ((g - b) / d) % 6; else if (max === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  return { h, s: max ? d / max : 0, v: max };
+}
+
+// On-brand custom colour picker — bespoke popover (saturation/value square + hue
+// slider), Brand-Kit swatches + hex field. NO OS dialog.
+function ColorField({ value, onChange, swatches }: { value: string; onChange: (v: string) => void; swatches: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [hex, setHex] = useState(value.toUpperCase());
+  const [hsv, setHsv] = useState(() => hexToHsv(value));
+  const ref = useRef<HTMLDivElement>(null);
+  const svRef = useRef<HTMLDivElement>(null);
+  const hueRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setHex(value.toUpperCase()), [value]);
+  useEffect(() => { if (open) setHsv(hexToHsv(value)); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const commit = (next: { h: number; s: number; v: number }) => { setHsv(next); onChange(hsvToHex(next.h, next.s, next.v)); };
+  const onSv = (e: { clientX: number; clientY: number }) => {
+    const r = svRef.current?.getBoundingClientRect(); if (!r) return;
+    commit({ ...hsv, s: clamp((e.clientX - r.left) / r.width, 0, 1), v: clamp(1 - (e.clientY - r.top) / r.height, 0, 1) });
+  };
+  const onHue = (e: { clientX: number }) => {
+    const r = hueRef.current?.getBoundingClientRect(); if (!r) return;
+    commit({ ...hsv, h: clamp((e.clientX - r.left) / r.width, 0, 1) * 360 });
+  };
+  const pickExternal = (v: string) => { onChange(v); setHsv(hexToHsv(v)); };
+  const norm = value.toUpperCase();
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} title="Change colour" aria-label="Change colour"
+        style={{ width: 28, height: 28, borderRadius: 6, cursor: 'pointer', border: `1px solid ${CARD_BORDER}`, background: value }} />
+      {open && (
+        <div style={{ position: 'absolute', zIndex: 60, top: 36, left: 0, width: 200, borderRadius: 8, border: `1px solid ${CARD_BORDER}`, background: '#1a1028', padding: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', userSelect: 'none' }}>
+          <div ref={svRef}
+            onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); onSv(e); }}
+            onPointerMove={e => { if (e.buttons) onSv(e); }}
+            style={{ position: 'relative', width: '100%', height: 120, borderRadius: 6, cursor: 'crosshair', marginBottom: 8, background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${hsv.h} 100% 50%))` }}>
+            <div style={{ position: 'absolute', width: 12, height: 12, borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 1px 3px rgba(0,0,0,0.4)', transform: 'translate(-50%,-50%)', pointerEvents: 'none', left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
+          </div>
+          <div ref={hueRef}
+            onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); onHue(e); }}
+            onPointerMove={e => { if (e.buttons) onHue(e); }}
+            style={{ position: 'relative', width: '100%', height: 12, borderRadius: 999, cursor: 'pointer', marginBottom: 10, background: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}>
+            <div style={{ position: 'absolute', top: '50%', width: 14, height: 14, borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 1px 3px rgba(0,0,0,0.4)', transform: 'translate(-50%,-50%)', pointerEvents: 'none', left: `${(hsv.h / 360) * 100}%` }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CARD_BORDER}`, flexShrink: 0, background: value }} />
+            <input value={hex}
+              onChange={e => { const v = e.target.value.toUpperCase(); setHex(v); if (/^#[0-9A-F]{6}$/.test(v)) pickExternal(v); }}
+              style={{ flex: 1, minWidth: 0, padding: '5px 8px', borderRadius: 6, fontSize: 11, background: 'rgba(26,16,40,0.6)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, outline: 'none' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {swatches.map((sw, i) => (
+              <button key={i} onClick={() => pickExternal(sw)} title={sw.toUpperCase()} aria-label={sw}
+                style={{ width: 24, height: 24, borderRadius: 6, cursor: 'pointer', border: `1px solid ${norm === sw.toUpperCase() ? 'var(--accent)' : CARD_BORDER}`, background: sw }} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Collapsible inspector group — clickable uppercase header + chevron.
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', marginBottom: open ? 9 : 0 }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 500, color: '#8b8398' }}>{title}</span>
+        <span style={{ flexShrink: 0, marginLeft: 8, fontSize: 8, color: '#8b8398', lineHeight: 1, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}>▼</span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+// mm:ss for the player time readouts.
+function fmtTime(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// A bespoke horizontal drag bar — same pointer technique as ColorField's hue
+// slider (onPointerDown → setPointerCapture, onPointerMove while buttons held,
+// fraction derived from the track's bounding rect). Accent-filled progress + a
+// draggable circular thumb. Used for the video scrubber and the volume control.
+function DragBar({ value, onChange, height = 6, thumb = 13, dimTrack = 'rgba(26,16,40,0.85)', accent = 'var(--accent)', title }:
+  { value: number; onChange: (v: number) => void; height?: number; thumb?: number; dimTrack?: string; accent?: string; title?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const seek = (clientX: number) => {
+    const r = ref.current?.getBoundingClientRect(); if (!r) return;
+    onChange(clamp((clientX - r.left) / r.width, 0, 1));
+  };
+  const pct = clamp(value, 0, 1) * 100;
+  return (
+    <div ref={ref} title={title}
+      onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); seek(e.clientX); }}
+      onPointerMove={e => { if (e.buttons) seek(e.clientX); }}
+      style={{ position: 'relative', width: '100%', height, borderRadius: 999, cursor: 'pointer', background: dimTrack, border: `1px solid ${CARD_BORDER}`, userSelect: 'none', touchAction: 'none' }}>
+      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, borderRadius: 999, background: accent, pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: '50%', left: `${pct}%`, width: thumb, height: thumb, borderRadius: '50%', background: '#fff', border: `2px solid ${accent}`, boxShadow: '0 1px 4px rgba(0,0,0,0.5)', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
+    </div>
+  );
+}
+
+// A small round transport button (play/pause and friends), accent-tinted.
+function TransportButton({ onClick, title, accent = false, children }:
+  { onClick: () => void; title: string; accent?: boolean; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={title} aria-label={title}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+        border: `1px solid ${accent ? 'var(--accent)' : CARD_BORDER}`,
+        background: accent ? 'var(--accent)' : 'rgba(26,16,40,0.6)',
+        color: accent ? '#0d0916' : '#cdd6f4' }}>
+      {children}
+    </button>
+  );
+}
+
+const iconBtnStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, cursor: 'pointer', flexShrink: 0, border: `1px solid ${CARD_BORDER}`, background: 'rgba(26,16,40,0.6)', color: '#a6adc8' };
+
+// ── Bespoke Video player ────────────────────────────────────────────────────
+// Dark stage + hand-built transport (NO <video controls>). A hidden <video ref>
+// is wired so the controls "just work" the day a real src is set; with no src we
+// drive a fake playhead over the chosen placeholder duration so the design is
+// fully feelable. Scrubber = DragBar (ColorField pointer technique).
+function VideoStage({ durationSec, src, generating }: { durationSec: number; src?: string; generating?: boolean }) {
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0); // 0..1
+  const [volume, setVolume] = useState(0.8);
+  const [muted, setMuted] = useState(false);
+  const [isMax, setIsMax] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
+  const lastRef = useRef<number>(0);
+
+  const hasSrc = () => !!videoRef.current?.currentSrc;
+
+  // A fresh clip arrived → rewind the transport so it plays the new one from 0.
+  useEffect(() => { setPlaying(false); setProgress(0); }, [src]);
+
+  // Fake playhead — advance progress over durationSec while playing and no real
+  // clip is loaded. A real <video> drives progress via onTimeUpdate instead.
+  useEffect(() => {
+    if (!playing || hasSrc()) return;
+    lastRef.current = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - lastRef.current) / 1000; lastRef.current = now;
+      setProgress(p => {
+        const next = p + dt / Math.max(0.1, durationSec);
+        if (next >= 1) { setPlaying(false); return 1; }
+        return next;
+      });
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [playing, durationSec]);
+
+  // Keep the (optional) real element in sync with our controls.
+  useEffect(() => { if (videoRef.current) videoRef.current.volume = muted ? 0 : volume; }, [volume, muted]);
+
+  const toggle = () => {
+    const v = videoRef.current;
+    setPlaying(prev => {
+      const next = !prev;
+      if (next && progress >= 1) setProgress(0);
+      if (v && hasSrc()) { if (next) void v.play().catch(() => {}); else v.pause(); }
+      return next;
+    });
+  };
+  const seek = (frac: number) => {
+    setProgress(frac);
+    const v = videoRef.current;
+    if (v && hasSrc() && Number.isFinite(v.duration)) v.currentTime = frac * v.duration;
+  };
+  const onTimeUpdate = () => {
+    const v = videoRef.current;
+    if (v && hasSrc() && Number.isFinite(v.duration) && v.duration > 0) setProgress(v.currentTime / v.duration);
+  };
+  // "Fullscreen" = maximise within the panel (fixed overlay), consistent with the
+  // extension where the real Fullscreen API is blocked in the sandboxed webview.
+  const toggleMax = () => setIsMax(m => !m);
+  useEffect(() => {
+    if (!isMax) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMax(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isMax]);
+
+  const cur = progress * durationSec;
+
+  return (
+    <div style={isMax
+      ? { position: 'fixed', inset: 0, zIndex: 2147483000, background: '#000', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }
+      : { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Stage — clean dark (not the transparency checker; video isn't transparent) */}
+      <div ref={stageRef} style={{ flex: 1, minHeight: 220, borderRadius: 12, border: `1px solid ${CARD_BORDER}`, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(120% 120% at 50% 30%, #171021, #0c0814)' }}>
+        <video ref={videoRef} src={src || undefined} onTimeUpdate={onTimeUpdate} onEnded={() => setPlaying(false)} playsInline
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'transparent' }} />
+        {!src && (
+          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center', padding: '0 32px', pointerEvents: 'none' }}>
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="5" width="15" height="14" rx="2" /><path d="m17 9 5-3v12l-5-3" />
+            </svg>
+            <div style={{ fontSize: 13.5, color: '#a6adc8' }}>Your video will appear here</div>
+            <div style={{ fontSize: 12, color: '#8b8398', maxWidth: 320, lineHeight: 1.6 }}>Describe it on the right — Ava generates it and it plays here.</div>
+          </div>
+        )}
+        {generating && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(12,8,20,0.74)', backdropFilter: 'blur(2px)' }}>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${CARD_BORDER}`, borderTopColor: 'var(--accent)', animation: 'avaSpin 0.8s linear infinite' }} />
+            <div style={{ fontSize: 12.5, color: '#a6adc8' }}>Generating your video… this can take a minute or two.</div>
+            <style>{'@keyframes avaSpin { to { transform: rotate(360deg) } }'}</style>
+          </div>
+        )}
+      </div>
+
+      {/* Transport chrome — bespoke, always visible so the design is feelable */}
+      <div style={{ borderRadius: 12, border: `1px solid ${CARD_BORDER}`, background: 'rgba(20,13,32,0.7)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <TransportButton onClick={toggle} title={playing ? 'Pause' : 'Play'} accent>
+            {playing
+              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+              : <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>}
+          </TransportButton>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <DragBar value={progress} onChange={seek} title="Scrub" />
+          </div>
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a6adc8', whiteSpace: 'nowrap' }}>{fmtTime(cur)} / {fmtTime(durationSec)}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button type="button" onClick={() => setMuted(m => !m)} title={muted ? 'Unmute' : 'Mute'} aria-label={muted ? 'Unmute' : 'Mute'} style={iconBtnStyle}>
+            {muted || volume === 0
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z" /><line x1="22" y1="9" x2="16" y2="15" /><line x1="16" y1="9" x2="22" y2="15" /></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /></svg>}
+          </button>
+          <div style={{ width: 96 }}>
+            <DragBar value={muted ? 0 : volume} onChange={v => { setVolume(v); setMuted(false); }} height={5} thumb={11} title="Volume" />
+          </div>
+          <div style={{ flex: 1 }} />
+          <button type="button" onClick={toggleMax} title={isMax ? 'Restore (Esc)' : 'Maximise'} aria-label={isMax ? 'Restore' : 'Maximise'} style={iconBtnStyle}>
+            {isMax
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" /></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg>}
+          </button>
+          <button type="button" onClick={() => {}} title="Save (coming soon)" aria-label="Save"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600, border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bespoke Waveform (voice) player ─────────────────────────────────────────
+// The signature element: a custom-drawn waveform on a devicePixelRatio-aware
+// <canvas>. Bars are a DETERMINISTIC function of index (no Math.random → stable
+// render). The waveform IS the scrubber: pointer down/move on it seeks (same
+// setPointerCapture technique as ColorField). Played bars bright accent,
+// unplayed dimmed. No <audio controls> — a fake playhead sweeps on play.
+function deterministicAmp(i: number): number {
+  // Layered sines over the bar index → an organic-but-stable envelope in 0..1.
+  const a = Math.sin(i * 0.45) * 0.5 + 0.5;
+  const b = Math.sin(i * 0.13 + 1.7) * 0.5 + 0.5;
+  const c = Math.sin(i * 0.9 + 0.3) * 0.25 + 0.25;
+  return clamp(0.12 + (a * 0.55 + b * 0.3 + c * 0.15) * 0.88, 0.06, 1);
+}
+
+function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; durationSec: number }) {
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
+  const lastRef = useRef<number>(0);
+  const progressRef = useRef(0);
+  useEffect(() => { progressRef.current = progress; }, [progress]);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+    if (cssW === 0 || cssH === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+    const ctx = canvas.getContext('2d'); if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    let accent = getComputedStyle(canvas).getPropertyValue('--accent').trim();
+    if (!accent) accent = '#c9a2ff';
+    const barW = 3, gap = 2, step = barW + gap;
+    const count = Math.max(1, Math.floor(cssW / step));
+    const mid = cssH / 2;
+    const p = progressRef.current;
+    for (let i = 0; i < count; i++) {
+      const amp = deterministicAmp(i);
+      const h = Math.max(2, amp * (cssH * 0.86));
+      const x = i * step;
+      const played = (i + 0.5) / count <= p;
+      ctx.globalAlpha = played ? 1 : 0.26;
+      ctx.fillStyle = accent;
+      const y = mid - h / 2;
+      const r = Math.min(1.5, barW / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + barW, y, x + barW, y + h, r);
+      ctx.arcTo(x + barW, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + barW, y, r);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Playhead line.
+    ctx.globalAlpha = 1;
+    const px = clamp(p, 0, 1) * cssW;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(px - 0.75, 0, 1.5, cssH);
+  }, []);
+
+  // Redraw on progress change.
+  useEffect(() => { draw(); }, [progress, draw]);
+  // Redraw on resize (ResizeObserver) + once on mount.
+  useEffect(() => {
+    draw();
+    const el = wrapRef.current; if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => draw());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [draw]);
+
+  // Fake playhead sweep on play.
+  useEffect(() => {
+    if (!playing) return;
+    lastRef.current = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - lastRef.current) / 1000; lastRef.current = now;
+      setProgress(pr => {
+        const next = pr + dt / Math.max(0.1, durationSec);
+        if (next >= 1) { setPlaying(false); return 1; }
+        return next;
+      });
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [playing, durationSec]);
+
+  const toggle = () => setPlaying(prev => { const next = !prev; if (next && progressRef.current >= 1) setProgress(0); return next; });
+  const seek = (clientX: number) => {
+    const r = canvasRef.current?.getBoundingClientRect(); if (!r) return;
+    setProgress(clamp((clientX - r.left) / r.width, 0, 1));
+  };
+
+  const cur = progress * durationSec;
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 14, justifyContent: 'center' }}>
+      <div style={{ borderRadius: 14, border: `1px solid ${CARD_BORDER}`, background: 'radial-gradient(120% 140% at 50% 0%, #171021, #0c0814)', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Waveform = scrubber */}
+        <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: 120 }}>
+          <canvas ref={canvasRef}
+            onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); seek(e.clientX); }}
+            onPointerMove={e => { if (e.buttons) seek(e.clientX); }}
+            style={{ width: '100%', height: '100%', display: 'block', cursor: 'pointer', touchAction: 'none' }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <TransportButton onClick={toggle} title={playing ? 'Pause' : 'Play'} accent>
+            {playing
+              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+              : <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>}
+          </TransportButton>
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <span style={{ fontSize: 13, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{voiceName}</span>
+            <span style={{ fontSize: 11, color: '#8b8398' }}>Voiceover preview</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a6adc8', whiteSpace: 'nowrap' }}>{fmtTime(cur)} / {fmtTime(durationSec)}</span>
+          <button type="button" onClick={() => {}} title="Save (coming soon)" aria-label="Save"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600, border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
+            Save
+          </button>
+        </div>
+      </div>
+      <div style={{ textAlign: 'center', fontSize: 12, color: '#8b8398' }}>No audio yet — this is the transport. Write a script on the right and Ava speaks it here.</div>
+    </div>
+  );
+}
+
+type ViewId = 'icon' | 'iconset' | 'appicon' | 'logo' | 'badge' | 'avatar' | 'banner' | 'hero' | 'ogimage' | 'illustration' | 'pattern' | 'gamekit' | 'gamepiece' | 'canvas' | 'video' | 'voice' | 'brandkit';
+
+const GROUPS: { label: string; accent: string; items: { id: ViewId; label: string; badge?: string }[] }[] = [
+  { label: 'Web / App', accent: 'var(--accent)', items: [
+    { id: 'icon', label: 'Icon' },
+    { id: 'iconset', label: 'Icon Set', badge: 'SOON' },
+    { id: 'appicon', label: 'App Icon / Favicon', badge: 'SOON' },
+    { id: 'logo', label: 'Logo', badge: 'NEXT' },
+    { id: 'badge', label: 'Badge / Mark', badge: 'SOON' },
+    { id: 'avatar', label: 'Avatar', badge: 'SOON' },
+    { id: 'banner', label: 'Banner', badge: 'SOON' },
+    { id: 'hero', label: 'Hero', badge: 'SOON' },
+    { id: 'ogimage', label: 'Social / OG Image', badge: 'SOON' },
+    { id: 'illustration', label: 'Illustration', badge: 'SOON' },
+    { id: 'pattern', label: 'Pattern / Background', badge: 'SOON' },
+  ] },
+  { label: 'Game', accent: '#f0a24b', items: [
+    { id: 'gamekit', label: 'UI Kit', badge: 'SOON' }, { id: 'gamepiece', label: 'Single Piece', badge: 'SOON' },
+  ] },
+  { label: 'Open Canvas', accent: '#6aa9ff', items: [
+    { id: 'video', label: 'Video' },
+    { id: 'voice', label: 'Voiceover' },
+    { id: 'canvas', label: 'Image', badge: 'SOON' },
+  ] },
+];
+
+// Qwen3-TTS built-in voice roster — PLACEHOLDER names for the shell (no wiring).
+const VOICES = ['Aria', 'Ovis', 'Nofish', 'Cherry', 'Ember', 'Sunny', 'Marcus', 'Willow', 'Koda'];
+
+export function DesignStudio() {
+  const kit = useMemo(() => activeKit(), []);
+  const [view, setView] = useState<ViewId>('icon');
+  // Which room the Design Architect chat should reflect. The Open-Canvas Video
+  // and Voiceover views map to their own rooms; everything else is the icon
+  // studio (greeting / chips / heading / persona all follow this).
+  const designRoom: 'icon' | 'video' | 'voice' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : 'icon';
+
+  const [query, setQuery] = useState('');
+  const [shapeId, setShapeId] = useState('Bell');
+  const [color, setColor] = useState<string>(kit.palette.primary);
+  const [boardBg, setBoardBg] = useState(CHECKER);
+
+  // ── Video lane (Wan 2.5 via sidecar: submit → poll → clip) ──
+  const [videoDuration, setVideoDuration] = useState('5'); // Wan: '5' | '10' seconds only
+  const [videoAspect, setVideoAspect] = useState('16:9');
+  const [videoResolution, setVideoResolution] = useState('1080p');
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [videoGenerating, setVideoGenerating] = useState(false);
+
+  // ── Voice lane (UI shell — local state only) ──
+  const [voiceName, setVoiceName] = useState(VOICES[0]);
+  const [voiceScript, setVoiceScript] = useState('');
+  const [voiceEmotion, setVoiceEmotion] = useState('neutral');
+  const [voiceSpeed, setVoiceSpeed] = useState('1.0');
+
+  const [materialId, setMaterialId] = useState('glass');
+  const [genResult, setGenResult] = useState<string | null>(null);
+  const [genStatus, setGenStatus] = useState<string | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [genSize, setGenSize] = useState(512);
+  const [dockOpen, setDockOpen] = useState(false);
+  // Keep the conversation mounted through the slide-down so the collapse animates.
+  const [renderConv, setRenderConv] = useState(false);
+  useEffect(() => {
+    if (dockOpen) { setRenderConv(true); return; }
+    const t2 = window.setTimeout(() => setRenderConv(false), 320);
+    return () => window.clearTimeout(t2);
+  }, [dockOpen]);
+
+  const material = MATERIALS.find(m => m.id === materialId) ?? MATERIALS[0];
+
+  const hits = useMemo(() => searchShapes(query, 24), [query]);
+  const shape = useMemo(() => getShape(shapeId), [shapeId]);
+
+  // Local creative gallery — design_save / set auto-save write the matted PNG here.
+  const gallery = useCreativeGallery('image');
+
+  // Live credit balance for the top bar (platform users only).
+  const [credit, setCredit] = useState<{ remaining: number; limit: number } | null>(null);
+  useEffect(() => {
+    if (!isConnected()) { setCredit(null); return; }
+    apiFetch('/usage/summary').then((res: any) => {
+      if (!res?.period) return;
+      const freeUsed = res.period.free_credits_used || 0;
+      const freeLimit = res.period.free_credits_limit || 0;
+      const subUsed = res.period.credits_used || 0;
+      const subLimit = res.period.credits_limit || 0;
+      const limit = res.isUnlimited ? Number.POSITIVE_INFINITY : freeLimit + subLimit;
+      const used = freeUsed + subUsed;
+      setCredit({ remaining: Math.max(0, limit - used), limit });
+    }).catch(() => {});
+  }, []);
+
+  // A generated result belongs to one (shape × material × colour); invalidate.
+  useEffect(() => { setGenResult(null); setGenError(null); }, [shapeId, materialId, color]);
+
+  // One generation in flight → one resolver. runGeneration parks it; the
+  // asset_forge_result listener fulfils it. Both a direct call and the Design
+  // Architect's tools await the same path.
+  const genResolverRef = useRef<((r: GenOutcome) => void) | null>(null);
+  const genResultRef = useRef<string | null>(null);
+  useEffect(() => { genResultRef.current = genResult; }, [genResult]);
+
+  // Shape-as-dial: render the shape to a duotone armature, hand it to the sidecar
+  // with an art-director prompt → Qwen-Image-edit → server matte. Returns a
+  // promise resolving with the matted result. `look` is Ava's authored art
+  // direction (or a material preset's text).
+  const runGeneration = useCallback((shapeHit: ShapeHit, look: string, colorHex: string): Promise<GenOutcome> => {
+    return new Promise<GenOutcome>((resolve) => {
+      genResolverRef.current = resolve;
+      setGenError(null); setGenResult(null);
+      setGenStatus('Preparing…');
+      svgToPngDataUrl(armatureSvg(shapeHit), 1024, 1024)
+        .then((armature) => {
+          const prompt = composeIconPrompt(shapeHit.label, look, colorHex);
+          setGenStatus('Generating with Qwen-Image…');
+          getSidecar().assetForgeGenerate({ prompt, referenceImage: armature, size: '1024*1024', negativePrompt: ICON_NEGATIVE }).catch((e) => {
+            genResolverRef.current = null;
+            const err = e instanceof Error ? e.message : 'Generation failed';
+            setGenError(err); setGenStatus(null);
+            resolve({ ok: false, error: err });
+          });
+        })
+        .catch((e) => {
+          genResolverRef.current = null;
+          const err = e instanceof Error ? e.message : 'Generation failed';
+          setGenError(err); setGenStatus(null);
+          resolve({ ok: false, error: err });
+        });
+    });
+  }, []);
+
+  const resolveShape = (idOrSubject: string): ShapeHit | null => {
+    const s = idOrSubject.trim();
+    if (!s) return null;
+    return getShape(s) ?? searchShapes(s, 1)[0] ?? null;
+  };
+
+  // ── Video lane wiring (mirror of the icon runGeneration/resolver pattern) ──
+  // One video in flight → one parked resolver. runVideoGeneration asks the
+  // sidecar to submit+poll and awaits the `asset_forge_video_result` event.
+  type VideoOutcome = { ok: boolean; url?: string; error?: string };
+  const videoResolverRef = useRef<((r: VideoOutcome) => void) | null>(null);
+  // `resolution` is the exact route value ('720P' | '1080P'); duration is 5 | 10.
+  const runVideoGeneration = useCallback((prompt: string, duration: string, resolution: string): Promise<VideoOutcome> => {
+    return new Promise<VideoOutcome>((resolve) => {
+      videoResolverRef.current = resolve;
+      setVideoSrc(null);
+      setVideoGenerating(true);
+      getSidecar().assetForgeVideo({ prompt, duration: Number(duration), resolution }).catch((e) => {
+        videoResolverRef.current = null;
+        setVideoGenerating(false);
+        resolve({ ok: false, error: e instanceof Error ? e.message : 'Video generation failed' });
+      });
+    });
+  }, []);
+
+  // Save a matted PNG to the local creative gallery (transparent icon).
+  const saveToLibrary = useCallback((dataUrl: string, title: string) => {
+    gallery.saveGenerated({ url: dataUrl, title, prompt: title, ext: 'png' }).catch(() => {});
+  }, [gallery]);
+
+  // ── Design Architect tool bridge ──────────────────────────────────────────
+  // Ava's design_* tools reach here via the sidecar's designControl → a
+  // `design_tool` event. We run the command against this canvas with the same
+  // code the UI uses, then reply via designToolResult. Held in a ref reassigned
+  // every render so it always closes over fresh state.
+  const cmdHandlerRef = useRef<(m: { requestId: string; command: string; args: Record<string, unknown> }) => void>(() => {});
+  cmdHandlerRef.current = async (m) => {
+    const reply = (ok: boolean, data?: unknown, error?: string) =>
+      getSidecar().designToolResult(m.requestId, ok, data, error).catch(() => {});
+    const args = m.args || {};
+    try {
+      if (m.command === 'find_shape') {
+        const q = String(args.query ?? '').trim();
+        const shapes = searchShapes(q, 8).map((s) => ({ id: s.id, label: s.label }));
+        reply(true, { shapes });
+        return;
+      }
+      if (m.command === 'generate_icon') {
+        const resolved = resolveShape(String(args.shape ?? ''));
+        if (!resolved) { reply(false, undefined, `No shape matches "${String(args.shape ?? '')}".`); return; }
+        const artDir = typeof args.art_direction === 'string' ? args.art_direction.trim() : '';
+        const matArg = MATERIALS.find((x) => x.id === args.material);
+        const mat = matArg ?? material; // for the inspector preset display
+        const look = artDir || mat.prompt; // Ava's authored look wins; material preset is the fallback
+        const col = typeof args.colour === 'string' && /^#[0-9a-fA-F]{6}$/.test(args.colour) ? args.colour : color;
+        // Sync the inspector so the user sees what she's making.
+        setView('icon'); setShapeId(resolved.id); if (matArg) setMaterialId(matArg.id);
+        setColor(col); if (typeof args.size === 'number') setGenSize(args.size);
+        const out = await runGeneration(resolved, look, col);
+        if (out.ok) reply(true, { label: resolved.label, material: artDir ? 'custom-direction' : mat.label, credits: 20 });
+        else reply(false, undefined, out.error || 'Generation failed.');
+        return;
+      }
+      if (m.command === 'generate_set') {
+        const list = Array.isArray(args.shapes) ? (args.shapes as unknown[]).map(String) : [];
+        const artDir = typeof args.art_direction === 'string' ? args.art_direction.trim() : '';
+        const matArg = MATERIALS.find((x) => x.id === args.material);
+        const mat = matArg ?? material;
+        const look = artDir || mat.prompt; // one look held constant across the family
+        const col = typeof args.colour === 'string' && /^#[0-9a-fA-F]{6}$/.test(args.colour) ? args.colour : color;
+        setView('icon'); if (matArg) setMaterialId(matArg.id); setColor(col);
+        let made = 0; const failed: string[] = [];
+        for (const s of list.slice(0, 12)) {
+          const resolved = resolveShape(s);
+          if (!resolved) { failed.push(s); continue; }
+          setShapeId(resolved.id);
+          const out = await runGeneration(resolved, look, col);
+          if (out.ok && out.dataUrl) { made++; saveToLibrary(out.dataUrl, `${resolved.label}-${mat.label}`.toLowerCase().replace(/\s+/g, '-')); }
+          else failed.push(resolved.label);
+        }
+        reply(true, { made, failed, credits: made * 20 });
+        return;
+      }
+      if (m.command === 'brand_kit') {
+        if (args.action === 'update') {
+          const active = activeKit();
+          const next: BrandKit = {
+            ...active,
+            name: typeof args.name === 'string' && args.name.trim() ? args.name.trim() : active.name,
+            palette: { ...active.palette, ...((args.palette as Partial<BrandKit['palette']> | undefined) ?? {}) },
+            styleTags: Array.isArray(args.styleTags) ? (args.styleTags as unknown[]).map(String) : active.styleTags,
+          };
+          upsertKit(next);
+          void loadKits();
+          reply(true, { name: next.name, palette: next.palette, styleTags: next.styleTags });
+        } else {
+          const k = activeKit();
+          reply(true, { name: k.name, palette: k.palette, styleTags: k.styleTags });
+        }
+        return;
+      }
+      if (m.command === 'generate_video') {
+        const prompt = typeof args.prompt === 'string' ? args.prompt.trim() : '';
+        if (!prompt) { reply(false, undefined, 'A prompt is required to generate a video.'); return; }
+        setView('video');
+        // Wan duration is 5 or 10 seconds only.
+        const dur = (args.duration === 10 || args.duration === '10') ? '10' : '5';
+        setVideoDuration(dur);
+        // Aspect is synced to the inspector; the Wan route carries orientation via
+        // the prompt (no aspect parameter), so only the resolution tier is sent.
+        const asp = typeof args.aspect === 'string' && ['16:9', '9:16', '1:1'].includes(args.aspect) ? args.aspect : videoAspect;
+        setVideoAspect(asp);
+        const resArg = typeof args.resolution === 'string' && args.resolution.includes('1080') ? '1080p'
+          : typeof args.resolution === 'string' && args.resolution.includes('720') ? '720p'
+          : videoResolution;
+        setVideoResolution(resArg);
+        const wanRes = resArg === '1080p' ? '1080P' : '720P'; // route: '480P' | '720P' | '1080P'
+        const out = await runVideoGeneration(prompt, dur, wanRes);
+        if (out.ok) reply(true, { duration: Number(dur), credits: wanRes === '1080P' ? 300 : 150 });
+        else reply(false, undefined, out.error || 'Video generation failed.');
+        return;
+      }
+      if (m.command === 'save') {
+        const url = genResultRef.current;
+        if (!url) { reply(false, undefined, 'Nothing on the canvas to save yet.'); return; }
+        const title = (typeof args.title === 'string' && args.title.trim())
+          ? args.title.trim()
+          : `${(getShape(shapeId)?.label ?? 'icon')}-${material.label}`.toLowerCase().replace(/\s+/g, '-');
+        saveToLibrary(url, title);
+        reply(true, { title });
+        return;
+      }
+      reply(false, undefined, `Unknown design command: ${m.command}`);
+    } catch (e) {
+      reply(false, undefined, e instanceof Error ? e.message : 'Design command failed');
+    }
+  };
+
+  // Single sidecar subscription: the pipeline result AND the design_tool bridge.
+  useEffect(() => {
+    const handler = (event: SidecarEvent) => {
+      if (event.event === 'asset_forge_result') {
+        const ok = !!event.success && !!event.dataUrl;
+        if (ok) { setGenResult(event.dataUrl!); setDockOpen(false); } // icon ready → slide the chat down, reveal it
+        else setGenError(event.error || 'Generation failed');
+        setGenStatus(null);
+        const resolve = genResolverRef.current;
+        if (resolve) {
+          genResolverRef.current = null;
+          resolve(ok ? { ok: true, dataUrl: event.dataUrl } : { ok: false, error: event.error || 'Generation failed' });
+        }
+        return;
+      }
+      if (event.event === 'asset_forge_video_result') {
+        setVideoGenerating(false);
+        const ok = !!event.success && !!event.url;
+        if (ok) { setVideoSrc(event.url!); setDockOpen(false); } // clip ready → slide the chat down, reveal it
+        const resolve = videoResolverRef.current;
+        if (resolve) {
+          videoResolverRef.current = null;
+          resolve(ok ? { ok: true, url: event.url } : { ok: false, error: event.error || 'Video generation failed' });
+        }
+        return;
+      }
+      if (event.event === 'design_tool' && event.requestId && event.command) {
+        cmdHandlerRef.current({ requestId: event.requestId, command: event.command, args: event.args ?? {} });
+      }
+    };
+    getSidecar().onAny(handler);
+    return () => { getSidecar().offAny(handler); };
+  }, []);
+
+  const boards: { bg: string; label: string }[] = [
+    { bg: CHECKER, label: 'checker' }, { bg: '#000000', label: 'black' },
+    { bg: '#ffffff', label: 'white' }, { bg: kit.palette.surface, label: 'brand surface' },
+  ];
+
+  const navBtn = (on: boolean): CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 8,
+    fontSize: 12.5, textAlign: 'left', cursor: 'pointer',
+    border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'transparent'}`,
+    background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
+    color: on ? 'var(--accent)' : '#a6adc8', fontWeight: on ? 400 : 300,
+  });
+
+  return (
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      {/* LEFT RAIL — the three areas */}
+      <nav style={{ width: 220, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', padding: 12, overflowY: 'auto' }}>
+        {GROUPS.map(g => (
+          <div key={g.label} style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px 6px', fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: 600, color: g.accent }}>
+              <span style={{ width: 3, height: 12, borderRadius: 2, background: g.accent }} />{g.label}
+            </div>
+            {g.items.map(it => {
+              // Badged items aren't built yet — render them inactive (non-clickable,
+              // dimmed) so the sidebar never implies something works when it doesn't.
+              const disabled = !!it.badge;
+              return (
+                <button key={it.id} onClick={disabled ? undefined : () => setView(it.id)} disabled={disabled}
+                  style={{ ...navBtn(view === it.id), ...(disabled ? { opacity: 0.45, cursor: 'default' } : {}) }}>
+                  {it.label}
+                  {it.badge && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999 }}>{it.badge}</span>}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        <div style={{ marginTop: 'auto', borderTop: `1px solid ${BORDER}`, paddingTop: 8 }}>
+          <button onClick={() => setView('brandkit')} style={navBtn(view === 'brandkit')}>
+            Brand Kit
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 3 }}>
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: kit.palette.primary }} />
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: kit.palette.accent }} />
+            </span>
+          </button>
+        </div>
+      </nav>
+
+      {/* CENTRE — the stage. The dock overlays the lower part when expanded. */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative', paddingBottom: DOCK_COLLAPSED }}>
+        {/* TOP BAR — model picker + credit balance */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 24px', borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+          <RoomModelPicker />
+          <div style={{ flex: 1 }} />
+          {credit && (credit.limit >= 999_999_999 || !Number.isFinite(credit.limit)
+            ? <span style={{ fontSize: 11, opacity: 0.5, fontFamily: 'monospace', color: '#6c7086' }}>∞ credits</span>
+            : credit.limit > 0
+              ? <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'monospace', color: '#a6e3a1' }} title={`${credit.remaining.toLocaleString()} of ${credit.limit.toLocaleString()} credits remaining`}>{credit.remaining.toLocaleString()} left</span>
+              : null)}
+        </div>
+
+        {view === 'icon' ? (
+          <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ marginBottom: 12 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Icon</h2>
+              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>Your shape, your brand, any material — generated and matted to a clean transparent icon.</p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 11, color: '#8b8398' }}>Check against</span>
+              {boards.map(b => (
+                <button key={b.label} onClick={() => setBoardBg(b.bg)} title={b.label} aria-label={b.label}
+                  style={{ width: 20, height: 20, borderRadius: 4, cursor: 'pointer', background: b.bg, border: `1px solid ${boardBg === b.bg ? '#fff' : CARD_BORDER}` }} />
+              ))}
+            </div>
+            <div style={{ flex: 1, minHeight: 240, borderRadius: 12, border: `1px solid ${CARD_BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, position: 'relative', background: boardBg }}>
+              {genResult && <img src={genResult} alt="Generated icon" style={{ width: 200, height: 200, objectFit: 'contain' }} />}
+              {!genResult && !genStatus && shape && (
+                <>
+                  <div style={{ width: 132, height: 132, opacity: 0.8 }} dangerouslySetInnerHTML={{ __html: buildShapeSvg(shape.elements, 'flat', ['#8b93b8'], 2.6) }} />
+                  <p style={{ fontSize: 12, color: '#8b8398', maxWidth: 320, textAlign: 'center', lineHeight: 1.6 }}><b style={{ color: '#a6adc8', fontWeight: 500 }}>{material.label}</b> — Qwen restyles this shape into the material, then mattes it to a clean transparent icon.</p>
+                </>
+              )}
+              {genStatus && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, fontSize: 12.5, color: '#a6adc8' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${CARD_BORDER}`, borderTopColor: 'var(--accent)', animation: 'avaSpin 0.8s linear infinite' }} />
+                  {genStatus}
+                  <style>{'@keyframes avaSpin { to { transform: rotate(360deg) } }'}</style>
+                </div>
+              )}
+            </div>
+            {genError && <p style={{ fontSize: 12, color: '#f38ba8', marginTop: 10 }}>{genError}</p>}
+          </div>
+        ) : view === 'video' ? (
+          <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ marginBottom: 14 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Video</h2>
+              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>Describe a shot — Ava generates a short clip and it plays in this bespoke stage.</p>
+            </div>
+            <VideoStage durationSec={Number(videoDuration)} src={videoSrc ?? undefined} generating={videoGenerating} />
+          </div>
+        ) : view === 'voice' ? (
+          <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ marginBottom: 14 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Voiceover</h2>
+              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>Pick a voice, write the line — Ava speaks it and it renders as a waveform you can scrub.</p>
+            </div>
+            <WaveformPlayer voiceName={voiceName} durationSec={8} />
+          </div>
+        ) : view === 'brandkit' ? (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+            <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Brand Kit</h2>
+            <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 16px' }}>Set once — every tool reads it. The Design Architect proposes updates as she works.</p>
+            <div style={{ maxWidth: 460 }}>
+              <label style={{ fontSize: 11, color: '#8b8398', display: 'block', marginBottom: 6 }}>Palette</label>
+              {(Object.keys(kit.palette) as (keyof typeof kit.palette)[]).map(role => (
+                <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', fontSize: 12.5, color: '#a6adc8' }}>
+                  <span style={{ width: 24, height: 24, borderRadius: 4, background: kit.palette[role] }} />
+                  <span style={{ textTransform: 'capitalize' }}>{role}</span>
+                  <code style={{ marginLeft: 'auto', fontSize: 11, color: '#8b8398' }}>{kit.palette[role].toUpperCase()}</code>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center', padding: '0 40px', color: '#8b8398' }}>
+            <PenNib weight="duotone" size={26} style={{ color: 'var(--accent)' }} />
+            <span style={{ fontSize: 15, color: '#a6adc8' }}>{GROUPS.flatMap(g => g.items).find(i => i.id === view)?.label}</span>
+            <span style={{ maxWidth: 420, fontSize: 13, lineHeight: 1.6 }}>Being brought over from the hub. The Icon lane is live — this one lands in an upcoming slice.</span>
+          </div>
+        )}
+
+        {/* DESIGN ARCHITECT DOCK — bottom-anchored; the composer stays static while
+            the conversation slides up above it (height animates COLLAPSED ⇄ 58%). */}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 30, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'height 0.3s ease-out', height: dockOpen ? '58%' : DOCK_COLLAPSED, background: 'rgba(13,9,22,0.97)' }}>
+          <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center', paddingTop: 6, paddingBottom: 4, borderTop: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)' }}>
+            <button onClick={() => setDockOpen(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 999, border: `1px solid ${CARD_BORDER}`, fontSize: 11, color: '#8b8398', cursor: 'pointer', background: 'rgba(13,9,22,0.92)' }}>
+              <span style={{ position: 'relative', width: 14, height: 14, borderRadius: '50%', overflow: 'hidden', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg, var(--accent), #6366f1)' }}>
+                A
+                <img src="/ava-avatar.jpeg" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              </span>
+              Design Architect
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: dockOpen ? 'rotate(180deg)' : 'none' }} aria-hidden="true"><polyline points="18 15 12 9 6 15" /></svg>
+            </button>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+            <DesignArchitectDock showMessages={renderConv} onComposerFocus={() => setDockOpen(true)} designRoom={designRoom} />
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT RAIL — the inspector (icon lane) */}
+      {view === 'icon' && (
+        <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <Section title="Shape">
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder={'Search 1,990 shapes… "bell"'}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 12, outline: 'none', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box' }} />
+              {/* No Tailwind reset in the IDE, so the injected shape SVGs render
+                  inline at default size and spill out of their tiles onto the
+                  caption below. This scopes them to fit their box cleanly. */}
+              <style>{`.ava-ds-tile{overflow:hidden;display:flex;align-items:center;justify-content:center}.ava-ds-tile svg{display:block;width:100%;height:100%}`}</style>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 7, marginTop: 10 }}>
+                {hits.map((h: ShapeHit) => {
+                  const on = h.id === shapeId;
+                  return (
+                    <button key={h.id} className="ava-ds-tile" onClick={() => setShapeId(h.id)} title={h.label} aria-label={h.label}
+                      style={{ aspectRatio: '1 / 1', borderRadius: 8, cursor: 'pointer', padding: 9, background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'rgba(26,16,40,0.5)', border: `1px solid ${on ? 'var(--accent)' : CARD_BORDER}` }}
+                      dangerouslySetInnerHTML={{ __html: buildShapeSvg(h.elements, 'line', [on ? '#c9a2ff' : '#8b93b8']) }} />
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 12 }}>Lucide · 1,990 shapes · licence-clean (ISC)</p>
+            </Section>
+
+            <Section title="Material">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                {MATERIALS.map(m => {
+                  const on = materialId === m.id;
+                  return (
+                    <button key={m.id} onClick={() => setMaterialId(m.id)} title={m.label}
+                      style={{ padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11.5, textAlign: 'center', border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : CARD_BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'rgba(26,16,40,0.5)', color: on ? 'var(--accent)' : '#a6adc8' }}>{m.label}</button>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 6 }}>The shape becomes a reference the model paints onto — then matted to a transparent icon. Uses credits.</p>
+            </Section>
+
+            <Section title="Colour">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', fontSize: 12, color: '#a6adc8' }}>
+                <ColorField value={color} onChange={setColor} swatches={Object.values(kit.palette)} />
+                Icon colour
+                <code style={{ marginLeft: 'auto', fontSize: 10.5, color: '#8b8398' }}>{color.toUpperCase()}</code>
+              </div>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 4 }}>The material is rendered in this colour.</p>
+            </Section>
+
+            <Section title="Output">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>Icon size</span>
+                <Select size="sm" style={{ width: 118 }} value={String(genSize)} onChange={v => setGenSize(Number(v))}
+                  options={PNG_SIZES.map(s => ({ value: String(s), label: `${s} × ${s}` }))} />
+              </div>
+              <p style={{ fontSize: 10.5, color: '#8b8398' }}>Generated at a 1024 master, exported at your chosen size. Save / export land next.</p>
+            </Section>
+          </div>
+          {/* No Generate button — Ava generates. Ask her in the dock. */}
+        </aside>
+      )}
+
+      {/* RIGHT RAIL — the inspector (video lane) */}
+      {view === 'video' && (
+        <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <Section title="Output">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>Duration</span>
+                <Select size="sm" style={{ width: 118 }} value={videoDuration} onChange={setVideoDuration}
+                  options={[{ value: '5', label: '5s' }, { value: '10', label: '10s' }]} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>Aspect ratio</span>
+                <Select size="sm" style={{ width: 118 }} value={videoAspect} onChange={setVideoAspect}
+                  options={[{ value: '16:9', label: '16:9' }, { value: '9:16', label: '9:16' }, { value: '1:1', label: '1:1' }]} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>Resolution</span>
+                <Select size="sm" style={{ width: 118 }} value={videoResolution} onChange={setVideoResolution}
+                  options={[{ value: '720p', label: '720p' }, { value: '1080p', label: '1080p' }]} />
+              </div>
+            </Section>
+
+            <p style={{ fontSize: 10.5, color: '#8b8398', margin: 0 }}>Ava generates this — describe it and she'll create it.</p>
+          </div>
+        </aside>
+      )}
+
+      {/* RIGHT RAIL — the inspector (voice lane) */}
+      {view === 'voice' && (
+        <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <Section title="Voice">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                {VOICES.map(v => {
+                  const on = v === voiceName;
+                  return (
+                    <button key={v} onClick={() => setVoiceName(v)} title={v}
+                      style={{ padding: '8px 6px', borderRadius: 8, cursor: 'pointer', fontSize: 11.5, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : CARD_BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'rgba(26,16,40,0.5)', color: on ? 'var(--accent)' : '#a6adc8' }}>{v}</button>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 8 }}>Qwen3-TTS built-in voices. Placeholder names — the real roster lands with wiring.</p>
+            </Section>
+
+            <Section title="Script">
+              <textarea value={voiceScript} onChange={e => setVoiceScript(e.target.value)}
+                placeholder="Type the line for Ava to speak…"
+                rows={4}
+                style={{ width: '100%', resize: 'vertical', minHeight: 80, padding: '9px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5, outline: 'none', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            </Section>
+
+            <Section title="Delivery">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>Emotion</span>
+                <Select size="sm" style={{ width: 130 }} value={voiceEmotion} onChange={setVoiceEmotion}
+                  options={[{ value: 'neutral', label: 'Neutral' }, { value: 'warm', label: 'Warm' }, { value: 'bright', label: 'Bright' }, { value: 'calm', label: 'Calm' }, { value: 'excited', label: 'Excited' }]} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>Speed</span>
+                <Select size="sm" style={{ width: 130 }} value={voiceSpeed} onChange={setVoiceSpeed}
+                  options={[{ value: '0.75', label: '0.75×' }, { value: '1.0', label: '1.0×' }, { value: '1.25', label: '1.25×' }]} />
+              </div>
+            </Section>
+
+            <p style={{ fontSize: 10.5, color: '#8b8398', margin: 0 }}>Ava generates this — describe it and she'll create it.</p>
+          </div>
+        </aside>
+      )}
+    </div>
+  );
+}
+
+// ── Design Architect DOCK chat ──────────────────────────────────────────────
+// Self-contained chat on the 'design' surface (mirrors HealthRoomChat, lane
+// 'design'). Local-only — no cloud. Renders its own stream; the main chat and
+// other rooms ignore lane === 'design'.
+
+interface DockAttachment { name: string; dataUri: string; mimeType: string }
+interface ToolChip { name: string; status: 'running' | 'done' | 'error' }
+interface DockMessage { id: string; role: 'user' | 'ava' | 'error'; text: string; toolCalls?: ToolChip[] }
+interface DockConfirm { id: string; question: string }
+
+let _drid = 0;
+const drid = () => `ds-${++_drid}-${Date.now()}`;
+
+const DOCK_STARTERS: { icon: string; label: string; prompt: string }[] = [
+  { icon: '🔔', label: 'A glass bell icon', prompt: 'Design me a frosted-glass bell notification icon in my brand purple.' },
+  { icon: '🎛', label: 'A matching set', prompt: 'Make me a matching set of icons: home, search, settings, profile — same look.' },
+  { icon: '🎨', label: 'Pick a material', prompt: 'What materials can you render, and which suits a premium fintech app?' },
+];
+
+// Open-Canvas Video room starters — verbatim room copy (label → prefill prompt).
+const DOCK_STARTERS_VIDEO: { icon: string; label: string; prompt: string }[] = [
+  { icon: '🎬', label: 'Film a scene', prompt: 'Create a video: a slow cinematic dolly-in down a neon-lit, rain-slicked street at night' },
+  { icon: '📦', label: 'Product in motion', prompt: 'A short clip of my product turning slowly on a clean studio backdrop, soft key light' },
+  { icon: '🌅', label: 'Set a mood', prompt: 'A calm 5-second atmospheric clip — soft morning light, gentle drifting motion' },
+  { icon: '📱', label: 'Vertical for social', prompt: 'A punchy vertical 9:16 clip for social, bright and energetic' },
+];
+
+// Open-Canvas Voiceover room starters — verbatim room copy (label → prefill prompt).
+const DOCK_STARTERS_VOICE: { icon: string; label: string; prompt: string }[] = [
+  { icon: '🎙', label: 'Narrate a script', prompt: 'Narrate this in a warm, calm voice: ' },
+  { icon: '🗣', label: 'Which voice fits?', prompt: 'What voices do you have, and which suits a premium, trustworthy brand?' },
+  { icon: '✨', label: 'An intro read', prompt: 'A short, upbeat intro read for my product video' },
+  { icon: '🧘', label: 'A calm read', prompt: 'A slow, reassuring read for a meditation clip' },
+];
+
+function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon' }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' }) {
+  const [messages, setMessages] = useState<DockMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [attachments, setAttachments] = useState<DockAttachment[]>([]);
+  const [pendingConfirm, setPendingConfirm] = useState<DockConfirm | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+  const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Subscribe to the sidecar, processing ONLY design-lane events.
+  useEffect(() => {
+    const handler = (event: SidecarEvent) => {
+      if (event.lane !== 'design') return;
+      switch (event.event) {
+        case 'stream_delta':
+          if (event.content) {
+            setMessages((prev) => {
+              const copy = [...prev];
+              const last = copy[copy.length - 1];
+              if (last?.role === 'ava') copy[copy.length - 1] = { ...last, text: last.text + event.content };
+              return copy;
+            });
+          }
+          break;
+        case 'confirm_required':
+          if (event.id) {
+            const question = (event.profileField?.question) || (event.args?.question as string) || event.message || 'Ava needs a quick answer.';
+            setPendingConfirm({ id: event.id, question });
+          }
+          break;
+        case 'tool_call_start':
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last?.role === 'ava') copy[copy.length - 1] = { ...last, toolCalls: [...(last.toolCalls || []), { name: event.toolName || 'tool', status: 'running' }] };
+            return copy;
+          });
+          break;
+        case 'tool_call_end':
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last?.role === 'ava' && last.toolCalls) {
+              const tools = [...last.toolCalls];
+              const idx = tools.findIndex((tc) => tc.name === event.toolName && tc.status === 'running');
+              if (idx >= 0) { tools[idx] = { ...tools[idx], status: event.success ? 'done' : 'error' }; copy[copy.length - 1] = { ...last, toolCalls: tools }; }
+            }
+            return copy;
+          });
+          break;
+        case 'done':
+        case 'stopped':
+        case 'cancelled':
+          setStreaming(false);
+          break;
+        case 'error':
+          setMessages((prev) => [...prev, { id: drid(), role: 'error', text: event.message || 'Something went wrong.' }]);
+          setStreaming(false);
+          break;
+      }
+    };
+    getSidecar().onAny(handler);
+    return () => { getSidecar().offAny(handler); };
+  }, []);
+
+  useEffect(() => { if (showMessages) endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, showMessages, pendingConfirm]);
+
+  const send = useCallback((raw: string) => {
+    const text = raw.trim();
+    // Only block a genuinely empty send. We deliberately do NOT block on
+    // `streaming`: if a prior turn's terminal event never cleared it, that flag
+    // would wedge the composer forever and silently swallow every send (the
+    // design chat's original "nothing fires" bug). The sidecar's own isRunning
+    // guard is the real concurrency control — it folds an overlapping send in
+    // as context rather than dropping it.
+    if (!text && attachments.length === 0) return;
+    const atts = attachments.length ? attachments : undefined;
+    setMessages((prev) => [...prev, { id: drid(), role: 'user', text: text || '(attachment)' }, { id: drid(), role: 'ava', text: '', toolCalls: [] }]);
+    setStreaming(true);
+    setInput('');
+    setAttachments([]);
+    const sc = getSidecar();
+    logDiag(`design send → sendMessage(surface=design, room=${designRoom}, ready=${sc.isReady}) "${text.slice(0, 40)}"`);
+    sc.sendMessage(text || '(see attachment)', atts, undefined, 'design', undefined, designRoom)
+      .then(() => logDiag('design send → sendMessage resolved (written to sidecar)'))
+      .catch((e) => { logDiag(`design send FAILED: ${e?.message || e}`, 'error'); setStreaming(false); });
+  }, [attachments, designRoom]);
+
+  const handleAttach = useCallback(() => {
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/*,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.md';
+    picker.multiple = true;
+    picker.onchange = () => {
+      if (!picker.files) return;
+      for (const file of Array.from(picker.files)) {
+        const reader = new FileReader();
+        reader.onload = () => setAttachments((prev) => [...prev, { name: file.name, dataUri: reader.result as string, mimeType: file.type }]);
+        reader.readAsDataURL(file);
+      }
+    };
+    picker.click();
+  }, []);
+  const removeAttachment = useCallback((idx: number) => setAttachments((prev) => prev.filter((_, i) => i !== idx)), []);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
+  };
+
+  const respondConfirm = useCallback((approved: boolean) => {
+    // The confirm() side effect MUST live OUTSIDE the setState updater. React
+    // StrictMode double-invokes updaters in dev, which fired confirm() twice for
+    // the same id — the first resolved it, the second hit the sidecar as
+    // "No pending confirmation" (the red error you saw, even though the answer
+    // actually went through).
+    const pc = pendingConfirm;
+    if (!pc) return;
+    setPendingConfirm(null);
+    if (approved) getSidecar().confirm(pc.id, true, confirmText || undefined).catch(() => {});
+    else getSidecar().confirm(pc.id, false).catch(() => {});
+    setConfirmText('');
+  }, [pendingConfirm, confirmText]);
+
+  const clearRoom = useCallback(() => {
+    setMessages([]);
+    setPendingConfirm(null);
+    getSidecar().clear('design').catch(() => {});
+  }, []);
+
+  const hasSpoken = messages.some((m) => m.role === 'user');
+
+  // Room-aware empty state — the Design Architect greeting, heading and starter
+  // chips follow the operator into the Open Canvas (Video / Voiceover). Icon
+  // keeps the current studio copy exactly. No name is threaded into this dock,
+  // so the greeting renders "Hey — …" (matching the existing name-less card).
+  const dockStarters = designRoom === 'video' ? DOCK_STARTERS_VIDEO : designRoom === 'voice' ? DOCK_STARTERS_VOICE : DOCK_STARTERS;
+  const dockHeading = designRoom === 'video' ? 'Direct with Ava' : designRoom === 'voice' ? 'Voice with Ava' : 'Design an icon with the Architect';
+  const dockGreeting = designRoom === 'video'
+    ? "Hey — Design Architect here, and we're on the Open Canvas. What are we filming? Give me the shot — subject, mood, the motion you want — and I'll direct it and render it right here."
+    : designRoom === 'voice'
+    ? "Hey — Design Architect here, on the Open Canvas. What are we voicing? Tell me the script and the kind of voice you want, and I'll narrate it for you."
+    : 'Tell me the shape, the material and your brand colour — I find the shape, direct the art and generate a clean transparent icon.';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {/* Clear-chat strip — only when the conversation is visible + has content */}
+      {showMessages && messages.length > 0 && (
+        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', padding: '6px 14px 0' }}>
+          <button type="button" onClick={clearRoom} title={t('header.clear_chat')}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
+            {t('header.clear_chat')}
+          </button>
+        </div>
+      )}
+
+      {/* Stream — only mounted while the dock is expanded (slide anim) */}
+      {showMessages && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
+          {!hasSpoken ? (
+            <div style={{ width: '100%' }}>
+              <div style={{ borderRadius: 14, padding: 16, background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(96,165,250,0.04))', border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{dockHeading}</div>
+                <p style={{ fontSize: 12, lineHeight: 1.5, color: '#a6adc8', margin: '0 0 14px' }}>{dockGreeting}</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {dockStarters.map((s) => (
+                    <button key={s.label} type="button" onClick={() => { setInput(s.prompt); inputRef.current?.focus(); onComposerFocus(); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, background: 'rgba(26,16,40,0.5)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: '#cdd6f4', cursor: 'pointer' }}>
+                      <span aria-hidden>{s.icon}</span>{s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {messages.map((m) => (
+                <div key={m.id} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                  {m.toolCalls && m.toolCalls.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                      {m.toolCalls.map((tc, i) => (
+                        <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: tc.status === 'error' ? '#f38ba8' : tc.status === 'done' ? '#a6e3a1' : '#a78bfa' }}>
+                          {tc.status === 'done' ? '✓' : tc.status === 'error' ? '✕' : '⋯'} {tc.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(m.text || m.role !== 'ava') && (
+                    <div style={{
+                      fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', padding: '10px 14px', borderRadius: 10,
+                      background: m.role === 'user' ? 'color-mix(in srgb, #60a5fa 13%, transparent)' : m.role === 'error' ? 'rgba(243,139,168,0.12)' : 'color-mix(in srgb, var(--accent) 6%, transparent)',
+                      border: m.role === 'error' ? '1px solid rgba(243,139,168,0.3)' : 'none',
+                      borderLeft: m.role === 'user' ? '2px solid color-mix(in srgb, #60a5fa 55%, transparent)' : m.role === 'error' ? undefined : '2px solid color-mix(in srgb, var(--accent) 45%, transparent)',
+                      borderRight: m.role === 'user' ? '2px solid color-mix(in srgb, #60a5fa 55%, transparent)' : m.role === 'error' ? undefined : '2px solid color-mix(in srgb, var(--accent) 45%, transparent)',
+                      color: m.role === 'error' ? '#f38ba8' : '#cdd6f4',
+                    }}>
+                      {m.text}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {streaming && messages[messages.length - 1]?.text === '' && !pendingConfirm && (
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, alignSelf: 'flex-start' }}>
+                  <style>{`@keyframes dsThinkPulse { 0%,80%,100% { opacity:.3; transform:scale(.8); } 40% { opacity:1; transform:scale(1); } }`}</style>
+                  {/* Ava avatar — identical to the main chat's Ava row (32px, marginRight 10) */}
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, marginRight: 10, overflow: 'hidden', background: 'linear-gradient(135deg, var(--accent), #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img src="/ava-avatar.jpeg" alt="Ava" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                  </div>
+                  {/* Same 7px pulsing dots + 11px status text as the main chat typing indicator */}
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', animation: 'dsThinkPulse 1.4s infinite', animationDelay: `${i * 0.2}s` }} />
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 11, color: '#a6adc8', marginLeft: 10 }}>Thinking…</span>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Inline confirmation card (ask_user / confirm) */}
+          {pendingConfirm && (
+            <div style={{ marginTop: 12, borderRadius: 12, padding: 14, background: 'rgba(26,16,40,0.6)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}>
+              <div style={{ fontSize: 13, color: '#cdd6f4', marginBottom: 10 }}>{pendingConfirm.question}</div>
+              <input autoFocus value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') respondConfirm(true); }}
+                placeholder="Type your answer…"
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 13, background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', outline: 'none', marginBottom: 10, boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => respondConfirm(false)} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${CARD_BORDER}`, background: 'transparent', color: '#a6adc8', fontSize: 12, cursor: 'pointer' }}>Skip</button>
+                <button type="button" onClick={() => respondConfirm(true)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Send</button>
+              </div>
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+      )}
+
+      {/* Composer — pinned at the bottom, always visible */}
+      <div style={{ flexShrink: 0, borderTop: `1px solid ${BORDER}`, padding: 10 }}>
+        {attachments.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            {attachments.map((att, idx) => (
+              <div key={idx} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'rgba(26,16,40,0.6)' }}>
+                {att.mimeType.startsWith('image/') && att.dataUri?.startsWith('data:') ? (
+                  <img src={att.dataUri} alt={att.name} style={{ height: 48, maxWidth: 100, objectFit: 'cover', display: 'block' }} />
+                ) : (
+                  <div style={{ padding: '8px 12px', fontSize: 11, color: '#6c7086', display: 'flex', alignItems: 'center', gap: 6 }}><PhPaperclip size={12} weight="duotone" /> {att.name}</div>
+                )}
+                <button onClick={() => removeAttachment(idx)} style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          <span style={{ flexShrink: 0, alignSelf: 'center', padding: '5px 10px', borderRadius: 8, background: 'linear-gradient(135deg,var(--accent),#7c3aed)', color: '#fff', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>Design</span>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            onFocus={onComposerFocus}
+            rows={1}
+            placeholder="Ask the Design Architect for an icon…"
+            style={{ flex: 1, resize: 'none', minHeight: 38, maxHeight: 160, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+          />
+          <button type="button" onClick={handleAttach} title={t('dash.chat.attach_file')} aria-label={t('dash.chat.attach_file')}
+            style={{ flexShrink: 0, alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'color-mix(in srgb, var(--accent) 5%, transparent)', color: '#a6adc8', cursor: 'pointer' }}>
+            <PhPaperclip size={17} weight="duotone" />
+          </button>
+          <button type="button" disabled={streaming || (!input.trim() && attachments.length === 0)} onClick={() => send(input)}
+            style={{ flexShrink: 0, alignSelf: 'center', padding: '8px 16px', borderRadius: 8, border: 'none', background: streaming || (!input.trim() && attachments.length === 0) ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: streaming || (!input.trim() && attachments.length === 0) ? 'default' : 'pointer' }}>
+            {streaming ? '…' : '↑'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

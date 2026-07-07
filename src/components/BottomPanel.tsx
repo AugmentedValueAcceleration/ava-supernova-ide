@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
+import { ensureSidecarLog, getSidecarLog, subscribeSidecarLog, clearSidecarLog, type SidecarLogEntry, type SidecarLogLevel } from '../lib/sidecar-log';
 import { getPlatformKey, apiStreamUrl, fetchPlatformModels, getCachedModels, type PlatformModel } from '../lib/api';
 import { useModeAvailability } from '../lib/mode-availability';
 import { t, useLocale } from '../lib/i18n';
@@ -382,6 +383,81 @@ function AvaCliPanel() {
   );
 }
 
+// ── Sidecar log view (Output / Problems) ───────────────────────────────────
+// Renders the always-on sidecar activity buffer. Output shows the full stream;
+// Problems shows only errors. This is the in-app diagnostic surface — every
+// agent event, tagged with its lane, so "why is nothing happening?" is answered
+// by looking, not guessing.
+
+const LOG_LEVEL_COLOR: Record<SidecarLogLevel, string> = {
+  info: '#a6adc8',
+  tool: 'var(--accent)',
+  error: '#f38ba8',
+};
+
+function fmtClock(t: number): string {
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function SidecarLogView({ filter, emptyText }: { filter?: (e: SidecarLogEntry) => boolean; emptyText: string }) {
+  const [, force] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+
+  useEffect(() => {
+    ensureSidecarLog();
+    const unsub = subscribeSidecarLog(() => force((n) => n + 1));
+    return unsub;
+  }, []);
+
+  const all = getSidecarLog();
+  const rows = filter ? all.filter(filter) : all;
+
+  useEffect(() => {
+    if (stick.current && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  });
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 10px 0' }}>
+        <button
+          onClick={() => clearSidecarLog()}
+          style={{
+            background: 'transparent', border: 'none', color: '#6c7086', fontSize: 11,
+            cursor: 'pointer', fontFamily: 'inherit', padding: '2px 6px', borderRadius: 4,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; }}
+        >
+          Clear
+        </button>
+      </div>
+      <div ref={scrollRef} onScroll={onScroll} style={{ flex: 1, overflowY: 'auto', padding: '2px 12px 10px' }}>
+        {rows.length === 0 ? (
+          <div style={{ color: '#6c7086', fontSize: 12, textAlign: 'center', padding: '24px 0' }}>{emptyText}</div>
+        ) : (
+          rows.map((r) => (
+            <div key={r.seq} style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              <span style={{ color: '#585b70', flexShrink: 0 }}>{fmtClock(r.t)}</span>
+              <span style={{ color: r.lane === 'design' ? 'var(--accent)' : '#6c7086', flexShrink: 0, minWidth: 58 }}>[{r.lane}]</span>
+              <span style={{ color: '#7f849c', flexShrink: 0, minWidth: 108 }}>{r.event}</span>
+              <span style={{ color: LOG_LEVEL_COLOR[r.level], minWidth: 0 }}>{r.detail}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Bottom Panel ──────────────────────────────────────────────────────
 
 export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) {
@@ -547,15 +623,11 @@ export default function BottomPanel({ activeTab, onTabChange, onClose }: Props) 
         {activeTab === 'ava' && <AvaCliPanel />}
 
         {activeTab === 'problems' && (
-          <div style={{ color: '#6c7086', fontSize: 12, textAlign: 'center', padding: '24px 0' }}>
-            {t('dash.panel.no_problems')}
-          </div>
+          <SidecarLogView filter={(e) => e.level === 'error'} emptyText={t('dash.panel.no_problems')} />
         )}
 
         {activeTab === 'output' && (
-          <div style={{ color: '#6c7086', fontSize: 12, textAlign: 'center', padding: '24px 0' }}>
-            {t('dash.panel.no_output')}
-          </div>
+          <SidecarLogView emptyText={t('dash.panel.no_output')} />
         )}
 
         {activeTab === 'debug-console' && (

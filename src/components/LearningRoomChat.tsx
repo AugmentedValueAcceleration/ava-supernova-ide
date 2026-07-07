@@ -213,21 +213,21 @@ export function LearningRoomChat({ active, courseId }: { active: boolean; course
   }, [active]);
 
   const respondConfirm = useCallback(() => {
-    setPendingConfirm((pc) => {
-      if (!pc) return null;
-      getSidecar().confirm(pc.id, true, confirmText.trim()).catch(() => {});
-      return null;
-    });
+    // Side effect OUTSIDE the setState updater — StrictMode double-invokes
+    // updaters in dev, which double-fired confirm() → "No pending confirmation".
+    const pc = pendingConfirm;
+    if (!pc) return;
+    setPendingConfirm(null);
+    getSidecar().confirm(pc.id, true, confirmText.trim()).catch(() => {});
     setConfirmText('');
-  }, [confirmText]);
+  }, [pendingConfirm, confirmText]);
   const skipConfirm = useCallback(() => {
-    setPendingConfirm((pc) => {
-      if (!pc) return null;
-      getSidecar().confirm(pc.id, false).catch(() => {});
-      return null;
-    });
+    const pc = pendingConfirm;
+    if (!pc) return;
+    setPendingConfirm(null);
+    getSidecar().confirm(pc.id, false).catch(() => {});
     setConfirmText('');
-  }, []);
+  }, [pendingConfirm]);
 
   const hasSpoken = messages.some((m) => m.role === 'user');
 

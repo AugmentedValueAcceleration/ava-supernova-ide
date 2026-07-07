@@ -291,7 +291,7 @@ export async function updateDisplayName(name: string): Promise<boolean> {
     // simply leaves the platform record at its previous value, which is
     // acceptable — the local greeting falls back to email prefix anyway.
     if (!trimmed) return true;
-    const res = await fetch(`${PLATFORM_URL}/api/account-info`, {
+    const res = await fetch(`${PLATFORM_URL}/account-info`, {
       method: 'PATCH',
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: trimmed }),
@@ -316,7 +316,7 @@ export async function refreshDisplayName(): Promise<string | null> {
   const key = getPlatformKey();
   if (!key) return null;
   try {
-    const res = await fetch(`${PLATFORM_URL}/api/account-info`, {
+    const res = await fetch(`${PLATFORM_URL}/account-info`, {
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     });
     if (!res.ok) return null;

@@ -8,6 +8,8 @@ import Sidebar from './components/Sidebar';
 import EditorArea from './components/EditorArea';
 import type { DashboardPageId } from './components/EditorArea';
 import BottomPanel from './components/BottomPanel';
+import { ensureSidecarLog } from './lib/sidecar-log';
+import { ensureSidecarRunning } from './lib/sidecar-boot';
 import StatusBar from './components/StatusBar';
 import WelcomeOverlay from './components/WelcomeOverlay';
 import UpdateChecker from './components/UpdateChecker';
@@ -155,6 +157,27 @@ export default function App() {
   // i18n — init on mount, re-render on locale change
   useLocale();
   useEffect(() => { initLocale(); }, []);
+  // Start capturing sidecar activity from launch so the Output/Problems panels
+  // have the full history the moment they're opened.
+  useEffect(() => { ensureSidecarLog(); }, []);
+
+  // App-level sidecar boot — the sidecar is a singleton shared by every page, so
+  // it must NOT be owned by the main chat alone. Ensure it's running from launch
+  // and whenever the account/keys change, regardless of which page is open. This
+  // is what makes the Design Studio work on a cold load / reload (previously the
+  // sidecar only started on the main chat, so design chat found nothing running).
+  useEffect(() => {
+    let cancelled = false;
+    const ensure = () => { if (!cancelled) ensureSidecarRunning().catch(() => {}); };
+    ensure();
+    window.addEventListener('ava-auth-changed', ensure);
+    window.addEventListener('ava-byok-changed', ensure);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('ava-auth-changed', ensure);
+      window.removeEventListener('ava-byok-changed', ensure);
+    };
+  }, []);
 
   useEffect(() => {
     const handler = () => setCurrentMode(localStorage.getItem('ava-ide-chat-mode') || 'work');

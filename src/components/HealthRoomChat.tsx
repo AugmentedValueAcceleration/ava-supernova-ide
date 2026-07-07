@@ -208,27 +208,27 @@ export function HealthRoomChat({ active }: { active: boolean }) {
 
   // Answer / skip a profile-fill (or generic) confirmation card.
   const respondConfirm = useCallback((value: unknown) => {
-    setPendingConfirm((pc) => {
-      if (!pc) return null;
-      if (pc.toolName === 'health_profile_ask' && pc.profileField) {
-        getSidecar().confirm(pc.id, true, JSON.stringify({ field: pc.profileField.field, value })).catch(() => {});
-      } else {
-        getSidecar().confirm(pc.id, true, typeof value === 'string' ? value : JSON.stringify(value)).catch(() => {});
-      }
-      return null;
-    });
-  }, []);
+    // Side effect OUTSIDE the setState updater — StrictMode double-invokes
+    // updaters in dev, which double-fired confirm() → "No pending confirmation".
+    const pc = pendingConfirm;
+    if (!pc) return;
+    setPendingConfirm(null);
+    if (pc.toolName === 'health_profile_ask' && pc.profileField) {
+      getSidecar().confirm(pc.id, true, JSON.stringify({ field: pc.profileField.field, value })).catch(() => {});
+    } else {
+      getSidecar().confirm(pc.id, true, typeof value === 'string' ? value : JSON.stringify(value)).catch(() => {});
+    }
+  }, [pendingConfirm]);
   const skipConfirm = useCallback(() => {
-    setPendingConfirm((pc) => {
-      if (!pc) return null;
-      if (pc.toolName === 'health_profile_ask' && pc.profileField) {
-        getSidecar().confirm(pc.id, true, JSON.stringify({ field: pc.profileField.field, skipped: true })).catch(() => {});
-      } else {
-        getSidecar().confirm(pc.id, false).catch(() => {});
-      }
-      return null;
-    });
-  }, []);
+    const pc = pendingConfirm;
+    if (!pc) return;
+    setPendingConfirm(null);
+    if (pc.toolName === 'health_profile_ask' && pc.profileField) {
+      getSidecar().confirm(pc.id, true, JSON.stringify({ field: pc.profileField.field, skipped: true })).catch(() => {});
+    } else {
+      getSidecar().confirm(pc.id, false).catch(() => {});
+    }
+  }, [pendingConfirm]);
 
   // Clear ONLY this room's thread (the health lane). The main chat is untouched.
   const clearRoom = useCallback(() => {

@@ -82,7 +82,7 @@ export interface SidecarEvent {
    *  & Fitness room, 'learning' for the Learning room (per-course thread),
    *  'main'/undefined for the main chat. The IDE's chat surfaces filter on
    *  this so they never cross-render. */
-  lane?: 'main' | 'health' | 'learning';
+  lane?: 'main' | 'health' | 'learning' | 'design';
   // stream events
   content?: string;
   // tool events
@@ -160,6 +160,16 @@ export interface SidecarEvent {
   profile?: Record<string, unknown>;
   // local_models_detected — response to detect_local_models (Custom Model card).
   models?: string[];
+  // Design Studio bridge — the `design_tool` event carries the command Ava's
+  // design_* tool wants the canvas to run; `asset_forge_result` carries the
+  // matted PNG (dataUrl) + the raw generated URL (rawUrl) back from the pipeline.
+  command?: string;
+  dataUrl?: string;
+  rawUrl?: string;
+  // Design Studio video lane — `asset_forge_video_result` carries the finished
+  // Wan 2.5 clip URL back from the sidecar's submit+poll pipeline.
+  url?: string;
+  ok?: boolean;
   error?: string;
 }
 
@@ -339,7 +349,7 @@ export class SidecarManager {
   /**
    * Send a chat message to the agent.
    */
-  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning', courseId?: string): Promise<void> {
+  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string, designRoom?: 'icon' | 'video' | 'voice'): Promise<void> {
     // For large attachments (images), write to temp files to avoid stdin buffer limits
     let processedAttachments = attachments;
     if (attachments?.length) {
@@ -362,7 +372,7 @@ export class SidecarManager {
         }
       }
     }
-    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined, surface, courseId });
+    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined, surface, courseId, designRoom });
   }
 
   // ── Conversation history (the shared ~/.ava/.../history/*.json files) ────────
@@ -450,8 +460,36 @@ export class SidecarManager {
    * Ava Health room thread, or surface:'learning' (+ courseId) to clear one
    * course's Learning thread — both leave the main chat untouched.
    */
-  async clear(surface?: 'main' | 'health' | 'learning', courseId?: string): Promise<void> {
+  async clear(surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string): Promise<void> {
     await this.send({ cmd: 'clear', surface, courseId });
+  }
+
+  /**
+   * Design Studio → platform: run the shape-as-dial generation pipeline
+   * (Qwen image-edit + server matte) in the sidecar and get an
+   * `asset_forge_result` event back ({ success, dataUrl, rawUrl, error }).
+   * The renderer can't reach the platform (CSP/no key), so the sidecar owns it.
+   */
+  async assetForgeGenerate(body: { prompt: string; referenceImage?: string; size?: string; negativePrompt?: string }): Promise<void> {
+    await this.send({ cmd: 'asset_forge_generate', body });
+  }
+
+  /**
+   * Design Studio video lane → platform: submit a Wan 2.5 job and poll it in the
+   * sidecar (which has no serverless timeout), getting an `asset_forge_video_result`
+   * event back ({ success, url, error }) with the finished clip URL.
+   */
+  async assetForgeVideo(body: { prompt: string; duration?: number | string; resolution?: string }): Promise<void> {
+    await this.send({ cmd: 'asset_forge_video', body });
+  }
+
+  /**
+   * Reply to a `design_tool` event — the Design Studio canvas ran the command
+   * Ava's design_* tool asked for and reports the outcome back so the parked
+   * tool call resolves.
+   */
+  async designToolResult(requestId: string, ok: boolean, data?: unknown, error?: string): Promise<void> {
+    await this.send({ cmd: 'design_tool_result', requestId, ok, data, error });
   }
 
   /**

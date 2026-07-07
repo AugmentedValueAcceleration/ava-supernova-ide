@@ -99,6 +99,7 @@ const {
   buildPersonalityPrefix,
   loadPersonality,
   getHealthRoomPrefix,
+  getDesignStudioPrefix,
   getTeachModePrefix,
   HEALTH_PROFILE_FIELDS,
   humaniseSlug,
@@ -175,6 +176,130 @@ function handleCreativeUserAction(data) {
   } catch { /* non-fatal */ }
 }
 
+// ── Design Studio — shape-as-dial generation (mirror of the extension's
+// DashboardPanel.handleAssetForgeGenerate) ──────────────────────────────────
+// The webview can't reach the platform (CSP/no key), so the Design Studio hands
+// us the armature + art-director prompt and we run the two-hop pipeline: Qwen
+// image-edit (reference-guided) → server matte (white-threshold → transparent).
+// The matte is non-fatal — on failure we return the raw generated URL so the
+// result is still usable. Result comes back as an `asset_forge_result` event.
+async function handleAssetForgeGenerate(body) {
+  const state = globalThis._sharedState || {};
+  const platformKey = state.platformKey;
+  if (!platformKey) {
+    emit({ event: 'asset_forge_result', success: false, error: 'Not connected. Add your account in Settings.' });
+    return;
+  }
+  // The platform still speaks the legacy data-mode vocabulary ('local' | 'both');
+  // generationLocalOnly is truthy when the user's Data Mode is local.
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${platformKey}`,
+    'X-Ava-Data-Mode': state.generationLocalOnly ? 'local' : 'both',
+  };
+  try {
+    // 1) Generate — the reference image (the shape armature) guides the material.
+    const genRes = await fetch('https://ava-supernova.com/api/asset-forge/image', {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        engine: 'qwen', prompt: body.prompt, referenceImage: body.referenceImage,
+        size: body.size || '1024*1024', negativePrompt: body.negativePrompt,
+      }),
+    });
+    if (!genRes.ok) {
+      const e = await genRes.json().catch(() => ({}));
+      emit({ event: 'asset_forge_result', success: false, error: e.error || `Generation failed (${genRes.status})` });
+      return;
+    }
+    const gen = await genRes.json();
+    if (!gen.url) {
+      emit({ event: 'asset_forge_result', success: false, error: 'No image returned' });
+      return;
+    }
+    // 2) Matte on the server. Non-fatal: on failure return the raw generated URL.
+    let dataUrl = gen.url;
+    try {
+      const bgRes = await fetch('https://ava-supernova.com/api/asset-forge/remove-bg', {
+        method: 'POST', headers, body: JSON.stringify({ imageUrl: gen.url }),
+      });
+      if (bgRes.ok) {
+        const bg = await bgRes.json();
+        if (bg.dataUrl) dataUrl = bg.dataUrl;
+      }
+    } catch { /* keep the raw url */ }
+    emit({ event: 'asset_forge_result', success: true, dataUrl, rawUrl: gen.url });
+  } catch (err) {
+    emit({ event: 'asset_forge_result', success: false, error: err instanceof Error ? err.message : 'Generation failed' });
+  }
+}
+
+// ── Design Studio — video lane (mirror of handleAssetForgeGenerate for Wan 2.5) ──
+// The webview can't reach the platform, so it hands us { prompt, duration,
+// resolution } and we run the async pipeline: submit to /api/generate-video (→
+// task_id), then poll /status until the clip is ready. The host has no
+// serverless timeout so polling here is fine. Result comes back as an
+// `asset_forge_video_result` event carrying the finished clip URL.
+async function handleAssetForgeVideo(body) {
+  const state = globalThis._sharedState || {};
+  const platformKey = state.platformKey;
+  if (!platformKey) {
+    emit({ event: 'asset_forge_video_result', success: false, error: 'Not connected. Add your account in Settings.' });
+    return;
+  }
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${platformKey}`,
+    'X-Ava-Data-Mode': state.generationLocalOnly ? 'local' : 'both',
+  };
+  try {
+    // 1) Submit — the route accepts the job and returns a task_id.
+    const submitRes = await fetch('https://ava-supernova.com/api/generate-video', {
+      method: 'POST', headers,
+      body: JSON.stringify({ prompt: body.prompt, duration: body.duration, resolution: body.resolution }),
+    });
+    if (!submitRes.ok) {
+      const e = await submitRes.json().catch(() => ({}));
+      emit({ event: 'asset_forge_video_result', success: false, error: e.error || `Video generation failed (${submitRes.status})` });
+      return;
+    }
+    const data = await submitRes.json();
+    if (data.url) { emit({ event: 'asset_forge_video_result', success: true, url: data.url }); return; }
+    if (!data.task_id) { emit({ event: 'asset_forge_video_result', success: false, error: 'No task_id returned' }); return; }
+    // 2) Poll until terminal, then hand back the finished clip URL.
+    const final = await pollVideoStatus(String(data.task_id), platformKey);
+    if (final.success) emit({ event: 'asset_forge_video_result', success: true, url: final.url });
+    else emit({ event: 'asset_forge_video_result', success: false, error: final.error || 'Video generation failed' });
+  } catch (err) {
+    emit({ event: 'asset_forge_video_result', success: false, error: err instanceof Error ? err.message : 'Video generation failed' });
+  }
+}
+
+/**
+ * Poll the async video status route until the job finishes. 5s cadence, ~8-min
+ * ceiling — mirror of the extension's DashboardPanel.pollVideoStatus. Transient
+ * poll failures are tolerated; only an explicit `failed` status or the timeout
+ * ends the loop.
+ */
+async function pollVideoStatus(taskId, platformKey) {
+  const statusUrl = `https://ava-supernova.com/api/generate-video/status/${encodeURIComponent(taskId)}`;
+  const intervalMs = 5000;
+  const maxAttempts = 96; // ~8 min ceiling — well past a typical Wan clip
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    try {
+      const res = await fetch(statusUrl, { headers: { 'Authorization': `Bearer ${platformKey}` } });
+      if (!res.ok) continue; // transient — keep polling
+      const data = await res.json();
+      if (data?.status === 'success' && data?.url) return { success: true, url: data.url };
+      if (data?.status === 'failed') return { success: false, error: data?.error || 'Video generation failed' };
+      // status === 'processing' — keep going
+    } catch {
+      // transient network blip — keep polling until the ceiling
+    }
+  }
+  return { success: false, error: 'Video generation timed out' };
+}
+
 // ─── State ──────────────────────────────────────────────────────────────────
 
 let agent = null;
@@ -205,6 +330,9 @@ let isRunning = false;
 // filter by `activeLane` (stamped on every emitted event). One run pipeline
 // (the isRunning guard) → no concurrency, so a scalar lane is safe.
 let healthConversation = null;
+// Design Studio — the focused "Design Architect" lane. Its own thread so guided
+// icon design never lands in the main chat (mirrors healthConversation).
+let designConversation = null;
 // Learning room — the focused "Ava Teach" lane. Unlike Health (one thread),
 // each course owns its own conversation thread so progress + chat history are
 // scoped per course (mirrors the extension's AvaViewProvider.learningConversations).
@@ -250,6 +378,13 @@ const pendingConfirmations = new Map();
 /** Map<requestId, { resolve: Function, reject: Function }> for desktop automation requests */
 const pendingDesktop = new Map();
 let desktopRequestId = 0;
+
+/** Design Architect tool → canvas bridge. sharedState.designControl emits a
+ *  `design_tool` event to the Design Studio webview and parks the resolver here,
+ *  keyed by requestId; the webview's `design_tool_result` cmd fulfils it. Mirror
+ *  of the extension's DashboardPanel.requestFromDesign / handleDesignToolResult. */
+const pendingDesignTools = new Map();
+let designReqSeq = 0;
 
 // ─── Secret working set ─────────────────────────────────────────────────────
 //
@@ -1491,6 +1626,32 @@ async function handleInit(data) {
         if (!res.ok) throw new Error(data?.error || `Plan generation failed (${res.status})`);
         return { days: data.days ?? [], credits_charged: data.credits_charged ?? 0 };
       },
+      // Design Studio control — the Design Architect's tools (design_find_shape,
+      // design_generate_icon, …) drive the open Design Studio canvas through this
+      // callback. It relays the command to the webview (which owns the shape
+      // library, brand kit and the shape-as-dial generate path) and resolves with
+      // what the canvas did. If the canvas isn't mounted nothing replies and the
+      // timeout resolves with a clear "open the Studio" message. Mirror of the
+      // extension's DashboardPanel.requestFromDesign.
+      designControl: async (command, args) => {
+        const slow = command === 'generate_icon' || command === 'generate_set';
+        const setCount = command === 'generate_set' && Array.isArray(args?.shapes) ? args.shapes.length : 1;
+        // Video is async on Wan (1–6 min per clip, ~8-min poll ceiling) — give it
+        // the full ceiling so the tool doesn't time out before the clip lands.
+        const timeoutMs =
+          command === 'generate_video' ? 600_000
+          : slow ? Math.min(600_000, 90_000 * Math.max(1, setCount))
+          : 12_000;
+        const requestId = `dtr-${++designReqSeq}`;
+        return new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            pendingDesignTools.delete(requestId);
+            resolve({ ok: false, error: "The Design Studio canvas didn't respond. Open it in Creative Studio → Design Studio and try again." });
+          }, timeoutMs);
+          pendingDesignTools.set(requestId, { resolve, timer });
+          emit({ event: 'design_tool', requestId, command, args: args || {} });
+        });
+      },
       projectIndexer,
       platformKey: config.platformKey,
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
@@ -2104,6 +2265,8 @@ async function distilDesktopTrajectory(trajectory, rawContent) {
 }
 
 async function handleMessage(data) {
+  // TEMP diagnostic: prove a message reached the sidecar + what surface it carries.
+  emit({ event: 'diag', lane: data.surface || 'main', message: `SIDECAR recv: surface=${data.surface} isRunning=${isRunning} content="${String(data.content || '').slice(0, 40)}"` });
   // If a fresh sidecar process is still mid-init when the user fires
   // their first message, wait briefly for init to complete instead of
   // bailing with a misleading "Not initialized" error. Caps at 3s so
@@ -2164,6 +2327,7 @@ async function handleMessage(data) {
   // safe. activeLane (set here, cleared in finally) tags outbound events.
   const surface = data.surface === 'health' ? 'health'
     : data.surface === 'learning' ? 'learning'
+    : data.surface === 'design' ? 'design'
     : 'main';
   activeLane = surface;
   const mainConversation = conversation;
@@ -2174,6 +2338,14 @@ async function handleMessage(data) {
       if (sysMsg) healthConversation.setSystemPrompt(typeof sysMsg.content === 'string' ? sysMsg.content : '');
     }
     conversation = healthConversation;
+  } else if (surface === 'design') {
+    // Design Architect lane — its own thread, sharing the main system prompt.
+    if (!designConversation) {
+      designConversation = new Conversation();
+      const sysMsg = conversation.getMessages().find(m => m.role === 'system');
+      if (sysMsg) designConversation.setSystemPrompt(typeof sysMsg.content === 'string' ? sysMsg.content : '');
+    }
+    conversation = designConversation;
   } else if (surface === 'learning') {
     // Per-course thread: each course owns its own history so switching the
     // active course swaps the whole conversation. '__lobby__' is the
@@ -2336,6 +2508,8 @@ async function handleMessage(data) {
     // mode-tag path below stays empty for this lane.
     const effectiveContent = activeLane === 'health'
       ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary())
+      : activeLane === 'design'
+      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, (data.designRoom === 'video' || data.designRoom === 'voice' || data.designRoom === 'icon') ? data.designRoom : 'icon')
       : activeLane === 'learning'
       ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
       : data.content;
@@ -2917,6 +3091,16 @@ function handleClear(data) {
     emit({ event: 'cleared', lane: 'health' });
     return;
   }
+  if (data && data.surface === 'design') {
+    if (designConversation) {
+      const messages = designConversation.getMessages();
+      const systemMsg = messages.find((m) => m.role === 'system');
+      designConversation.clear();
+      if (systemMsg) designConversation.setSystemPrompt(systemMsg.content);
+    }
+    emit({ event: 'cleared', lane: 'design' });
+    return;
+  }
   if (data && data.surface === 'learning') {
     // Drop only the targeted course's thread (by courseId, or the lobby) so the
     // next learning turn for that course rebuilds fresh. Other courses' threads
@@ -3293,6 +3477,29 @@ rl.on('line', async (line) => {
     case 'creative_user_action':
       handleCreativeUserAction(data);
       break;
+    case 'asset_forge_generate':
+      // Design Studio → platform: run the shape-as-dial pipeline (Qwen edit +
+      // server matte) and emit an `asset_forge_result` back to the canvas.
+      handleAssetForgeGenerate(data.body || {}).catch((err) =>
+        emit({ event: 'asset_forge_result', success: false, error: err && err.message ? err.message : 'Generation failed' }));
+      break;
+    case 'asset_forge_video':
+      // Design Studio → platform: submit a Wan 2.5 job + poll status, then emit
+      // an `asset_forge_video_result` with the finished clip URL back to the canvas.
+      handleAssetForgeVideo(data.body || {}).catch((err) =>
+        emit({ event: 'asset_forge_video_result', success: false, error: err && err.message ? err.message : 'Video generation failed' }));
+      break;
+    case 'design_tool_result': {
+      // The Design Studio canvas replied to a design_tool command — resolve the
+      // parked designControl promise so the design_* tool returns.
+      const pending = pendingDesignTools.get(data.requestId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingDesignTools.delete(data.requestId);
+        pending.resolve({ ok: !!data.ok, data: data.data, error: data.error });
+      }
+      break;
+    }
     case 'set_permission':
       if (toolRegistry && data.mode) {
         toolRegistry.setPermissionMode(data.mode);

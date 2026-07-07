@@ -38,7 +38,9 @@ import {
   Paperclip as PhPaperclip,
   X as PhX,
   ShieldCheck as PhShieldCheck,
+  PenNib as PhPenNib,
 } from '@phosphor-icons/react';
+import { DesignStudio } from './DesignStudio';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
 import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
@@ -3214,7 +3216,20 @@ export function AvaChatPage() {
       }
     };
 
-    startSidecar();
+    // A transient platform blip flips canChat false→true. If a sidecar is ALREADY
+    // alive from before the flap, adopt it — re-attach our event handler and mark
+    // ready — instead of killing and respawning it. Only spawn fresh when there
+    // genuinely isn't one running. Restarting/killing the sidecar on every flap is
+    // exactly what left the design chat dead and silent (it has no cloud fallback).
+    if (sidecar.isReady) {
+      const handler = (event: SidecarEvent) => { sidecarEventRef.current(event); };
+      (sidecar as any).__avaHandler = handler;
+      sidecar.onAny(handler);
+      setSidecarReady(true);
+      setSidecarStatus('ready');
+    } else {
+      startSidecar();
+    }
 
     // Listen for sidecar close
     const onClose = () => {
@@ -3254,9 +3269,19 @@ export function AvaChatPage() {
       window.removeEventListener('ava-clear-memory', onClearMemory);
       window.removeEventListener('ava-folder-changed', onFolderChanged);
       window.removeEventListener('ava-ide-source-changed', onSourceChanged);
-      sidecar.stop().catch(() => {});
+      // Do NOT stop the sidecar on a canChat change. A transient connectivity blip
+      // flips canChat false for a moment; killing the sidecar here (an intentional
+      // stop the manager won't auto-respawn) is precisely what left the design chat
+      // dead and silent. The sidecar is stopped only on a real unmount — see the
+      // dedicated teardown effect below.
     };
-  }, [canChat]); // Restart sidecar when chat ability changes
+  }, [canChat]); // (Re)attach on chat-ability change — never kills a live sidecar
+
+  // NOTE: the sidecar is a singleton shared across ALL dashboard pages (main chat,
+  // Creative/Design Studio, etc.). AvaChatPage must NOT stop it on unmount —
+  // navigating to the Design Studio unmounts this page, and killing the sidecar
+  // here is exactly what left the design chat with no live sidecar to init. The
+  // sidecar is left running for the session (the OS reclaims it on app exit).
 
   // ── Library → Papers "Read with Ava" handoff ────────────────────────
   // LibraryPapersPage dispatches `ava-read-paper-with-ava` on the window
@@ -15317,6 +15342,10 @@ export function CreativeStudioPage() {
   // remounts on each navigation, so we don't restore the last-used tab.
   const [tab, setTab] = useState<CreativeMode>('images');
 
+  // Which Studio surface: the media composer (Compose) or the Design workspace.
+  // Design Studio is added as a toggle WITHOUT touching the working media gen.
+  const [studioView, setStudioView] = useState<'compose' | 'design'>('compose');
+
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -15768,8 +15797,43 @@ export function CreativeStudioPage() {
     );
   })();
 
+  // Studio view toggle — Compose (media composer, unchanged) vs Design Studio
+  // (the guided asset workspace). Rendered in both branches so the user can
+  // switch back. Mirrors the extension's CreativeStudio.tsx.
+  const viewToggle = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      {(([['compose', 'Compose'], ['design', 'Design Studio']]) as const).map(([key, label]) => {
+        const on = studioView === key;
+        return (
+          <button key={key} onClick={() => setStudioView(key)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+              border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
+              background: on ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+              color: on ? 'var(--accent)' : '#8b8398',
+            }}>
+            {key === 'design' && <PhPenNib weight="duotone" size={14} />}
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  if (studioView === 'design') {
+    // Full-bleed: the design workspace fills the page and only the inspector /
+    // dock scroll. A slim header holds the view toggle.
+    return (
+      <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
+        <div style={{ padding: '16px 24px 12px', flexShrink: 0 }}>{viewToggle}</div>
+        <DesignStudio />
+      </div>
+    );
+  }
+
   return (
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '28px 32px' }}>
+      <div style={{ marginBottom: 12 }}>{viewToggle}</div>
       {/* Header — Wan-correct subtitle + credit balance card. */}
       <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
         <div>

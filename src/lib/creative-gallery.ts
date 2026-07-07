@@ -32,6 +32,10 @@ export interface GalleryItem {
   title: string;
   createdAt: string;
   localPath?: string;
+  /** Override the on-disk file extension. Defaults to TYPE_TO_EXT[kind]. Design
+   *  Studio icons set 'png' so their transparent bytes keep a correct extension
+   *  (the kind default for images is the lossy 'jpg', which has no alpha). */
+  ext?: string;
 }
 
 const TYPE_TO_DIR: Record<MediumKind, string> = {
@@ -82,7 +86,7 @@ async function saveBinaryToDisk(item: GalleryItem): Promise<{ assetUrl: string; 
     const home = await homeDir();
     const dir = `${await creativeDir()}/${TYPE_TO_DIR[item.kind]}`;
     await mkdir(dir, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
-    const filePath = `${dir}/${item.id}.${TYPE_TO_EXT[item.kind]}`;
+    const filePath = `${dir}/${item.id}.${item.ext ?? TYPE_TO_EXT[item.kind]}`;
 
     let bytes: Uint8Array | null = null;
     if (item.url.startsWith('data:')) {
@@ -146,7 +150,7 @@ export function useCreativeGallery(kind: MediumKind) {
   /** Persist a freshly-generated item to disk + metadata. Always inserts into
    *  the in-memory gallery so the user sees it immediately. */
   const saveGenerated = useCallback(async (
-    args: { id?: string; prompt: string; title: string; url: string },
+    args: { id?: string; prompt: string; title: string; url: string; ext?: string },
   ): Promise<GalleryItem> => {
     const id = args.id ?? `${kind}_${Date.now()}`;
     let item: GalleryItem = {
@@ -156,6 +160,7 @@ export function useCreativeGallery(kind: MediumKind) {
       prompt: args.prompt,
       title: args.title,
       createdAt: new Date().toISOString(),
+      ext: args.ext,
     };
 
     const saved = await saveBinaryToDisk(item);
@@ -187,7 +192,7 @@ export function useCreativeGallery(kind: MediumKind) {
 export async function downloadGalleryItem(item: GalleryItem): Promise<void> {
   const a = document.createElement('a');
   a.href = item.url;
-  a.download = `${item.kind}_${item.id}.${TYPE_TO_EXT[item.kind]}`;
+  a.download = `${item.kind}_${item.id}.${item.ext ?? TYPE_TO_EXT[item.kind]}`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
