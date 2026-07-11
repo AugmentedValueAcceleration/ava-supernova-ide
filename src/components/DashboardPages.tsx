@@ -9245,7 +9245,13 @@ function LocalThumb({ file, style, fallback }: { file: LibraryFile; style: React
     (async () => {
       try {
         const { readFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-        const bytes = await readFile(file.localPath!, { baseDir: BaseDirectory.Home });
+        // Extension items give an absolute path (C:\… or /…); IDE items give a
+        // home-relative one. Read absolute paths directly; relative via Home.
+        const p = file.localPath!;
+        const isAbsolute = /^([a-zA-Z]:[\\/]|\/|\\\\)/.test(p);
+        const bytes = isAbsolute
+          ? await readFile(p)
+          : await readFile(p, { baseDir: BaseDirectory.Home });
         if (cancelled) return;
         const ext = (file.localPath!.split('.').pop() || '').toLowerCase();
         const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp'
@@ -10017,7 +10023,10 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
               type: 'image',
               mediaKind: it.kind as LibraryMediaKind,
               designType: it.designType,
-              localPath: it.localPath,
+              // Extension items store absolutePath; IDE items store localPath
+              // (home-relative). Prefer absolutePath so shared-folder assets
+              // made in the extension still preview here.
+              localPath: it.absolutePath || it.localPath,
               size: 0,
               modified: it.createdAt || '',
               url: it.url || '',

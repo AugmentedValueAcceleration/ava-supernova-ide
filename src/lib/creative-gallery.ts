@@ -42,6 +42,14 @@ export interface GalleryItem {
    *  variants also share a `logo_<ts>_<variant>` id so the Library groups them
    *  as one card. */
   designType?: string;
+  /** Extension-schema fields. The creative folder is SHARED with the VS Code
+   *  extension, whose creative-store writes `path` (relative) + `absolutePath`
+   *  (+ `bytes`) instead of `localPath`. We persist these too so items made on
+   *  either surface are readable on both — the Library reads absolutePath to
+   *  show a preview off disk. */
+  path?: string;
+  absolutePath?: string;
+  bytes?: number;
 }
 
 const TYPE_TO_DIR: Record<MediumKind, string> = {
@@ -95,7 +103,7 @@ async function writeLocalMetadata(items: GalleryItem[]): Promise<void> {
 /** Write the binary bytes of a generation to disk and return the Tauri
  *  asset-protocol URL the WebView can load. Accepts a data URI (decode base64)
  *  or a remote https URL (download then save). Returns null on failure. */
-async function saveBinaryToDisk(item: GalleryItem): Promise<{ assetUrl: string; localPath: string } | null> {
+async function saveBinaryToDisk(item: GalleryItem): Promise<{ assetUrl: string; localPath: string; absolutePath: string; path: string; bytes: number } | null> {
   try {
     const home = await homeDir();
     const folder = (item.designType && DESIGN_TYPE_TO_DIR[item.designType]) ?? TYPE_TO_DIR[item.kind];
@@ -123,7 +131,8 @@ async function saveBinaryToDisk(item: GalleryItem): Promise<{ assetUrl: string; 
 
     await writeFile(filePath, bytes, { baseDir: BaseDirectory.Home });
     const absPath = await join(home, filePath);
-    return { assetUrl: convertFileSrc(absPath), localPath: filePath };
+    const relToCreative = `${folder}/${item.id}.${item.ext ?? TYPE_TO_EXT[item.kind]}`;
+    return { assetUrl: convertFileSrc(absPath), localPath: filePath, absolutePath: absPath, path: relToCreative, bytes: bytes.length };
   } catch (err) {
     console.warn('[creative-gallery] saveBinaryToDisk failed:', err);
     return null;
@@ -189,7 +198,9 @@ export function useCreativeGallery(kind: MediumKind) {
 
     const saved = await saveBinaryToDisk(item);
     if (saved) {
-      item = { ...item, url: saved.assetUrl, localPath: saved.localPath };
+      // Record BOTH our fields and the extension's (absolutePath/path/bytes) so
+      // an item saved in the IDE is readable in the extension's Library too.
+      item = { ...item, url: saved.assetUrl, localPath: saved.localPath, absolutePath: saved.absolutePath, path: saved.path, bytes: saved.bytes };
     }
     const meta = await readLocalMetadata();
     await writeLocalMetadata([item, ...meta.filter((m) => m.id !== item.id)]).catch(() => {});
