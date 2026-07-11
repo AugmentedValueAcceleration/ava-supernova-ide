@@ -1188,11 +1188,11 @@ export function DesignStudio() {
         ) : view === 'logo' ? (
           <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ marginBottom: 12 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Logo</h2>
-              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>Your brand's whole identity — one system, all its forms. Talk to Ava to design it; check every form against light and dark right here.</p>
+              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.logo.title')}</h2>
+              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>{t('dash.studio.logo.subtitle')}</p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 11, color: '#8b8398' }}>Check against</span>
+              <span style={{ fontSize: 11, color: '#8b8398' }}>{t('dash.studio.check_against')}</span>
               {boards.map(b => (
                 <button key={b.label} onClick={() => setLogoBoard(b.bg)} title={b.label} aria-label={b.label}
                   style={{ width: 20, height: 20, borderRadius: 4, cursor: 'pointer', background: b.bg, border: `1px solid ${logoBoard === b.bg ? '#fff' : CARD_BORDER}` }} />
@@ -1216,7 +1216,7 @@ export function DesignStudio() {
                       );
                     })}
                   </div>
-                  <p style={{ textAlign: 'center', fontSize: 11, color: '#8b8398', marginTop: 12 }}>Click a direction to pick it — or ask Ava which she'd choose.</p>
+                  <p style={{ textAlign: 'center', fontSize: 11, color: '#8b8398', marginTop: 12 }}>{t('dash.studio.logo.pick_hint')}</p>
                 </div>
               )}
               {logoSystem && !logoExplore && !logoBusy && (() => {
@@ -1226,14 +1226,14 @@ export function DesignStudio() {
               {!logoSystem && !logoExplore && !logoBusy && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center', padding: '0 32px', pointerEvents: 'none' }}>
                   <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v10M7 12h10" opacity="0.5" /></svg>
-                  <div style={{ fontSize: 13.5, color: '#a6adc8' }}>Let's design a logo for {kit.name}</div>
-                  <div style={{ fontSize: 12, color: '#8b8398', maxWidth: 360, lineHeight: 1.6 }}>Tell Ava about the brand — what it does, who it's for, the one idea the mark should carry. She'll design it and it lands here.</div>
+                  <div style={{ fontSize: 13.5, color: '#a6adc8' }}>{t('dash.studio.logo.empty_title')} {kit.name}</div>
+                  <div style={{ fontSize: 12, color: '#8b8398', maxWidth: 360, lineHeight: 1.6 }}>{t('dash.studio.logo.empty_desc')}</div>
                 </div>
               )}
               {logoBusy && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(12,8,20,0.6)' }}>
                   <div style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${CARD_BORDER}`, borderTopColor: 'var(--accent)', animation: 'avaSpin 0.8s linear infinite' }} />
-                  <div style={{ fontSize: 12.5, color: '#a6adc8' }}>Constructing the mark → wordmark → variants…</div>
+                  <div style={{ fontSize: 12.5, color: '#a6adc8' }}>{t('dash.studio.logo.busy')}</div>
                   <style>{'@keyframes avaSpin { to { transform: rotate(360deg) } }'}</style>
                 </div>
               )}
@@ -1358,28 +1358,28 @@ export function DesignStudio() {
       {view === 'logo' && (
         <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <Section title="Form">
+            <Section title={t('dash.studio.logo.form')}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                 {LOGO_FORMS.map(f => (
-                  <button key={f.id} onClick={() => setLogoForm(f.id)} style={logoPill(logoForm === f.id)}>{f.label}</button>
+                  <button key={f.id} onClick={() => setLogoForm(f.id)} style={logoPill(logoForm === f.id)}>{t(`dash.studio.logo.form.${f.id}`)}</button>
                 ))}
               </div>
               {logoForm === 'emblem' && (
-                <input value={logoTagline} onChange={e => setLogoTagline(e.target.value)} placeholder="Tagline (curved underneath)"
+                <input value={logoTagline} onChange={e => setLogoTagline(e.target.value)} placeholder={t('dash.studio.logo.tagline_ph')}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 12, outline: 'none', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box', marginTop: 8 }} />
               )}
             </Section>
 
-            <Section title="Mark">
+            <Section title={t('dash.studio.logo.mark_type')}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                 {MARK_TYPES.map(mt => (
-                  <button key={mt.id} onClick={() => setLogoMarkType(mt.id)} style={logoPill(logoMarkType === mt.id)}>{mt.label}</button>
+                  <button key={mt.id} onClick={() => setLogoMarkType(mt.id)} style={logoPill(logoMarkType === mt.id)}>{t(`dash.studio.marktype.${mt.id}`)}</button>
                 ))}
               </div>
               {logoMarkType === 'icon' && (
                 <>
                   <style>{`.ava-ds-tile{overflow:hidden;display:flex;align-items:center;justify-content:center}.ava-ds-tile svg{display:block;width:100%;height:100%}`}</style>
-                  <input value={logoQuery} onChange={e => setLogoQuery(e.target.value)} placeholder={'Search shapes… "star"'}
+                  <input value={logoQuery} onChange={e => setLogoQuery(e.target.value)} placeholder={t('dash.studio.logo.shape_search_ph')}
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 12, outline: 'none', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box', marginTop: 8 }} />
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 7, marginTop: 8 }}>
                     {logoHits.map((h: ShapeHit) => {
@@ -1396,50 +1396,51 @@ export function DesignStudio() {
               {logoMarkType === 'letter' && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginTop: 8 }}>
                   {(['none', 'ring'] as const).map(c => (
-                    <button key={c} onClick={() => setLogoContainer(c)} style={logoPill(logoContainer === c)}>{c === 'none' ? 'Plain' : 'In a ring'}</button>
+                    <button key={c} onClick={() => setLogoContainer(c)} style={logoPill(logoContainer === c)}>{c === 'none' ? t('dash.studio.logo.container.none') : t('dash.studio.logo.container.ring')}</button>
                   ))}
                 </div>
               )}
               {logoMarkType === 'geometry' && (
-                <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 8 }}>{logoSpec ? `Construction: ${logoSpec.concept}` : 'Ava constructs the mark from primitives — ask her in the dock.'}</p>
+                <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 8 }}>{logoSpec ? `${t('dash.studio.logo.construction')}: ${logoSpec.concept}` : t('dash.studio.logo.construction_hint')}</p>
               )}
             </Section>
 
-            <Section title="Style">
+            <Section title={t('dash.studio.logo.style')}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                 {LOGO_STYLES.map(s => (
-                  <button key={s.id} onClick={() => setLogoStyle(s.id)} style={logoPill(logoStyle === s.id)}>{s.label}</button>
+                  <button key={s.id} onClick={() => setLogoStyle(s.id)} style={logoPill(logoStyle === s.id)}>{t(`dash.studio.style.${s.id}`)}</button>
                 ))}
               </div>
             </Section>
 
-            <Section title="Colour">
+            <Section title={t('dash.studio.logo.mark_colour')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', fontSize: 12, color: '#a6adc8' }}>
                 <ColorField value={logoColour} onChange={setLogoColour} swatches={Object.values(kit.palette)} />
-                Mark colour
+                {t('dash.studio.logo.mark_colour')}
                 <code style={{ marginLeft: 'auto', fontSize: 10.5, color: '#8b8398' }}>{logoColour.toUpperCase()}</code>
               </div>
               {TWO_TONE(logoStyle) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', fontSize: 12, color: '#a6adc8' }}>
                   <ColorField value={logoSecondary} onChange={setLogoSecondary} swatches={Object.values(kit.palette)} />
-                  Second colour
+                  {t('dash.studio.logo.second_colour')}
                   <code style={{ marginLeft: 'auto', fontSize: 10.5, color: '#8b8398' }}>{logoSecondary.toUpperCase()}</code>
                 </div>
               )}
             </Section>
 
-            <Section title="Wordmark">
+            <Section title={t('dash.studio.logo.wordmark')}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>Font</span>
+                <span>{t('dash.studio.logo.font')}</span>
                 <Select size="sm" style={{ width: 150 }} value={logoFontId || suggestFont(kit.styleTags).id} onChange={v => setLogoFontId(v)}
                   options={WORDMARK_FONTS.map(f => ({ value: f.id, label: f.label }))} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginTop: 6 }}>
+              <div style={{ fontSize: 11, color: '#8b8398', margin: '2px 0 6px' }}>{t('dash.studio.logo.wordmark_colour')}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                 {(['ink', 'brand'] as const).map(w => (
-                  <button key={w} onClick={() => setLogoWordColour(w)} style={logoPill(logoWordColour === w)}>{w === 'ink' ? 'Ink' : 'Brand colour'}</button>
+                  <button key={w} onClick={() => setLogoWordColour(w)} style={logoPill(logoWordColour === w)}>{w === 'ink' ? t('dash.studio.logo.wc.ink') : t('dash.studio.logo.wc.brand')}</button>
                 ))}
               </div>
-              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 6 }}>Ava picks the font by feel — override it here. "Ink" is a deep tint of the brand, not flat black.</p>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 6 }}>{t('dash.studio.logo.wc.ink_desc')}</p>
             </Section>
           </div>
           {/* No Generate button — Ava designs. Ask her in the dock. */}
