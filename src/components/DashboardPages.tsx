@@ -9209,11 +9209,22 @@ interface LibraryFile {
    *  thumbnail can render the right element (img / audio icon / video poster)
    *  without falling back to a broken <img src="...mp3"> for music tracks. */
   mediaKind?: LibraryMediaKind;
+  /** Fine-grained Creative Studio lane (icon / logo / image / …) when tagged.
+   *  Lets the Library sort icons and logos into their own buckets instead of
+   *  lumping every image kind under one tab — mirrors the extension. */
+  designType?: string;
   size: number;
   modified: string;
   url?: string;          // platform storage URL (cloud) or local-resolved path
   prompt?: string;       // generation prompt for cloud assets
   source?: 'cloud' | 'local';
+}
+
+/** The bucket a file sorts into: its fine-grained designType (icon / logo) if
+ *  tagged, else the coarse media kind. Mirrors the extension's effectiveType. */
+function libraryBucket(f: LibraryFile): 'icon' | 'logo' | LibraryMediaKind {
+  if (f.designType === 'icon' || f.designType === 'logo') return f.designType;
+  return classifyMediaKind(f);
 }
 
 // Per-mediaKind icon — Phosphor duotone weight. Layered fill gives each
@@ -9913,7 +9924,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // Filter axis is the real media kind, not the coalesced LibraryFileType,
   // so the user can isolate just music / video / voice within the Assets
   // tab — previously they all collapsed under Images.
-  const [filter, setFilter] = useState<LibraryMediaKind | 'all'>('all');
+  const [filter, setFilter] = useState<'icon' | 'logo' | LibraryMediaKind | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
 
@@ -9964,7 +9975,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           if (cancelled) return;
           const items = collapseLogoGroups(rawItems);
           setCloudFiles(items
-            .filter((it) => it.kind === 'image' || it.kind === 'video')
+            .filter((it) => it.kind === 'image' || it.kind === 'video' || it.kind === 'voice')
             .map((it): LibraryFile => ({
               id: it.id,
               name: it.title || 'Untitled',
@@ -9972,6 +9983,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
               folder: 'Creative Studio',
               type: 'image',
               mediaKind: it.kind as LibraryMediaKind,
+              designType: it.designType,
               size: 0,
               modified: it.createdAt || '',
               url: it.url || '',
@@ -10065,19 +10077,21 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         : (f.type === 'document' || f.type === 'spreadsheet')
     );
   }, [cloudFiles, localFiles, sourceFilter, kind]);
-  const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => classifyMediaKind(f) === filter);
+  const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => libraryBucket(f) === filter);
 
   const typeCounts = useMemo(() => {
-    const byKind = (k: LibraryMediaKind) => kindFiles.filter((f) => classifyMediaKind(f) === k).length;
+    const byBucket = (k: 'icon' | 'logo' | LibraryMediaKind) => kindFiles.filter((f) => libraryBucket(f) === k).length;
     return {
       all: kindFiles.length,
-      image:        byKind('image'),
-      music:        byKind('music'),
-      voice:        byKind('voice'),
-      video:        byKind('video'),
-      document:     byKind('document'),
-      spreadsheet:  byKind('spreadsheet'),
-      presentation: byKind('presentation'),
+      icon:         byBucket('icon'),
+      logo:         byBucket('logo'),
+      image:        byBucket('image'),
+      music:        byBucket('music'),
+      voice:        byBucket('voice'),
+      video:        byBucket('video'),
+      document:     byBucket('document'),
+      spreadsheet:  byBucket('spreadsheet'),
+      presentation: byBucket('presentation'),
     };
   }, [kindFiles]);
 
@@ -10113,14 +10127,18 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     return !out || out === key ? fallback : out;
   };
   const filterOptions = useMemo(() => {
-    const base: { id: LibraryMediaKind | 'all'; label: string; count: number }[] = [
+    const base: { id: 'icon' | 'logo' | LibraryMediaKind | 'all'; label: string; count: number }[] = [
       { id: 'all', label: localised('dash.library.all', 'All'), count: typeCounts.all },
     ];
     if (kind === 'assets') {
-      // Voice/audio hidden — Creative Studio no longer produces them.
+      // Sorted into Creative Studio lanes (icon / logo / image / video / voice),
+      // mirroring the extension — not everything lumped under Images.
       base.push(
+        { id: 'icon',         label: localised('dash.library.icons',  'Icons'),        count: typeCounts.icon },
+        { id: 'logo',         label: localised('dash.library.logos',  'Logos'),        count: typeCounts.logo },
         { id: 'image',        label: localised('dash.library.images', 'Images'),       count: typeCounts.image },
         { id: 'video',        label: localised('dash.library.video',  'Video'),        count: typeCounts.video },
+        { id: 'voice',        label: localised('dash.library.voice',  'Voiceover'),    count: typeCounts.voice },
         { id: 'presentation', label: localised('dash.library.slides', 'Slides'),       count: typeCounts.presentation },
       );
     } else {
@@ -10280,7 +10298,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
-            <div style={{ marginBottom: 12, color: 'var(--accent)', display: 'flex', justifyContent: 'center' }}>{filter === 'all' ? <PhFolder size={48} weight="duotone" /> : <MediaKindIcon kind={filter} size={48} weight="duotone" />}</div>
+            <div style={{ marginBottom: 12, color: 'var(--accent)', display: 'flex', justifyContent: 'center' }}>{filter === 'all' ? <PhFolder size={48} weight="duotone" /> : <MediaKindIcon kind={filter === 'icon' || filter === 'logo' ? 'image' : filter} size={48} weight="duotone" />}</div>
             <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
               {t('dash.library.no_files')}
             </div>

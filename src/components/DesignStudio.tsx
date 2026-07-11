@@ -739,8 +739,8 @@ export function DesignStudio() {
   }, []);
 
   // Save a matted PNG to the local creative gallery (transparent icon).
-  const saveToLibrary = useCallback((dataUrl: string, title: string) => {
-    gallery.saveGenerated({ url: dataUrl, title, prompt: title, ext: 'png' }).catch(() => {});
+  const saveToLibrary = useCallback((dataUrl: string, title: string, designType?: string) => {
+    gallery.saveGenerated({ url: dataUrl, title, prompt: title, ext: 'png', designType }).catch(() => {});
   }, [gallery]);
 
   // ── Image lane wiring (mirror of runVideoGeneration) — free-form Qwen-Image
@@ -955,7 +955,7 @@ export function DesignStudio() {
           if (!resolved) { failed.push(s); continue; }
           setShapeId(resolved.id);
           const out = await runGeneration(resolved, look, col);
-          if (out.ok && out.dataUrl) { made++; saveToLibrary(out.dataUrl, `${resolved.label}-${mat.label}`.toLowerCase().replace(/\s+/g, '-')); }
+          if (out.ok && out.dataUrl) { made++; saveToLibrary(out.dataUrl, `${resolved.label}-${mat.label}`.toLowerCase().replace(/\s+/g, '-'), 'icon'); }
           else failed.push(resolved.label);
         }
         reply(true, { made, failed, credits: made * 20 });
@@ -1122,7 +1122,7 @@ export function DesignStudio() {
         const title = (typeof args.title === 'string' && args.title.trim())
           ? args.title.trim()
           : `${(getShape(shapeId)?.label ?? 'icon')}-${material.label}`.toLowerCase().replace(/\s+/g, '-');
-        saveToLibrary(url, title);
+        saveToLibrary(url, title, 'icon');
         reply(true, { title });
         return;
       }
