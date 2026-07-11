@@ -1720,8 +1720,17 @@ const DOCK_STARTERS_VOICE: { icon: string; label: string; prompt: string }[] = [
   { icon: '🧘', label: 'A calm read', prompt: 'A slow, reassuring read for a meditation clip' },
 ];
 
+const DESIGN_CHAT_KEY = 'ava-ide-design-chat';
+
 function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon' }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' }) {
-  const [messages, setMessages] = useState<DockMessage[]>([]);
+  // Persist the design conversation like every other room — it was pure local
+  // state before, so it vanished on every reload / tab switch.
+  const [messages, setMessages] = useState<DockMessage[]>(() => {
+    try { const raw = localStorage.getItem(DESIGN_CHAT_KEY); const v = raw ? JSON.parse(raw) : []; return Array.isArray(v) ? v : []; } catch { return []; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(DESIGN_CHAT_KEY, JSON.stringify(messages)); } catch { /* quota / disabled */ }
+  }, [messages]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<DockAttachment[]>([]);
@@ -1846,6 +1855,7 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
 
   const clearRoom = useCallback(() => {
     setMessages([]);
+    try { localStorage.removeItem(DESIGN_CHAT_KEY); } catch { /* ignore */ }
     setPendingConfirm(null);
     getSidecar().clear('design').catch(() => {});
   }, []);
