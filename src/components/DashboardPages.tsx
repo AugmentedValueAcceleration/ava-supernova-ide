@@ -9891,6 +9891,24 @@ export function LibraryPage() {
 // tabs. `kind='assets'` filters to images + media; `kind='documents'`
 // filters to document + spreadsheet and exposes a "+ New document"
 // shortcut to Creative Studio's creation picker.
+// A logo system saves as 7 SVG variants sharing a `logo_<ts>_<variant>` id.
+// Collapse them to ONE representative card (the primary lockup) in the Library,
+// so a logo reads as a single asset — mirrors the extension's grouping.
+const LOGO_VARIANT_RE = /^(logo_\d+)_(primary|stacked|symbol|wordmark|mono-dark|mono-light|favicon)$/;
+function collapseLogoGroups(items: GalleryItem[]): GalleryItem[] {
+  const repByGroup = new Map<string, string>();
+  for (const it of items) {
+    const m = LOGO_VARIANT_RE.exec(it.id);
+    if (!m) continue;
+    const [, group, variant] = m;
+    if (!repByGroup.has(group) || variant === 'primary') repByGroup.set(group, it.id);
+  }
+  return items.filter((it) => {
+    const m = LOGO_VARIANT_RE.exec(it.id);
+    return m ? repByGroup.get(m[1]) === it.id : true;
+  });
+}
+
 function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   useLocale();
   const [, setAuthKey] = useState(0);
@@ -9958,8 +9976,9 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       let cancelled = false;
       setLoading(true);
       readAllLocalCreative()
-        .then((items) => {
+        .then((rawItems) => {
           if (cancelled) return;
+          const items = collapseLogoGroups(rawItems);
           setCloudFiles(items
             .filter((it) => it.kind === 'image' || it.kind === 'video')
             .map((it): LibraryFile => ({

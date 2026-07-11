@@ -95,8 +95,15 @@ export function activeKit(): BrandKit {
   return kits.find(k => k.id === id) ?? kits[0];
 }
 
+/** Let live surfaces (Design Studio) re-read the active kit when it changes, so
+ *  icon/logo colours follow the brand instead of freezing at mount. */
+function signalKitChange(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('ava-kit-changed'));
+}
+
 export function setActiveKit(id: string): void {
   localStorage.setItem(ACTIVE_KEY, id);
+  signalKitChange();
 }
 
 export function upsertKit(kit: BrandKit): BrandKit[] {
@@ -105,6 +112,7 @@ export function upsertKit(kit: BrandKit): BrandKit[] {
   const next = { ...kit, updatedAt: Date.now() };
   if (i >= 0) kits[i] = next; else kits.push(next);
   saveKits(kits);
+  signalKitChange();
   return kits;
 }
 

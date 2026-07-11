@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { t, useLocale } from '../lib/i18n';
+import { AnnouncementTicker } from './AnnouncementTicker';
 
 interface TitleBarProps {
   onOpenFolder?: (path: string) => void;
@@ -134,18 +135,29 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
         </div>
       </div>
 
-      {/* Centre: Current folder or welcome */}
+      {/* Centre: hub announcement ticker when there's one, otherwise the current
+          folder / welcome. No-drag so the ticker's dismiss button is clickable. */}
       <div
-        data-tauri-drag-region
         style={{
           position: 'absolute',
           left: '50%',
           transform: 'translateX(-50%)',
+          maxWidth: '46%',
+          display: 'flex',
+          justifyContent: 'center',
           fontSize: 12,
           color: '#a6adc8',
+          // @ts-expect-error Tauri no-drag region CSS property
+          WebkitAppRegion: 'no-drag',
         }}
       >
-        {folderName || t('dash.titlebar.welcome')}
+        <AnnouncementTicker
+          fallback={
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {folderName || t('dash.titlebar.welcome')}
+            </span>
+          }
+        />
       </div>
 
       {/* Right: Window controls */}

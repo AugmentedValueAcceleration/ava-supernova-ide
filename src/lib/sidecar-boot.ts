@@ -89,6 +89,10 @@ export function buildSidecarConfig(): SidecarConfig {
     activeModel: SIDECAR_MODEL_MAP[model] || (model === 'auto' || model === 'supernova' || model === 'aurora' ? model : `platform:${model}`),
     cwd: ls('ava-ide-project-folder') || '.',
     mode,
+    // The chosen UI language — the sidecar setLocale()s this so Ava replies in it
+    // (she speaks 19 beyond English). Without it the agent defaulted to 'auto' and
+    // ignored the operator's pick. Same store the language dropdown writes.
+    language: ls('ava-ide-language') || 'auto',
     permissionMode: (ls('ava-ide-settings') ? JSON.parse(ls('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
     autoMemory: true,
     workingHours: { start: workStart, end: workEnd },

@@ -36,6 +36,12 @@ export interface GalleryItem {
    *  Studio icons set 'png' so their transparent bytes keep a correct extension
    *  (the kind default for images is the lossy 'jpg', which has no alpha). */
   ext?: string;
+  /** Which Creative Studio lane made this (icon / logo / image / …). Routes the
+   *  file into its own on-disk folder and lets the Library sort it into the
+   *  matching section. Absent = fall back to the medium's default folder. Logo
+   *  variants also share a `logo_<ts>_<variant>` id so the Library groups them
+   *  as one card. */
+  designType?: string;
 }
 
 const TYPE_TO_DIR: Record<MediumKind, string> = {
@@ -44,6 +50,14 @@ const TYPE_TO_DIR: Record<MediumKind, string> = {
   voice: 'voice',
   sfx: 'sfx',
   video: 'video',
+};
+
+/** Design-type overrides for the on-disk folder — each lane gets its own folder
+ *  (mirrors the extension's per-type creative store) instead of everything
+ *  piling into images/. Absent design types fall back to TYPE_TO_DIR[kind]. */
+const DESIGN_TYPE_TO_DIR: Record<string, string> = {
+  icon: 'icons',
+  logo: 'logos',
 };
 
 const TYPE_TO_EXT: Record<MediumKind, string> = {
@@ -84,14 +98,23 @@ async function writeLocalMetadata(items: GalleryItem[]): Promise<void> {
 async function saveBinaryToDisk(item: GalleryItem): Promise<{ assetUrl: string; localPath: string } | null> {
   try {
     const home = await homeDir();
-    const dir = `${await creativeDir()}/${TYPE_TO_DIR[item.kind]}`;
+    const folder = (item.designType && DESIGN_TYPE_TO_DIR[item.designType]) ?? TYPE_TO_DIR[item.kind];
+    const dir = `${await creativeDir()}/${folder}`;
     await mkdir(dir, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
     const filePath = `${dir}/${item.id}.${item.ext ?? TYPE_TO_EXT[item.kind]}`;
 
     let bytes: Uint8Array | null = null;
     if (item.url.startsWith('data:')) {
-      const base64 = item.url.split(',')[1] ?? '';
-      bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const comma = item.url.indexOf(',');
+      const header = item.url.slice(0, comma);
+      const payload = item.url.slice(comma + 1);
+      if (/;base64/i.test(header)) {
+        bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
+      } else {
+        // URL-encoded data URL (e.g. `data:image/svg+xml,<svg…>`) — NOT base64.
+        // Decoding it with atob would corrupt the file; decode as text instead.
+        bytes = new TextEncoder().encode(decodeURIComponent(payload));
+      }
     } else {
       const res = await fetch(item.url);
       if (!res.ok) return null;
@@ -150,7 +173,7 @@ export function useCreativeGallery(kind: MediumKind) {
   /** Persist a freshly-generated item to disk + metadata. Always inserts into
    *  the in-memory gallery so the user sees it immediately. */
   const saveGenerated = useCallback(async (
-    args: { id?: string; prompt: string; title: string; url: string; ext?: string },
+    args: { id?: string; prompt: string; title: string; url: string; ext?: string; designType?: string },
   ): Promise<GalleryItem> => {
     const id = args.id ?? `${kind}_${Date.now()}`;
     let item: GalleryItem = {
@@ -161,6 +184,7 @@ export function useCreativeGallery(kind: MediumKind) {
       title: args.title,
       createdAt: new Date().toISOString(),
       ext: args.ext,
+      designType: args.designType,
     };
 
     const saved = await saveBinaryToDisk(item);
