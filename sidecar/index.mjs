@@ -230,6 +230,18 @@ async function handleAssetForgeGenerate(body) {
           if (bg.dataUrl) dataUrl = bg.dataUrl;
         }
       } catch { /* keep the raw url */ }
+    } else {
+      // Free-form image: no matte, but proxy the cross-origin image to a data:
+      // URL so the webview can persist it — its fetch is CSP-restricted to
+      // same-origin, so it can't pull the raw Qwen URL's bytes itself.
+      try {
+        const imgRes = await fetch(gen.url);
+        if (imgRes.ok) {
+          const buf = Buffer.from(await imgRes.arrayBuffer());
+          const mime = imgRes.headers.get('content-type') || 'image/png';
+          dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+        }
+      } catch { /* fall back to the raw url */ }
     }
     emit({ event: 'asset_forge_result', success: true, dataUrl, rawUrl: gen.url });
   } catch (err) {

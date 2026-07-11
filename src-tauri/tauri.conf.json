@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://ava-supernova.com https://ipwho.is https://ip-api.com https://api.open-meteo.com https://github.com http://ipc.localhost; img-src 'self' data: https: blob: https://asset.localhost; media-src 'self' data: https: blob: https://asset.localhost; font-src 'self' data:",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://ava-supernova.com https://ipwho.is https://ip-api.com https://api.open-meteo.com https://github.com http://ipc.localhost; img-src 'self' data: https: blob: https://asset.localhost http://asset.localhost; media-src 'self' data: https: blob: https://asset.localhost http://asset.localhost; font-src 'self' data:",
       "assetProtocol": {
         "enable": true,
         "scope": ["**"]
