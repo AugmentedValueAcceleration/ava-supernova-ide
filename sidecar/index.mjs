@@ -2534,7 +2534,15 @@ async function handleMessage(data) {
   // (no tag → agent defaults to work). When a desktop snapshot is also
   // being prepended, the mode tag goes FIRST so detectModeFromMessages
   // sees it on its `text.startsWith(...)` check.
-  const modeTag = MODE_PREFIX_TAG[currentMode] || '';
+  //
+  // BUT: the design / health / learning lanes carry their OWN room tag
+  // ([Design Studio] / [Health Room] / [Teach Mode]) inside their prefix.
+  // Prepending [Chat Mode] in front of that makes detectModeFromMessages read
+  // 'chat' FIRST — which blocks the room's tools (e.g. design_generate_image).
+  // So those lanes get no global mode tag; their room tag drives the mode.
+  const modeTag = (activeLane === 'design' || activeLane === 'health' || activeLane === 'learning')
+    ? ''
+    : (MODE_PREFIX_TAG[currentMode] || '');
 
   try {
     // ── Desktop Automation Mode → the five-persona conductor ──────────────
