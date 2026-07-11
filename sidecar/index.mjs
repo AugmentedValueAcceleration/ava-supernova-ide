@@ -300,6 +300,20 @@ async function handleAssetForgeVoice(body) {
   }
 }
 
+// Proxy a cross-origin media URL to a same-origin data: URL so the webview can
+// both play AND persist it — its fetch is CSP-restricted to same-origin, so it
+// can't pull the raw platform/Wan URL's bytes itself. Falls back to the raw URL.
+async function proxyMediaToDataUrl(url, fallbackMime) {
+  try {
+    if (!/^https?:/i.test(url)) return url;
+    const res = await fetch(url);
+    if (!res.ok) return url;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const mime = res.headers.get('content-type') || fallbackMime;
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  } catch { return url; }
+}
+
 // ── Design Studio — video lane (mirror of handleAssetForgeGenerate for Wan 2.5) ──
 // The webview can't reach the platform, so it hands us { prompt, duration,
 // resolution } and we run the async pipeline: submit to /api/generate-video (→
@@ -330,11 +344,11 @@ async function handleAssetForgeVideo(body) {
       return;
     }
     const data = await submitRes.json();
-    if (data.url) { emit({ event: 'asset_forge_video_result', success: true, url: data.url }); return; }
+    if (data.url) { emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(data.url, 'video/mp4') }); return; }
     if (!data.task_id) { emit({ event: 'asset_forge_video_result', success: false, error: 'No task_id returned' }); return; }
     // 2) Poll until terminal, then hand back the finished clip URL.
     const final = await pollVideoStatus(String(data.task_id), platformKey);
-    if (final.success) emit({ event: 'asset_forge_video_result', success: true, url: final.url });
+    if (final.success) emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(final.url, 'video/mp4') });
     else emit({ event: 'asset_forge_video_result', success: false, error: final.error || 'Video generation failed' });
   } catch (err) {
     emit({ event: 'asset_forge_video_result', success: false, error: err instanceof Error ? err.message : 'Video generation failed' });

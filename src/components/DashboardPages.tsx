@@ -10528,9 +10528,12 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           file={selectedFile}
           projectFolder={projectFolder}
           onClose={() => setSelectedFile(null)}
-          onDeleted={(id, src) => {
-            if (src === 'cloud') setCloudFiles(prev => prev.filter(f => f.id !== id));
-            else setLocalFiles(prev => prev.filter(f => f.path !== id));
+          onDeleted={(id) => {
+            // Creative assets live in cloudFiles even though source==='local', and
+            // delete passes file.path for local / file.id for cloud — so drop from
+            // BOTH lists by either key. This is what refreshes the grid.
+            setCloudFiles(prev => prev.filter(f => f.id !== id && f.path !== id));
+            setLocalFiles(prev => prev.filter(f => f.id !== id && f.path !== id));
           }}
         />
       )}

@@ -379,11 +379,6 @@ function VideoStage({ durationSec, src, generating }: { durationSec: number; src
               ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" /></svg>
               : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg>}
           </button>
-          <button type="button" onClick={() => {}} title="Save (coming soon)" aria-label="Save"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600, border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
-            Save
-          </button>
         </div>
       </div>
     </div>
@@ -512,11 +507,6 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
           </div>
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a6adc8', whiteSpace: 'nowrap' }}>{fmtTime(cur)} / {fmtTime(durationSec)}</span>
-          <button type="button" onClick={() => {}} title="Save (coming soon)" aria-label="Save"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600, border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
-            Save
-          </button>
         </div>
       </div>
       <div style={{ textAlign: 'center', fontSize: 12, color: '#8b8398' }}>No audio yet — this is the transport. Write a script on the right and Ava speaks it here.</div>
@@ -623,6 +613,7 @@ export function DesignStudio() {
   // Local creative gallery — design_save / set auto-save write the matted PNG here.
   const gallery = useCreativeGallery('image');
   const voiceGallery = useCreativeGallery('voice');
+  const videoGallery = useCreativeGallery('video');
 
   // ── Logo lane ────────────────────────────────────────────────────────────
   // Constructed logo systems: a mark (letter / geometry / icon) + a real-font
@@ -727,7 +718,12 @@ export function DesignStudio() {
   // `resolution` is the exact route value ('720P' | '1080P'); duration is 5 | 10.
   const runVideoGeneration = useCallback((prompt: string, duration: string, resolution: string): Promise<VideoOutcome> => {
     return new Promise<VideoOutcome>((resolve) => {
-      videoResolverRef.current = resolve;
+      const title = (prompt.trim().split(/\s+/).slice(0, 6).join(' ') || 'Video').slice(0, 60);
+      // Auto-save on success (no Save button) — lands in creative/video/.
+      videoResolverRef.current = (r) => {
+        if (r.ok && r.url) videoGallery.saveGenerated({ url: r.url, title, prompt, ext: 'mp4' }).catch(() => {});
+        resolve(r);
+      };
       setVideoSrc(null);
       setVideoGenerating(true);
       getSidecar().assetForgeVideo({ prompt, duration: Number(duration), resolution }).catch((e) => {
@@ -736,7 +732,7 @@ export function DesignStudio() {
         resolve({ ok: false, error: e instanceof Error ? e.message : 'Video generation failed' });
       });
     });
-  }, []);
+  }, [videoGallery]);
 
   // Save a matted PNG to the local creative gallery (transparent icon).
   const saveToLibrary = useCallback((dataUrl: string, title: string, designType?: string) => {
