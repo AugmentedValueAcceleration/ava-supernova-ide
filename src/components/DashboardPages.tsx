@@ -9213,6 +9213,10 @@ interface LibraryFile {
    *  Lets the Library sort icons and logos into their own buckets instead of
    *  lumping every image kind under one tab — mirrors the extension. */
   designType?: string;
+  /** On-disk path (relative to home) for local creative assets. Used to read
+   *  the bytes and render a blob preview — the asset-protocol URL is flaky
+   *  under the CSP, so we don't depend on it for local files. */
+  localPath?: string;
   size: number;
   modified: string;
   url?: string;          // platform storage URL (cloud) or local-resolved path
@@ -9225,6 +9229,35 @@ interface LibraryFile {
 function libraryBucket(f: LibraryFile): 'icon' | 'logo' | LibraryMediaKind {
   if (f.designType === 'icon' || f.designType === 'logo') return f.designType;
   return classifyMediaKind(f);
+}
+
+/** Renders an asset's actual pixels. Cloud files use their URL; local files read
+ *  their bytes off disk into a blob URL — the Tauri asset-protocol URL is flaky
+ *  under the CSP, so we never rely on it for local previews. Shows the caller's
+ *  `fallback` (a kind icon) while loading or if the read fails. */
+function LocalThumb({ file, style, fallback }: { file: LibraryFile; style: React.CSSProperties; fallback: React.ReactNode }) {
+  const [src, setSrc] = useState<string | null>(file.source === 'cloud' ? (file.url || null) : null);
+  useEffect(() => {
+    if (file.source === 'cloud') { setSrc(file.url || null); return; }
+    if (!file.localPath) { setSrc(null); return; }
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { readFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+        const bytes = await readFile(file.localPath!, { baseDir: BaseDirectory.Home });
+        if (cancelled) return;
+        const ext = (file.localPath!.split('.').pop() || '').toLowerCase();
+        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp'
+          : ext === 'svg' ? 'image/svg+xml' : ext === 'gif' ? 'image/gif' : 'image/png';
+        objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        setSrc(objectUrl);
+      } catch { if (!cancelled) setSrc(null); }
+    })();
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [file.source, file.url, file.localPath]);
+  if (!src) return <>{fallback}</>;
+  return <img src={src} alt={file.name} style={style} />;
 }
 
 // Per-mediaKind icon — Phosphor duotone weight. Layered fill gives each
@@ -9984,6 +10017,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
               type: 'image',
               mediaKind: it.kind as LibraryMediaKind,
               designType: it.designType,
+              localPath: it.localPath,
               size: 0,
               modified: it.createdAt || '',
               url: it.url || '',
@@ -10332,13 +10366,14 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                     background: colors.bg, position: 'relative',
                   }}>
                     {(() => {
-                      if (kind === 'image' && file.url) {
-                        return <img src={file.url} alt={file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+                      const iconFallback = <span style={{ color: colors.text, opacity: 0.95 }}><MediaKindIcon kind={kind} size={52} weight="duotone" /></span>;
+                      if (kind === 'image') {
+                        return <LocalThumb file={file} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
                       }
                       if (kind === 'video' && file.url) {
                         return <video src={file.url} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
                       }
-                      return <span style={{ color: colors.text, opacity: 0.95 }}><MediaKindIcon kind={kind} size={52} weight="duotone" /></span>;
+                      return iconFallback;
                     })()}
                     {/* Type badge — labelled and coloured by real media kind
                         so MP3 rows read MUSIC, not IMAGE. */}
@@ -10664,8 +10699,10 @@ function LibraryPreviewModal({
         >×</button>
 
         {/* Preview area */}
-        {isImage && isCloud && file.url ? (
-          <img src={file.url} alt={file.name} style={{ width: '100%', maxHeight: '50vh', objectFit: 'contain', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }} />
+        {isImage && (file.url || file.localPath) ? (
+          <LocalThumb file={file}
+            style={{ width: '100%', maxHeight: '50vh', objectFit: 'contain', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
+            fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '56px 20px', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}><span style={{ color: 'var(--accent)' }}><PhImage size={72} weight="duotone" /></span></div>} />
         ) : isVideo && isCloud && file.url ? (
           <LibraryMediaPlayer src={file.url} kind="video" />
         ) : isAudio && isCloud && file.url ? (
