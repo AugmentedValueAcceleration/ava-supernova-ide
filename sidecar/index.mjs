@@ -216,17 +216,21 @@ async function handleAssetForgeGenerate(body) {
       emit({ event: 'asset_forge_result', success: false, error: 'No image returned' });
       return;
     }
-    // 2) Matte on the server. Non-fatal: on failure return the raw generated URL.
+    // 2) Matte on the server — icon lane only. Free-form images (matte === false)
+    // skip it: a hero / banner / illustration must keep its background, not get
+    // cut out. Non-fatal: on failure return the raw generated URL.
     let dataUrl = gen.url;
-    try {
-      const bgRes = await fetch('https://ava-supernova.com/api/asset-forge/remove-bg', {
-        method: 'POST', headers, body: JSON.stringify({ imageUrl: gen.url }),
-      });
-      if (bgRes.ok) {
-        const bg = await bgRes.json();
-        if (bg.dataUrl) dataUrl = bg.dataUrl;
-      }
-    } catch { /* keep the raw url */ }
+    if (body.matte !== false) {
+      try {
+        const bgRes = await fetch('https://ava-supernova.com/api/asset-forge/remove-bg', {
+          method: 'POST', headers, body: JSON.stringify({ imageUrl: gen.url }),
+        });
+        if (bgRes.ok) {
+          const bg = await bgRes.json();
+          if (bg.dataUrl) dataUrl = bg.dataUrl;
+        }
+      } catch { /* keep the raw url */ }
+    }
     emit({ event: 'asset_forge_result', success: true, dataUrl, rawUrl: gen.url });
   } catch (err) {
     emit({ event: 'asset_forge_result', success: false, error: err instanceof Error ? err.message : 'Generation failed' });

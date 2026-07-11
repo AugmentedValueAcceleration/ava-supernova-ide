@@ -470,7 +470,7 @@ export class SidecarManager {
    * `asset_forge_result` event back ({ success, dataUrl, rawUrl, error }).
    * The renderer can't reach the platform (CSP/no key), so the sidecar owns it.
    */
-  async assetForgeGenerate(body: { prompt: string; referenceImage?: string; size?: string; negativePrompt?: string }): Promise<void> {
+  async assetForgeGenerate(body: { prompt: string; referenceImage?: string; size?: string; negativePrompt?: string; matte?: boolean }): Promise<void> {
     await this.send({ cmd: 'asset_forge_generate', body });
   }
 

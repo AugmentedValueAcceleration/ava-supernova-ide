@@ -524,7 +524,7 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
   );
 }
 
-type ViewId = 'icon' | 'iconset' | 'appicon' | 'logo' | 'badge' | 'avatar' | 'banner' | 'hero' | 'ogimage' | 'illustration' | 'pattern' | 'gamekit' | 'gamepiece' | 'canvas' | 'video' | 'voice' | 'brandkit';
+type ViewId = 'icon' | 'iconset' | 'appicon' | 'logo' | 'badge' | 'avatar' | 'banner' | 'hero' | 'ogimage' | 'illustration' | 'pattern' | 'gamekit' | 'gamepiece' | 'canvas' | 'image' | 'video' | 'voice' | 'brandkit';
 
 const GROUPS: { label: string; accent: string; items: { id: ViewId; label: string; badge?: string }[] }[] = [
   { label: 'Web / App', accent: 'var(--accent)', items: [
@@ -544,6 +544,7 @@ const GROUPS: { label: string; accent: string; items: { id: ViewId; label: strin
     { id: 'gamekit', label: 'UI Kit', badge: 'SOON' }, { id: 'gamepiece', label: 'Single Piece', badge: 'SOON' },
   ] },
   { label: 'Open Canvas', accent: '#6aa9ff', items: [
+    { id: 'image', label: 'Image' },
     { id: 'video', label: 'Video' },
     { id: 'voice', label: 'Voiceover' },
     { id: 'canvas', label: 'Image', badge: 'SOON' },
@@ -574,6 +575,15 @@ export function DesignStudio() {
   const [shapeId, setShapeId] = useState('Bell');
   const [color, setColor] = useState<string>(kit.palette.primary);
   const [boardBg, setBoardBg] = useState(CHECKER);
+
+  // ── Image lane (free-form Qwen-Image via sidecar — no armature, no matte) ──
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [imageGenerating, setImageGenerating] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageSize, setImageSize] = useState('1280*1280');
+  const imageResolverRef = useRef<((r: { ok: boolean; dataUrl?: string; error?: string }) => void) | null>(null);
+  const pendingImageRef = useRef(false);
+  const lastImageTitleRef = useRef('Image');
 
   // ── Video lane (Wan 2.5 via sidecar: submit → poll → clip) ──
   const [videoDuration, setVideoDuration] = useState('5'); // Wan: '5' | '10' seconds only
@@ -728,6 +738,34 @@ export function DesignStudio() {
   const saveToLibrary = useCallback((dataUrl: string, title: string) => {
     gallery.saveGenerated({ url: dataUrl, title, prompt: title, ext: 'png' }).catch(() => {});
   }, [gallery]);
+
+  // ── Image lane wiring (mirror of runVideoGeneration) — free-form Qwen-Image
+  // via the sidecar with NO reference armature and matte:false (a hero / banner
+  // keeps its background; it isn't cut out like an icon). Auto-saves on success.
+  const runImageGeneration = (prompt: string, size: string): Promise<{ ok: boolean; dataUrl?: string; error?: string }> => {
+    return new Promise((resolve) => {
+      const title = (prompt.trim().split(/\s+/).slice(0, 6).join(' ') || 'Image').slice(0, 60);
+      lastImageTitleRef.current = title;
+      imageResolverRef.current = (r) => {
+        if (r.ok && r.dataUrl) saveToLibrary(r.dataUrl, title); // lands in creative/images/
+        resolve(r);
+      };
+      pendingImageRef.current = true;
+      setImageSrc(null); setImageError(null);
+      setImageGenerating(true);
+      // Layer the active brand's style onto the free-form prompt — the kit shapes
+      // everything the studio makes. Title stays off the user's original words.
+      const branded = kit.styleTags?.length ? `${prompt} — style: ${kit.styleTags.join(', ')}` : prompt;
+      getSidecar().assetForgeGenerate({ prompt: branded, size, matte: false }).catch((e) => {
+        pendingImageRef.current = false;
+        imageResolverRef.current = null;
+        setImageGenerating(false);
+        const err = e instanceof Error ? e.message : 'Image generation failed';
+        setImageError(err);
+        resolve({ ok: false, error: err });
+      });
+    });
+  };
 
   // Build a whole logo SYSTEM from a brief — the mark (letter / geometry / icon),
   // a real-font wordmark, every lockup, mono, and favicon. MONO is a second render
@@ -936,6 +974,17 @@ export function DesignStudio() {
         else reply(false, undefined, out.error || 'Video generation failed.');
         return;
       }
+      if (m.command === 'generate_image') {
+        const prompt = typeof args.prompt === 'string' ? args.prompt.trim() : '';
+        if (!prompt) { reply(false, undefined, 'A prompt is required to generate an image.'); return; }
+        setView('image');
+        const size = typeof args.size === 'string' && /^\d+\*\d+$/.test(args.size) ? args.size : imageSize;
+        setImageSize(size);
+        const out = await runImageGeneration(prompt, size);
+        if (out.ok) reply(true, { size });
+        else reply(false, undefined, out.error || 'Image generation failed.');
+        return;
+      }
       if (m.command === 'generate_logo') {
         // Full logo make. The PANEL is the starting brief — whatever Ava leaves
         // unset, the dials supply. Whatever she does set is synced back into them
@@ -1049,6 +1098,20 @@ export function DesignStudio() {
     const handler = (event: SidecarEvent) => {
       if (event.event === 'asset_forge_result') {
         const ok = !!event.success && !!event.dataUrl;
+        // The free-form image lane shares this event with the icon lane; route by
+        // the pending flag so an image result doesn't land on the icon canvas.
+        if (pendingImageRef.current) {
+          pendingImageRef.current = false;
+          setImageGenerating(false);
+          if (ok) { setImageSrc(event.dataUrl!); setDockOpen(false); }
+          else setImageError(event.error || 'Generation failed');
+          const resolveImg = imageResolverRef.current;
+          if (resolveImg) {
+            imageResolverRef.current = null;
+            resolveImg(ok ? { ok: true, dataUrl: event.dataUrl } : { ok: false, error: event.error || 'Generation failed' });
+          }
+          return;
+        }
         if (ok) { setGenResult(event.dataUrl!); setDockOpen(false); } // icon ready → slide the chat down, reveal it
         else setGenError(event.error || 'Generation failed');
         setGenStatus(null);
@@ -1168,6 +1231,30 @@ export function DesignStudio() {
               )}
             </div>
             {genError && <p style={{ fontSize: 12, color: '#f38ba8', marginTop: 10 }}>{genError}</p>}
+          </div>
+        ) : view === 'image' ? (
+          <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ marginBottom: 12 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.image.title')}</h2>
+              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>{t('dash.studio.image.subtitle')}</p>
+            </div>
+            <div style={{ flex: 1, minHeight: 240, borderRadius: 12, border: `1px solid ${CARD_BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, position: 'relative', background: '#0f0a17', overflow: 'hidden' }}>
+              {imageSrc && <img src={imageSrc} alt="Generated image" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />}
+              {!imageSrc && !imageGenerating && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center', padding: '0 32px', pointerEvents: 'none' }}>
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+                  <div style={{ fontSize: 12, color: '#8b8398', maxWidth: 340, lineHeight: 1.6 }}>{t('dash.studio.image.hint')}</div>
+                </div>
+              )}
+              {imageGenerating && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, fontSize: 12.5, color: '#a6adc8' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${CARD_BORDER}`, borderTopColor: 'var(--accent)', animation: 'avaSpin 0.8s linear infinite' }} />
+                  Generating…
+                  <style>{'@keyframes avaSpin { to { transform: rotate(360deg) } }'}</style>
+                </div>
+              )}
+            </div>
+            {imageError && <p style={{ fontSize: 12, color: '#f38ba8', marginTop: 10 }}>{imageError}</p>}
           </div>
         ) : view === 'video' ? (
           <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -1444,6 +1531,23 @@ export function DesignStudio() {
             </Section>
           </div>
           {/* No Generate button — Ava designs. Ask her in the dock. */}
+        </aside>
+      )}
+
+      {/* RIGHT RAIL — the inspector (image lane) */}
+      {view === 'image' && (
+        <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <Section title={t('dash.studio.output')}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>{t('dash.studio.image.size')}</span>
+                <Select size="sm" style={{ width: 140 }} value={imageSize} onChange={setImageSize}
+                  options={[{ value: '1280*1280', label: t('dash.studio.image.square') }, { value: '1664*928', label: '16:9' }, { value: '928*1664', label: '9:16' }]} />
+              </div>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 6 }}>{t('dash.studio.image.hint')}</p>
+            </Section>
+          </div>
+          {/* No Generate button — Ava generates. Ask her in the dock. */}
         </aside>
       )}
 
