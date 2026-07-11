@@ -3612,12 +3612,16 @@ export function AvaChatPage() {
         setMessages((prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
+          const newTc = { name: event.toolName || 'unknown', status: 'running' as const, args: event.args };
           if (last?.role === 'ava') {
-            const existing = last.toolCalls || [];
-            copy[copy.length - 1] = {
-              ...last,
-              toolCalls: [...existing, { name: event.toolName || 'unknown', status: 'running', args: event.args }],
-            };
+            copy[copy.length - 1] = { ...last, toolCalls: [...(last.toolCalls || []), newTc] };
+          } else {
+            // Ava called a tool BEFORE emitting any text (the common case — she
+            // reads/greps/edits first, then responds). Create her bubble now so
+            // the tool call shows instead of being dropped. Mirrors the extension,
+            // which keeps an assistant message for the whole turn. Later text
+            // deltas append to this same bubble (stream_delta handles it).
+            copy.push({ id: mkId(), role: 'ava', text: '', timestamp: Date.now(), toolCalls: [newTc] });
           }
           return copy;
         });
