@@ -1141,11 +1141,11 @@ export function DesignStudio() {
         {view === 'icon' ? (
           <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ marginBottom: 12 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Icon</h2>
-              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>Your shape, your brand, any material — generated and matted to a clean transparent icon.</p>
+              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.icon.title')}</h2>
+              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>{t('dash.studio.icon.subtitle')}</p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 11, color: '#8b8398' }}>Check against</span>
+              <span style={{ fontSize: 11, color: '#8b8398' }}>{t('dash.studio.check_against')}</span>
               {boards.map(b => (
                 <button key={b.label} onClick={() => setBoardBg(b.bg)} title={b.label} aria-label={b.label}
                   style={{ width: 20, height: 20, borderRadius: 4, cursor: 'pointer', background: b.bg, border: `1px solid ${boardBg === b.bg ? '#fff' : CARD_BORDER}` }} />
@@ -1172,16 +1172,16 @@ export function DesignStudio() {
         ) : view === 'video' ? (
           <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ marginBottom: 14 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Video</h2>
-              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>Describe a shot — Ava generates a short clip and it plays in this bespoke stage.</p>
+              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.video.title')}</h2>
+              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>{t('dash.studio.video.subtitle')}</p>
             </div>
             <VideoStage durationSec={Number(videoDuration)} src={videoSrc ?? undefined} generating={videoGenerating} />
           </div>
         ) : view === 'voice' ? (
           <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ marginBottom: 14 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Voiceover</h2>
-              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>Pick a voice, write the line — Ava speaks it and it renders as a waveform you can scrub.</p>
+              <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.voice.title')}</h2>
+              <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>{t('dash.studio.voice.subtitle')}</p>
             </div>
             <WaveformPlayer voiceName={voiceName} durationSec={8} />
           </div>
@@ -1298,8 +1298,8 @@ export function DesignStudio() {
       {view === 'icon' && (
         <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <Section title="Shape">
-              <input value={query} onChange={e => setQuery(e.target.value)} placeholder={'Search 1,990 shapes… "bell"'}
+            <Section title={t('dash.studio.icon.shape')}>
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder={t('dash.studio.icon.shape_search_ph')}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 12, outline: 'none', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box' }} />
               {/* No Tailwind reset in the IDE, so the injected shape SVGs render
                   inline at default size and spill out of their tiles onto the
@@ -1315,10 +1315,10 @@ export function DesignStudio() {
                   );
                 })}
               </div>
-              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 12 }}>Lucide · 1,990 shapes · licence-clean (ISC)</p>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 12 }}>{t('dash.studio.icon.shape_credit')}</p>
             </Section>
 
-            <Section title="Material">
+            <Section title={t('dash.studio.icon.material')}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                 {MATERIALS.map(m => {
                   const on = materialId === m.id;
@@ -1328,25 +1328,25 @@ export function DesignStudio() {
                   );
                 })}
               </div>
-              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 6 }}>The shape becomes a reference the model paints onto — then matted to a transparent icon. Uses credits.</p>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 6 }}>{t('dash.studio.icon.material_hint')}</p>
             </Section>
 
-            <Section title="Colour">
+            <Section title={t('dash.studio.icon.icon_colour')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', fontSize: 12, color: '#a6adc8' }}>
                 <ColorField value={color} onChange={setColor} swatches={Object.values(kit.palette)} />
-                Icon colour
+                {t('dash.studio.icon.icon_colour')}
                 <code style={{ marginLeft: 'auto', fontSize: 10.5, color: '#8b8398' }}>{color.toUpperCase()}</code>
               </div>
-              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 4 }}>The material is rendered in this colour.</p>
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 4 }}>{t('dash.studio.icon.colour_hint')}</p>
             </Section>
 
-            <Section title="Output">
+            <Section title={t('dash.studio.output')}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>Icon size</span>
+                <span>{t('dash.studio.icon.size')}</span>
                 <Select size="sm" style={{ width: 118 }} value={String(genSize)} onChange={v => setGenSize(Number(v))}
                   options={PNG_SIZES.map(s => ({ value: String(s), label: `${s} × ${s}` }))} />
               </div>
-              <p style={{ fontSize: 10.5, color: '#8b8398' }}>Generated at a 1024 master, exported at your chosen size. Save / export land next.</p>
+              <p style={{ fontSize: 10.5, color: '#8b8398' }}>{t('dash.studio.icon.output_hint')}</p>
             </Section>
           </div>
           {/* No Generate button — Ava generates. Ask her in the dock. */}
@@ -1451,19 +1451,19 @@ export function DesignStudio() {
       {view === 'video' && (
         <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <Section title="Output">
+            <Section title={t('dash.studio.output')}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>Duration</span>
+                <span>{t('dash.studio.video.duration')}</span>
                 <Select size="sm" style={{ width: 118 }} value={videoDuration} onChange={setVideoDuration}
                   options={[{ value: '5', label: '5s' }, { value: '10', label: '10s' }]} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>Aspect ratio</span>
+                <span>{t('dash.studio.video.aspect')}</span>
                 <Select size="sm" style={{ width: 118 }} value={videoAspect} onChange={setVideoAspect}
                   options={[{ value: '16:9', label: '16:9' }, { value: '9:16', label: '9:16' }, { value: '1:1', label: '1:1' }]} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>Resolution</span>
+                <span>{t('dash.studio.video.resolution')}</span>
                 <Select size="sm" style={{ width: 118 }} value={videoResolution} onChange={setVideoResolution}
                   options={[{ value: '720p', label: '720p' }, { value: '1080p', label: '1080p' }]} />
               </div>
@@ -1478,7 +1478,7 @@ export function DesignStudio() {
       {view === 'voice' && (
         <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <Section title="Voice">
+            <Section title={t('dash.studio.voice.voice')}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                 {VOICES.map(v => {
                   const on = v === voiceName;
