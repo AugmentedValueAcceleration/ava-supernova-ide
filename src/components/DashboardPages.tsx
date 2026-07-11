@@ -9231,11 +9231,17 @@ function libraryBucket(f: LibraryFile): 'icon' | 'logo' | LibraryMediaKind {
   return classifyMediaKind(f);
 }
 
-/** Renders an asset's actual pixels. Cloud files use their URL; local files read
- *  their bytes off disk into a blob URL — the Tauri asset-protocol URL is flaky
- *  under the CSP, so we never rely on it for local previews. Shows the caller's
- *  `fallback` (a kind icon) while loading or if the read fails. */
-function LocalThumb({ file, style, fallback }: { file: LibraryFile; style: React.CSSProperties; fallback: React.ReactNode }) {
+const ASSET_MIME: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml',
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska',
+  mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', ogg: 'audio/ogg', flac: 'audio/flac',
+};
+
+/** A usable media src for an asset. Cloud files use their URL; local files read
+ *  their bytes off disk into a blob URL — the asset-protocol URL is flaky under
+ *  the CSP, so we never rely on it. Works for image / video / audio alike.
+ *  Extension items give an absolute path; IDE items give a home-relative one. */
+function useAssetSrc(file: LibraryFile): string | null {
   const [src, setSrc] = useState<string | null>(file.source === 'cloud' ? (file.url || null) : null);
   useEffect(() => {
     if (file.source === 'cloud') { setSrc(file.url || null); return; }
@@ -9245,25 +9251,64 @@ function LocalThumb({ file, style, fallback }: { file: LibraryFile; style: React
     (async () => {
       try {
         const { readFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-        // Extension items give an absolute path (C:\… or /…); IDE items give a
-        // home-relative one. Read absolute paths directly; relative via Home.
         const p = file.localPath!;
         const isAbsolute = /^([a-zA-Z]:[\\/]|\/|\\\\)/.test(p);
-        const bytes = isAbsolute
-          ? await readFile(p)
-          : await readFile(p, { baseDir: BaseDirectory.Home });
+        const bytes = isAbsolute ? await readFile(p) : await readFile(p, { baseDir: BaseDirectory.Home });
         if (cancelled) return;
-        const ext = (file.localPath!.split('.').pop() || '').toLowerCase();
-        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp'
-          : ext === 'svg' ? 'image/svg+xml' : ext === 'gif' ? 'image/gif' : 'image/png';
-        objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        const ext = (p.split('.').pop() || '').toLowerCase();
+        const mime = ASSET_MIME[ext];
+        objectUrl = URL.createObjectURL(mime ? new Blob([bytes], { type: mime }) : new Blob([bytes]));
         setSrc(objectUrl);
       } catch { if (!cancelled) setSrc(null); }
     })();
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [file.source, file.url, file.localPath]);
+  return src;
+}
+
+/** Grid image thumbnail — real pixels, or the caller's fallback icon. */
+function LocalThumb({ file, style, fallback }: { file: LibraryFile; style: React.CSSProperties; fallback: React.ReactNode }) {
+  const src = useAssetSrc(file);
   if (!src) return <>{fallback}</>;
   return <img src={src} alt={file.name} style={style} />;
+}
+
+/** Grid video poster — the first frame off disk, or the fallback icon. */
+function LocalVideoThumb({ file, style, fallback }: { file: LibraryFile; style: React.CSSProperties; fallback: React.ReactNode }) {
+  const src = useAssetSrc(file);
+  if (!src) return <>{fallback}</>;
+  return <video src={src} muted preload="metadata" style={style} />;
+}
+
+/** The detail-modal preview: real image / video player / audio waveform for
+ *  local AND cloud assets. Non-previewable kinds fall back to a type icon. */
+function AssetModalPreview({ file }: { file: LibraryFile }) {
+  const src = useAssetSrc(file);
+  const kind = classifyMediaKind(file);
+  if (src && kind === 'image') {
+    return <img src={src} alt={file.name} style={{ width: '100%', maxHeight: '50vh', objectFit: 'contain', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }} />;
+  }
+  if (src && kind === 'video') {
+    return <LibraryMediaPlayer src={src} kind="video" />;
+  }
+  if (src && (kind === 'voice' || kind === 'music')) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '40px 20px', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+        <div style={{ width: 'min(92%, 480px)' }}>
+          <LibraryMediaPlayer src={src} kind="audio" />
+        </div>
+      </div>
+    );
+  }
+  const Icon = FILE_TYPE_PH[file.type];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '56px 20px', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+      <span style={{ color: 'var(--accent)' }}><Icon size={72} weight="duotone" /></span>
+      {file.source !== 'cloud' && !file.localPath && (
+        <p style={{ fontSize: 11, color: '#6c7086', margin: 0 }}>Inline preview unavailable — use Open to view in your default app.</p>
+      )}
+    </div>
+  );
 }
 
 // Per-mediaKind icon — Phosphor duotone weight. Layered fill gives each
@@ -10379,8 +10424,8 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                       if (kind === 'image') {
                         return <LocalThumb file={file} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
                       }
-                      if (kind === 'video' && file.url) {
-                        return <video src={file.url} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+                      if (kind === 'video') {
+                        return <LocalVideoThumb file={file} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
                       }
                       return iconFallback;
                     })()}
@@ -10530,9 +10575,6 @@ function LibraryPreviewModal({
 
   const isCloud = file.source === 'cloud';
   const mediaKind = classifyMediaKind(file);
-  const isImage = mediaKind === 'image';
-  const isVideo = mediaKind === 'video';
-  const isAudio = mediaKind === 'music' || mediaKind === 'voice';
   const isOfficeDoc = mediaKind === 'document' || mediaKind === 'spreadsheet' || mediaKind === 'presentation';
 
   const showToast = (msg: string) => {
@@ -10707,37 +10749,8 @@ function LibraryPreviewModal({
           }}
         >×</button>
 
-        {/* Preview area */}
-        {isImage && (file.url || file.localPath) ? (
-          <LocalThumb file={file}
-            style={{ width: '100%', maxHeight: '50vh', objectFit: 'contain', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
-            fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '56px 20px', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}><span style={{ color: 'var(--accent)' }}><PhImage size={72} weight="duotone" /></span></div>} />
-        ) : isVideo && isCloud && file.url ? (
-          <LibraryMediaPlayer src={file.url} kind="video" />
-        ) : isAudio && isCloud && file.url ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '40px 20px', background: 'rgba(0,0,0,0.25)' }}>
-            <span style={{ fontSize: 48, opacity: 0.6 }}>{'🎵'}</span>
-            <div style={{ width: 'min(92%, 480px)' }}>
-              <LibraryMediaPlayer src={file.url} kind="audio" />
-            </div>
-          </div>
-        ) : (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 10, padding: '56px 20px', background: 'rgba(0,0,0,0.25)',
-            borderTopLeftRadius: 16, borderTopRightRadius: 16,
-          }}>
-            {(() => {
-              const Icon = FILE_TYPE_PH[file.type];
-              return <span style={{ color: 'var(--accent)' }}><Icon size={72} weight="duotone" /></span>;
-            })()}
-            {!isCloud && (
-              <p style={{ fontSize: 11, color: '#6c7086', margin: 0 }}>
-                Inline preview unavailable for local files — use Open to view in your default app.
-              </p>
-            )}
-          </div>
-        )}
+        {/* Preview area — real image / video player / audio waveform, local or cloud. */}
+        <AssetModalPreview file={file} />
 
         {/* Meta + actions */}
         <div style={{ padding: 20 }}>
