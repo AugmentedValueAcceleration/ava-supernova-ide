@@ -1703,10 +1703,17 @@ async function handleInit(data) {
       designControl: async (command, args) => {
         const slow = command === 'generate_icon' || command === 'generate_set';
         const setCount = command === 'generate_set' && Array.isArray(args?.shapes) ? args.shapes.length : 1;
-        // Video is async on Wan (1–6 min per clip, ~8-min poll ceiling) — give it
-        // the full ceiling so the tool doesn't time out before the clip lands.
+        // Model-side generation is slow — a 12s default made generate_image time
+        // out, so Ava saw "failed" and RETRIED while the first image was still
+        // rendering (two generations). Give each lane a realistic ceiling.
+        //   video  — async Wan, 1–6 min per clip (~8-min poll ceiling)
+        //   image  — Qwen-Image, tens of seconds
+        //   logo / explore — constructed vector (fast) but loads fonts + renders
+        //                    several candidates, so keep generous headroom
         const timeoutMs =
           command === 'generate_video' ? 600_000
+          : command === 'generate_image' ? 300_000
+          : (command === 'generate_logo' || command === 'explore_logos') ? 180_000
           : slow ? Math.min(600_000, 90_000 * Math.max(1, setCount))
           : 12_000;
         const requestId = `dtr-${++designReqSeq}`;

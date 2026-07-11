@@ -94,7 +94,7 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 // the chat header calls setCloudSync(); a single localStorage value is
 // the source of truth across the IDE.
 import { cloudSyncEnabled } from '../lib/data-mode';
-import { readAllLocalCreative, type GalleryItem } from '../lib/creative-gallery';
+import { readAllLocalCreative, removeLocalCreative, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
 import { GeneralProfilePage, ProfileTab, MySubmissionsTab, ContributeModal, requestHealthRoomTab } from './HealthPage';
@@ -10587,7 +10587,11 @@ function LibraryPreviewModal({
   };
 
   const resolveLocalAbsPath = async (): Promise<string | null> => {
-    if (isCloud || !projectFolder) return null;
+    if (isCloud) return null;
+    // Creative assets carry an absolute localPath (the shared metadata's
+    // absolutePath). Use it directly — they live under ~/.ava, not the project.
+    if (file.localPath && /^([a-zA-Z]:[\\/]|\/|\\\\)/.test(file.localPath)) return file.localPath;
+    if (!projectFolder) return null;
     try {
       const { join } = await import('@tauri-apps/api/path');
       return await join(projectFolder, file.path);
@@ -10673,12 +10677,10 @@ function LibraryPreviewModal({
       } else {
         const abs = await resolveLocalAbsPath();
         if (!abs) { showToast('Could not resolve local path.'); return; }
-        // Note: local fs deletes under the project folder currently need
-        // a capability extension; today the user's project folder is not
-        // in the write allowlist. When that lands, the call below starts
-        // working without code changes.
         const { remove } = await import('@tauri-apps/plugin-fs');
-        await remove(abs);
+        await remove(abs).catch(() => { /* file may already be gone */ });
+        // Keep the shared creative metadata in sync so it doesn't reappear.
+        if (file.id) await removeLocalCreative(file.id).catch(() => {});
         onDeleted(file.path, 'local');
       }
       onClose();

@@ -147,6 +147,13 @@ async function deleteFromDisk(localPath: string): Promise<void> {
   }
 }
 
+/** Remove a local creative asset's metadata entry so it doesn't reappear after
+ *  the Library deletes its file. Shared metadata.json is the source of truth. */
+export async function removeLocalCreative(id: string): Promise<void> {
+  const meta = await readLocalMetadata();
+  await writeLocalMetadata(meta.filter((m) => m.id !== id)).catch(() => {});
+}
+
 /** Every local creative item across all media, newest-first — for the Library
  *  Assets grid (which shows all kinds together, not one medium). */
 export async function readAllLocalCreative(): Promise<GalleryItem[]> {
