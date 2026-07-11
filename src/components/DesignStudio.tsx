@@ -568,7 +568,7 @@ export function DesignStudio() {
   // Which room the Design Architect chat should reflect. The Open-Canvas Video
   // and Voiceover views map to their own rooms; everything else is the icon
   // studio (greeting / chips / heading / persona all follow this).
-  const designRoom: 'icon' | 'video' | 'voice' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : 'icon';
+  const designRoom: 'icon' | 'video' | 'voice' | 'image' | 'logo' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : view === 'image' ? 'image' : view === 'logo' ? 'logo' : 'icon';
 
   const [query, setQuery] = useState('');
   const [shapeId, setShapeId] = useState('Bell');
@@ -1720,7 +1720,7 @@ const DOCK_STARTERS_VOICE: { icon: string; label: string; prompt: string }[] = [
   { icon: '🧘', label: 'A calm read', prompt: 'A slow, reassuring read for a meditation clip' },
 ];
 
-function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon' }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' }) {
+function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon' }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' }) {
   const [messages, setMessages] = useState<DockMessage[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
