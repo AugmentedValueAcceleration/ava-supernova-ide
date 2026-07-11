@@ -527,6 +527,11 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
 type ViewId = 'icon' | 'iconset' | 'appicon' | 'logo' | 'badge' | 'avatar' | 'banner' | 'hero' | 'ogimage' | 'illustration' | 'pattern' | 'gamekit' | 'gamepiece' | 'canvas' | 'image' | 'video' | 'voice' | 'brandkit';
 
 const GROUPS: { label: string; accent: string; items: { id: ViewId; label: string; badge?: string }[] }[] = [
+  { label: 'Open Canvas', accent: '#6aa9ff', items: [
+    { id: 'video', label: 'Video' },
+    { id: 'voice', label: 'Voiceover' },
+    { id: 'image', label: 'Image' },
+  ] },
   { label: 'Web / App', accent: 'var(--accent)', items: [
     { id: 'icon', label: 'Icon' },
     { id: 'iconset', label: 'Icon Set', badge: 'SOON' },
@@ -542,12 +547,6 @@ const GROUPS: { label: string; accent: string; items: { id: ViewId; label: strin
   ] },
   { label: 'Game', accent: '#f0a24b', items: [
     { id: 'gamekit', label: 'UI Kit', badge: 'SOON' }, { id: 'gamepiece', label: 'Single Piece', badge: 'SOON' },
-  ] },
-  { label: 'Open Canvas', accent: '#6aa9ff', items: [
-    { id: 'image', label: 'Image' },
-    { id: 'video', label: 'Video' },
-    { id: 'voice', label: 'Voiceover' },
-    { id: 'canvas', label: 'Image', badge: 'SOON' },
   ] },
 ];
 
