@@ -592,11 +592,15 @@ export function DesignStudio() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [videoGenerating, setVideoGenerating] = useState(false);
 
-  // ── Voice lane (UI shell — local state only) ──
+  // ── Voice lane (Qwen3-TTS via sidecar) ──
   const [voiceName, setVoiceName] = useState(VOICES[0]);
   const [voiceScript, setVoiceScript] = useState('');
   const [voiceEmotion, setVoiceEmotion] = useState('neutral');
   const [voiceSpeed, setVoiceSpeed] = useState('1.0');
+  const [voiceSrc, setVoiceSrc] = useState<string | null>(null);
+  const [voiceGenerating, setVoiceGenerating] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const voiceResolverRef = useRef<((r: { ok: boolean; url?: string; error?: string }) => void) | null>(null);
 
   const [materialId, setMaterialId] = useState('glass');
   const [genResult, setGenResult] = useState<string | null>(null);
@@ -619,6 +623,7 @@ export function DesignStudio() {
 
   // Local creative gallery — design_save / set auto-save write the matted PNG here.
   const gallery = useCreativeGallery('image');
+  const voiceGallery = useCreativeGallery('voice');
 
   // ── Logo lane ────────────────────────────────────────────────────────────
   // Constructed logo systems: a mark (letter / geometry / icon) + a real-font
@@ -762,6 +767,28 @@ export function DesignStudio() {
         setImageGenerating(false);
         const err = e instanceof Error ? e.message : 'Image generation failed';
         setImageError(err);
+        resolve({ ok: false, error: err });
+      });
+    });
+  };
+
+  // ── Voice lane wiring (Qwen3-TTS via sidecar) — park a resolver, ask the
+  // sidecar to synthesise, and the asset_forge_voice_result listener fulfils it.
+  // Auto-saves the finished audio into creative/voice/ on success.
+  const runVoiceGeneration = (script: string, voice: string, language: string, instructions?: string): Promise<{ ok: boolean; url?: string; error?: string }> => {
+    return new Promise((resolve) => {
+      const title = (script.trim().split(/\s+/).slice(0, 6).join(' ') || 'Voiceover').slice(0, 60);
+      voiceResolverRef.current = (r) => {
+        if (r.ok && r.url) voiceGallery.saveGenerated({ url: r.url, title, prompt: script, ext: 'mp3' }).catch(() => {});
+        resolve(r);
+      };
+      setVoiceSrc(null); setVoiceError(null);
+      setVoiceGenerating(true);
+      getSidecar().assetForgeVoice({ text: script, voice, language_type: language, instructions }).catch((e) => {
+        voiceResolverRef.current = null;
+        setVoiceGenerating(false);
+        const err = e instanceof Error ? e.message : 'Voice generation failed';
+        setVoiceError(err);
         resolve({ ok: false, error: err });
       });
     });
@@ -985,6 +1012,19 @@ export function DesignStudio() {
         else reply(false, undefined, out.error || 'Image generation failed.');
         return;
       }
+      if (m.command === 'generate_voice') {
+        const script = typeof args.script === 'string' ? args.script.trim() : (typeof args.text === 'string' ? args.text.trim() : '');
+        if (!script) { reply(false, undefined, 'A script is required to generate a voiceover.'); return; }
+        setView('voice');
+        const voice = typeof args.voice === 'string' && args.voice.trim() ? args.voice.trim() : voiceName;
+        setVoiceName(voice); setVoiceScript(script);
+        const language = typeof args.language === 'string' ? args.language : 'auto';
+        const instructions = typeof args.instructions === 'string' ? args.instructions : undefined;
+        const out = await runVoiceGeneration(script, voice, language, instructions);
+        if (out.ok) reply(true, { voice });
+        else reply(false, undefined, out.error || 'Voice generation failed.');
+        return;
+      }
       if (m.command === 'generate_logo') {
         // Full logo make. The PANEL is the starting brief — whatever Ava leaves
         // unset, the dials supply. Whatever she does set is synced back into them
@@ -1133,6 +1173,18 @@ export function DesignStudio() {
         }
         return;
       }
+      if (event.event === 'asset_forge_voice_result') {
+        setVoiceGenerating(false);
+        const ok = !!event.success && !!event.url;
+        if (ok) { setVoiceSrc(event.url!); setDockOpen(false); } // audio ready → reveal it
+        else setVoiceError(event.error || 'Voice generation failed');
+        const resolve = voiceResolverRef.current;
+        if (resolve) {
+          voiceResolverRef.current = null;
+          resolve(ok ? { ok: true, url: event.url } : { ok: false, error: event.error || 'Voice generation failed' });
+        }
+        return;
+      }
       if (event.event === 'design_tool' && event.requestId && event.command) {
         cmdHandlerRef.current({ requestId: event.requestId, command: event.command, args: event.args ?? {} });
       }
@@ -1270,7 +1322,18 @@ export function DesignStudio() {
               <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.voice.title')}</h2>
               <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>{t('dash.studio.voice.subtitle')}</p>
             </div>
-            <WaveformPlayer voiceName={voiceName} durationSec={8} />
+            {voiceSrc ? (
+              <audio controls src={voiceSrc} style={{ width: '100%', marginTop: 8 }} />
+            ) : voiceGenerating ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: '#a6adc8', padding: '20px 0' }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${CARD_BORDER}`, borderTopColor: 'var(--accent)', animation: 'avaSpin 0.8s linear infinite' }} />
+                Voicing…
+                <style>{'@keyframes avaSpin { to { transform: rotate(360deg) } }'}</style>
+              </div>
+            ) : (
+              <WaveformPlayer voiceName={voiceName} durationSec={8} />
+            )}
+            {voiceError && <p style={{ fontSize: 12, color: '#f38ba8', marginTop: 10 }}>{voiceError}</p>}
           </div>
         ) : view === 'logo' ? (
           <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

@@ -237,6 +237,57 @@ async function handleAssetForgeGenerate(body) {
   }
 }
 
+// ── Design Studio — voice lane (Qwen3-TTS via the platform) ──
+// The webview can't reach the platform; it hands us { text, voice, language_type,
+// instructions } and we POST /api/generate-voice, then proxy the returned audio to
+// a data: URL — the DashScope url is cross-origin with no CORS, which breaks the
+// webview's Web Audio decode (the waveform) and can block playback. Result comes
+// back as an `asset_forge_voice_result` event carrying the audio URL.
+async function handleAssetForgeVoice(body) {
+  const state = globalThis._sharedState || {};
+  const platformKey = state.platformKey;
+  if (!platformKey) {
+    emit({ event: 'asset_forge_voice_result', success: false, error: 'Not connected. Add your account in Settings.' });
+    return;
+  }
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${platformKey}`,
+    'X-Ava-Data-Mode': state.generationLocalOnly ? 'local' : 'both',
+  };
+  try {
+    const res = await fetch('https://ava-supernova.com/api/generate-voice', {
+      method: 'POST', headers,
+      body: JSON.stringify({ text: body.text, voice: body.voice, language_type: body.language_type, instructions: body.instructions }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      emit({ event: 'asset_forge_voice_result', success: false, error: e.error || `Voice generation failed (${res.status})` });
+      return;
+    }
+    const data = await res.json();
+    if (!data.url) {
+      emit({ event: 'asset_forge_voice_result', success: false, error: 'No audio returned' });
+      return;
+    }
+    // Proxy cross-origin audio to a same-origin data: URL so the waveform decodes.
+    let audioUrl = data.url;
+    if (/^https?:/i.test(audioUrl)) {
+      try {
+        const audioRes = await fetch(audioUrl);
+        if (audioRes.ok) {
+          const buf = Buffer.from(await audioRes.arrayBuffer());
+          const mime = audioRes.headers.get('content-type') || 'audio/wav';
+          audioUrl = `data:${mime};base64,${buf.toString('base64')}`;
+        }
+      } catch { /* fall back to the raw url */ }
+    }
+    emit({ event: 'asset_forge_voice_result', success: true, url: audioUrl });
+  } catch (err) {
+    emit({ event: 'asset_forge_voice_result', success: false, error: err instanceof Error ? err.message : 'Voice generation failed' });
+  }
+}
+
 // ── Design Studio — video lane (mirror of handleAssetForgeGenerate for Wan 2.5) ──
 // The webview can't reach the platform, so it hands us { prompt, duration,
 // resolution } and we run the async pipeline: submit to /api/generate-video (→
@@ -3492,6 +3543,12 @@ rl.on('line', async (line) => {
       // an `asset_forge_video_result` with the finished clip URL back to the canvas.
       handleAssetForgeVideo(data.body || {}).catch((err) =>
         emit({ event: 'asset_forge_video_result', success: false, error: err && err.message ? err.message : 'Video generation failed' }));
+      break;
+    case 'asset_forge_voice':
+      // Design Studio → platform: Qwen3-TTS synthesis, then emit an
+      // `asset_forge_voice_result` with the finished audio back to the canvas.
+      handleAssetForgeVoice(data.body || {}).catch((err) =>
+        emit({ event: 'asset_forge_voice_result', success: false, error: err && err.message ? err.message : 'Voice generation failed' }));
       break;
     case 'design_tool_result': {
       // The Design Studio canvas replied to a design_tool command — resolve the

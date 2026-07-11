@@ -484,6 +484,15 @@ export class SidecarManager {
   }
 
   /**
+   * Design Studio voice lane → platform: Qwen3-TTS synthesis in the sidecar
+   * (which proxies the cross-origin audio to a data: URL), getting an
+   * `asset_forge_voice_result` event back ({ success, url, error }).
+   */
+  async assetForgeVoice(body: { text: string; voice?: string; language_type?: string; instructions?: string }): Promise<void> {
+    await this.send({ cmd: 'asset_forge_voice', body });
+  }
+
+  /**
    * Reply to a `design_tool` event — the Design Studio canvas ran the command
    * Ava's design_* tool asked for and reports the outcome back so the parked
    * tool call resolves.
