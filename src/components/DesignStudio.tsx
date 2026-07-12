@@ -1727,6 +1727,11 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
   useEffect(() => {
     try { localStorage.setItem(DESIGN_CHAT_KEY, JSON.stringify(messages)); } catch { /* quota / disabled */ }
   }, [messages]);
+  // Mirror of `messages` for the send path. `messages` changes on every stream
+  // token, so reading it through a ref keeps send() out of that churn instead
+  // of rebuilding the callback hundreds of times a turn.
+  const messagesRef = useRef<DockMessage[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<DockAttachment[]>([]);
@@ -1808,8 +1813,18 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
     setInput('');
     setAttachments([]);
     const sc = getSidecar();
-    logDiag(`design send → sendMessage(surface=design, room=${designRoom}, ready=${sc.isReady}) "${text.slice(0, 40)}"`);
-    sc.sendMessage(text || '(see attachment)', atts, undefined, 'design', undefined, designRoom)
+    // Replay the persisted conversation. The dock restores its bubbles from
+    // localStorage, but the sidecar's design thread is IN-MEMORY and starts
+    // empty on every app/sidecar restart — so without this Ava is answering
+    // about a conversation she has never seen ("I don't have context from the
+    // previous session") while the user is staring at it on screen. Same
+    // contract the main chat uses. `messagesRef` is still pre-update here, so
+    // this is everything BEFORE the new turn, which goes as `content`.
+    const history = messagesRef.current
+      .filter((m) => (m.role === 'user' || m.role === 'ava') && m.text.trim())
+      .map((m) => ({ role: m.role === 'ava' ? 'assistant' : 'user', text: m.text }));
+    logDiag(`design send → sendMessage(surface=design, room=${designRoom}, ready=${sc.isReady}, history=${history.length}) "${text.slice(0, 40)}"`);
+    sc.sendMessage(text || '(see attachment)', atts, history.length ? history : undefined, 'design', undefined, designRoom)
       .then(() => logDiag('design send → sendMessage resolved (written to sidecar)'))
       .catch((e) => { logDiag(`design send FAILED: ${e?.message || e}`, 'error'); setStreaming(false); });
   }, [attachments, designRoom]);

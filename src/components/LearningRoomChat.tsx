@@ -88,6 +88,15 @@ export function LearningRoomChat({ active, courseId }: { active: boolean; course
     if (!streaming) writeRoomMessages(courseId, messages);
   }, [messages, streaming, courseId]);
 
+  // Mirror of `messages` for the send path. `messages` changes on every stream
+  // token, so reading it through a ref keeps send() out of that churn instead
+  // of rebuilding the callback hundreds of times a turn. It can't leak one
+  // course's thread into another: the page mounts us with a key on courseId
+  // (DashboardPages), so a course switch REMOUNTS this component and both
+  // `messages` and this ref re-seed from that course's own store.
+  const messagesRef = useRef<RoomMessage[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   // Subscribe to the sidecar, processing ONLY learning-lane events.
   useEffect(() => {
     const handler = (event: SidecarEvent) => {
@@ -158,7 +167,16 @@ export function LearningRoomChat({ active, courseId }: { active: boolean; course
     setStreaming(true);
     setInput('');
     setAttachments([]);
-    getSidecar().sendMessage(text || '(see attachment)', atts, undefined, 'learning', courseId).catch(() => setStreaming(false));
+    // Replay the restored conversation — the room rehydrates its bubbles from
+    // sessionStorage / the module cache, but the sidecar's per-course thread is
+    // IN-MEMORY, so a fresh sidecar would be answering about a conversation it
+    // has never seen. Same contract the main chat and the Design dock use;
+    // `messagesRef` is still pre-update here, so this is everything BEFORE the
+    // new turn, which goes as `content`.
+    const history = messagesRef.current
+      .filter((m) => (m.role === 'user' || m.role === 'ava') && m.text.trim())
+      .map((m) => ({ role: m.role === 'ava' ? 'assistant' : 'user', text: m.text }));
+    getSidecar().sendMessage(text || '(see attachment)', atts, history.length ? history : undefined, 'learning', courseId).catch(() => setStreaming(false));
   }, [streaming, courseId, attachments]);
 
   const handleAttach = useCallback(() => {

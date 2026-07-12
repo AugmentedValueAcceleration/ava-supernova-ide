@@ -98,6 +98,9 @@ async function readLocalMetadata(): Promise<GalleryItem[]> {
 async function writeLocalMetadata(items: GalleryItem[]): Promise<void> {
   await mkdir(await creativeDir(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
   await writeTextFile(await metadataRel(), JSON.stringify(items, null, 2), { baseDir: BaseDirectory.Home });
+  // Every save AND delete funnels through here, so it's the one place that has
+  // to tell the storage bars (Command Centre + Library) the footprint moved.
+  try { window.dispatchEvent(new CustomEvent('ava-storage-changed')); } catch { /* non-DOM caller */ }
 }
 
 /** Write the binary bytes of a generation to disk and return the Tauri

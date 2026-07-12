@@ -65,6 +65,7 @@ import {
 } from '../lib/journal-store';
 import { DocumentationPage } from './DocumentationPage';
 import { LibraryPapersPage } from './LibraryPapersPage';
+import { StorageBar } from './StorageBar';
 import { ContextBar } from './ContextBar';
 import { getToolHeader } from './tool-header';
 import {
@@ -1997,6 +1998,16 @@ export function CommandCentrePage() {
               text={`v${APP_VERSION}`}
               title={`Ava IDE v${APP_VERSION}`}
             />
+          </div>
+        </div>
+
+        {/* Storage — colour-coded bar of Ava's whole local footprint, click to
+            manage/prune. Sits under the hero; mirrors the Library bar and the
+            extension's Command Center placement. Renders nothing until the
+            scan lands. */}
+        <div style={{ display: 'flex', marginBottom: 16 }}>
+          <div style={{ marginLeft: 'auto', width: '100%', maxWidth: 320 }}>
+            <StorageBar label="Storage" />
           </div>
         </div>
 
@@ -9952,6 +9963,11 @@ export function LibraryPage() {
             <p style={{ fontSize: 12, color: '#9b8caa', margin: 0, marginBottom: 16 }}>
               {t('dash.library.hub_subtitle')}
             </p>
+          </div>
+          {/* Storage — same bar as the Command Centre. In the header rather than
+              above the asset grid so it stays visible on every Library tab. */}
+          <div style={{ width: '100%', maxWidth: 320, marginBottom: 16 }}>
+            <StorageBar label="Storage" />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>

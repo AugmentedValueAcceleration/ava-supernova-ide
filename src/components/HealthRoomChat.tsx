@@ -88,6 +88,12 @@ export function HealthRoomChat({ active }: { active: boolean }) {
     if (!streaming) writeRoomMessages(messages);
   }, [messages, streaming]);
 
+  // Mirror of `messages` for the send path. `messages` changes on every stream
+  // token, so reading it through a ref keeps send() out of that churn instead
+  // of rebuilding the callback hundreds of times a turn.
+  const messagesRef = useRef<RoomMessage[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   // Subscribe to the sidecar, processing ONLY health-lane events.
   useEffect(() => {
     const handler = (event: SidecarEvent) => {
@@ -163,7 +169,16 @@ export function HealthRoomChat({ active }: { active: boolean }) {
     setStreaming(true);
     setInput('');
     setAttachments([]);
-    getSidecar().sendMessage(text || '(see attachment)', atts, undefined, 'health').catch(() => setStreaming(false));
+    // Replay the restored conversation — the room rehydrates its bubbles from
+    // sessionStorage / the module cache, but the sidecar's health thread is
+    // IN-MEMORY, so a fresh sidecar would be answering about a conversation it
+    // has never seen. Same contract the main chat and the Design dock use;
+    // `messagesRef` is still pre-update here, so this is everything BEFORE the
+    // new turn, which goes as `content`.
+    const history = messagesRef.current
+      .filter((m) => (m.role === 'user' || m.role === 'ava') && m.text.trim())
+      .map((m) => ({ role: m.role === 'ava' ? 'assistant' : 'user', text: m.text }));
+    getSidecar().sendMessage(text || '(see attachment)', atts, history.length ? history : undefined, 'health').catch(() => setStreaming(false));
   }, [streaming, attachments]);
 
   const handleAttach = useCallback(() => {
