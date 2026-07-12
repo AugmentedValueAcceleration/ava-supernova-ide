@@ -510,6 +510,26 @@ function handleSecretGrantResponse(data) {
   pending.resolve({ id, label: pending.label });
 }
 
+/**
+ * Grant a vault entry into the working set under an id the RENDERER chose.
+ *
+ * This is the composer path: the operator typed `@secret:<label>` themselves and
+ * the renderer substituted the opaque `{{secret:<id>}}` handle into the message,
+ * so the handle must resolve to something at tool-execute time. Typing the
+ * reference IS the consent — no prompt.
+ *
+ * The value crosses the local stdio pipe to this process and stops here: it goes
+ * into the session-lived working set only, never into the conversation, the model
+ * request, or the saved transcript. Substitution happens in argsPreprocessor,
+ * after the user has approved the tool call.
+ */
+function handleGrantSecret(data) {
+  const id = typeof data?.id === 'string' ? data.id : '';
+  const value = typeof data?.value === 'string' ? data.value : '';
+  if (!id || !value) return;
+  secretWorkingSet.set(id, { label: typeof data.label === 'string' ? data.label : id, value });
+}
+
 // Recursively replace `{{secret:<id>}}` tokens in strings with the
 // working-set value for that id. Non-string / non-object values
 // pass through. Unknown ids are left as the literal handle (safer
@@ -3548,6 +3568,9 @@ rl.on('line', async (line) => {
       break;
     case 'secret_grant_response':
       handleSecretGrantResponse(data);
+      break;
+    case 'grant_secret':
+      handleGrantSecret(data);
       break;
     case 'clear':
       handleClear(data);

@@ -456,6 +456,21 @@ export class SidecarManager {
   }
 
   /**
+   * Grant a vault entry into the sidecar's session working set under an id the
+   * renderer chose. Used when the operator writes `@secret:<label>` in the
+   * composer: the renderer substitutes the opaque `{{secret:<id>}}` handle into
+   * the message and calls this so the handle can resolve at tool-execute time.
+   *
+   * The value goes over the LOCAL stdio pipe to our own sidecar and stops there
+   * — it is never put in the message, so it never reaches the model, the
+   * provider, or the saved transcript. Typing the reference is the consent, so
+   * there's no grant prompt on this path.
+   */
+  async grantSecret(id: string, label: string, value: string): Promise<void> {
+    await this.send({ cmd: 'grant_secret', id, label, value });
+  }
+
+  /**
    * Clear conversation (new chat). Pass surface:'health' to clear only the
    * Ava Health room thread, or surface:'learning' (+ courseId) to clear one
    * course's Learning thread — both leave the main chat untouched.

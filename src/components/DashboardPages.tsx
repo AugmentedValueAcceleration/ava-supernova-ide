@@ -2289,7 +2289,28 @@ export function AvaChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const saved = localStorage.getItem('ava-ide-chat-current');
-      if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed) && parsed.length > 0) return parsed; }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Settle any tool chip still marked `running`. We persist on every
+          // `messages` change — including mid-stream — so closing the app during
+          // a turn freezes a chip in `running`, and on reopen it spins forever
+          // against a sidecar that has no memory of it. A spinner that can never
+          // resolve is a lie; mark it for what it is.
+          return (parsed as ChatMessage[]).map((m) =>
+            m.toolCalls?.some((tc) => tc.status === 'running')
+              ? {
+                  ...m,
+                  toolCalls: m.toolCalls.map((tc) =>
+                    tc.status === 'running'
+                      ? { ...tc, status: 'error' as const, result: tc.result ?? 'Interrupted — the app closed before this finished.' }
+                      : tc,
+                  ),
+                }
+              : m,
+          );
+        }
+      }
     } catch { /* */ }
     return [
       { id: mkId(), role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now() },
@@ -2700,13 +2721,27 @@ export function AvaChatPage() {
     });
   }, []);
 
-  // Replace @secret:Label references with actual values, returns { text, usedSecrets }
+  // Expand @secret:Label to the OPAQUE {{secret:<id>}} handle — never the raw
+  // value. This used to substitute `s.value` straight into the outgoing message,
+  // which put the operator's key into the prompt: out to the model provider, and
+  // into the saved transcript. Masked on screen, shipped to a third party — the
+  // exact opposite of what a vault is for, and a direct contradiction of the
+  // guarantee written 140 lines above ("the raw value never appears in chat
+  // history, tool args, thinking, or the model's context").
+  //
+  // Now we grant the entry into the sidecar's session working set (over the
+  // local stdio pipe — it never enters the message) and emit the handle. The
+  // sidecar's argsPreprocessor swaps in the real value at tool-execute time,
+  // after the user has approved the call. Typing the reference is the consent,
+  // so this path needs no grant prompt.
   const injectSecrets = useCallback((text: string): { text: string; usedSecrets: boolean } => {
     let usedSecrets = false;
     const result = text.replace(/@secret:(\S+)/g, (_match, label) => {
       const s = secrets.find(sec => sec.label === label);
-      if (s) { usedSecrets = true; return s.value; }
-      return _match; // leave unchanged if not found
+      if (!s) return _match; // leave unchanged if not found
+      usedSecrets = true;
+      getSidecar().grantSecret(s.id, s.label, s.value).catch(() => { /* handle then fails closed */ });
+      return `{{secret:${s.id}}}`;
     });
     return { text: result, usedSecrets };
   }, [secrets]);

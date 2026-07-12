@@ -55,7 +55,16 @@ export interface ModelCatalogueGroup {
  *  name, availability per BYOK key. Identical logic to AvaChatPage.MODEL_CATALOGUE. */
 export function buildModelCatalogue(keyedProviders: Set<string>): ModelCatalogueGroup[] {
   const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', anthropic: 'Anthropic', minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA' };
-  const STORE: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral' };
+  // provider id → the field name its key is stored under in `ava-ide-byok`.
+  // `available` is derived from this, so a provider MISSING here is permanently
+  // unavailable no matter what key the user holds. It was stuck at five, which
+  // silently locked Anthropic / Xiaomi / Tencent / NVIDIA out of BYOK entirely —
+  // their models stayed greyed out even with a valid key pasted in. Must stay in
+  // step with the Sidebar's provider list (same store keys).
+  const STORE: Record<string, string> = {
+    deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral',
+    anthropic: 'Anthropic', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA',
+  };
   return Object.entries(ALL_MODELS)
     .map(([id, models]) => ({
       id,

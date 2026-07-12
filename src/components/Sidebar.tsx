@@ -956,7 +956,27 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
     );
   }
 
-  const providers = ['DeepSeek', 'Moonshot', 'Qwen', 'Zhipu', 'Mistral'];
+  // The nine BYOK providers Ava actually supports — mirrors the extension's
+  // Settings PROVIDERS list. This was stuck at five, and because
+  // buildModelCatalogue() derives `available` from the same set, Anthropic,
+  // Xiaomi, Tencent and NVIDIA could never be used with a BYOK key at all: you
+  // could hold a valid key and the models stayed greyed out. (MiniMax is
+  // deliberately absent — it's retired.)
+  //
+  // `key` is the localStorage field in `ava-ide-byok` and MUST NOT change for
+  // the original five, or existing saved keys are orphaned. `label` is display
+  // only, and matches the extension's wording.
+  const providers: Array<{ key: string; label: string }> = [
+    { key: 'Anthropic', label: 'Anthropic (Claude)' },
+    { key: 'DeepSeek', label: 'DeepSeek' },
+    { key: 'Moonshot', label: 'Kimi (Moonshot)' },
+    { key: 'Zhipu', label: 'GLM (Zhipu AI)' },
+    { key: 'Qwen', label: 'Qwen (Alibaba)' },
+    { key: 'Mistral', label: 'Mistral AI' },
+    { key: 'Xiaomi', label: 'Xiaomi (MiMo)' },
+    { key: 'Tencent', label: 'Tencent Hunyuan' },
+    { key: 'NVIDIA', label: 'NVIDIA' },
+  ];
   const [keys, setKeys] = useState<Record<string, string>>(() => {
     try { const s = localStorage.getItem('ava-ide-byok'); return s ? JSON.parse(s) : {}; }
     catch { return {}; }
@@ -1114,10 +1134,10 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
       {showKeys && (
         <div style={{ paddingTop: 6 }}>
           {providers.map((p) => (
-            <div key={p} style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 2 }}>{p}</div>
-              <input type="password" placeholder={`${p} API key`} value={keys[p] || ''}
-                onChange={(e) => saveKey(p, e.target.value)}
+            <div key={p.key} style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 2 }}>{p.label}</div>
+              <input type="password" placeholder={`${p.label} API key`} value={keys[p.key] || ''}
+                onChange={(e) => saveKey(p.key, e.target.value)}
                 style={{ ...inputStyle, height: 24, fontSize: 11 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
