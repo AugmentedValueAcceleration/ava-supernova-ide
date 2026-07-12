@@ -6824,6 +6824,7 @@ export function ChatHistoryPage() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'conversations' | 'usage' | 'audit'>('conversations');
+  const [surfaceTab, setSurfaceTab] = useState<'all' | 'main' | 'design' | 'health' | 'learning' | 'social'>('all');
   // Inline rename of a conversation card. Writes the new title into the shared
   // history file so the rename shows up in the extension + CLI too.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -6912,9 +6913,34 @@ export function ChatHistoryPage() {
     return () => { cancelled = true; window.removeEventListener('focus', onFocus); };
   }, [activeTab]);
 
+  // Room filter. Every room saves into the SAME history folder, so a code chat,
+  // a logo experiment and a workout plan all land in one undifferentiated list —
+  // and Design Studio is typically the majority of it. `surface` is derived in
+  // core from the scaffold tag already present in each transcript, so this needs
+  // no migration and classifies conversations saved months ago.
+  const surfaceCounts = conversations.reduce<Record<string, number>>((acc, c) => {
+    const s = c.surface ?? 'main';
+    acc[s] = (acc[s] ?? 0) + 1;
+    return acc;
+  }, { all: conversations.length });
+
+  // Only offer a tab for a room that actually has something in it.
+  const surfaceTabs = ([
+    { key: 'all', label: 'All' },
+    { key: 'main', label: 'Chat' },
+    { key: 'design', label: 'Design' },
+    { key: 'health', label: 'Health' },
+    { key: 'learning', label: 'Learning' },
+    { key: 'social', label: 'Social' },
+  ] as const).filter(tb => tb.key === 'all' || (surfaceCounts[tb.key] ?? 0) > 0);
+
+  const byRoom = surfaceTab === 'all'
+    ? conversations
+    : conversations.filter(c => (c.surface ?? 'main') === surfaceTab);
+
   const filtered = search
-    ? conversations.filter(c => c.title?.toLowerCase().includes(search.toLowerCase()))
-    : conversations;
+    ? byRoom.filter(c => c.title?.toLowerCase().includes(search.toLowerCase()))
+    : byRoom;
 
   const deleteConversation = (id: string) => {
     const updated = conversations.filter(c => c.id !== id);
@@ -7138,6 +7164,26 @@ export function ChatHistoryPage() {
         {activeTab === 'conversations' && (
           <>
 
+
+        {/* Room filter. Reuses the page's own tabStyle — the underline treatment
+            every other tab strip in the app uses — rather than inventing a second
+            visual language for the same job, and sits on its own row like every
+            other tab strip. Only worth showing once more than one room is in play. */}
+        {surfaceTabs.length > 2 && (
+          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
+            {surfaceTabs.map(tb => {
+              const active = surfaceTab === tb.key;
+              return (
+                <button key={tb.key} onClick={() => setSurfaceTab(tb.key)} style={tabStyle(active)}>
+                  {tb.label}
+                  <span style={{ marginLeft: 5, color: '#585b70' }}>
+                    {surfaceCounts[tb.key] ?? 0}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Search */}
         <div style={{ marginBottom: 20 }}>

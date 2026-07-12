@@ -9,9 +9,17 @@
 // round-trip, no account network fetch.
 
 import { readTextFile, writeTextFile, readDir, remove, BaseDirectory } from '@tauri-apps/plugin-fs';
+import {
+  deriveConversationTitle,
+  isJunkTitle,
+  deriveConversationSurface,
+  type ConversationSurface,
+} from '@ava/core/history/conversation-title';
 import { accountRoot } from './account-scope';
 
 const historyDir = async (): Promise<string> => `${await accountRoot()}/history`;
+
+export type { ConversationSurface };
 
 export interface HistoryListItem {
   id: string;
@@ -23,6 +31,10 @@ export interface HistoryListItem {
   messageCount: number;
   /** First assistant reply, for the card preview line. */
   preview: string;
+  /** Which room the conversation came from — derived from the scaffold tag in
+   *  the transcript, so it works on every record ever written. Drives the room
+   *  tabs; Design Studio alone is the majority of a typical history. */
+  surface: ConversationSurface;
 }
 
 function textOf(content: unknown): string {
@@ -47,12 +59,20 @@ export async function readHistoryList(): Promise<HistoryListItem[]> {
           const firstAva = msgs.find((m) => m.role === 'assistant');
           items.push({
             id: rec.id,
-            title: rec.title || 'Untitled',
+            // Repair junk titles on read, using the SAME core logic the extension
+            // and CLI use — this list is read straight off disk in the renderer,
+            // so it never passed through HistoryManager and would otherwise still
+            // be showing "[Design Studio] You are Ava — the same Ava…" as a name.
+            // A genuine title (including a manual rename) is left alone.
+            title: isJunkTitle(rec.title)
+              ? deriveConversationTitle(msgs)
+              : rec.title,
             updatedAt: rec.updatedAt || rec.createdAt || '',
             pinned: rec.pinned,
             projectPath: rec.projectPath,
             messageCount: msgs.filter((m) => m.role === 'user' || m.role === 'assistant').length,
             preview: firstAva ? textOf(firstAva.content).slice(0, 120) : '',
+            surface: deriveConversationSurface(msgs),
           });
         }
       } catch { /* skip an unreadable transcript */ }
