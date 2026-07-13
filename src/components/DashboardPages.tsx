@@ -963,15 +963,48 @@ const SHARE_ICONS: Record<string, string> = {
   hn: 'M0 24V0h24v24H0zM6.951 5.896l4.112 7.708v5.064h1.583v-4.972l4.148-7.799h-1.749l-2.457 4.875c-.372.745-.688 1.434-.688 1.434s-.297-.708-.651-1.434L8.831 5.896h-1.88z',
 };
 
-/** mu.social is our Mastodon home — if we ever move instances, only this changes. */
-function shareTargets(title: string, url: string): { key: string; label: string; url: string }[] {
-  const withLink = encodeURIComponent(`${title}\n\n${url}`);
+/**
+ * Open a URL in the user's real browser.
+ *
+ * `window.open` is a NO-OP inside the Tauri webview — it silently does nothing,
+ * which is exactly what the share buttons (and "Open in Browser") did. External
+ * links have to go through the opener plugin. The window.open fallback is for
+ * running the renderer in a plain browser during development, where the Tauri
+ * transport is undefined and openUrl throws. Same pattern as lib/sign-in.ts.
+ */
+async function openExternal(url: string): Promise<void> {
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener');
+    await openUrl(url);
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+/**
+ * Where an article can be shared.
+ *
+ * X, Bluesky, LinkedIn, Reddit and HN all take the post as URL parameters, so
+ * one click lands you in a pre-filled composer.
+ *
+ * mu.social does NOT. It looks like a Mastodon address but it's an AT Protocol
+ * app, and it ships no compose intent — `/share?text=` (the Mastodon route) is
+ * silently swallowed by its single-page router, which is why the post never
+ * appeared. There is no URL that will pre-fill it. So instead of a button that
+ * quietly does nothing, we copy the post to the clipboard and open the composer:
+ * `copyFirst` marks that. One paste instead of one click, and it actually works.
+ */
+interface ShareTarget { key: string; label: string; url: string; copyFirst?: string }
+
+function shareTargets(title: string, url: string): ShareTarget[] {
+  const post = `${title}\n\n${url}`;
+  const withLink = encodeURIComponent(post);
   const u = encodeURIComponent(url);
   const ti = encodeURIComponent(title);
   return [
     { key: 'x', label: 'X', url: `https://x.com/intent/tweet?text=${ti}&url=${u}` },
     { key: 'bluesky', label: 'Bluesky', url: `https://bsky.app/intent/compose?text=${withLink}` },
-    { key: 'mastodon', label: 'mu.social', url: `https://mu.social/share?text=${withLink}` },
+    { key: 'mastodon', label: 'mu.social', url: 'https://mu.social/', copyFirst: post },
     { key: 'linkedin', label: 'LinkedIn', url: `https://www.linkedin.com/sharing/share-offsite/?url=${u}` },
     { key: 'reddit', label: 'Reddit', url: `https://reddit.com/submit?url=${u}&title=${ti}` },
     { key: 'hn', label: 'Hacker News', url: `https://news.ycombinator.com/submitlink?u=${u}&t=${ti}` },
@@ -1036,6 +1069,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
   onNavigateToArticle: (slug: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [sharePasted, setSharePasted] = useState<string | null>(null);
   const cat = article.category ? ARTICLE_CATEGORIES[article.category] : null;
   const sources: any[] = article.sources || [];
   const quotes: any[] = article.quotes || [];
@@ -1062,7 +1096,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
   };
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', paddingBottom: 48 }}>
+    <div style={{ width: '100%', paddingBottom: 48 }}>
       {/* Back button */}
       <button
         onClick={onBack}
@@ -1122,20 +1156,30 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
         {shareTargets(article.title || '', articleUrl).map(target => (
           <button
             key={target.key}
-            onClick={() => window.open(target.url, '_blank')}
-            title={target.label}
+            onClick={async () => {
+              // mu.social can't be pre-filled — put the post on the clipboard so
+              // the composer is one paste away, and SAY so rather than leaving
+              // the operator wondering why nothing appeared.
+              if (target.copyFirst) {
+                try { await navigator.clipboard.writeText(target.copyFirst); } catch { /* clipboard denied */ }
+                setSharePasted(target.key);
+                setTimeout(() => setSharePasted(null), 2500);
+              }
+              await openExternal(target.url);
+            }}
+            title={target.copyFirst ? 'Copies the post — paste it into the composer' : target.label}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(49,34,68,0.3)', padding: '6px 12px', fontSize: 10, color: '#a6adc8', cursor: 'pointer' }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d={SHARE_ICONS[target.key]} />
             </svg>
-            {target.label}
+            {sharePasted === target.key ? 'Copied — paste it' : target.label}
           </button>
         ))}
         <button onClick={handleCopy} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(49,34,68,0.3)', padding: '6px 12px', fontSize: 10, color: '#a6adc8', cursor: 'pointer' }}>
           {copied ? `✓ ${t('dash.article.copied')}` : `🔗 ${t('dash.article.copy_link')}`}
         </button>
-        <button onClick={() => window.open(articleUrl, '_blank')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(49,34,68,0.3)', padding: '6px 12px', fontSize: 10, color: '#a6adc8', cursor: 'pointer' }}>
+        <button onClick={() => void openExternal(articleUrl)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(49,34,68,0.3)', padding: '6px 12px', fontSize: 10, color: '#a6adc8', cursor: 'pointer' }}>
           🔗 {t('dash.article.open_in_browser')}
         </button>
       </div>
@@ -1149,7 +1193,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
             {article.source_publication && <> {t('dash.article.at')} <span style={{ fontWeight: 500, color: '#cdd6f4' }}>{article.source_publication}</span></>}
           </p>
           {article.source_url && (
-            <a href={article.source_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>
+            <a href={article.source_url} onClick={e => { e.preventDefault(); void openExternal(article.source_url); }} rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 12, color: 'var(--accent)', textDecoration: 'none', cursor: 'pointer' }}>
               {t('dash.article.read_original')} ↗
             </a>
           )}
@@ -1171,7 +1215,22 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
         .ide-article pre.art-code { background: rgba(49,34,68,0.3); border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 12px; margin: 0 0 12px; }
         .ide-article code.art-inline { background: rgba(49,34,68,0.3); border-radius: 4px; padding: 1px 4px; font-size: 0.85em; }
       `}</style>
-      <div className="ide-article" style={{ fontSize: 13, lineHeight: 1.7, color: '#a6adc8' }} dangerouslySetInnerHTML={{ __html: articleHtml }} />
+      {/* The body is rendered markdown, so its links are plain anchors we can't
+          attach handlers to individually — and a bare target="_blank" goes
+          nowhere in the Tauri webview. Catch the click on the way up instead. */}
+      <div
+        className="ide-article"
+        style={{ fontSize: 13, lineHeight: 1.7, color: '#a6adc8' }}
+        onClick={e => {
+          const a = (e.target as HTMLElement).closest('a');
+          const href = a?.getAttribute('href');
+          if (href && /^https?:/i.test(href)) {
+            e.preventDefault();
+            void openExternal(href);
+          }
+        }}
+        dangerouslySetInnerHTML={{ __html: articleHtml }}
+      />
 
       {/* Ava's commentary */}
       {article.ava_commentary && (
@@ -1253,7 +1312,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
                 <p style={{ fontSize: 10, color: '#6c7086', margin: '2px 0 0' }}>
                   {q.speaker && <>{q.speaker} — </>}
                   {q.url
-                    ? <a href={q.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>{q.outlet || 'source'}</a>
+                    ? <a href={q.url} onClick={e => { e.preventDefault(); void openExternal(q.url); }} rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', cursor: 'pointer' }}>{q.outlet || 'source'}</a>
                     : q.outlet}
                 </p>
               </blockquote>
@@ -1271,7 +1330,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(26,16,40,0.6)', padding: 10 }}>
                 <span style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(49,34,68,0.5)', fontSize: 9, fontWeight: 700, color: '#6c7086', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
                 <div>
-                  <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', textDecoration: 'none' }}>{srcHeadline(source)}</a>
+                  <a href={source.url} onClick={e => { e.preventDefault(); void openExternal(source.url); }} rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', textDecoration: 'none', cursor: 'pointer' }}>{srcHeadline(source)}</a>
                   <p style={{ marginTop: 2, fontSize: 10, color: '#6c7086', margin: '2px 0 0' }}>
                     {source.author && <>{source.author} — </>}{srcOutlet(source)}
                   </p>
