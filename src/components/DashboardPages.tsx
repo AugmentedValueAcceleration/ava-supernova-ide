@@ -376,6 +376,13 @@ interface NewsArticle {
   reading_time: number;
   date: string;
   image_url?: string | null;
+  /** The standfirst — one line under a lead headline. */
+  excerpt?: string | null;
+  /** breaking | high | normal | evergreen. Drives the BREAKING strip. */
+  priority?: string | null;
+  /** The API returns created_at; `date` is sometimes absent. */
+  created_at?: string | null;
+  published_at?: string | null;
 }
 
 interface ReleaseInfo {
@@ -1399,6 +1406,36 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
 
 // ── News Widget ─────────────────────────────────────────────────────────────
 
+/**
+ * The release, as a strip rather than a section. It's a notification, not content:
+ * a full card under the news gave it more weight than the news while making it the
+ * last thing anyone saw. One line, at the top. Mirrors the extension.
+ */
+function CCReleaseStrip({ release, loading }: { release: ReleaseInfo | null; loading?: boolean }) {
+  // Nothing while loading: a strip that appears a beat after the news has
+  // rendered shoves the front page down under the reader's eyes.
+  if (loading || !release) return null;
+  return (
+    <button
+      onClick={() => void openExternal('https://ava-supernova.com/releases')}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+        padding: '8px 12px', marginBottom: 12, borderRadius: 8, cursor: 'pointer',
+        background: 'color-mix(in srgb, var(--accent) 7%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+      }}
+    >
+      <span style={{ flexShrink: 0, fontSize: 12 }}>🚀</span>
+      <span style={{
+        flexShrink: 0, borderRadius: 4, padding: '2px 6px', fontSize: 9, fontWeight: 700,
+        background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)',
+      }}>v{release.version}</span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: '#a6adc8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{release.title}</span>
+      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 500, color: 'var(--accent)' }}>{t('dash.nav.release_notes')} →</span>
+    </button>
+  );
+}
+
 function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, onRefresh, onOpenArticle }: {
   articles: NewsArticle[];
   loading: boolean;
@@ -1413,11 +1450,27 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
   };
 
   const [page, setPage] = useState(0);
-  const PER_PAGE = 6;
+  // A front page, not a list: 1 lead + 2 equals + a compact tail.
+  const PER_PAGE = 7;
   const totalPages = Math.max(1, Math.ceil(articles.length / PER_PAGE));
   const safePage = Math.min(page, totalPages - 1);
   const pageArticles = articles.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
   useEffect(() => { setPage(0); }, [selectedCategory]);
+
+  const dateOf = (a: NewsArticle) => a.date || a.published_at || a.created_at || '';
+
+  // BREAKING is real or it is nothing — only a story the desk actually marked
+  // `breaking` gets the strip. A banner that's always on has stopped meaning
+  // anything. Taken from the whole set, not the page: breaking news doesn't stop
+  // being breaking because you clicked Next.
+  const breaking = articles.find(a => a.priority === 'breaking') ?? null;
+  const leadPool = pageArticles.filter(a => a.slug !== breaking?.slug);
+  const lead = leadPool[0] ?? null;
+  const seconds = leadPool.slice(1, 3);
+  const rest = leadPool.slice(3);
+
+  const openStory = (slug: string) =>
+    onOpenArticle ? onOpenArticle(slug) : void openExternal(`https://ava-supernova.com/news/${slug}`);
 
   return (
     <WidgetCard title={t('dash.cc.latest_news')} icon={'\uD83D\uDCF0'} onRefresh={onRefresh}>
@@ -1457,38 +1510,104 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
         <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_news')}</p>
       ) : (
         <>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {pageArticles.map((article, idx) => (
+        {/* ── BREAKING ─────────────────────────────────────────────────── */}
+        {breaking && (
+          <button
+            onClick={() => openStory(breaking.slug)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+              padding: '8px 12px', marginBottom: 12, borderRadius: 8, cursor: 'pointer',
+              background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.40)',
+            }}
+          >
+            <span style={{
+              flexShrink: 0, borderRadius: 4, background: '#ef4444', padding: '2px 6px',
+              fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#fff',
+            }}>{t('news.breaking')}</span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, color: '#cdd6f4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{breaking.title}</span>
+            <span style={{ flexShrink: 0, fontSize: 9, color: 'rgba(252,165,165,0.75)' }}>{formatRelativeDate(dateOf(breaking))}</span>
+          </button>
+        )}
+
+        {/* ── The lead — one story gets the space ───────────────────────── */}
+        {lead && (
+          <button
+            onClick={() => openStory(lead.slug)}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left', marginBottom: 10, padding: 0,
+              overflow: 'hidden', borderRadius: 10, cursor: 'pointer',
+              background: 'rgba(49,50,68,0.3)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+            }}
+          >
+            {lead.image_url && (
+              <div style={{ position: 'relative', height: 130, width: '100%', overflow: 'hidden' }}>
+                <img src={lead.image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                {lead.category && (
+                  <span style={{
+                    position: 'absolute', top: 8, left: 8, borderRadius: 4, padding: '2px 6px',
+                    background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 9, fontWeight: 700,
+                    letterSpacing: '0.05em', textTransform: 'uppercase',
+                  }}>{formatCategoryLabel(lead.category)}</span>
+                )}
+              </div>
+            )}
+            <div style={{ padding: 12 }}>
+              <p style={{ fontSize: 13.5, fontWeight: 600, color: '#cdd6f4', margin: 0, lineHeight: 1.35 }}>{lead.title}</p>
+              {lead.excerpt && (
+                <p style={{ fontSize: 11, color: '#a6adc8', margin: '5px 0 0', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{lead.excerpt}</p>
+              )}
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, fontSize: 9, color: '#6c7086' }}>
+                {lead.reading_time > 0 && <span>{t('news.min_read', { n: lead.reading_time })}</span>}
+                <span>{formatRelativeDate(dateOf(lead))}</span>
+              </div>
+            </div>
+          </button>
+        )}
+
+        {/* ── The row of equals ─────────────────────────────────────────── */}
+        {seconds.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            {seconds.map((article, idx) => (
+              <button
+                key={article.slug || `s${idx}`}
+                onClick={() => openStory(article.slug)}
+                style={{
+                  display: 'block', textAlign: 'left', padding: 0, overflow: 'hidden', borderRadius: 10, cursor: 'pointer',
+                  background: 'rgba(49,50,68,0.3)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+                }}
+              >
+                {article.image_url && (
+                  <div style={{ height: 64, width: '100%', overflow: 'hidden' }}>
+                    <img src={article.image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </div>
+                )}
+                <div style={{ padding: 10 }}>
+                  <p style={{ fontSize: 11.5, fontWeight: 500, color: '#cdd6f4', margin: 0, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{article.title}</p>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 5, fontSize: 9, color: '#6c7086' }}>
+                    {article.category && <span style={{ color: 'var(--accent)' }}>{formatCategoryLabel(article.category)}</span>}
+                    <span>{formatRelativeDate(dateOf(article))}</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── The tail — compact, text-first ────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {rest.map((article, idx) => (
             <button
-              key={article.slug || idx}
-              onClick={() => onOpenArticle ? onOpenArticle(article.slug) : window.open(`https://ava-supernova.com/news/${article.slug}`, '_blank')}
+              key={article.slug || `r${idx}`}
+              onClick={() => openStory(article.slug)}
               style={{
-                display: 'block', width: '100%', textAlign: 'left', padding: 12,
-                background: 'rgba(49,50,68,0.3)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 8, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
+                background: 'transparent', border: 'none',
               }}
             >
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                {article.image_url && (
-                  <img src={article.image_url} alt="" loading="lazy" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    {article.category && (
-                      <span style={{
-                        borderRadius: 9999, background: 'color-mix(in srgb, var(--accent) 15%, transparent)', padding: '2px 8px',
-                        fontSize: 9, fontWeight: 500, color: 'var(--accent)',
-                      }}>
-                        {formatCategoryLabel(article.category)}
-                      </span>
-                    )}
-                    {article.reading_time > 0 && (
-                      <span style={{ fontSize: 9, color: '#6c7086' }}>{t('news.min_read', { n: article.reading_time })}</span>
-                    )}
-                  </div>
-                  <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0, lineHeight: 1.4 }}>{article.title}</p>
-                  <p style={{ fontSize: 10, color: '#6c7086', margin: '4px 0 0 0' }}>{formatRelativeDate(article.date)}</p>
-                </div>
-              </div>
+              <span style={{ flexShrink: 0, width: 4, height: 4, borderRadius: '50%', background: 'color-mix(in srgb, var(--accent) 50%, transparent)' }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: '#a6adc8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{article.title}</span>
+              <span style={{ flexShrink: 0, fontSize: 9, color: '#6c7086' }}>{formatRelativeDate(dateOf(article))}</span>
             </button>
           ))}
         </div>
@@ -1750,39 +1869,6 @@ function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loadin
   );
 }
 
-// ── Release Widget ──────────────────────────────────────────────────────────
-
-function CCReleaseWidget({ release, loading, onRefresh }: { release: ReleaseInfo | null; loading: boolean; onRefresh: () => void }) {
-  return (
-    <WidgetCard title={t('dash.cc.latest_release')} icon={'\uD83D\uDE80'} onRefresh={onRefresh}>
-      {loading ? (
-        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_release')}</div>
-      ) : !release ? (
-        <p style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', margin: 0 }}>{t('dash.cc.no_release_info')}</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{
-              borderRadius: 9999, background: 'color-mix(in srgb, var(--accent) 15%, transparent)', padding: '2px 10px',
-              fontSize: 12, fontWeight: 700, color: 'var(--accent)',
-            }}>
-              v{release.version}
-            </span>
-            <span style={{ fontSize: 10, color: '#6c7086' }}>{formatRelativeDate(release.published_at)}</span>
-          </div>
-          <p style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4', margin: 0 }}>{release.title}</p>
-          <button
-            onClick={() => window.open('https://ava-supernova.com/releases', '_blank')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--accent)', padding: 0, textAlign: 'left' }}
-          >
-            {t('dash.cc.view_release_notes')} &rarr;
-          </button>
-        </div>
-      )}
-    </WidgetCard>
-  );
-}
-
 // ── Not Connected Widget Placeholder ────────────────────────────────────────
 
 function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
@@ -1853,8 +1939,19 @@ export function CommandCentrePage() {
   // Inner tab state — always opens on the first tab (Daily) for a clean load.
   // The page remounts on each sidebar navigation, so a plain default resets
   // every visit; we deliberately don't restore the last-used tab.
-  const [tab, setTab] = useState<CcTab>('daily');
-  const switchTab = (next: CcTab) => setTab(next);
+  // Remember the tab. Opening a story swaps the Command Centre out, so coming back
+  // used to reset you to Daily — read one headline, lose your place in the news.
+  const [tab, setTab] = useState<CcTab>(() => {
+    try {
+      const saved = localStorage.getItem('ava_cc_tab');
+      if (saved === 'daily' || saved === 'briefing' || saved === 'reflect' || saved === 'health') return saved;
+    } catch { /* storage denied */ }
+    return 'daily';
+  });
+  const switchTab = (next: CcTab) => {
+    setTab(next);
+    try { localStorage.setItem('ava_cc_tab', next); } catch { /* storage denied */ }
+  };
 
   // Working-hours readout for the hero pill — same localStorage keys
   // WorkingHoursClock writes to so the pill and the full widget stay
@@ -2245,7 +2342,9 @@ export function CommandCentrePage() {
           borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         }}>
           <TabBtn id="daily" label="Daily" />
-          <TabBtn id="briefing" label="Briefing" />
+          {/* "Briefing" told you nothing. This is where the news lives — say so.
+              The id stays `briefing` so persisted state and existing wiring hold. */}
+          <TabBtn id="briefing" label={t('dash.chat.tab.briefing')} />
           <TabBtn id="reflect" label="Reflect" />
           <TabBtn id="health" label="Health" />
         </div>
@@ -2280,9 +2379,14 @@ export function CommandCentrePage() {
           </>
         )}
 
-        {/* ── Briefing tab ──────────────────────────────────────────── */}
+        {/* ── Newsroom tab ──────────────────────────────────────────────
+            The release moved from a full card at the BOTTOM to a slim strip at
+            the TOP. It's a notification, not a section: as a big card under the
+            news it took more space than the news while being the last thing
+            anyone ever saw. */}
         {tab === 'briefing' && (
           <>
+            <CCReleaseStrip release={latestRelease} loading={releaseLoading} />
             <div style={{ marginBottom: 16 }}>
               <CCNewsWidget
                 articles={newsArticles}
@@ -2293,7 +2397,6 @@ export function CommandCentrePage() {
                 onOpenArticle={openArticle}
               />
             </div>
-            <CCReleaseWidget release={latestRelease} loading={releaseLoading} onRefresh={refetchRelease} />
           </>
         )}
 
