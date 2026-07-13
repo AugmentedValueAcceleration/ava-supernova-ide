@@ -1474,6 +1474,9 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
 
   return (
     <WidgetCard title={t('dash.cc.latest_news')} icon={'\uD83D\uDCF0'} onRefresh={onRefresh}>
+      {/* Fixed height + column flow: the tail takes the slack and the pager sits
+          on the bottom edge, so the widget doesn't change height between pages. */}
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 560 }}>
       {/* Category carousel */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 12, scrollbarWidth: 'none' }}>
         <style>{`.cc-news-scroll::-webkit-scrollbar { display: none; }`}</style>
@@ -1540,7 +1543,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
             }}
           >
             {lead.image_url && (
-              <div style={{ position: 'relative', height: 130, width: '100%', overflow: 'hidden' }}>
+              <div style={{ position: 'relative', height: 180, width: '100%', overflow: 'hidden' }}>
                 <img src={lead.image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 {lead.category && (
                   <span style={{
@@ -1577,7 +1580,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
                 }}
               >
                 {article.image_url && (
-                  <div style={{ height: 64, width: '100%', overflow: 'hidden' }}>
+                  <div style={{ height: 96, width: '100%', overflow: 'hidden' }}>
                     <img src={article.image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   </div>
                 )}
@@ -1594,14 +1597,14 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
         )}
 
         {/* ── The tail — compact, text-first ────────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {rest.map((article, idx) => (
             <button
               key={article.slug || `r${idx}`}
               onClick={() => openStory(article.slug)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-                padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
+                padding: '8px 8px', borderRadius: 6, cursor: 'pointer',
                 background: 'transparent', border: 'none',
               }}
             >
@@ -1620,6 +1623,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
         )}
         </>
       )}
+      </div>
     </WidgetCard>
   );
 }
