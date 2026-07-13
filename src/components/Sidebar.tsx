@@ -1152,9 +1152,37 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
 
 /* ---------- Dashboard Panel ---------- */
 
+/**
+ * "Early Access" — shipped, usable, and still moving under your feet.
+ *
+ * Not a warning label and not an apology: it's the honest state of a surface that
+ * works but hasn't settled. Telling someone up front costs nothing; letting them
+ * find out by being surprised costs their trust.
+ */
+function EarlyAccessBadge() {
+  return (
+    <span style={{
+      flexShrink: 0,
+      padding: '1px 5px',
+      borderRadius: 4,
+      border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+      background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+      color: 'var(--accent)',
+      fontSize: 8,
+      fontWeight: 700,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+      lineHeight: 1.5,
+      whiteSpace: 'nowrap',
+    }}>
+      Early Access
+    </span>
+  );
+}
+
 // Flat nav — Phosphor duotone icons replacing the previous emoji glyphs.
 // Same lineup the extension sidebar uses; identity-mapped one-to-one.
-const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string }[] = [
+const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string; earlyAccess?: boolean }[] = [
   // Order + naming mirror the extension sidebar exactly (Health before
   // Learning; "Ava Chat", "Usage & History", extension descriptions).
   { id: 'command-centre',  Icon: PhCommand,  label: 'Command Centre',     desc: 'Overview of everything' },
@@ -1163,7 +1191,9 @@ const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string }[]
   { id: 'library',         Icon: PhLibrary,  label: 'Library',            desc: 'Images and documents' },
   { id: 'health',          Icon: PhHealth,   label: 'Health & Nutrition', desc: 'Exercises, recipes, plans' },
   { id: 'learning',        Icon: PhLearning, label: 'Learning',           desc: 'Courses, lessons, and teaching' },
-  { id: 'creative-studio', Icon: PhCreative, label: 'Creative Studio',    desc: 'Images, music, video, voice' },
+  // Early Access: shipped and usable, but still moving. Saying so is cheaper than
+  // having someone discover it the hard way.
+  { id: 'creative-studio', Icon: PhCreative, label: 'Creative Studio',    desc: 'Images, music, video, voice', earlyAccess: true },
   { id: 'memory',          Icon: PhMemory,   label: 'Memory',             desc: 'View and manage memories' },
   { id: 'chat-history',    Icon: PhHistory,  label: 'Usage & History',    desc: 'Credits, sessions, models' },
   { id: 'account',         Icon: PhAccount,  label: 'Account',            desc: 'Settings, billing, personalisation' },
@@ -1260,7 +1290,10 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
                 })()}
               </span>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</span>
+                  {item.earlyAccess && <EarlyAccessBadge />}
+                </div>
                 <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>
               </div>
             </button>

@@ -6633,6 +6633,19 @@ export function AvaChatPage() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontFamily: 'monospace', fontSize: 10, opacity: 0.6 }}>{m.icon}</span>
                         {m.label}
+                        {/* Desktop Automation drives the real machine. It works,
+                            but it is the youngest surface here — say so on the
+                            way in rather than letting someone find out. */}
+                        {m.id === 'desktop' && (
+                          <span style={{
+                            flexShrink: 0, padding: '1px 5px', borderRadius: 4,
+                            border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+                            background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                            color: 'var(--accent)', fontSize: 8, fontWeight: 700,
+                            letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.5,
+                            whiteSpace: 'nowrap',
+                          }}>Early Access</span>
+                        )}
                       </span>
                       <span style={{ fontSize: 9, opacity: 0.4, fontFamily: 'monospace' }}>Ctrl+Shift+{idx + 1}</span>
                     </button>
