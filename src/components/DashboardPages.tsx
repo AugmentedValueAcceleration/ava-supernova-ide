@@ -1474,9 +1474,10 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
 
   return (
     <WidgetCard title={t('dash.cc.latest_news')} icon={'\uD83D\uDCF0'} onRefresh={onRefresh}>
-      {/* Fixed height + column flow: the tail takes the slack and the pager sits
-          on the bottom edge, so the widget doesn't change height between pages. */}
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 560 }}>
+      {/* Fill the viewport, don't guess at a height. minHeight: 560 did nothing —
+          the content is already taller than that, so the card never grew and the
+          pager stayed welded under the last row with empty space below it. */}
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 300px)' }}>
       {/* Category carousel */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 12, scrollbarWidth: 'none' }}>
         <style>{`.cc-news-scroll::-webkit-scrollbar { display: none; }`}</style>
@@ -1935,6 +1936,10 @@ function CCTrustNudges({ findings, onReview }: { findings: any[]; onReview: () =
 
 type CcTab = 'daily' | 'briefing' | 'reflect' | 'health';
 
+/** Survives the unmount when you open an article, and nothing more. A fresh
+ *  session starts on Daily — see switchTab. */
+let lastCcTab: CcTab = 'daily';
+
 export function CommandCentrePage() {
   useLocale();
   const hour = new Date().getHours();
@@ -1943,18 +1948,14 @@ export function CommandCentrePage() {
   // Inner tab state — always opens on the first tab (Daily) for a clean load.
   // The page remounts on each sidebar navigation, so a plain default resets
   // every visit; we deliberately don't restore the last-used tab.
-  // Remember the tab. Opening a story swaps the Command Centre out, so coming back
-  // used to reset you to Daily — read one headline, lose your place in the news.
-  const [tab, setTab] = useState<CcTab>(() => {
-    try {
-      const saved = localStorage.getItem('ava_cc_tab');
-      if (saved === 'daily' || saved === 'briefing' || saved === 'reflect' || saved === 'health') return saved;
-    } catch { /* storage denied */ }
-    return 'daily';
-  });
+  // Remember the tab ONLY for the round-trip into an article. Opening a story
+  // swaps the Command Centre out, so coming back used to dump you on Daily. A
+  // module-scoped variable survives that unmount and nothing else — a fresh open
+  // still starts on Daily, which is where it should start.
+  const [tab, setTab] = useState<CcTab>(() => lastCcTab);
   const switchTab = (next: CcTab) => {
+    lastCcTab = next;
     setTab(next);
-    try { localStorage.setItem('ava_cc_tab', next); } catch { /* storage denied */ }
   };
 
   // Working-hours readout for the hero pill — same localStorage keys
