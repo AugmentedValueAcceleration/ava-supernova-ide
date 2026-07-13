@@ -1013,7 +1013,10 @@ function shareTargets(title: string, url: string): ShareTarget[] {
   return [
     { key: 'x', label: 'X', url: `https://x.com/intent/tweet?text=${ti}&url=${u}` },
     { key: 'bluesky', label: 'Bluesky', url: `https://bsky.app/intent/compose?text=${withLink}` },
-    { key: 'mu', label: 'mu.social', url: `https://mu.social/intent/compose?text=${withLink}` },
+    // mu.social is HIDDEN — the composer never opens from a share click (the app
+    // lands on its own root), even though pasting the same URL by hand opens it.
+    // A button that silently does nothing is worse than no button.
+    //   { key: 'mu', label: 'mu.social', url: `https://mu.social/intent/compose?text=${withLink}` },
     // NOT /sharing/share-offsite — that 302s to the legacy /shareArticle/ page,
     // which is why it misbehaved. feed/?shareActive=true is LinkedIn's current
     // composer, and it survives the sign-in redirect with the URL intact.
