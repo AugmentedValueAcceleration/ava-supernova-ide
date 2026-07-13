@@ -1182,6 +1182,12 @@ function EarlyAccessBadge() {
 
 // Flat nav — Phosphor duotone icons replacing the previous emoji glyphs.
 // Same lineup the extension sidebar uses; identity-mapped one-to-one.
+//
+// `earlyAccess` marks the rooms that are shipped and usable but still evolving:
+// Health & Nutrition, Learning, Creative Studio (and, in the mode picker, Desktop
+// Automation). It's not a warning — it tells someone where a feature actually is
+// in its development, which is exactly what we'd want to be told. Keep this in
+// step with the extension's NavSidebar.
 const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string; earlyAccess?: boolean }[] = [
   // Order + naming mirror the extension sidebar exactly (Health before
   // Learning; "Ava Chat", "Usage & History", extension descriptions).
@@ -1189,10 +1195,8 @@ const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string; ea
   { id: 'ava-chat',        Icon: PhChat,     label: 'Ava Chat',           desc: 'Full-width AI chat' },
   { id: 'planner',         Icon: PhPlanner,  label: 'Planner',            desc: 'Tasks, journal, learning' },
   { id: 'library',         Icon: PhLibrary,  label: 'Library',            desc: 'Images and documents' },
-  { id: 'health',          Icon: PhHealth,   label: 'Health & Nutrition', desc: 'Exercises, recipes, plans' },
-  { id: 'learning',        Icon: PhLearning, label: 'Learning',           desc: 'Courses, lessons, and teaching' },
-  // Early Access: shipped and usable, but still moving. Saying so is cheaper than
-  // having someone discover it the hard way.
+  { id: 'health',          Icon: PhHealth,   label: 'Health & Nutrition', desc: 'Exercises, recipes, plans', earlyAccess: true },
+  { id: 'learning',        Icon: PhLearning, label: 'Learning',           desc: 'Courses, lessons, and teaching', earlyAccess: true },
   { id: 'creative-studio', Icon: PhCreative, label: 'Creative Studio',    desc: 'Images, music, video, voice', earlyAccess: true },
   { id: 'memory',          Icon: PhMemory,   label: 'Memory',             desc: 'View and manage memories' },
   { id: 'chat-history',    Icon: PhHistory,  label: 'Usage & History',    desc: 'Credits, sessions, models' },
