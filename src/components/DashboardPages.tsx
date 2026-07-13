@@ -1005,7 +1005,9 @@ const MU_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABze
 interface ShareTarget { key: string; label: string; url: string }
 
 function shareTargets(title: string, url: string): ShareTarget[] {
-  const withLink = encodeURIComponent(`${title}\n\n${url}`);
+  // ONE LINE, no newlines — `%0A` in an intent's ?text= is a known-bad shape in
+  // the Bluesky app (bluesky-social/social-app#6133) and mu is an older fork.
+  const withLink = encodeURIComponent(`${title} ${url}`);
   const u = encodeURIComponent(url);
   const ti = encodeURIComponent(title);
   return [
