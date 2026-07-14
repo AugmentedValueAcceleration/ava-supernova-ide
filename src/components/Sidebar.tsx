@@ -14,6 +14,9 @@ import {
   ChartLineUp as PhHistory,
   GearSix as PhAccount,
   Question as PhHelp,
+  ArrowsLeftRight as PhFlip,
+  CaretLeft as PhCaretLeft,
+  CaretRight as PhCaretRight,
 } from '@phosphor-icons/react';
 import type { ActivityItem, SidebarPosition } from '../App';
 import { getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
@@ -26,6 +29,10 @@ interface Props {
   activePanel: ActivityItem;
   position?: SidebarPosition;
   onTogglePosition?: () => void;
+  /** Collapse / expand the panel. Rendered as a handle on the border facing the
+   *  content — the SAME handle in both states, so the control doesn't move on you
+   *  the moment you use it. */
+  onToggleCollapse?: () => void;
   onDashboardSelect?: (page: string) => void;
   activeDashboardPage?: string | null;
   onFileOpen?: (path: string) => void;
@@ -1313,7 +1320,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
   );
 }
 
-export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onDashboardSelect, activeDashboardPage, onFileOpen, collapsed = false }: Props) {
+export default function Sidebar({ activePanel, position = 'left', onTogglePosition, onToggleCollapse, onDashboardSelect, activeDashboardPage, onFileOpen, collapsed = false }: Props) {
   // Collapsed mode: render the icons-only dashboard rail and skip the
   // header/resizer entirely. Other panels (Explorer / Search / Git etc.)
   // have no icon shorthand so they render nothing in collapsed mode —
@@ -1323,10 +1330,37 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
     const RAIL_WIDTH = 56;
     return (
       <div style={{
+        position: 'relative',
         width: RAIL_WIDTH, height: '100%', flexShrink: 0,
         background: '#181028', borderRight: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         display: 'flex', flexDirection: 'column',
       }}>
+        {/* Expand — the SAME handle, in the SAME place, as the collapse control on
+            the expanded panel. There was no expand control here at all: once you
+            collapsed, the only way back was the activity bar. */}
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            title="Expand sidebar"
+            style={{
+              position: 'absolute', top: '50%', transform: 'translateY(-50%)', zIndex: 20,
+              [position === 'left' ? 'right' : 'left']: 0,
+              width: 14, height: 56,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(30, 30, 46, 0.9)',
+              border: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)',
+              [position === 'left' ? 'borderRight' : 'borderLeft']: 'none',
+              borderRadius: position === 'left' ? '4px 0 0 4px' : '0 4px 4px 0',
+              color: '#6c7086', cursor: 'pointer', padding: 0,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#cdd6f4'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#6c7086'; }}
+          >
+            {position === 'left'
+              ? <PhCaretRight size={11} weight="bold" />
+              : <PhCaretLeft size={11} weight="bold" />}
+          </button>
+        )}
         <DashboardPanel collapsed onDashboardSelect={onDashboardSelect} activePage={activeDashboardPage} />
       </div>
     );
@@ -1408,6 +1442,35 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
         onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 30%, transparent)')}
         onMouseLeave={e => { if (!isDragging.current) e.currentTarget.style.background = 'transparent'; }}
       />
+
+      {/* Collapse — a handle on the border facing the content, halfway down.
+          Sits INSIDE the edge because the panel clips its overflow. The arrow
+          points the way the panel will actually go: left when docked left, right
+          when flipped. Mirrors the extension. */}
+      {onToggleCollapse && (
+        <button
+          onClick={onToggleCollapse}
+          title="Collapse sidebar"
+          style={{
+            position: 'absolute', top: '50%', transform: 'translateY(-50%)', zIndex: 20,
+            [position === 'left' ? 'right' : 'left']: 0,
+            width: 14, height: 56,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(30, 30, 46, 0.9)',
+            border: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)',
+            [position === 'left' ? 'borderRight' : 'borderLeft']: 'none',
+            borderRadius: position === 'left' ? '4px 0 0 4px' : '0 4px 4px 0',
+            color: '#6c7086', cursor: 'pointer', padding: 0,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#cdd6f4'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#6c7086'; }}
+        >
+          {position === 'left'
+            ? <PhCaretLeft size={11} weight="bold" />
+            : <PhCaretRight size={11} weight="bold" />}
+        </button>
+      )}
+
       {/* Header */}
       <div
         style={{
@@ -1435,11 +1498,10 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
                 onMouseOver={(e) => e.currentTarget.style.color = '#cdd6f4'}
                 onMouseOut={(e) => e.currentTarget.style.color = '#6c7086'}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  style={{ transform: position === 'left' ? 'none' : 'scaleX(-1)' }}>
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <line x1="9" y1="3" x2="9" y2="21" />
-                </svg>
+                {/* Phosphor duotone, same pack as the nav below. It used to be the
+                    PANEL glyph — which is the icon the extension used for COLLAPSE.
+                    Same picture, two meanings, across two surfaces. */}
+                <PhFlip size={15} weight="duotone" />
               </button>
             </Tooltip>
           )}

@@ -108,6 +108,23 @@ const pageWrapper: React.CSSProperties = {
   padding: '40px',
 };
 
+/**
+ * The Command Centre's own wrapper — pageWrapper plus a flex column.
+ *
+ * Scoped to this page rather than changed on the shared `pageWrapper`, which a
+ * dozen other pages rely on being a plain block.
+ *
+ * The column is the whole point: without it a page root has no definite height to
+ * size against, so any flex child collapses back to its content height. That is
+ * why the Newsroom card kept stopping short with dead space beneath it no matter
+ * what number I put on it — the number was never the problem.
+ */
+const ccPageWrapper: React.CSSProperties = {
+  ...pageWrapper,
+  display: 'flex',
+  flexDirection: 'column',
+};
+
 const pageTitle: React.CSSProperties = {
   fontSize: 22,
   fontWeight: 600,
@@ -643,7 +660,7 @@ const widgetCardStyle: React.CSSProperties = {
 };
 
 function WidgetCard({
-  title, icon, subtitle, action, onRefresh, children,
+  title, icon, subtitle, action, onRefresh, children, style, bodyStyle,
 }: {
   title: string;
   icon: string;
@@ -651,6 +668,11 @@ function WidgetCard({
   action?: { label: string; onClick: () => void };
   onRefresh?: () => void;
   children: React.ReactNode;
+  /** Lets a card stretch to fill its parent. Only the Newsroom needs it — without
+   *  it a card only ever grows to fit its content, so no guessed min-height can
+   *  put the pager on the bottom edge. */
+  style?: React.CSSProperties;
+  bodyStyle?: React.CSSProperties;
 }) {
   const [spinning, setSpinning] = useState(false);
   const handleRefresh = () => {
@@ -661,8 +683,8 @@ function WidgetCard({
   };
 
   return (
-    <div style={widgetCardStyle}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+    <div style={{ ...widgetCardStyle, ...style }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 14 }}>{icon}</span>
           <h3 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, color: '#a6adc8', margin: 0 }}>{title}</h3>
@@ -695,7 +717,7 @@ function WidgetCard({
           )}
         </div>
       </div>
-      {children}
+      {bodyStyle ? <div style={bodyStyle}>{children}</div> : children}
     </div>
   );
 }
@@ -1473,11 +1495,21 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
     onOpenArticle ? onOpenArticle(slug) : void openExternal(`https://ava-supernova.com/news/${slug}`);
 
   return (
-    <WidgetCard title={t('dash.cc.latest_news')} icon={'\uD83D\uDCF0'} onRefresh={onRefresh}>
+    <WidgetCard
+      title={t('dash.cc.latest_news')}
+      icon={'\uD83D\uDCF0'}
+      onRefresh={onRefresh}
+      // Fill the PARENT, not a guessed height. minHeight 560 did nothing (the
+      // content is already taller than that), and 100vh overflowed the scroll
+      // container and gave you a scrollbar. Both were me inventing a number
+      // instead of using the space that is actually there.
+      style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+      bodyStyle={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
+    >
       {/* Fill the viewport, don't guess at a height. minHeight: 560 did nothing —
           the content is already taller than that, so the card never grew and the
           pager stayed welded under the last row with empty space below it. */}
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 300px)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {/* Category carousel */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 12, scrollbarWidth: 'none' }}>
         <style>{`.cc-news-scroll::-webkit-scrollbar { display: none; }`}</style>
@@ -2230,8 +2262,12 @@ export function CommandCentrePage() {
   };
 
   return (
-    <div style={pageWrapper}>
-      <div style={{ width: '100%' }}>
+    <div style={ccPageWrapper}>
+      {/* flex:1 inside the flex-column wrapper — this page fills the remaining
+          height so the Newsroom tab can claim what's left and put its pager on the
+          bottom edge. minHeight:0 lets the taller tabs still overflow and scroll
+          rather than being squashed. */}
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         {/* Spin animation */}
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
@@ -2390,9 +2426,9 @@ export function CommandCentrePage() {
             news it took more space than the news while being the last thing
             anyone ever saw. */}
         {tab === 'briefing' && (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <CCReleaseStrip release={latestRelease} loading={releaseLoading} />
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <CCNewsWidget
                 articles={newsArticles}
                 loading={newsLoading}
@@ -2402,7 +2438,7 @@ export function CommandCentrePage() {
                 onOpenArticle={openArticle}
               />
             </div>
-          </>
+          </div>
         )}
 
         {/* ── Reflect tab ───────────────────────────────────────────── */}

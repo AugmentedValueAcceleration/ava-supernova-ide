@@ -228,6 +228,7 @@ export default function App() {
       activePanel={activeActivity}
       position={sidebarPosition}
       onTogglePosition={toggleSidebarPosition}
+      onToggleCollapse={() => { setSidebarOpen(o => { save('sidebarOpen', !o); return !o; }); }}
       onDashboardSelect={handleDashboardSelect}
       activeDashboardPage={dashboardPage}
       onFileOpen={handleFileOpen}
