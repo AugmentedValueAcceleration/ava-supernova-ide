@@ -12085,30 +12085,159 @@ export function PersonalityPage() {
 }
 
 /* ===== 8. Cloud Sync ===== */
-export function CloudSyncPage() {
-  useLocale();
-  const [authKey, setAuthKey] = useState(0);
-  useEffect(() => {
-    const handler = () => {
-      if (!checkConnected()) { setCounts({}); setSyncResults({}); setSyncingTypes(new Set()); }
-      setAuthKey(k => k + 1);
-    };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-  void authKey;
-  const connected = checkConnected();
-  const [syncingTypes, setSyncingTypes] = useState<Set<string>>(new Set());
-  const [syncResults, setSyncResults] = useState<Record<string, { success: boolean; count?: number; error?: string }>>({});
+/**
+ * Data export / import — lives in Settings → Privacy.
+ *
+ * Self-contained: owns its own state and listens for the sidecar's
+ * data_export_ready / data_imported events directly. It used to sit on the
+ * CloudSyncPage, which is no longer reachable from the sidebar — so the card
+ * was live in the bundle and invisible in the app.
+ *
+ * The 11 types and all read/write logic come from core (CORE_DATA_TYPES); this
+ * is only the picker.
+ */
+/**
+ * Encrypted backup / readable export / restore — Settings -> Privacy.
+ *
+ * This card predates the per-type picker and used to live on CloudSyncPage,
+ * which is no longer reachable from the sidebar. So ever since cloud sync left
+ * the nav, there was NO way for a user to take a passphrase-locked backup or
+ * restore one: the feature existed, was wired to the sidecar, and could not be
+ * clicked. Moved here, next to the picker, where a user actually looks.
+ */
+export function LocalBackupCard() {
+  useLocale(); // re-render on locale change; `t` is a direct import
+  const cardStyle: React.CSSProperties = {
+    background: 'rgba(26, 16, 40, 0.6)',
+    border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+    borderRadius: 12,
+    padding: '18px 20px',
+  };
 
-  // Data sovereignty — encrypted backup / readable export (local, no account).
   const [backupPassModal, setBackupPassModal] = useState<null | { mode: 'export' | 'import'; content?: string; name?: string }>(null);
   const [backupPass, setBackupPass] = useState('');
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
 
-  // Per-type export — mirrors the extension's Settings -> Data picker. The types
-  // and their semantics come from core (CORE_DATA_TYPES), not a second copy here.
+  const startEncryptedBackup = () => { setBackupPass(''); setBackupPassModal({ mode: 'export' }); };
+  const startReadableExport = () => {
+    setBackupStatus(t('dash.portability.preparing'));
+    getSidecar().exportReadable().catch(() => setBackupStatus(t('dash.portability.import_failed')));
+  };
+  const pickBackupToImport = async () => {
+    try {
+      const [dialog, fs] = await Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]);
+      const sel = await dialog.open({ multiple: false, filters: [{ name: 'Ava backup', extensions: ['ava-backup'] }] });
+      if (!sel || typeof sel !== 'string') return;
+      const content = await fs.readTextFile(sel);
+      setBackupPass('');
+      setBackupPassModal({ mode: 'import', content, name: sel.split(/[/\\]/).pop() || 'backup' });
+    } catch { /* cancelled / unreadable */ }
+  };
+  const confirmBackupPass = () => {
+    if (!backupPassModal || !backupPass) return;
+    setBackupBusy(true);
+    const sc = getSidecar();
+    if (backupPassModal.mode === 'export') sc.exportBackup(backupPass).catch(() => setBackupBusy(false));
+    else sc.importBackup(backupPassModal.content || '', backupPass).catch(() => setBackupBusy(false));
+  };
+
+  // The sidecar seals/opens the bytes; the Tauri save dialog + write happen here.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        event?: string; envelope?: string; json?: string; ok?: boolean; message?: string;
+      };
+      if (!detail?.event) return;
+
+      if (detail.event === 'backup_ready' && detail.envelope) {
+        Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
+          const datePart = new Date().toISOString().slice(0, 10);
+          const target = await dialog.save({ defaultPath: `ava-backup-${datePart}.ava-backup`, filters: [{ name: 'Ava backup', extensions: ['ava-backup'] }] });
+          setBackupBusy(false); setBackupPassModal(null); setBackupPass('');
+          if (!target) return;
+          await fs.writeTextFile(target, detail.envelope!);
+          setBackupStatus(t('dash.portability.backup_saved')); setTimeout(() => setBackupStatus(null), 4000);
+        }).catch(() => setBackupBusy(false));
+      }
+
+      if (detail.event === 'readable_ready' && detail.json) {
+        Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
+          const datePart = new Date().toISOString().slice(0, 10);
+          const target = await dialog.save({ defaultPath: `ava-data-readable-${datePart}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
+          if (!target) return;
+          await fs.writeTextFile(target, detail.json!);
+          setBackupStatus(t('dash.portability.readable_saved')); setTimeout(() => setBackupStatus(null), 4000);
+        }).catch(() => { /* non-fatal */ });
+      }
+
+      if (detail.event === 'backup_imported') {
+        setBackupBusy(false); setBackupPassModal(null); setBackupPass('');
+        setBackupStatus(detail.ok ? t('dash.portability.restored') : t('dash.portability.import_failed'));
+        setTimeout(() => setBackupStatus(null), 5000);
+      }
+    };
+    window.addEventListener('ava-backup-event', handler);
+    return () => window.removeEventListener('ava-backup-event', handler);
+  }, []);
+
+  const btn: React.CSSProperties = { padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#cdd6f4', fontSize: 12, fontWeight: 600, cursor: 'pointer' };
+
+  return (
+    <>
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{t('dash.portability.local_title')}</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={startEncryptedBackup} style={{ ...btn, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)' }}>{'\u{1F512}'} {t('dash.portability.enc_backup')} (.ava-backup)</button>
+          <button onClick={startReadableExport} style={btn}>{'\u{1F4D6}'} {t('dash.portability.readable')}</button>
+          <button onClick={pickBackupToImport} style={btn}>{'⤓'} {t('dash.portability.import_backup')}</button>
+        </div>
+        <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5, marginTop: 8 }}>
+          {t('dash.portability.enc_backup_desc')} {t('dash.portability.readable_desc')}
+        </div>
+        {backupStatus && <div style={{ marginTop: 8, fontSize: 11, color: '#cdd6f4', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', borderRadius: 8, padding: '6px 10px' }}>{backupStatus}</div>}
+      </div>
+
+      {/* Passphrase modal - create or open an encrypted backup. */}
+      {backupPassModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !backupBusy) { setBackupPassModal(null); setBackupPass(''); } }}>
+          <div style={{ width: 320, background: '#1e1e2e', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>
+              {backupPassModal.mode === 'export' ? t('dash.portability.pass_set') : t('dash.portability.pass_enter')}
+            </div>
+            <div style={{ fontSize: 11, color: '#a6adc8', lineHeight: 1.5, marginBottom: 12 }}>
+              {backupPassModal.mode === 'export' ? t('dash.portability.pass_set_desc') : (backupPassModal.name || '')}
+            </div>
+            <input type="password" value={backupPass} autoFocus
+              onChange={(e) => setBackupPass(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && backupPass && !backupBusy) confirmBackupPass(); }}
+              placeholder={t('dash.portability.passphrase')}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, background: '#11111b', color: '#cdd6f4', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', outline: 'none', marginBottom: 12, boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setBackupPassModal(null); setBackupPass(''); }} disabled={backupBusy}
+                style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'transparent', color: '#a6adc8', border: '1px solid rgba(108,112,134,0.3)', cursor: 'pointer' }}>{t('dash.portability.cancel')}</button>
+              <button onClick={confirmBackupPass} disabled={!backupPass || backupBusy}
+                style={{ flex: 1, padding: '8px', borderRadius: 8, background: (!backupPass || backupBusy) ? '#6c7086' : 'linear-gradient(135deg,var(--accent),#7c3aed)', color: '#fff', border: 'none', cursor: (!backupPass || backupBusy) ? 'default' : 'pointer' }}>
+                {backupBusy ? t('dash.portability.working') : backupPassModal.mode === 'export' ? t('dash.portability.create_backup') : t('dash.portability.restore')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function DataExportCard() {
+  useLocale(); // re-render on locale change; `t` is a direct import
+  const cardStyle: React.CSSProperties = {
+    background: 'rgba(26, 16, 40, 0.6)',
+    border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+    borderRadius: 12,
+    padding: '18px 20px',
+  };
+
   const EXPORT_TYPES: Array<{ id: string; icon: string; nameKey: string; descKey: string }> = [
     { id: 'memory', icon: '\u{1F9E0}', nameKey: 'dash.nav.memory', descKey: 'dash.portability.type.memory_desc' },
     { id: 'tasks', icon: '✅', nameKey: 'dash.nav.tasks', descKey: 'dash.portability.type.tasks_desc' },
@@ -12122,9 +12251,12 @@ export function CloudSyncPage() {
     { id: 'datasets', icon: '\u{1F4E6}', nameKey: 'dash.portability.type.datasets', descKey: 'dash.portability.type.datasets_desc' },
     { id: 'audit', icon: '\u{1F4DC}', nameKey: 'dash.portability.type.audit', descKey: 'dash.portability.type.audit_desc' },
   ];
+
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [exportBusy, setExportBusy] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const allExportSelected = exportSelected.size === EXPORT_TYPES.length;
+
   const toggleExportType = (id: string) => setExportSelected(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -12154,43 +12286,22 @@ export function CloudSyncPage() {
     } catch { /* cancelled / unreadable */ }
   };
 
-  // The sidecar formats the bytes; the Tauri save dialog + write happen here
-  // (mirrors the audit-export flow).
+  // The sidecar formats the bytes; the Tauri save dialog + write happen here.
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { event?: string; envelope?: string; json?: string; ok?: boolean; written?: number; skipped?: number; message?: string; files?: Array<{ name: string; content: string }> };
+      const detail = (e as CustomEvent).detail as {
+        event?: string; ok?: boolean; message?: string;
+        files?: Array<{ name: string; content: string }>;
+      };
       if (!detail?.event) return;
-      if (detail.event === 'backup_ready' && detail.envelope) {
-        Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
-          const datePart = new Date().toISOString().slice(0, 10);
-          const target = await dialog.save({ defaultPath: `ava-backup-${datePart}.ava-backup`, filters: [{ name: 'Ava backup', extensions: ['ava-backup'] }] });
-          setBackupBusy(false); setBackupPassModal(null); setBackupPass('');
-          if (!target) return;
-          await fs.writeTextFile(target, detail.envelope!);
-          setBackupStatus(t('dash.portability.backup_saved')); setTimeout(() => setBackupStatus(null), 4000);
-        }).catch(() => setBackupBusy(false));
-      }
-      if (detail.event === 'readable_ready' && detail.json) {
-        Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
-          const datePart = new Date().toISOString().slice(0, 10);
-          const target = await dialog.save({ defaultPath: `ava-data-readable-${datePart}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
-          if (!target) return;
-          await fs.writeTextFile(target, detail.json!);
-          setBackupStatus(t('dash.portability.readable_saved')); setTimeout(() => setBackupStatus(null), 4000);
-        }).catch(() => { /* non-fatal */ });
-      }
-      if (detail.event === 'backup_imported') {
-        setBackupBusy(false); setBackupPassModal(null); setBackupPass('');
-        setBackupStatus(detail.ok ? t('dash.portability.restored') : t('dash.portability.import_failed'));
-        setTimeout(() => setBackupStatus(null), 5000);
-      }
+
       if (detail.event === 'data_export_ready' && Array.isArray(detail.files)) {
-        const files = detail.files as Array<{ name: string; content: string }>;
+        const files = detail.files;
         Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
           setExportBusy(false);
           if (files.length === 0) return;
           if (files.length === 1) {
-            // One type — save it straight to a file the user names.
+            // One type — save straight to a file the user names.
             const f = files[0];
             const ext = f.name.endsWith('.jsonl') ? 'jsonl' : 'json';
             const target = await dialog.save({
@@ -12200,8 +12311,8 @@ export function CloudSyncPage() {
             if (!target) return;
             await fs.writeTextFile(target, f.content);
           } else {
-            // Several types — pick a folder and drop one file per type into it.
-            // No zip dependency, and the result is easier to read than an archive.
+            // Several types — pick a folder, one file per type. No zip dependency,
+            // and the result is easier to read than an archive.
             const dir = await dialog.open({ directory: true, multiple: false });
             if (!dir || typeof dir !== 'string') return;
             for (const f of files) await fs.writeTextFile(`${dir}/${f.name}`, f.content);
@@ -12210,6 +12321,7 @@ export function CloudSyncPage() {
           setTimeout(() => setBackupStatus(null), 4000);
         }).catch(() => setExportBusy(false));
       }
+
       if (detail.event === 'data_imported') {
         setBackupStatus(detail.ok ? t('dash.portability.restored') : (detail.message || t('dash.portability.import_failed')));
         setTimeout(() => setBackupStatus(null), 5000);
@@ -12218,6 +12330,100 @@ export function CloudSyncPage() {
     window.addEventListener('ava-backup-event', handler);
     return () => window.removeEventListener('ava-backup-event', handler);
   }, []);
+
+  return (
+    <>
+
+        {/* Per-type export — pick exactly what leaves the machine. One type saves
+            as a file; several save as one file each into a folder you choose. */}
+        <div style={{ ...cardStyle, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.portability.export')}</div>
+            <button
+              onClick={toggleAllExport}
+              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#a6adc8', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+            >
+              {allExportSelected ? t('dash.portability.deselect_all') : t('dash.portability.select_all')}
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
+            {EXPORT_TYPES.map(d => {
+              const on = exportSelected.has(d.id);
+              return (
+                <label
+                  key={d.id}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                    border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 45%, transparent)' : 'rgba(108,112,134,0.25)'}`,
+                    background: on ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+                  }}
+                >
+                  <input type="checkbox" checked={on} onChange={() => toggleExportType(d.id)} style={{ marginTop: 2, accentColor: 'var(--accent)' }} />
+                  <span style={{ fontSize: 14, lineHeight: 1.2 }}>{d.icon}</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#cdd6f4' }}>{t(d.nameKey)}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: '#6c7086', lineHeight: 1.4 }}>{t(d.descKey)}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+            <button
+              onClick={runExport}
+              disabled={!exportSelected.size || exportBusy}
+              style={{
+                padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+                background: exportSelected.size ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
+                color: exportSelected.size ? '#cdd6f4' : '#6c7086',
+                cursor: exportSelected.size && !exportBusy ? 'pointer' : 'not-allowed',
+              }}
+            >
+              {'⤓'} {t('dash.portability.export')}{exportSelected.size ? ` (${exportSelected.size})` : ''}
+            </button>
+            <button
+              onClick={pickFileToImport}
+              style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#cdd6f4', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              {'⤒'} {t('dash.portability.import')}
+            </button>
+          </div>
+
+          {/* Say the quiet part: a restore does not bring the keys back. */}
+          <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5, marginTop: 10 }}>
+            {t('dash.portability.keys_not_exported')}
+          </div>
+        </div>
+      {backupStatus && (
+        <div style={{ marginTop: 8, fontSize: 11, color: '#cdd6f4', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', borderRadius: 8, padding: '6px 10px' }}>
+          {backupStatus}
+        </div>
+      )}
+    </>
+  );
+}
+
+export function CloudSyncPage() {
+  useLocale();
+  const [authKey, setAuthKey] = useState(0);
+  useEffect(() => {
+    const handler = () => {
+      if (!checkConnected()) { setCounts({}); setSyncResults({}); setSyncingTypes(new Set()); }
+      setAuthKey(k => k + 1);
+    };
+    window.addEventListener('ava-auth-changed', handler);
+    return () => window.removeEventListener('ava-auth-changed', handler);
+  }, []);
+  void authKey;
+  const connected = checkConnected();
+  const [syncingTypes, setSyncingTypes] = useState<Set<string>>(new Set());
+  const [syncResults, setSyncResults] = useState<Record<string, { success: boolean; count?: number; error?: string }>>({});
+
+
+
 
   // Categories that default OFF — opt-in only. The user must explicitly
   // enable cloud sync for these: shared learnings leave the device, and
@@ -12364,28 +12570,6 @@ export function CloudSyncPage() {
     }
   };
 
-  const startEncryptedBackup = () => { setBackupPass(''); setBackupPassModal({ mode: 'export' }); };
-  const startReadableExport = () => {
-    setBackupStatus(t('dash.portability.preparing'));
-    getSidecar().exportReadable().catch(() => setBackupStatus(t('dash.portability.import_failed')));
-  };
-  const pickBackupToImport = async () => {
-    try {
-      const [dialog, fs] = await Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]);
-      const sel = await dialog.open({ multiple: false, filters: [{ name: 'Ava backup', extensions: ['ava-backup'] }] });
-      if (!sel || typeof sel !== 'string') return;
-      const content = await fs.readTextFile(sel);
-      setBackupPass('');
-      setBackupPassModal({ mode: 'import', content, name: sel.split(/[/\\]/).pop() || 'backup' });
-    } catch { /* cancelled / unreadable */ }
-  };
-  const confirmBackupPass = () => {
-    if (!backupPassModal || !backupPass) return;
-    setBackupBusy(true);
-    const sc = getSidecar();
-    if (backupPassModal.mode === 'export') sc.exportBackup(backupPass).catch(() => setBackupBusy(false));
-    else sc.importBackup(backupPassModal.content || '', backupPass).catch(() => setBackupBusy(false));
-  };
 
   return (
     <div style={pageWrapper}>
@@ -12396,113 +12580,6 @@ export function CloudSyncPage() {
             {t('dash.sync.subtitle')}
           </div>
         </div>
-
-        {/* Data sovereignty — encrypted backup + readable export. Local; no
-            account needed. Sits above the cloud export. */}
-        <div style={{ ...card, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{t('dash.portability.local_title')}</div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button onClick={startEncryptedBackup} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: '#cdd6f4', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{'\u{1F512}'} {t('dash.portability.enc_backup')} (.ava-backup)</button>
-            <button onClick={startReadableExport} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#cdd6f4', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{'\u{1F4D6}'} {t('dash.portability.readable')}</button>
-            <button onClick={pickBackupToImport} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#cdd6f4', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{'⤓'} {t('dash.portability.import_backup')}</button>
-          </div>
-          <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5, marginTop: 8 }}>
-            {t('dash.portability.enc_backup_desc')} {t('dash.portability.readable_desc')}
-          </div>
-          {backupStatus && <div style={{ marginTop: 8, fontSize: 11, color: '#cdd6f4', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', borderRadius: 8, padding: '6px 10px' }}>{backupStatus}</div>}
-        </div>
-
-        {/* Per-type export — pick exactly what leaves the machine. One type saves
-            as a file; several save as one file each into a folder you choose. */}
-        <div style={{ ...card, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.portability.export')}</div>
-            <button
-              onClick={toggleAllExport}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#a6adc8', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-            >
-              {allExportSelected ? t('dash.portability.deselect_all') : t('dash.portability.select_all')}
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
-            {EXPORT_TYPES.map(d => {
-              const on = exportSelected.has(d.id);
-              return (
-                <label
-                  key={d.id}
-                  style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-                    border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 45%, transparent)' : 'rgba(108,112,134,0.25)'}`,
-                    background: on ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
-                  }}
-                >
-                  <input type="checkbox" checked={on} onChange={() => toggleExportType(d.id)} style={{ marginTop: 2, accentColor: 'var(--accent)' }} />
-                  <span style={{ fontSize: 14, lineHeight: 1.2 }}>{d.icon}</span>
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#cdd6f4' }}>{t(d.nameKey)}</span>
-                    <span style={{ display: 'block', fontSize: 10.5, color: '#6c7086', lineHeight: 1.4 }}>{t(d.descKey)}</span>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-            <button
-              onClick={runExport}
-              disabled={!exportSelected.size || exportBusy}
-              style={{
-                padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
-                background: exportSelected.size ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
-                color: exportSelected.size ? '#cdd6f4' : '#6c7086',
-                cursor: exportSelected.size && !exportBusy ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {'⤓'} {t('dash.portability.export')}{exportSelected.size ? ` (${exportSelected.size})` : ''}
-            </button>
-            <button
-              onClick={pickFileToImport}
-              style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#cdd6f4', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-            >
-              {'⤒'} {t('dash.portability.import')}
-            </button>
-          </div>
-
-          {/* Say the quiet part: a restore does not bring the keys back. */}
-          <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5, marginTop: 10 }}>
-            {t('dash.portability.keys_not_exported')}
-          </div>
-        </div>
-
-        {/* Passphrase modal — create or open an encrypted backup. */}
-        {backupPassModal && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
-            onMouseDown={(e) => { if (e.target === e.currentTarget && !backupBusy) { setBackupPassModal(null); setBackupPass(''); } }}>
-            <div style={{ width: 320, background: '#1e1e2e', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: 12, padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>
-                {backupPassModal.mode === 'export' ? t('dash.portability.pass_set') : t('dash.portability.pass_enter')}
-              </div>
-              <div style={{ fontSize: 11, color: '#a6adc8', lineHeight: 1.5, marginBottom: 12 }}>
-                {backupPassModal.mode === 'export' ? t('dash.portability.pass_set_desc') : (backupPassModal.name || '')}
-              </div>
-              <input type="password" value={backupPass} autoFocus
-                onChange={(e) => setBackupPass(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && backupPass && !backupBusy) confirmBackupPass(); }}
-                placeholder={t('dash.portability.passphrase')}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, background: '#11111b', color: '#cdd6f4', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', outline: 'none', marginBottom: 12, boxSizing: 'border-box' }} />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { setBackupPassModal(null); setBackupPass(''); }} disabled={backupBusy}
-                  style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'transparent', color: '#a6adc8', border: '1px solid rgba(108,112,134,0.3)', cursor: 'pointer' }}>{t('dash.portability.cancel')}</button>
-                <button onClick={confirmBackupPass} disabled={!backupPass || backupBusy}
-                  style={{ flex: 1, padding: '8px', borderRadius: 8, background: (!backupPass || backupBusy) ? '#6c7086' : 'linear-gradient(135deg,var(--accent),#7c3aed)', color: '#fff', border: 'none', cursor: (!backupPass || backupBusy) ? 'default' : 'pointer' }}>
-                  {backupBusy ? t('dash.portability.working') : backupPassModal.mode === 'export' ? t('dash.portability.create_backup') : t('dash.portability.restore')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* GDPR full-account export — now also the cloud SUNSET notice: the
             platform stops storing user data on 1 Jul 2026, so this is the
@@ -14083,6 +14160,14 @@ export function SettingsPage() {
           )}
         </div>
 
+
+        {/* Export & Import — your data leaving the machine is a privacy
+            question, so it lives here rather than on a data-management page. */}
+        <div style={sLabel}>{t('dash.portability.local_title')}</div>
+        <LocalBackupCard />
+
+        <div style={sLabel}>{t('dash.portability.export')}</div>
+        <DataExportCard />
         </div>{/* /Privacy-1 */}
 
         {/* ── Group: Behavior (sec 4) ──────────────────────────── */}
