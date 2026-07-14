@@ -125,6 +125,13 @@ const {
   exportEncryptedBackup,
   importEncryptedBackup,
   gatherBundle,
+  // Per-type export/import — the SAME core implementation the extension uses,
+  // so the two surfaces cannot drift apart.
+  exportDataType,
+  importDataType,
+  isCoreDataType,
+  NotImportableError,
+  CORE_DATA_TYPES,
   haltIntent,
   createEmbeddingServiceFromConfig,
   loadMachineRules,
@@ -3686,7 +3693,9 @@ rl.on('line', async (line) => {
       // Sidecar produces the opaque envelope; the IDE runs the Tauri save
       // dialog (mirrors export_audit_log).
       try {
-        const envelope = await exportEncryptedBackup(AVA_HOME, data?.passphrase ?? '', { source: 'ide' });
+        // ACCOUNT_ROOT is where a signed-in user's memory/tasks/history actually
+        // live. Passing AVA_HOME alone backed up the root — the wrong account.
+        const envelope = await exportEncryptedBackup(AVA_HOME, data?.passphrase ?? '', { source: 'ide', scopedDir: ACCOUNT_ROOT });
         emit({ event: 'backup_ready', envelope });
       } catch (err) {
         emitError(`Backup failed: ${err && err.message ? err.message : err}`);
@@ -3696,17 +3705,53 @@ rl.on('line', async (line) => {
     case 'export_readable': {
       // Plain JSON snapshot so the user can SEE what's on their machine.
       try {
-        const bundle = await gatherBundle(AVA_HOME, { source: 'ide' });
+        const bundle = await gatherBundle(AVA_HOME, { source: 'ide', scopedDir: ACCOUNT_ROOT });
         emit({ event: 'readable_ready', json: JSON.stringify(bundle, null, 2) });
       } catch (err) {
         emitError(`Readable export failed: ${err && err.message ? err.message : err}`);
       }
       break;
     }
+    case 'list_data_types': {
+      emit({ event: 'data_types', types: CORE_DATA_TYPES });
+      break;
+    }
+    case 'export_data': {
+      // Per-type export. Sidecar formats the bytes; the IDE runs the native
+      // save dialog (mirrors export_backup / export_audit_log).
+      try {
+        const roots = { avaHome: AVA_HOME, scopedDir: ACCOUNT_ROOT };
+        const types = (Array.isArray(data?.types) ? data.types : [data?.dataType]).filter(Boolean);
+        const files = [];
+        for (const t of types) {
+          if (!isCoreDataType(t)) continue;
+          // One absent type must never kill the whole export.
+          try { files.push(await exportDataType(t, roots)); } catch { /* skip */ }
+        }
+        emit({ event: 'data_export_ready', files });
+      } catch (err) {
+        emitError(`Export failed: ${err && err.message ? err.message : err}`);
+      }
+      break;
+    }
+    case 'import_data': {
+      try {
+        const roots = { avaHome: AVA_HOME, scopedDir: ACCOUNT_ROOT };
+        const count = await importDataType(data?.dataType, data?.content ?? '', roots);
+        emit({ event: 'data_imported', ok: true, dataType: data?.dataType, count });
+      } catch (err) {
+        // `audit` is deliberately export-only and says so in plain words.
+        const message = err instanceof NotImportableError
+          ? err.message
+          : `Import failed: ${err && err.message ? err.message : err}`;
+        emit({ event: 'data_imported', ok: false, dataType: data?.dataType, message });
+      }
+      break;
+    }
     case 'import_backup': {
       // Restore an encrypted .ava-backup into ~/.ava (safe-merge by default).
       try {
-        const { result } = await importEncryptedBackup(AVA_HOME, data?.content ?? '', data?.passphrase ?? '', { overwrite: !!data?.overwrite });
+        const { result } = await importEncryptedBackup(AVA_HOME, data?.content ?? '', data?.passphrase ?? '', { overwrite: !!data?.overwrite, scopedDir: ACCOUNT_ROOT });
         emit({ event: 'backup_imported', ok: true, written: result.written, skipped: result.skipped });
       } catch (err) {
         emit({ event: 'backup_imported', ok: false, message: err && err.message ? err.message : String(err) });

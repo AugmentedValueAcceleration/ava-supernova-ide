@@ -4314,6 +4314,8 @@ export function AvaChatPage() {
       case 'backup_ready':
       case 'readable_ready':
       case 'backup_imported':
+      case 'data_export_ready':
+      case 'data_imported':
         // Forward to the Sync page, which owns the Tauri save dialog + result.
         window.dispatchEvent(new CustomEvent('ava-backup-event', { detail: event }));
         break;
@@ -12105,11 +12107,58 @@ export function CloudSyncPage() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
 
+  // Per-type export — mirrors the extension's Settings -> Data picker. The types
+  // and their semantics come from core (CORE_DATA_TYPES), not a second copy here.
+  const EXPORT_TYPES: Array<{ id: string; icon: string; nameKey: string; descKey: string }> = [
+    { id: 'memory', icon: '\u{1F9E0}', nameKey: 'dash.nav.memory', descKey: 'dash.portability.type.memory_desc' },
+    { id: 'tasks', icon: '✅', nameKey: 'dash.nav.tasks', descKey: 'dash.portability.type.tasks_desc' },
+    { id: 'journal', icon: '\u{1F4D3}', nameKey: 'dash.nav.journal', descKey: 'dash.portability.type.journal_desc' },
+    { id: 'learning', icon: '\u{1F393}', nameKey: 'dash.nav.learning', descKey: 'dash.portability.type.learning_desc' },
+    { id: 'history', icon: '\u{1F4AC}', nameKey: 'dash.nav.chat_history', descKey: 'dash.portability.type.history_desc' },
+    { id: 'health', icon: '\u{1F957}', nameKey: 'dash.nav.health', descKey: 'dash.portability.type.health_desc' },
+    { id: 'personality', icon: '\u{1F3A8}', nameKey: 'dash.nav.personality', descKey: 'dash.portability.type.personality_desc' },
+    { id: 'profile', icon: '\u{1F464}', nameKey: 'dash.portability.type.profile', descKey: 'dash.portability.type.profile_desc' },
+    { id: 'brain', icon: '✨', nameKey: 'dash.portability.type.brain', descKey: 'dash.portability.type.brain_desc' },
+    { id: 'datasets', icon: '\u{1F4E6}', nameKey: 'dash.portability.type.datasets', descKey: 'dash.portability.type.datasets_desc' },
+    { id: 'audit', icon: '\u{1F4DC}', nameKey: 'dash.portability.type.audit', descKey: 'dash.portability.type.audit_desc' },
+  ];
+  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
+  const [exportBusy, setExportBusy] = useState(false);
+  const allExportSelected = exportSelected.size === EXPORT_TYPES.length;
+  const toggleExportType = (id: string) => setExportSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleAllExport = () => setExportSelected(prev =>
+    prev.size === EXPORT_TYPES.length ? new Set() : new Set(EXPORT_TYPES.map(d => d.id)));
+  const runExport = () => {
+    if (!exportSelected.size) return;
+    setExportBusy(true);
+    getSidecar().exportData([...exportSelected]).catch(() => setExportBusy(false));
+  };
+  const pickFileToImport = async () => {
+    try {
+      const [dialog, fs] = await Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]);
+      const sel = await dialog.open({ multiple: false, filters: [{ name: 'Ava data', extensions: ['json'] }] });
+      if (!sel || typeof sel !== 'string') return;
+      // Infer the type from the filename core gave it (ava-<type>.json).
+      const base = sel.split(/[/\\]/).pop() || '';
+      const match = EXPORT_TYPES.find(d => base === `ava-${d.id}.json`);
+      if (!match) {
+        setBackupStatus(t('dash.portability.import_unknown'));
+        setTimeout(() => setBackupStatus(null), 5000);
+        return;
+      }
+      await getSidecar().importData(match.id, await fs.readTextFile(sel));
+    } catch { /* cancelled / unreadable */ }
+  };
+
   // The sidecar formats the bytes; the Tauri save dialog + write happen here
   // (mirrors the audit-export flow).
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { event?: string; envelope?: string; json?: string; ok?: boolean; written?: number; skipped?: number; message?: string };
+      const detail = (e as CustomEvent).detail as { event?: string; envelope?: string; json?: string; ok?: boolean; written?: number; skipped?: number; message?: string; files?: Array<{ name: string; content: string }> };
       if (!detail?.event) return;
       if (detail.event === 'backup_ready' && detail.envelope) {
         Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
@@ -12133,6 +12182,36 @@ export function CloudSyncPage() {
       if (detail.event === 'backup_imported') {
         setBackupBusy(false); setBackupPassModal(null); setBackupPass('');
         setBackupStatus(detail.ok ? t('dash.portability.restored') : t('dash.portability.import_failed'));
+        setTimeout(() => setBackupStatus(null), 5000);
+      }
+      if (detail.event === 'data_export_ready' && Array.isArray(detail.files)) {
+        const files = detail.files as Array<{ name: string; content: string }>;
+        Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
+          setExportBusy(false);
+          if (files.length === 0) return;
+          if (files.length === 1) {
+            // One type — save it straight to a file the user names.
+            const f = files[0];
+            const ext = f.name.endsWith('.jsonl') ? 'jsonl' : 'json';
+            const target = await dialog.save({
+              defaultPath: f.name,
+              filters: [{ name: ext === 'jsonl' ? 'JSON Lines' : 'JSON', extensions: [ext] }],
+            });
+            if (!target) return;
+            await fs.writeTextFile(target, f.content);
+          } else {
+            // Several types — pick a folder and drop one file per type into it.
+            // No zip dependency, and the result is easier to read than an archive.
+            const dir = await dialog.open({ directory: true, multiple: false });
+            if (!dir || typeof dir !== 'string') return;
+            for (const f of files) await fs.writeTextFile(`${dir}/${f.name}`, f.content);
+          }
+          setBackupStatus(t('dash.portability.exported', { count: String(files.length) }));
+          setTimeout(() => setBackupStatus(null), 4000);
+        }).catch(() => setExportBusy(false));
+      }
+      if (detail.event === 'data_imported') {
+        setBackupStatus(detail.ok ? t('dash.portability.restored') : (detail.message || t('dash.portability.import_failed')));
         setTimeout(() => setBackupStatus(null), 5000);
       }
     };
@@ -12331,6 +12410,70 @@ export function CloudSyncPage() {
             {t('dash.portability.enc_backup_desc')} {t('dash.portability.readable_desc')}
           </div>
           {backupStatus && <div style={{ marginTop: 8, fontSize: 11, color: '#cdd6f4', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', borderRadius: 8, padding: '6px 10px' }}>{backupStatus}</div>}
+        </div>
+
+        {/* Per-type export — pick exactly what leaves the machine. One type saves
+            as a file; several save as one file each into a folder you choose. */}
+        <div style={{ ...card, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.portability.export')}</div>
+            <button
+              onClick={toggleAllExport}
+              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#a6adc8', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+            >
+              {allExportSelected ? t('dash.portability.deselect_all') : t('dash.portability.select_all')}
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
+            {EXPORT_TYPES.map(d => {
+              const on = exportSelected.has(d.id);
+              return (
+                <label
+                  key={d.id}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                    border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 45%, transparent)' : 'rgba(108,112,134,0.25)'}`,
+                    background: on ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+                  }}
+                >
+                  <input type="checkbox" checked={on} onChange={() => toggleExportType(d.id)} style={{ marginTop: 2, accentColor: 'var(--accent)' }} />
+                  <span style={{ fontSize: 14, lineHeight: 1.2 }}>{d.icon}</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#cdd6f4' }}>{t(d.nameKey)}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: '#6c7086', lineHeight: 1.4 }}>{t(d.descKey)}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+            <button
+              onClick={runExport}
+              disabled={!exportSelected.size || exportBusy}
+              style={{
+                padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+                background: exportSelected.size ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
+                color: exportSelected.size ? '#cdd6f4' : '#6c7086',
+                cursor: exportSelected.size && !exportBusy ? 'pointer' : 'not-allowed',
+              }}
+            >
+              {'⤓'} {t('dash.portability.export')}{exportSelected.size ? ` (${exportSelected.size})` : ''}
+            </button>
+            <button
+              onClick={pickFileToImport}
+              style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(108,112,134,0.3)', background: 'transparent', color: '#cdd6f4', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              {'⤒'} {t('dash.portability.import')}
+            </button>
+          </div>
+
+          {/* Say the quiet part: a restore does not bring the keys back. */}
+          <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5, marginTop: 10 }}>
+            {t('dash.portability.keys_not_exported')}
+          </div>
         </div>
 
         {/* Passphrase modal — create or open an encrypted backup. */}

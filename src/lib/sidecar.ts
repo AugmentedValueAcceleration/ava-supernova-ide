@@ -660,6 +660,17 @@ export class SidecarManager {
     await this.send({ cmd: 'import_backup', content, passphrase, overwrite: !!overwrite });
   }
 
+  /** Export chosen data types. Files arrive as a `data_export_ready` event,
+   *  each `{ name, content }`, for the Tauri save dialog. */
+  async exportData(types: string[]): Promise<void> {
+    await this.send({ cmd: 'export_data', types });
+  }
+
+  /** Restore one data type from a file. Result arrives as `data_imported`. */
+  async importData(dataType: string, content: string): Promise<void> {
+    await this.send({ cmd: 'import_data', dataType, content });
+  }
+
   /**
    * Update the sidecar's working directory when user opens a new project folder.
    */
