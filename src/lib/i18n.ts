@@ -126,20 +126,35 @@ export function getLocale(): string {
  * so the two never drift. Native names stay as-is; only "auto-detect" is
  * translated, so this is a function (resolved at render), not a const.
  */
+const LANGUAGE_CODES = ['en', 'zh-CN', 'es', 'fr', 'de', 'ja', 'ko', 'pt', 'ru', 'ar', 'hi'];
+
+// Native fallback names, used only if the runtime lacks Intl.DisplayNames
+// (WebView2/Chromium has it — this is belt-and-braces).
+const NATIVE_FALLBACK: Record<string, string> = {
+  en: 'English', 'zh-CN': '中文（简体）', es: 'Español', fr: 'Français', de: 'Deutsch',
+  ja: '日本語', ko: '한국어', pt: 'Português', ru: 'Русский', ar: 'العربية', hi: 'हिन्दी',
+};
+
+const capitalise = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+/**
+ * Each language shown BOTH in the current UI language and in its own native
+ * form ("Japonés · 日本語" when the UI is Spanish) — friendlier than a bare
+ * endonym you may not recognise. Uses Intl.DisplayNames, so it needs no
+ * translation keys and follows the current locale automatically.
+ */
 export function languageOptions(): { value: string; label: string }[] {
+  const named = (code: string): string => {
+    let inCurrent = '', native = '';
+    try { inCurrent = capitalise(new Intl.DisplayNames([currentLocale], { type: 'language' }).of(code) || ''); } catch { /* no Intl */ }
+    try { native = capitalise(new Intl.DisplayNames([code], { type: 'language' }).of(code) || ''); } catch { /* no Intl */ }
+    native = native || NATIVE_FALLBACK[code] || code;
+    if (!inCurrent || inCurrent === native) return native;
+    return `${inCurrent} · ${native}`;
+  };
   return [
     { value: 'auto', label: t('dash.settings.auto_detect') },
-    { value: 'en', label: 'English' },
-    { value: 'zh-CN', label: '中文（简体）' },
-    { value: 'es', label: 'Español' },
-    { value: 'fr', label: 'Français' },
-    { value: 'de', label: 'Deutsch' },
-    { value: 'ja', label: '日本語' },
-    { value: 'ko', label: '한국어' },
-    { value: 'pt', label: 'Português' },
-    { value: 'ru', label: 'Русский' },
-    { value: 'ar', label: 'العربية' },
-    { value: 'hi', label: 'हिन्दी' },
+    ...LANGUAGE_CODES.map(code => ({ value: code, label: named(code) })),
   ];
 }
 
