@@ -20,12 +20,15 @@ interface Props {
   /** Wrapper style — width / margins for inline placement. */
   style?: CSSProperties;
   title?: string;
+  /** Portal-menu z-index. Default 1000; raise it when the Select sits inside a
+   *  higher-stacked layer (e.g. a modal overlay) so the menu isn't hidden. */
+  menuZIndex?: number;
 }
 
 const BORDER = 'var(--border, #2a2440)';
 const MENU_DESIRED_HEIGHT = 240;
 
-export function Select({ value, onChange, options, size = 'md', style, title }: Props) {
+export function Select({ value, onChange, options, size = 'md', style, title, menuZIndex = 1000 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -47,7 +50,7 @@ export function Select({ value, onChange, options, size = 'md', style, title }: 
       maxWidth: Math.max(rect.width, window.innerWidth - rect.left - 8),
       maxHeight,
       overflowY: 'auto',
-      zIndex: 1000,
+      zIndex: menuZIndex,
       borderRadius: 8,
       border: `1px solid ${BORDER}`,
       background: '#1a1028',
@@ -55,7 +58,7 @@ export function Select({ value, onChange, options, size = 'md', style, title }: 
       boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
       ...(openUp ? { bottom: window.innerHeight - rect.top + gap } : { top: rect.bottom + gap }),
     });
-  }, []);
+  }, [menuZIndex]);
 
   useEffect(() => {
     if (!open) return;

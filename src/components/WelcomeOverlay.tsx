@@ -8,7 +8,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { SignInPanel } from './SignInPanel';
 import type { SignInAccount } from '../lib/sign-in';
-import { t, useLocale } from '../lib/i18n';
+import { t, useLocale, getLocale, languageOptions, setLanguage } from '../lib/i18n';
+import { Select } from './Select';
 import { PATHS, MODES, BREADTH, stepsFor, pathById, type Destination, type OnboardingPath } from '../onboarding/flow';
 
 interface Props {
@@ -165,6 +166,18 @@ export default function WelcomeOverlay({ onComplete }: Props) {
             <span key={s.id} style={{ height: 5, width: i === idx ? 28 : 8, borderRadius: 999, background: i <= idx ? ACCENT : 'rgba(255,255,255,0.15)', transition: 'all 0.2s' }} />
           ))}
           <div style={{ flex: 1 }} />
+          {/* Language picker, present from the first screen so the whole tour —
+              and everything after — is in the user's language. The sidecar isn't
+              running yet during onboarding, so setLanguage (persist + UI) is
+              enough; boot reads the stored value. */}
+          <Select
+            value={getLocale()}
+            onChange={(v) => setLanguage(v)}
+            options={languageOptions()}
+            size="sm"
+            title={t('dash.settings.language')}
+            menuZIndex={10001}
+          />
           {step !== 'consent' && <button onClick={() => finish()} style={{ background: 'none', border: 'none', color: '#6c7086', fontSize: 12, cursor: 'pointer' }}>{t('onboarding.skip')}</button>}
         </div>
 

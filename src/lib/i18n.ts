@@ -120,3 +120,35 @@ export function useLocale(): string {
 export function getLocale(): string {
   return currentLocale;
 }
+
+/**
+ * The language picker's options — shared by Settings and the onboarding overlay
+ * so the two never drift. Native names stay as-is; only "auto-detect" is
+ * translated, so this is a function (resolved at render), not a const.
+ */
+export function languageOptions(): { value: string; label: string }[] {
+  return [
+    { value: 'auto', label: t('dash.settings.auto_detect') },
+    { value: 'en', label: 'English' },
+    { value: 'zh-CN', label: '中文（简体）' },
+    { value: 'es', label: 'Español' },
+    { value: 'fr', label: 'Français' },
+    { value: 'de', label: 'Deutsch' },
+    { value: 'ja', label: '日本語' },
+    { value: 'ko', label: '한국어' },
+    { value: 'pt', label: 'Português' },
+    { value: 'ru', label: 'Русский' },
+    { value: 'ar', label: 'العربية' },
+    { value: 'hi', label: 'हिन्दी' },
+  ];
+}
+
+/**
+ * Persist and apply a language choice. Writes the store the sidecar reads at
+ * boot, and updates the UI live. Callers that have a running sidecar should
+ * ALSO send it `set_language` so Ava switches without a restart.
+ */
+export function setLanguage(value: string): void {
+  try { localStorage.setItem('ava-ide-language', value); } catch { /* private mode */ }
+  initLocale(value);
+}

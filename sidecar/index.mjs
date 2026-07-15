@@ -3343,6 +3343,22 @@ function handleSetMode(data) {
   }
 }
 
+// Switch Ava's reply language on the LIVE conversation. config.language is read
+// only at boot, so without this a mid-session language change wouldn't reach Ava
+// until restart. Mirrors handleSetMode: resolve, update the sidecar's own i18n,
+// and rebuild the system prompt so the langLine reflects the new language.
+async function handleSetLanguage(data) {
+  const language = resolveLocale(data?.language ?? 'auto');
+  try { await setLocale(language); } catch { /* non-fatal — affects only sidecar-emitted strings */ }
+  if (conversation && globalThis._systemPromptArgs) {
+    const newArgs = { ...globalThis._systemPromptArgs, language };
+    globalThis._systemPromptArgs = newArgs;
+    const suffix = globalThis._systemPromptUserInfoSuffix || '';
+    conversation.setSystemPrompt(buildSystemPrompt(newArgs) + suffix);
+  }
+  emit({ event: 'language_changed', language });
+}
+
 async function handleSetModel(data) {
   // Hot-swap the model without restarting the sidecar
   if (!data.model) { emitError('No model specified'); return; }
@@ -3760,6 +3776,9 @@ rl.on('line', async (line) => {
     }
     case 'inject':
       handleInject(data);
+      break;
+    case 'set_language':
+      handleSetLanguage(data).catch((err) => emitError(err?.message || String(err)));
       break;
     case 'set_mode':
       handleSetMode(data);

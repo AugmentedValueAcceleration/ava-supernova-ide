@@ -530,6 +530,12 @@ export class SidecarManager {
     await this.send({ cmd: 'set_mode', mode });
   }
 
+  /** Switch Ava's reply language on the LIVE conversation (no restart). The
+   *  sidecar rebuilds the system prompt's language line. */
+  async setLanguage(language: string): Promise<void> {
+    await this.send({ cmd: 'set_language', language });
+  }
+
   /**
    * Creative Studio dataset capture (Phase 3). The renderer generates via the
    * platform API directly, so it reports the generation to the sidecar (which

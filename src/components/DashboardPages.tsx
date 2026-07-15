@@ -37,7 +37,7 @@ import {
   ShieldCheck as PhShieldCheck,
 } from '@phosphor-icons/react';
 import { DesignStudio } from './DesignStudio';
-import { t, useLocale, getLocale } from '../lib/i18n';
+import { t, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
 import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
 import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
@@ -13909,14 +13909,8 @@ export function SettingsPage() {
     { id: 'hcompany', name: 'H Company (Holo Vision)', placeholder: '...', signupUrl: 'https://www.hcompany.ai', description: 'Holo 3.1 — visual grounding for Desktop mode’s Fast vision lane (BYOK, key stays on this device)' },
   ];
 
-  const LANGUAGES = [
-    { value: 'auto', label: t('dash.settings.auto_detect') }, { value: 'en', label: 'English' },
-    { value: 'zh-CN', label: '\u4e2d\u6587\uff08\u7b80\u4f53\uff09' }, { value: 'es', label: 'Espa\u00f1ol' },
-    { value: 'fr', label: 'Fran\u00e7ais' }, { value: 'de', label: 'Deutsch' },
-    { value: 'ja', label: '\u65e5\u672c\u8a9e' }, { value: 'ko', label: '\ud55c\uad6d\uc5b4' },
-    { value: 'pt', label: 'Portugu\u00eas' }, { value: 'ru', label: '\u0420\u0443\u0441\u0441\u043a\u0438\u0439' },
-    { value: 'ar', label: '\u0627\u0644\u0639\u0631\u0628\u064a\u0629' }, { value: 'hi', label: '\u0939\u093f\u0928\u094d\u0926\u0940' },
-  ];
+  // Shared with the onboarding overlay so the two lists never drift.
+  const LANGUAGES = languageOptions();
 
 
   useEffect(() => {
@@ -13935,10 +13929,12 @@ export function SettingsPage() {
   const saveImmediate = (key: string, value: any) => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
-    // Persist specific keys to localStorage for sidecar access
+    // Persist + apply the language: writes the store the sidecar reads at boot
+    // and updates the UI live (setLanguage), THEN tells the running sidecar so
+    // Ava switches her reply language immediately instead of at next restart.
     if (key === 'language') {
-      localStorage.setItem('ava-ide-language', value);
-      import('../lib/i18n').then(({ initLocale }) => initLocale(value)).catch(() => {});
+      import('../lib/i18n').then(({ setLanguage }) => setLanguage(value)).catch(() => {});
+      getSidecar().setLanguage(value).catch(() => { /* sidecar not up yet — boot reads the store */ });
     }
     if (connected && cloudSyncEnabled()) {
       apiFetch('/settings', {
