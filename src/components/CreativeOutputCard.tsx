@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getLocale } from '../lib/i18n';
 import {
   type GalleryItem, type MediumKind,
   downloadGalleryItem, copyGalleryPrompt,
@@ -93,7 +94,7 @@ export function CreativeOutputCard({ item, onRegenerate, onDelete }: OutputCardP
   };
 
   const date = item.createdAt ? new Date(item.createdAt) : null;
-  const dateLabel = date ? date.toLocaleString('en-GB', {
+  const dateLabel = date ? date.toLocaleString(getLocale(), {
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
   }) : '';
 

@@ -31,7 +31,7 @@ import {
   type HealthProfile,
   type GeneralProfile,
 } from '../lib/health-store';
-import { t, useLocale } from '../lib/i18n';
+import { t, useLocale, getLocale } from '../lib/i18n';
 import { CookingTimeGrid, type CookTime } from './CookingTimeGrid';
 
 /**
@@ -1050,7 +1050,7 @@ function SubmissionRow({ row }: { row: SubmissionRowData }) {
       </div>
       <div style={{ fontSize: 10, color: '#6c7086' }}>
         {row.at
-          ? t('health.mysubs.submitted', { date: new Date(row.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) })
+          ? t('health.mysubs.submitted', { date: new Date(row.at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) })
           : t('health.mysubs.submitted_no_date')}
       </div>
       {row.status === 'rejected' && row.notes && (

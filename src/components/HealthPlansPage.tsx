@@ -10,7 +10,7 @@
 // ONE fixed-size overlay: setup → build → add are phases inside it.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { t, useLocale } from '../lib/i18n';
+import { t, useLocale, getLocale } from '../lib/i18n';
 import {
   loadExercises, loadRecipes, loadExerciseDetail, loadRecipeDetail,
 } from '../lib/health-catalog';
@@ -1210,7 +1210,7 @@ function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelec
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, mon, d));
   while (cells.length % 7 !== 0) cells.push(null);
   const today = todayISO();
-  const monthLabel = new Date(year, mon, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const monthLabel = new Date(year, mon, 1).toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' });
   const navBtn: CSSProperties = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', height: 28, width: 28,
     borderRadius: 6, border: 'none', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: TEXT2, fontSize: 14, cursor: 'pointer',

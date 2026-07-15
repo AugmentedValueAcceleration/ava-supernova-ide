@@ -528,7 +528,7 @@ function formatRelativeDate(dateStr: string): string {
   if (diffDays === 0) return t('dash.cc.today');
   if (diffDays === 1) return t('dash.cc.yesterday');
   if (diffDays < 7) return t('dash.cc.days_ago', { n: diffDays });
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' });
 }
 
 function truncate(str: string, len: number): string {
@@ -598,7 +598,7 @@ function getDayName(dateStr: string): string {
   tomorrow.setDate(tomorrow.getDate() + 1);
   if (d.toDateString() === today.toDateString()) return t('dash.cc.today');
   if (d.toDateString() === tomorrow.toDateString()) return t('dash.cc.tomorrow');
-  return d.toLocaleDateString('en-GB', { weekday: 'short' });
+  return d.toLocaleDateString(getLocale(), { weekday: 'short' });
 }
 
 // ── Weather fetching (direct HTTP, no platform) ────────────────────────────
@@ -1243,7 +1243,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
 
       {/* Meta */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 10, color: '#6c7086', marginBottom: 12 }}>
-        <span>{new Date(article.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        <span>{new Date(article.created_at).toLocaleDateString(getLocale(), { year: 'numeric', month: 'long', day: 'numeric' })}</span>
         {article.reading_time && <><span>&middot;</span><span>{t('dash.article.min_read', { n: article.reading_time })}</span></>}
         {article.source_publication && <><span>&middot;</span><span>{article.source_publication}</span></>}
       </div>
@@ -1472,7 +1472,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
                     <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, color: '#6c7086' }}>
                       {rel.reading_time && <span>{t('dash.article.m_read', { n: rel.reading_time })}</span>}
                       {rel.reading_time && <span>&middot;</span>}
-                      <span>{new Date(rel.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      <span>{new Date(rel.created_at).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' })}</span>
                     </div>
                   </div>
                 </button>
@@ -2092,7 +2092,7 @@ export function CommandCentrePage() {
   }, []);
 
   const connected = checkConnected();
-  const dateStr = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateStr = new Date().toLocaleDateString(getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   // ── Editable display name ────────────────────────────────────────────
   // Source-of-truth for what Ava calls the user. `ava-ide-user-name` is
@@ -7655,8 +7655,8 @@ export function ChatHistoryPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {filtered.map((conv: any) => {
               const msgCount = conv.messageCount ?? (conv.messages?.length || 0);
-              const date = conv.updatedAt ? new Date(conv.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-              const time = conv.updatedAt ? new Date(conv.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+              const date = conv.updatedAt ? new Date(conv.updatedAt).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+              const time = conv.updatedAt ? new Date(conv.updatedAt).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
               const preview = conv.preview ?? (conv.messages?.find((m: any) => m.role === 'ava')?.text?.slice(0, 120) || '');
 
               return (
@@ -7856,7 +7856,7 @@ export function MemoryPage() {
 
   const formatDate = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(dateStr).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const handleDelete = async (id: string | number) => {
@@ -8229,7 +8229,7 @@ function isTaskDueToday(task: any): boolean {
 function formatTaskDate(dateStr: string | undefined): string {
   if (!dateStr) return '';
   const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' });
 }
 
 export function TasksPage() {
@@ -8576,7 +8576,7 @@ export function TasksPage() {
             background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
           }}>
             <span style={{ fontSize: 12, color: 'var(--accent)' }}>
-              Showing tasks for {new Date(selectedCalDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              Showing tasks for {new Date(selectedCalDate + 'T00:00:00').toLocaleDateString(getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
             <button
               onClick={() => setSelectedCalDate(null)}
@@ -10991,7 +10991,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                     }}>{file.name}</div>
                     <div style={{ fontSize: 10, color: '#6c7086', display: 'flex', justifyContent: 'space-between' }}>
                       <span>{formatFileSize(file.size)}</span>
-                      {file.modified && <span>{new Date(file.modified).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
+                      {file.modified && <span>{new Date(file.modified).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
                     </div>
                   </div>
                 </div>
@@ -11048,7 +11048,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                   </span>
                   {/* Date */}
                   <span style={{ fontSize: 11, color: '#6c7086', flexShrink: 0, width: 80, textAlign: 'right' }}>
-                    {file.modified ? new Date(file.modified).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
+                    {file.modified ? new Date(file.modified).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
                   </span>
                 </div>
               );
@@ -12755,7 +12755,7 @@ export function CloudSyncPage() {
                       {description}
                       {lastSynced && (
                         <span style={{ opacity: 0.6, marginLeft: 4 }}>
-                          &middot; Last synced {new Date(lastSynced).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          &middot; Last synced {new Date(lastSynced).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}
                         </span>
                       )}
                     </div>
@@ -13264,7 +13264,7 @@ export function UsagePage() {
                         const tokens = d.tokens || d.total_tokens || 0;
                         const heightPct = maxDaily > 0 ? (tokens / maxDaily) * 100 : 0;
                         const isToday = (d.date || '') === today;
-                        const dayLabel = d.date ? new Date(d.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric' }) : (d.day || '');
+                        const dayLabel = d.date ? new Date(d.date + 'T00:00:00').toLocaleDateString(getLocale(), { day: 'numeric' }) : (d.day || '');
                         return (
                           <div key={d.date || d.day || i} style={{
                             flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
@@ -15444,7 +15444,7 @@ export function SupportPage() {
                       <span>{supportCategoryMeta(conv.category)!.icon}</span>{supportCategoryMeta(conv.category)!.label}
                     </span>
                   )}
-                  <span>{new Date(conv.last_message_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                  <span>{new Date(conv.last_message_at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' })}</span>
                 </div>
               </button>
             );
@@ -15468,7 +15468,7 @@ export function SupportPage() {
             </div>
             <div style={{ marginTop: 2, fontSize: 11, color: '#6c7086' }}>
               {activeConv
-                ? `Opened ${new Date(activeConv.last_message_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}${messages.some((m: any) => m.is_ava) ? ' · Ava is helping' : ''}`
+                ? `Opened ${new Date(activeConv.last_message_at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' })}${messages.some((m: any) => m.is_ava) ? ' · Ava is helping' : ''}`
                 : t('dash.support.ava_first')}
             </div>
           </div>
@@ -15490,7 +15490,7 @@ export function SupportPage() {
             <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
               {messages.map((msg: any) => {
                 const isUser = msg.sender_type === 'user';
-                const time = new Date(msg.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                const time = new Date(msg.created_at).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
                 return (
                   <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
                     <div style={{
@@ -15643,7 +15643,7 @@ export function ReleaseNotesPage() {
   };
 
   const formatMonth = (date: Date) => {
-    return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    return date.toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' });
   };
 
   const months = useMemo(() => {
@@ -15781,7 +15781,7 @@ export function ReleaseNotesPage() {
                             </span>
                           )}
                           <span style={{ fontSize: 10, color: '#6c7086' }}>
-                            {dateStr ? new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
+                            {dateStr ? new Date(dateStr).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
                           </span>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                             style={{ transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
@@ -16399,7 +16399,7 @@ export function _CreativeLibraryTab() {
                       {asset.asset_type || asset.type || 'file'}
                     </span>
                     <span style={{ fontSize: 8, color: '#585b70' }}>
-                      {asset.created_at ? new Date(asset.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}
+                      {asset.created_at ? new Date(asset.created_at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' }) : ''}
                     </span>
                   </div>
                 </div>
@@ -16432,7 +16432,7 @@ export function _CreativeLibraryTab() {
                     {selected.asset_type || selected.type || 'file'}
                   </span>
                   <span style={{ fontSize: 10, color: '#585b70' }}>
-                    {selected.created_at ? new Date(selected.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                    {selected.created_at ? new Date(selected.created_at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
                   </span>
                 </div>
               </div>

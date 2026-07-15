@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { t, useLocale } from '../lib/i18n';
+import { t, useLocale, getLocale } from '../lib/i18n';
 import {
   deriveProgression, buildCvMarkdown, buildCertificateMarkdown,
   type LearnerProgression, type DerivedSkill, type SkillLevel, type DerivedCertificate,
@@ -171,7 +171,7 @@ export function Progression() {
                 <div style={{ marginTop: 2, fontSize: 11, color: '#6c7086' }}>{c.subject} · {c.level}</div>
                 <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, color: '#a6adc8' }}>
                   <span>✓ {c.score}%</span>
-                  <span>{c.completedAt ? new Date(c.completedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
+                  <span>{c.completedAt ? new Date(c.completedAt).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
                 </div>
                 <button onClick={() => exportCert(c)} style={{ marginTop: 12, width: '100%', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '6px 0', fontSize: 11, fontWeight: 500, color: 'var(--accent)', cursor: 'pointer' }}>{t('learning.progression.export_cert')}</button>
               </div>
