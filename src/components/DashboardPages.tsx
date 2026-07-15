@@ -188,15 +188,22 @@ function CustomSelect({ value, onChange, options, placeholder, width, height }: 
       const tgt = e.target as Node;
       if (!ref.current?.contains(tgt) && !menuRef.current?.contains(tgt)) setOpen(false);
     };
-    // The menu is portaled with fixed positioning, so any scroll detaches it
-    // from the trigger — close it rather than let it float.
+    // The menu is portaled with fixed positioning, so a PAGE scroll detaches it
+    // from the trigger — close then. But scrolling the menu's OWN option list
+    // (or dragging its scrollbar) must NOT close it, so ignore scroll events
+    // that originate inside the menu.
+    const onScroll = (e: Event) => {
+      const tgt = e.target as Node;
+      if (menuRef.current && tgt instanceof Node && menuRef.current.contains(tgt)) return;
+      setOpen(false);
+    };
     const close = () => setOpen(false);
     document.addEventListener('mousedown', onDown);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', close);
     return () => {
       document.removeEventListener('mousedown', onDown);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', close);
     };
   }, [open]);
@@ -2544,6 +2551,7 @@ export function AvaChatPage() {
     images?: { src: string; alt?: string }[]; // base64 or URL images
     files?: { name: string; path?: string; url?: string; type?: string }[]; // created files
     attachments?: { name: string; dataUri: string; mimeType: string }[]; // user-attached files
+    welcome?: boolean; // Ava's opening line — re-resolved live so it follows a language change
   }
   interface Conversation {
     id: string;
@@ -2672,7 +2680,7 @@ export function AvaChatPage() {
         setCreditBalance(null);
         setUsageWarning({ level: 'none', message: '' });
         setChatBackend('local');
-        setMessages([{ id: `msg-reset-${Date.now()}`, role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now() }]);
+        setMessages([{ id: `msg-reset-${Date.now()}`, role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now(), welcome: true }]);
         setConversationTitle(t('dash.chat.new_chat'));
         setSecrets([]);
         setTokenCount(0);
@@ -2690,16 +2698,22 @@ export function AvaChatPage() {
   // extension chat panel's buildSeededWelcome — first-person from Ava,
   // partner-voice rather than generic-chatbot. localStorage `ava-ide-user-name`
   // is the same key used by the dataset trajectory event (line 2671).
+  // Resolved live (via t() + getLocale) so a language change re-renders the
+  // welcome message in the new language — see the `welcome` flag on ChatMessage.
   const buildIdeWelcome = (): string => {
     const userName = (localStorage.getItem('ava-ide-user-name') ?? localStorage.getItem('ava-ide-email')?.split('@')[0] ?? '').trim() || null;
     const now = new Date();
     const h = now.getHours();
-    const day = now.toLocaleDateString('en-GB', { weekday: 'long' });
+    const day = now.toLocaleDateString(getLocale(), { weekday: 'long' });
     const namePart = userName ? `, ${userName}` : '';
-    if (h >= 5 && h < 12) return `Morning${namePart}. It's ${day} — what are we tackling today?`;
-    if (h >= 12 && h < 18) return `Afternoon${namePart}. ${day} — what can I get into for you?`;
-    if (h >= 18 && h < 23) return `Evening${namePart}. Pull up a chair — what are we working on?`;
-    return `Late one${namePart ? '' : ' here'}${namePart}. I'm awake if you are — what's on your mind?`;
+    const key = h >= 5 && h < 12 ? 'dash.chat.welcome_morning'
+      : h >= 12 && h < 18 ? 'dash.chat.welcome_afternoon'
+      : h >= 18 && h < 23 ? 'dash.chat.welcome_evening'
+      : 'dash.chat.welcome_late';
+    const name = key === 'dash.chat.welcome_late' ? (namePart || ' here') : namePart;
+    // Some locales insert a space before the comma {name} carries ("días ,
+    // Stewart") — collapse any space-before-comma so it reads cleanly.
+    return t(key, { name, day }).replace(/\s+,/g, ',');
   };
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -2729,7 +2743,7 @@ export function AvaChatPage() {
       }
     } catch { /* */ }
     return [
-      { id: mkId(), role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now() },
+      { id: mkId(), role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now(), welcome: true },
     ];
   });
   const [input, setInput] = useState('');
@@ -2890,7 +2904,7 @@ export function AvaChatPage() {
       const isCurrent = currentConvId !== null && currentConvId === detail.deletedId;
       const allCleared = detail.remaining === 0;
       if (isCurrent || allCleared) {
-        setMessages([{ id: mkId(), role: 'ava', text: buildIdeWelcome(), timestamp: Date.now() }]);
+        setMessages([{ id: mkId(), role: 'ava', text: buildIdeWelcome(), timestamp: Date.now(), welcome: true }]);
         setConversationTitle(t('dash.chat.new_chat'));
         setCurrentConvId(null);
       }
@@ -3753,19 +3767,17 @@ export function AvaChatPage() {
             ? `openalex:${paper.openalex_id}`
             : paper.primary_url ?? paper.title;
 
+      const authorNames = paper.authors.slice(0, 6).map(a => a.name).join(', ')
+        + (paper.authors.length > 6 ? `, ${t('ide.papers.primer_etal')}` : '');
       const primer =
-        `[Read with Ava]\n\n` +
-        `I'd like you to read and explain this scientific paper for me. ` +
-        `Use the four-layer pass: 1. What's the question? (one plain-English sentence). ` +
-        `2. Why does it matter? (the human stake). ` +
-        `3. What did they do? (method, jargon-stripped). ` +
-        `4. What did they find — and how confident should I be? (results + caveats specific to this paper's discipline).\n\n` +
-        `Paper: **${paper.title}**${paper.year ? ` (${paper.year})` : ''}\n` +
-        (paper.authors.length > 0 ? `Authors: ${paper.authors.slice(0, 6).map(a => a.name).join(', ')}${paper.authors.length > 6 ? ', et al.' : ''}\n` : '') +
-        `Identifier: \`${ident}\`\n` +
-        (paper.primary_url ? `URL: ${paper.primary_url}\n` : '') +
-        (paper.retracted ? `\n⚠ This paper is marked as RETRACTED. Surface that to me before discussing findings.\n` : '') +
-        `\nFetch the full text via the \`paper_fetch_full_text\` tool first if you need more than the abstract, then walk me through it.`;
+        `${t('ide.papers.primer_tag')}\n\n` +
+        `${t('ide.papers.primer_intro')}\n\n` +
+        `${t('ide.papers.primer_paper', { title: paper.title })}${paper.year ? ` (${paper.year})` : ''}\n` +
+        (paper.authors.length > 0 ? `${t('ide.papers.primer_authors', { authors: authorNames })}\n` : '') +
+        `${t('ide.papers.primer_identifier', { ident })}\n` +
+        (paper.primary_url ? `${t('ide.papers.primer_url', { url: paper.primary_url })}\n` : '') +
+        (paper.retracted ? `\n${t('ide.papers.primer_retracted')}\n` : '') +
+        `\n${t('ide.papers.primer_fetch')}`;
 
       // Switch to Teach mode and persist. The model/mode-change effect
       // below will push the new mode to the sidecar on the next render.
@@ -4413,7 +4425,7 @@ export function AvaChatPage() {
       } catch { /* */ }
     }
     setMessages([
-      { id: mkId(), role: 'ava', text: buildIdeWelcome(), timestamp: Date.now() },
+      { id: mkId(), role: 'ava', text: buildIdeWelcome(), timestamp: Date.now(), welcome: true },
     ]);
     setConversationTitle(t('dash.chat.new_chat'));
     setCurrentConvId(null);
@@ -5189,7 +5201,7 @@ export function AvaChatPage() {
               <div style={{
                 position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 999,
                 background: '#1a1028', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10,
-                padding: 6, minWidth: 240, maxHeight: 420, overflowY: 'auto',
+                padding: 6, minWidth: 300, maxHeight: 420, overflowY: 'auto',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               }}>
                 {/* Orchestrated section — Supernova (polyglot ensemble) on top,
@@ -5489,8 +5501,7 @@ export function AvaChatPage() {
               <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.cc.where_start')}</div>
             </div>
             <p style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.5, margin: '0 0 14px' }}>
-              I can read your code, plan a feature, teach you something, audit security, brainstorm, or just chat.
-              Pick one — you can edit before sending.
+              {t('dash.cc.qs_subtitle')}
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {[
@@ -5543,7 +5554,7 @@ export function AvaChatPage() {
               ))}
             </div>
             <p style={{ fontSize: 10, color: '#6c7086', marginTop: 14, marginBottom: 0 }}>
-              Tip: type <code style={{ color: 'var(--accent)' }}>{'>>'}</code> <code style={{ color: '#60a5fa' }}>::</code> <code style={{ color: '#a6adc8' }}>..</code> <code style={{ color: '#f9e2af' }}>??</code> <code style={{ color: '#f38ba8' }}>!!</code> <code style={{ color: '#94e2d5' }}>**</code> to switch modes any time.
+              {t('dash.cc.tip_prefix')} <code style={{ color: 'var(--accent)' }}>{'>>'}</code> <code style={{ color: '#60a5fa' }}>::</code> <code style={{ color: '#a6adc8' }}>..</code> <code style={{ color: '#f9e2af' }}>??</code> <code style={{ color: '#f38ba8' }}>!!</code> <code style={{ color: '#94e2d5' }}>**</code> {t('dash.cc.tip_suffix')}
             </p>
           </div>
         )}
@@ -5656,10 +5667,13 @@ export function AvaChatPage() {
                   {/* Rendered text with markdown + inline secret reveal */}
                   <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {(() => {
+                      // Ava's welcome line is re-resolved live so it follows a
+                      // language change; every other message uses its stored text.
+                      const srcText = msg.welcome ? buildIdeWelcome() : msg.text;
                       const MASK = '\u2022\u2022\u2022\u2022\u2022\u2022';
-                      const hasMask = msg.text.includes(MASK);
+                      const hasMask = srcText.includes(MASK);
                       if (!hasMask) {
-                        return isAva || isError ? renderMarkdown(msg.text) : msg.text;
+                        return isAva || isError ? renderMarkdown(srcText) : srcText;
                       }
                       // Split text on mask sequences and render with inline eye toggles
                       const parts = msg.text.split(MASK);

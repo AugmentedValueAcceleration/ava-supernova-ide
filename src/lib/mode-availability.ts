@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 // Single source of truth for the 3 orchestrated modes —
 // Aurora, Supernova, Maestro — and what unlocks them.
 //
@@ -139,20 +141,20 @@ export function useModeAvailability(): {
 // via BYOK or just hasn't connected. Surfaced in mode subtitles.
 export function modeSubtitle(mode: ModeId, av: ModeAvailability, state: ModeAvailabilityState): string {
   if (av[mode]) {
-    if (mode === 'maestro')   return state.platformConnected ? 'Best model per task'           : 'BYOK · Qwen';
-    if (mode === 'supernova') return state.platformConnected ? 'Polyglot ensemble'              : 'BYOK · DeepSeek + Qwen';
-    if (mode === 'aurora')    return state.platformConnected ? 'EU stack — Mistral end-to-end' : 'BYOK · Mistral';
+    if (mode === 'maestro')   return t(state.platformConnected ? 'dash.model.sub.maestro_best'   : 'dash.model.sub.byok_qwen');
+    if (mode === 'supernova') return t(state.platformConnected ? 'dash.model.sub.supernova_poly' : 'dash.model.sub.byok_ds_qwen');
+    if (mode === 'aurora')    return t(state.platformConnected ? 'dash.model.sub.aurora_eu'      : 'dash.model.sub.byok_mistral');
   }
   // Locked — explain the unlock path. Admin gate retired 2026-04-30,
   // so locked = not-signed-in AND missing the BYOK keys for this mode.
   if (mode === 'supernova') {
-    if (state.byok.qwen && !state.byok.deepseek) return 'Add DeepSeek key';
-    if (state.byok.deepseek && !state.byok.qwen) return 'Add Qwen key';
-    return 'Connect or add DeepSeek + Qwen keys';
+    if (state.byok.qwen && !state.byok.deepseek) return t('dash.model.sub.add_deepseek');
+    if (state.byok.deepseek && !state.byok.qwen) return t('dash.model.sub.add_qwen');
+    return t('dash.model.sub.connect_ds_qwen');
   }
   if (mode === 'aurora') {
-    return 'Connect or add Mistral key';
+    return t('dash.model.sub.connect_mistral');
   }
   // maestro
-  return 'Connect or add Qwen key';
+  return t('dash.model.sub.connect_qwen');
 }
