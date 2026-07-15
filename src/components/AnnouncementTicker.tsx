@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { t } from '../lib/i18n';
 
 // ─── Announcement ticker (IDE) ───────────────────────────────────────────────
 //
@@ -56,7 +57,7 @@ export function AnnouncementTicker({ fallback }: { fallback?: ReactNode }) {
       <button
         onClick={() => setDismissed(true)}
         style={{ flexShrink: 0, background: 'none', border: 'none', color: '#8b8398', cursor: 'pointer', lineHeight: 1, fontSize: 13, padding: 0 }}
-        aria-label="Dismiss announcement"
+        aria-label={t('ide.ticker.dismiss')}
       >×</button>
       <style>{'@keyframes avaTickerPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }'}</style>
     </div>

@@ -39,26 +39,26 @@ type GenOutcome = { ok: boolean; dataUrl?: string; error?: string };
 
 // Logo styles — REAL vector paints from the shape engine, not prompt words. A
 // gradient logo is a true SVG gradient: still scalable, still exact, no model.
-const LOGO_STYLES: { id: MarkStyle; label: string }[] = [
-  { id: 'flat', label: 'Solid' },
-  { id: 'gradient', label: 'Gradient' },
-  { id: 'line', label: 'Monoline' },
-  { id: 'duotone', label: 'Duotone' },
+const LOGO_STYLES: { id: MarkStyle; labelKey: string }[] = [
+  { id: 'flat', labelKey: 'dash.studio.logo.style.flat' },
+  { id: 'gradient', labelKey: 'dash.studio.logo.style.gradient' },
+  { id: 'line', labelKey: 'dash.studio.logo.style.line' },
+  { id: 'duotone', labelKey: 'dash.studio.logo.style.duotone' },
 ];
 /** Styles that paint with a second colour. */
 const TWO_TONE = (s: MarkStyle) => s === 'gradient' || s === 'duotone';
 
 /** How the mark gets made. */
-const MARK_TYPES: { id: 'letter' | 'geometry' | 'icon'; label: string }[] = [
-  { id: 'geometry', label: 'Constructed' },
-  { id: 'letter', label: 'Lettermark' },
-  { id: 'icon', label: 'Icon' },
+const MARK_TYPES: { id: 'letter' | 'geometry' | 'icon'; labelKey: string }[] = [
+  { id: 'geometry', labelKey: 'dash.studio.mark.geometry' },
+  { id: 'letter', labelKey: 'dash.studio.mark.letter' },
+  { id: 'icon', labelKey: 'dash.studio.mark.icon' },
 ];
 
 /** Logo forms — the overall lockup shape Ava composes. */
-const LOGO_FORMS: { id: NonNullable<LogoBrief['form']>; label: string }[] = [
-  { id: 'combination', label: 'Wordmark' },
-  { id: 'emblem', label: 'Emblem' },
+const LOGO_FORMS: { id: NonNullable<LogoBrief['form']>; labelKey: string }[] = [
+  { id: 'combination', labelKey: 'dash.studio.form.combination' },
+  { id: 'emblem', labelKey: 'dash.studio.form.emblem' },
 ];
 
 // Compose N logo lockups into ONE contact-sheet SVG — a numbered grid Ava can
@@ -159,7 +159,7 @@ function ColorField({ value, onChange, swatches }: { value: string; onChange: (v
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} title="Change colour" aria-label="Change colour"
+      <button onClick={() => setOpen(o => !o)} title={t('dash.studio.change_colour')} aria-label={t('dash.studio.change_colour')}
         style={{ width: 28, height: 28, borderRadius: 6, cursor: 'pointer', border: `1px solid ${CARD_BORDER}`, background: value }} />
       {open && (
         <div style={{ position: 'absolute', zIndex: 60, top: 36, left: 0, width: 200, borderRadius: 8, border: `1px solid ${CARD_BORDER}`, background: '#1a1028', padding: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', userSelect: 'none' }}>
@@ -338,8 +338,8 @@ function VideoStage({ durationSec, src, generating }: { durationSec: number; src
             <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="2" y="5" width="15" height="14" rx="2" /><path d="m17 9 5-3v12l-5-3" />
             </svg>
-            <div style={{ fontSize: 13.5, color: '#a6adc8' }}>Your video will appear here</div>
-            <div style={{ fontSize: 12, color: '#8b8398', maxWidth: 320, lineHeight: 1.6 }}>Describe it on the right — Ava generates it and it plays here.</div>
+            <div style={{ fontSize: 13.5, color: '#a6adc8' }}>{t('dash.studio.video.empty')}</div>
+            <div style={{ fontSize: 12, color: '#8b8398', maxWidth: 320, lineHeight: 1.6 }}>{t('dash.studio.video.empty_hint')}</div>
           </div>
         )}
         {generating && (
@@ -360,18 +360,18 @@ function VideoStage({ durationSec, src, generating }: { durationSec: number; src
               : <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>}
           </TransportButton>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <DragBar value={progress} onChange={seek} title="Scrub" />
+            <DragBar value={progress} onChange={seek} title={t('dash.studio.transport.scrub')} />
           </div>
           <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a6adc8', whiteSpace: 'nowrap' }}>{fmtTime(cur)} / {fmtTime(durationSec)}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button type="button" onClick={() => setMuted(m => !m)} title={muted ? 'Unmute' : 'Mute'} aria-label={muted ? 'Unmute' : 'Mute'} style={iconBtnStyle}>
+          <button type="button" onClick={() => setMuted(m => !m)} title={muted ? t('dash.studio.transport.unmute') : t('dash.studio.transport.mute')} aria-label={muted ? t('dash.studio.transport.unmute') : t('dash.studio.transport.mute')} style={iconBtnStyle}>
             {muted || volume === 0
               ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z" /><line x1="22" y1="9" x2="16" y2="15" /><line x1="16" y1="9" x2="22" y2="15" /></svg>
               : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /></svg>}
           </button>
           <div style={{ width: 96 }}>
-            <DragBar value={muted ? 0 : volume} onChange={v => { setVolume(v); setMuted(false); }} height={5} thumb={11} title="Volume" />
+            <DragBar value={muted ? 0 : volume} onChange={v => { setVolume(v); setMuted(false); }} height={5} thumb={11} title={t('dash.studio.transport.volume')} />
           </div>
           <div style={{ flex: 1 }} />
           <button type="button" onClick={toggleMax} title={isMax ? 'Restore (Esc)' : 'Maximise'} aria-label={isMax ? 'Restore' : 'Maximise'} style={iconBtnStyle}>
@@ -503,40 +503,43 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
           </TransportButton>
           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <span style={{ fontSize: 13, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{voiceName}</span>
-            <span style={{ fontSize: 11, color: '#8b8398' }}>Voiceover preview</span>
+            <span style={{ fontSize: 11, color: '#8b8398' }}>{t('dash.studio.voice.preview')}</span>
           </div>
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a6adc8', whiteSpace: 'nowrap' }}>{fmtTime(cur)} / {fmtTime(durationSec)}</span>
         </div>
       </div>
-      <div style={{ textAlign: 'center', fontSize: 12, color: '#8b8398' }}>No audio yet — this is the transport. Write a script on the right and Ava speaks it here.</div>
+      <div style={{ textAlign: 'center', fontSize: 12, color: '#8b8398' }}>{t('dash.studio.voice.empty')}</div>
     </div>
   );
 }
 
 type ViewId = 'icon' | 'iconset' | 'appicon' | 'logo' | 'badge' | 'avatar' | 'banner' | 'hero' | 'ogimage' | 'illustration' | 'pattern' | 'gamekit' | 'gamepiece' | 'canvas' | 'image' | 'video' | 'voice' | 'brandkit';
 
-const GROUPS: { label: string; accent: string; items: { id: ViewId; label: string; badge?: string }[] }[] = [
-  { label: 'Open Canvas', accent: '#6aa9ff', items: [
-    { id: 'video', label: 'Video' },
-    { id: 'voice', label: 'Voiceover' },
-    { id: 'image', label: 'Image' },
+// Keys, not text. This is a module-level const — resolved strings would evaluate
+// once at import (before initLocale) and freeze in English. Labels resolve at
+// render via t(), keyed off the asset id.
+const GROUPS: { labelKey: string; accent: string; items: { id: ViewId; soon?: boolean }[] }[] = [
+  { labelKey: 'dash.studio.group.open_canvas', accent: '#6aa9ff', items: [
+    { id: 'video' },
+    { id: 'voice' },
+    { id: 'image' },
   ] },
-  { label: 'Web / App', accent: 'var(--accent)', items: [
-    { id: 'icon', label: 'Icon' },
-    { id: 'iconset', label: 'Icon Set', badge: 'SOON' },
-    { id: 'appicon', label: 'App Icon / Favicon', badge: 'SOON' },
-    { id: 'logo', label: 'Logo' },
-    { id: 'badge', label: 'Badge / Mark', badge: 'SOON' },
-    { id: 'avatar', label: 'Avatar', badge: 'SOON' },
-    { id: 'banner', label: 'Banner', badge: 'SOON' },
-    { id: 'hero', label: 'Hero', badge: 'SOON' },
-    { id: 'ogimage', label: 'Social / OG Image', badge: 'SOON' },
-    { id: 'illustration', label: 'Illustration', badge: 'SOON' },
-    { id: 'pattern', label: 'Pattern / Background', badge: 'SOON' },
+  { labelKey: 'dash.studio.group.web_app', accent: 'var(--accent)', items: [
+    { id: 'icon' },
+    { id: 'iconset', soon: true },
+    { id: 'appicon', soon: true },
+    { id: 'logo' },
+    { id: 'badge', soon: true },
+    { id: 'avatar', soon: true },
+    { id: 'banner', soon: true },
+    { id: 'hero', soon: true },
+    { id: 'ogimage', soon: true },
+    { id: 'illustration', soon: true },
+    { id: 'pattern', soon: true },
   ] },
-  { label: 'Game', accent: '#f0a24b', items: [
-    { id: 'gamekit', label: 'UI Kit', badge: 'SOON' }, { id: 'gamepiece', label: 'Single Piece', badge: 'SOON' },
+  { labelKey: 'dash.studio.group.game', accent: '#f0a24b', items: [
+    { id: 'gamekit', soon: true }, { id: 'gamepiece', soon: true },
   ] },
 ];
 
@@ -1206,19 +1209,19 @@ export function DesignStudio() {
       {/* LEFT RAIL — the three areas */}
       <nav style={{ width: 220, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', padding: 12, overflowY: 'auto' }}>
         {GROUPS.map(g => (
-          <div key={g.label} style={{ marginBottom: 14 }}>
+          <div key={g.labelKey} style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px 6px', fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: 600, color: g.accent }}>
-              <span style={{ width: 3, height: 12, borderRadius: 2, background: g.accent }} />{g.label}
+              <span style={{ width: 3, height: 12, borderRadius: 2, background: g.accent }} />{t(g.labelKey)}
             </div>
             {g.items.map(it => {
-              // Badged items aren't built yet — render them inactive (non-clickable,
+              // "Soon" items aren't built yet — render them inactive (non-clickable,
               // dimmed) so the sidebar never implies something works when it doesn't.
-              const disabled = !!it.badge;
+              const disabled = !!it.soon;
               return (
                 <button key={it.id} onClick={disabled ? undefined : () => setView(it.id)} disabled={disabled}
                   style={{ ...navBtn(view === it.id), ...(disabled ? { opacity: 0.45, cursor: 'default' } : {}) }}>
-                  {it.label}
-                  {it.badge && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999 }}>{it.badge}</span>}
+                  {t(`dash.studio.asset.${it.id}`)}
+                  {it.soon && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999 }}>{t('dash.studio.soon')}</span>}
                 </button>
               );
             })}
@@ -1266,7 +1269,7 @@ export function DesignStudio() {
               {!genResult && !genStatus && shape && (
                 <>
                   <div style={{ width: 132, height: 132, opacity: 0.8 }} dangerouslySetInnerHTML={{ __html: buildShapeSvg(shape.elements, 'flat', ['#8b93b8'], 2.6) }} />
-                  <p style={{ fontSize: 12, color: '#8b8398', maxWidth: 320, textAlign: 'center', lineHeight: 1.6 }}><b style={{ color: '#a6adc8', fontWeight: 500 }}>{material.label}</b> — Qwen restyles this shape into the material, then mattes it to a clean transparent icon.</p>
+                  <p style={{ fontSize: 12, color: '#8b8398', maxWidth: 320, textAlign: 'center', lineHeight: 1.6 }}><b style={{ color: '#a6adc8', fontWeight: 500 }}>{t(`dash.studio.material.${material.id}`)}</b> {t('dash.studio.icon.material_desc')}</p>
                 </>
               )}
               {genStatus && (
@@ -1398,8 +1401,8 @@ export function DesignStudio() {
           </div>
         ) : view === 'brandkit' ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-            <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>Brand Kit</h2>
-            <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 16px' }}>Set once — every tool reads it. The Design Architect proposes updates as she works.</p>
+            <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.brandkit.title')}</h2>
+            <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 16px' }}>{t('dash.studio.brandkit.subtitle')}</p>
             <div style={{ maxWidth: 460 }}>
               <label style={{ fontSize: 11, color: '#8b8398', display: 'block', marginBottom: 6 }}>Palette</label>
               {(Object.keys(kit.palette) as (keyof typeof kit.palette)[]).map(role => (
@@ -1414,8 +1417,8 @@ export function DesignStudio() {
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center', padding: '0 40px', color: '#8b8398' }}>
             <PenNib weight="duotone" size={26} style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: 15, color: '#a6adc8' }}>{GROUPS.flatMap(g => g.items).find(i => i.id === view)?.label}</span>
-            <span style={{ maxWidth: 420, fontSize: 13, lineHeight: 1.6 }}>Being brought over from the hub. The Icon lane is live — this one lands in an upcoming slice.</span>
+            <span style={{ fontSize: 15, color: '#a6adc8' }}>{t(`dash.studio.asset.${view}`)}</span>
+            <span style={{ maxWidth: 420, fontSize: 13, lineHeight: 1.6 }}>{t('dash.studio.coming_soon')}</span>
           </div>
         )}
 
@@ -1468,8 +1471,8 @@ export function DesignStudio() {
                 {MATERIALS.map(m => {
                   const on = materialId === m.id;
                   return (
-                    <button key={m.id} onClick={() => setMaterialId(m.id)} title={m.label}
-                      style={{ padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11.5, textAlign: 'center', border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : CARD_BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'rgba(26,16,40,0.5)', color: on ? 'var(--accent)' : '#a6adc8' }}>{m.label}</button>
+                    <button key={m.id} onClick={() => setMaterialId(m.id)} title={t(`dash.studio.material.${m.id}`)}
+                      style={{ padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11.5, textAlign: 'center', border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : CARD_BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'rgba(26,16,40,0.5)', color: on ? 'var(--accent)' : '#a6adc8' }}>{t(`dash.studio.material.${m.id}`)}</button>
                   );
                 })}
               </div>
@@ -1694,26 +1697,29 @@ interface DockConfirm { id: string; question: string }
 let _drid = 0;
 const drid = () => `ds-${++_drid}-${Date.now()}`;
 
-const DOCK_STARTERS: { icon: string; label: string; prompt: string }[] = [
-  { icon: '🔔', label: 'A glass bell icon', prompt: 'Design me a frosted-glass bell notification icon in my brand purple.' },
-  { icon: '🎛', label: 'A matching set', prompt: 'Make me a matching set of icons: home, search, settings, profile — same look.' },
-  { icon: '🎨', label: 'Pick a material', prompt: 'What materials can you render, and which suits a premium fintech app?' },
+// Keys, not text — module-level, so resolved strings would freeze at import.
+// Both label AND prompt are translated: the prompt is prefilled into the
+// composer, and a Spanish user should not watch an English sentence appear.
+const DOCK_STARTERS: { icon: string; key: string }[] = [
+  { icon: '🔔', key: 'dash.studio.starter.icon.1' },
+  { icon: '🎛', key: 'dash.studio.starter.icon.2' },
+  { icon: '🎨', key: 'dash.studio.starter.icon.3' },
 ];
 
 // Open-Canvas Video room starters — verbatim room copy (label → prefill prompt).
-const DOCK_STARTERS_VIDEO: { icon: string; label: string; prompt: string }[] = [
-  { icon: '🎬', label: 'Film a scene', prompt: 'Create a video: a slow cinematic dolly-in down a neon-lit, rain-slicked street at night' },
-  { icon: '📦', label: 'Product in motion', prompt: 'A short clip of my product turning slowly on a clean studio backdrop, soft key light' },
-  { icon: '🌅', label: 'Set a mood', prompt: 'A calm 5-second atmospheric clip — soft morning light, gentle drifting motion' },
-  { icon: '📱', label: 'Vertical for social', prompt: 'A punchy vertical 9:16 clip for social, bright and energetic' },
+const DOCK_STARTERS_VIDEO: { icon: string; key: string }[] = [
+  { icon: '🎬', key: 'dash.studio.starter.video.1' },
+  { icon: '📦', key: 'dash.studio.starter.video.2' },
+  { icon: '🌅', key: 'dash.studio.starter.video.3' },
+  { icon: '📱', key: 'dash.studio.starter.video.4' },
 ];
 
 // Open-Canvas Voiceover room starters — verbatim room copy (label → prefill prompt).
-const DOCK_STARTERS_VOICE: { icon: string; label: string; prompt: string }[] = [
-  { icon: '🎙', label: 'Narrate a script', prompt: 'Narrate this in a warm, calm voice: ' },
-  { icon: '🗣', label: 'Which voice fits?', prompt: 'What voices do you have, and which suits a premium, trustworthy brand?' },
-  { icon: '✨', label: 'An intro read', prompt: 'A short, upbeat intro read for my product video' },
-  { icon: '🧘', label: 'A calm read', prompt: 'A slow, reassuring read for a meditation clip' },
+const DOCK_STARTERS_VOICE: { icon: string; key: string }[] = [
+  { icon: '🎙', key: 'dash.studio.starter.voice.1' },
+  { icon: '🗣', key: 'dash.studio.starter.voice.2' },
+  { icon: '✨', key: 'dash.studio.starter.voice.3' },
+  { icon: '🧘', key: 'dash.studio.starter.voice.4' },
 ];
 
 const DESIGN_CHAT_KEY = 'ava-ide-design-chat';
@@ -1910,9 +1916,9 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
                 <p style={{ fontSize: 12, lineHeight: 1.5, color: '#a6adc8', margin: '0 0 14px' }}>{dockGreeting}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {dockStarters.map((s) => (
-                    <button key={s.label} type="button" onClick={() => { setInput(s.prompt); inputRef.current?.focus(); onComposerFocus(); }}
+                    <button key={s.key} type="button" onClick={() => { setInput(t(`${s.key}_p`)); inputRef.current?.focus(); onComposerFocus(); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, background: 'rgba(26,16,40,0.5)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: '#cdd6f4', cursor: 'pointer' }}>
-                      <span aria-hidden>{s.icon}</span>{s.label}
+                      <span aria-hidden>{s.icon}</span>{t(s.key)}
                     </button>
                   ))}
                 </div>
@@ -1969,7 +1975,7 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
               <div style={{ fontSize: 13, color: '#cdd6f4', marginBottom: 10 }}>{pendingConfirm.question}</div>
               <input autoFocus value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') respondConfirm(true); }}
-                placeholder="Type your answer…"
+                placeholder={t('dash.studio.dock.answer_ph')}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 13, background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', outline: 'none', marginBottom: 10, boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => respondConfirm(false)} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${CARD_BORDER}`, background: 'transparent', color: '#a6adc8', fontSize: 12, cursor: 'pointer' }}>Skip</button>
@@ -2006,7 +2012,7 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
             onKeyDown={onKeyDown}
             onFocus={onComposerFocus}
             rows={1}
-            placeholder="Ask the Design Architect for an icon…"
+            placeholder={t('dash.studio.dock.ask')}
             style={{ flex: 1, resize: 'none', minHeight: 38, maxHeight: 160, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
           />
           <button type="button" onClick={handleAttach} title={t('dash.chat.attach_file')} aria-label={t('dash.chat.attach_file')}

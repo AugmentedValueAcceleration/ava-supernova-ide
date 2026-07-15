@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ActivityItem } from '../App';
 import { Tooltip } from './Tooltip';
+import { t, useLocale } from '../lib/i18n';
 
 interface Props {
   active: ActivityItem;
@@ -8,9 +9,9 @@ interface Props {
   sidebarOpen: boolean;
 }
 
-const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = {
+const icons: Partial<Record<ActivityItem, { labelKey: string; svg: ReactNode }>> = {
   explorer: {
-    label: 'Explorer',
+    labelKey: 'dash.activity.explorer',
     svg: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2v11z" />
@@ -18,7 +19,7 @@ const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = 
     ),
   },
   search: {
-    label: 'Search',
+    labelKey: 'dash.activity.search',
     svg: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="11" cy="11" r="8" />
@@ -27,7 +28,7 @@ const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = 
     ),
   },
   git: {
-    label: 'Source Control',
+    labelKey: 'dash.activity.git',
     svg: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <line x1="6" y1="3" x2="6" y2="15" />
@@ -41,7 +42,7 @@ const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = 
   // sits with the other primary panels instead of being separated as a
   // bottom-anchored secondary action.
   dashboard: {
-    label: 'Dashboard',
+    labelKey: 'dash.activity.dashboard',
     // Supernova star-burst — on-brand for the Command Center, and reads as a
     // distinct "home / overview" mark rather than a generic grid.
     svg: (
@@ -55,7 +56,7 @@ const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = 
   // in there now). Keeping the AvaPanel component for legacy reference
   // doesn't cost anything since nothing routes to it.
   extensions: {
-    label: 'Extensions',
+    labelKey: 'dash.activity.extensions',
     svg: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -66,7 +67,7 @@ const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = 
     ),
   },
   debug: {
-    label: 'Run and Debug',
+    labelKey: 'dash.activity.debug',
     svg: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="5 3 19 12 5 21 5 3" />
@@ -81,6 +82,7 @@ const icons: Partial<Record<ActivityItem, { label: string; svg: ReactNode }>> = 
 const order: ActivityItem[] = ['explorer', 'dashboard', 'search', 'git', 'extensions', 'debug'];
 
 export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
+  useLocale(); // re-render on locale change; `t` is a direct import
   // Uncommitted-changes badge on the git icon. Polls git_status every
   // 15 seconds — light enough not to spam the disk, fast enough that
   // the user sees their commit reflected within a turn. Skips entirely
@@ -141,9 +143,11 @@ export default function ActivityBar({ active, onSelect, sidebarOpen }: Props) {
           // Code uses so muscle memory ports.
           const showGitBadge = item === 'git' && gitChangeCount !== null && gitChangeCount > 0;
           const badgeText = gitChangeCount != null && gitChangeCount > 99 ? '99+' : String(gitChangeCount ?? '');
+          const label = icons[item]?.labelKey ? t(icons[item]!.labelKey) : '';
           const titleText = item === 'git' && gitChangeCount != null && gitChangeCount > 0
-            ? `${icons[item]?.label} — ${gitChangeCount} uncommitted change${gitChangeCount === 1 ? '' : 's'}`
-            : icons[item]?.label;
+            ? t(gitChangeCount === 1 ? 'dash.activity.uncommitted_one' : 'dash.activity.uncommitted_many',
+                { label, count: String(gitChangeCount) })
+            : label;
           return (
             <Tooltip key={item} content={titleText || ''} placement="right">
               <button

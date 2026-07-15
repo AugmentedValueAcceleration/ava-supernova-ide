@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { t } from '../lib/i18n';
 
 /**
  * A compact, dark-themed month calendar mirroring the sidebar calendar look so
@@ -28,13 +29,13 @@ function MiniDatePicker({ value, onChange }: { value: string; onChange: (iso: st
     <div style={{ width: 224, padding: 12, borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', background: '#15101f', boxShadow: '0 18px 40px rgba(0,0,0,0.55)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span style={{ display: 'flex', alignItems: 'center' }}>
-          <button onClick={() => stepYear(-1)} title="Previous year" style={{ ...navBtn, fontSize: 13 }}>{'«'}</button>
-          <button onClick={() => step(-1)} title="Previous month" style={{ ...navBtn, fontSize: 11 }}>{'‹'}</button>
+          <button onClick={() => stepYear(-1)} title={t('ide.datepicker.prev_year')} style={{ ...navBtn, fontSize: 13 }}>{'«'}</button>
+          <button onClick={() => step(-1)} title={t('ide.datepicker.prev_month')} style={{ ...navBtn, fontSize: 11 }}>{'‹'}</button>
         </span>
         <span style={{ fontSize: 11, fontWeight: 500, color: '#a6adc8' }}>{label}</span>
         <span style={{ display: 'flex', alignItems: 'center' }}>
-          <button onClick={() => step(1)} title="Next month" style={{ ...navBtn, fontSize: 11 }}>{'›'}</button>
-          <button onClick={() => stepYear(1)} title="Next year" style={{ ...navBtn, fontSize: 13 }}>{'»'}</button>
+          <button onClick={() => step(1)} title={t('ide.datepicker.next_month')} style={{ ...navBtn, fontSize: 11 }}>{'›'}</button>
+          <button onClick={() => stepYear(1)} title={t('ide.datepicker.next_year')} style={{ ...navBtn, fontSize: 13 }}>{'»'}</button>
         </span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', marginBottom: 4 }}>

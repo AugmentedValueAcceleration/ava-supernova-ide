@@ -11,7 +11,7 @@
  * by the non-interactive bar.
  */
 
-import { useLocale } from '../lib/i18n';
+import { t, useLocale } from '../lib/i18n';
 import { Tooltip } from './Tooltip';
 
 interface ContextBarProps {
@@ -93,7 +93,7 @@ export function ContextBar({ contextPercent, contextUsed, contextLimit, isCompre
             padding: '2px 12px',
           }}
         >
-          <span style={{ fontSize: 10, opacity: 0.5, letterSpacing: '0.02em' }}>Context</span>
+          <span style={{ fontSize: 10, opacity: 0.5, letterSpacing: '0.02em' }}>{t('ide.contextbar.context')}</span>
           <span
             style={{
               fontSize: 10,

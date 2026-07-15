@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { t } from '../lib/i18n';
 import { scanStorage, reclaimStorage, openStorageFolder, type StorageScan } from '../lib/storage-scan';
 
 // ─── Storage bar + detail card ───────────────────────────────────────────────
@@ -189,7 +190,7 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
                   onClick={() => { openStorageFolder().catch(() => { /* nothing to do */ }); }}
-                  title="Reveal the ~/.ava data folder"
+                  title={t('ide.storage.reveal')}
                   style={{
                     flex: 1, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                     border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
@@ -201,9 +202,9 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
                 </button>
                 {reclaimBytes > 0 && (armed
                   ? <button onClick={doReclaim} disabled={busy} style={pillBtn(true)}>
-                      {busy ? 'Freeing…' : `Free ${formatBytes(reclaimBytes)}`}
+                      {busy ? t('ide.storage.freeing') : t('ide.storage.free_n', { size: formatBytes(reclaimBytes) })}
                     </button>
-                  : <button onClick={() => setArmed(true)} style={pillBtn(false)}>Reclaim</button>)}
+                  : <button onClick={() => setArmed(true)} style={pillBtn(false)}>{t('ide.storage.reclaim')}</button>)}
               </div>
               <p style={{ margin: 0, fontSize: 10, lineHeight: 1.5, color: '#6c7086' }}>
                 Reclaim removes only stale backups. Models are Ava's local AI engine, managed in Desktop / Vision.

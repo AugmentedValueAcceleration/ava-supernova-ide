@@ -379,11 +379,15 @@ function useApiData<T>(path: string, defaultValue: T): { data: T; loading: boole
 interface WeatherData {
   location: string;
   temp_c: number;
-  condition: string;
+  /** WMO code. The label is derived from this at RENDER time — storing the
+   *  resolved string here meant the cached copy (30 min, localStorage) froze
+   *  whatever language it was fetched in, so the condition stayed English
+   *  no matter what locale you switched to. */
+  code: number;
   emoji: string;
   humidity: number;
   wind_kmph: number;
-  forecast: Array<{ date: string; day: string; max_c: number; min_c: number; condition: string; emoji: string }>;
+  forecast: Array<{ date: string; day: string; max_c: number; min_c: number; code: number; emoji: string }>;
 }
 
 interface NewsArticle {
@@ -456,34 +460,48 @@ const NEWS_CATEGORIES = [
   'business', 'science', 'health', 'food', 'education', 'sport',
 ] as const;
 
-const WMO_EMOJI: Record<number, { label: string; emoji: string }> = {
-  0: { label: t('weather.clear_sky'), emoji: '\u2600\uFE0F' },
-  1: { label: t('weather.mainly_clear'), emoji: '\uD83C\uDF24\uFE0F' },
-  2: { label: t('weather.partly_cloudy'), emoji: '\u26C5' },
-  3: { label: t('weather.overcast'), emoji: '\u2601\uFE0F' },
-  45: { label: t('weather.fog'), emoji: '\uD83C\uDF2B\uFE0F' },
-  48: { label: t('weather.rime_fog'), emoji: '\uD83C\uDF2B\uFE0F' },
-  51: { label: t('weather.light_drizzle'), emoji: '\uD83C\uDF26\uFE0F' },
-  53: { label: t('weather.drizzle'), emoji: '\uD83C\uDF26\uFE0F' },
-  55: { label: t('weather.dense_drizzle'), emoji: '\uD83C\uDF27\uFE0F' },
-  61: { label: t('weather.light_rain'), emoji: '\uD83C\uDF26\uFE0F' },
-  63: { label: t('weather.rain'), emoji: '\uD83C\uDF27\uFE0F' },
-  65: { label: t('weather.heavy_rain'), emoji: '\uD83C\uDF27\uFE0F' },
-  71: { label: t('weather.light_snow'), emoji: '\uD83C\uDF28\uFE0F' },
-  73: { label: t('weather.snow'), emoji: '\u2744\uFE0F' },
-  75: { label: t('weather.heavy_snow'), emoji: '\u2744\uFE0F' },
-  77: { label: t('weather.snow_grains'), emoji: '\u2744\uFE0F' },
-  80: { label: t('weather.light_showers'), emoji: '\uD83C\uDF26\uFE0F' },
-  81: { label: t('weather.showers'), emoji: '\uD83C\uDF27\uFE0F' },
-  82: { label: t('weather.heavy_showers'), emoji: '\uD83C\uDF27\uFE0F' },
-  85: { label: t('weather.snow_showers'), emoji: '\uD83C\uDF28\uFE0F' },
-  86: { label: t('weather.heavy_snow_showers'), emoji: '\uD83C\uDF28\uFE0F' },
-  95: { label: t('weather.thunderstorm'), emoji: '\u26A1' },
-  96: { label: t('weather.thunderstorm_hail'), emoji: '\u26A1' },
-  99: { label: t('weather.thunderstorm_heavy_hail'), emoji: '\u26A1' },
+// Keys, not resolved strings. As `label: t(...)` these ran once at module load \u2014
+// before initLocale() \u2014 leaving every weather condition frozen in English.
+// wmoInfo() resolves at call time so they follow the locale.
+const WMO_EMOJI: Record<number, { labelKey: string; emoji: string }> = {
+  0: { labelKey: 'weather.clear_sky', emoji: '\u2600\uFE0F' },
+  1: { labelKey: 'weather.mainly_clear', emoji: '\uD83C\uDF24\uFE0F' },
+  2: { labelKey: 'weather.partly_cloudy', emoji: '\u26C5' },
+  3: { labelKey: 'weather.overcast', emoji: '\u2601\uFE0F' },
+  45: { labelKey: 'weather.fog', emoji: '\uD83C\uDF2B\uFE0F' },
+  48: { labelKey: 'weather.rime_fog', emoji: '\uD83C\uDF2B\uFE0F' },
+  51: { labelKey: 'weather.light_drizzle', emoji: '\uD83C\uDF26\uFE0F' },
+  53: { labelKey: 'weather.drizzle', emoji: '\uD83C\uDF26\uFE0F' },
+  55: { labelKey: 'weather.dense_drizzle', emoji: '\uD83C\uDF27\uFE0F' },
+  61: { labelKey: 'weather.light_rain', emoji: '\uD83C\uDF26\uFE0F' },
+  63: { labelKey: 'weather.rain', emoji: '\uD83C\uDF27\uFE0F' },
+  65: { labelKey: 'weather.heavy_rain', emoji: '\uD83C\uDF27\uFE0F' },
+  71: { labelKey: 'weather.light_snow', emoji: '\uD83C\uDF28\uFE0F' },
+  73: { labelKey: 'weather.snow', emoji: '\u2744\uFE0F' },
+  75: { labelKey: 'weather.heavy_snow', emoji: '\u2744\uFE0F' },
+  77: { labelKey: 'weather.snow_grains', emoji: '\u2744\uFE0F' },
+  80: { labelKey: 'weather.light_showers', emoji: '\uD83C\uDF26\uFE0F' },
+  81: { labelKey: 'weather.showers', emoji: '\uD83C\uDF27\uFE0F' },
+  82: { labelKey: 'weather.heavy_showers', emoji: '\uD83C\uDF27\uFE0F' },
+  85: { labelKey: 'weather.snow_showers', emoji: '\uD83C\uDF28\uFE0F' },
+  86: { labelKey: 'weather.heavy_snow_showers', emoji: '\uD83C\uDF28\uFE0F' },
+  95: { labelKey: 'weather.thunderstorm', emoji: '\u26A1' },
+  96: { labelKey: 'weather.thunderstorm_hail', emoji: '\u26A1' },
+  99: { labelKey: 'weather.thunderstorm_heavy_hail', emoji: '\u26A1' },
 };
 
-const WEATHER_CACHE_KEY = 'ava-ide-weather-cache';
+/** Resolve a WMO code to a live-translated label + emoji. */
+function wmoInfo(code: number): { label: string; emoji: string } {
+  const hit = WMO_EMOJI[code];
+  return {
+    label: hit ? t(hit.labelKey) : t('weather.unknown'),
+    emoji: hit?.emoji ?? '\uD83C\uDF24\uFE0F',
+  };
+}
+
+// -v2: the old cache holds resolved English condition strings. Bumping the key
+// drops them rather than serving stale English until the TTL expires.
+const WEATHER_CACHE_KEY = 'ava-ide-weather-cache-v2';
 const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -509,6 +527,17 @@ function formatRelativeDate(dateStr: string): string {
 function truncate(str: string, len: number): string {
   if (str.length <= len) return str;
   return str.slice(0, len).trimEnd() + '...';
+}
+
+/**
+ * t() with an explicit fallback. `t` returns the KEY itself when a key is
+ * missing, which would print `dash.billing.feat.pro.9` on screen. Used where the
+ * English source of truth lives outside i18n (core's billing module) and we map
+ * onto it by id — a missing key must degrade to that English, not to a key name.
+ */
+function tOr(key: string, fallback: string): string {
+  const s = t(key);
+  return s === key ? fallback : s;
 }
 
 function formatCategoryLabel(slug: string): string {
@@ -569,30 +598,28 @@ async function fetchWeatherDirect(): Promise<WeatherData> {
   const w = await weatherRes.json();
 
   const currentCode = w.current?.weather_code ?? 0;
-  const wmo = WMO_EMOJI[currentCode] || { label: t('weather.unknown'), emoji: '\uD83C\uDF24\uFE0F' };
-
   const forecast: WeatherData['forecast'] = [];
   if (w.daily?.time) {
     // Skip today (index 0), take next 3 days
     for (let i = 1; i < Math.min(w.daily.time.length, 4); i++) {
       const dayCode = w.daily.weather_code?.[i] ?? 0;
-      const dayWmo = WMO_EMOJI[dayCode] || { label: t('weather.unknown'), emoji: '\uD83C\uDF24\uFE0F' };
       forecast.push({
         date: w.daily.time[i],
         day: getDayName(w.daily.time[i]),
         max_c: Math.round(w.daily.temperature_2m_max[i]),
         min_c: Math.round(w.daily.temperature_2m_min[i]),
-        condition: dayWmo.label,
-        emoji: dayWmo.emoji,
+        code: dayCode,
+        emoji: wmoInfo(dayCode).emoji,
       });
     }
   }
 
+  // Store the CODE, never the resolved label — this object gets cached.
   return {
     location,
     temp_c: Math.round(w.current?.temperature_2m ?? 0),
-    condition: wmo.label,
-    emoji: wmo.emoji,
+    code: currentCode,
+    emoji: wmoInfo(currentCode).emoji,
     humidity: w.current?.relative_humidity_2m ?? 0,
     wind_kmph: Math.round(w.current?.wind_speed_10m ?? 0),
     forecast,
@@ -696,7 +723,7 @@ function WidgetCard({
           {onRefresh && (
             <button
               onClick={handleRefresh}
-              title={`Refresh ${title.toLowerCase()}`}
+              title={t('dash.widget.refresh_title', { what: title.toLowerCase() })}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6c7086', padding: 2, display: 'flex' }}
             >
               <svg
@@ -750,7 +777,7 @@ function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData
         <span style={{ fontSize: 36 }}>{weather.emoji}</span>
         <div>
           <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>{weather.temp_c}&deg;C</div>
-          <div style={{ fontSize: 12, color: '#a6adc8' }}>{weather.condition}</div>
+          <div style={{ fontSize: 12, color: '#a6adc8' }}>{wmoInfo(weather.code).label}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'grid', gridTemplateColumns: 'auto auto', gap: '4px 16px', fontSize: 12, color: '#6c7086' }}>
           <span>{t('weather.humidity')}</span>
@@ -1162,7 +1189,9 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
         <div style={{ position: 'absolute', right: 12, top: 12, display: 'flex', gap: 6 }}>
           {cat && (
             <span style={{ borderRadius: 9999, background: 'rgba(255,255,255,0.1)', padding: '3px 10px', fontSize: 9, fontWeight: 700, color: '#fff', backdropFilter: 'blur(4px)' }}>
-              {cat.icon} {cat.label}
+              {/* formatCategoryLabel, not cat.label — the raw record holds the
+                  English fallback and bypasses i18n entirely. */}
+              {cat.icon} {formatCategoryLabel(article.category!)}
             </span>
           )}
           {article.priority === 'breaking' && (
@@ -1938,13 +1967,13 @@ function CCTrustNudges({ findings, onReview }: { findings: any[]; onReview: () =
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <PhShieldCheck size={16} weight="duotone" color={headColor} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Worth a look</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.cc.worth_a_look')}</span>
         </div>
         <button onClick={onReview} style={{
           height: 28, padding: '0 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
           background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent)', fontSize: 11, fontWeight: 600,
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
-        }}>Review in audit</button>
+        }}>{t('dash.cc.review_in_audit')}</button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {shown.map((f, i) => (
@@ -2289,7 +2318,7 @@ export function CommandCentrePage() {
                     if (e.key === 'Enter') { e.preventDefault(); saveUserName(); }
                     else if (e.key === 'Escape') { setEditingName(false); setNameInput(''); }
                   }}
-                  placeholder="What should Ava call you?"
+                  placeholder={t('dash.cc.call_you_ph')}
                   maxLength={40}
                   style={{
                     fontSize: 28, fontWeight: 300, color: '#cdd6f4',
@@ -2307,7 +2336,7 @@ export function CommandCentrePage() {
                   onClick={() => { setNameInput(userName); setEditingName(true); }}
                   onMouseEnter={() => setNameHover(true)}
                   onMouseLeave={() => setNameHover(false)}
-                  title="Click to change what Ava calls you"
+                  title={t('dash.cc.call_you_click')}
                   style={{
                     cursor: 'pointer',
                     borderBottom: nameHover ? '1px dashed var(--accent)' : '1px dashed transparent',
@@ -2319,7 +2348,7 @@ export function CommandCentrePage() {
               ) : (
                 <span
                   onClick={() => { setNameInput(''); setEditingName(true); }}
-                  title="Tell Ava what to call you"
+                  title={t('dash.cc.call_you_tell')}
                   style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: 18, marginLeft: 4 }}
                 >
                   + add name
@@ -2332,14 +2361,14 @@ export function CommandCentrePage() {
             {weather && !weatherLoading && (
               <HeroPill
                 icon={<PhWeather size={14} weight="duotone" />}
-                text={`${Math.round((weather as { temp_c?: number }).temp_c ?? 0)}° ${(weather as { condition?: string }).condition ?? ''}`.trim()}
-                title="Weather — see Daily for details"
+                text={`${Math.round((weather as { temp_c?: number }).temp_c ?? 0)}° ${wmoInfo((weather as { code?: number }).code ?? 0).label}`.trim()}
+                title={t('dash.cc.weather_hint')}
               />
             )}
             <HeroPill
               icon={<PhClock size={14} weight="duotone" />}
               text={`${workStart}:00 - ${workEnd}:00`}
-              title="Working hours — change on Daily tab"
+              title={t('dash.cc.hours_hint')}
             />
             <HeroPill
               icon={<PhRocket size={14} weight="duotone" />}
@@ -2355,7 +2384,7 @@ export function CommandCentrePage() {
             scan lands. */}
         <div style={{ display: 'flex', marginBottom: 16 }}>
           <div style={{ marginLeft: 'auto', width: '100%', maxWidth: 320 }}>
-            <StorageBar label="Storage" />
+            <StorageBar label={t('dash.cc.storage')} />
           </div>
         </div>
 
@@ -2382,12 +2411,12 @@ export function CommandCentrePage() {
           display: 'flex', gap: 4, marginBottom: 20,
           borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         }}>
-          <TabBtn id="daily" label="Daily" />
+          <TabBtn id="daily" label={t('dash.cc.tab.daily')} />
           {/* "Briefing" told you nothing. This is where the news lives — say so.
               The id stays `briefing` so persisted state and existing wiring hold. */}
           <TabBtn id="briefing" label={t('dash.chat.tab.briefing')} />
-          <TabBtn id="reflect" label="Reflect" />
-          <TabBtn id="health" label="Health" />
+          <TabBtn id="reflect" label={t('dash.cc.tab.reflect')} />
+          <TabBtn id="health" label={t('dash.cc.tab.health')} />
         </div>
 
         {/* ── Daily tab ─────────────────────────────────────────────── */}
@@ -2524,13 +2553,13 @@ export function AvaChatPage() {
   // ── Mode definitions ───────────────────────────────────────────────────────
   const MODES: { id: AvaMode; label: string; icon: string; prefix: string; placeholder: string }[] = [
     { id: 'work', label: t('mode.work'), icon: '>>', prefix: '', placeholder: t('mode.work.placeholder') },
-    { id: 'write', label: 'Write', icon: '<<', prefix: '[Write Mode] ', placeholder: 'What would you like to write?' },
+    { id: 'write', label: t('mode.write'), icon: '<<', prefix: '[Write Mode] ', placeholder: t('mode.write.placeholder') },
     { id: 'plan', label: t('mode.plan'), icon: '::', prefix: '[Plan Mode] ', placeholder: t('mode.plan.placeholder') },
     { id: 'chat', label: t('mode.chat'), icon: '..', prefix: '[Chat Mode] ', placeholder: t('mode.chat.placeholder') },
     { id: 'teach', label: t('mode.teach'), icon: '??', prefix: '[Teach Mode] ', placeholder: t('mode.teach.placeholder') },
     { id: 'security', label: t('mode.security'), icon: '!!', prefix: '[Security Audit Mode] ', placeholder: t('mode.security.placeholder') },
     { id: 'brainstorm', label: t('mode.brainstorm'), icon: '**', prefix: '[Brainstorm Mode] ', placeholder: t('mode.brainstorm.placeholder') },
-    { id: 'desktop', label: 'Desktop Automation', icon: '@@', prefix: '[Desktop Automation Mode] ', placeholder: 'Open Notepad, launch Chrome, control your screen...' },
+    { id: 'desktop', label: t('mode.desktop'), icon: '@@', prefix: '[Desktop Automation Mode] ', placeholder: t('mode.desktop.placeholder') },
   ];
 
   // Modes selectable from the main-chat picker. Teach is kept in MODES (so the
@@ -5424,7 +5453,7 @@ export function AvaChatPage() {
             `}</style>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ color: 'var(--accent)', fontSize: 14 }}>✦</span>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>Where do we start?</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.cc.where_start')}</div>
             </div>
             <p style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.5, margin: '0 0 14px' }}>
               I can read your code, plan a feature, teach you something, audit security, brainstorm, or just chat.
@@ -5432,12 +5461,12 @@ export function AvaChatPage() {
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {[
-                { label: 'Explain a file',  prefix: '>>', prompt: 'Explain what this file does: ',           color: 'var(--accent)' },
-                { label: 'Plan a feature',  prefix: '::', prompt: ':: How should I approach adding ',         color: '#60a5fa' },
-                { label: 'Teach me',        prefix: '??', prompt: '?? Teach me about ',                       color: '#f9e2af' },
-                { label: 'Audit security',  prefix: '!!', prompt: '!! Audit this project for security issues', color: '#f38ba8' },
-                { label: 'Brainstorm',      prefix: '**', prompt: '** Help me think through ',                color: '#94e2d5' },
-                { label: 'Just chat',       prefix: '..', prompt: '.. ',                                      color: '#a6adc8' },
+                { label: t('dash.cc.qs.explain'), prefix: '>>', prompt: t('dash.cc.qs.explain_p'), color: 'var(--accent)' },
+                { label: t('dash.cc.qs.plan'), prefix: '::', prompt: `:: ${t('dash.cc.qs.plan_p')}`, color: '#60a5fa' },
+                { label: t('dash.cc.qs.teach'), prefix: '??', prompt: `?? ${t('dash.cc.qs.teach_p')}`, color: '#f9e2af' },
+                { label: t('dash.cc.qs.audit'), prefix: '!!', prompt: `!! ${t('dash.cc.qs.audit_p')}`, color: '#f38ba8' },
+                { label: t('dash.cc.qs.brainstorm'), prefix: '**', prompt: `** ${t('dash.cc.qs.brainstorm_p')}`, color: '#94e2d5' },
+                { label: t('dash.cc.qs.chat'), prefix: '..', prompt: '.. ', color: '#a6adc8' },
               ].map(c => (
                 <button
                   key={c.label}
@@ -6092,7 +6121,7 @@ export function AvaChatPage() {
                   ? 'Ava wants your approval to run this plan:'
                   : desktopActionLine
                     ? `Ava wants to: ${desktopActionLine}`
-                    : <>Ava wants to run <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span></>
+                    : <>{t('dash.cc.ava_wants_to_run')} <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span></>
                 }
               </div>
             </div>
@@ -6123,7 +6152,7 @@ export function AvaChatPage() {
                     padding: '5px 12px', background: 'transparent', border: '1px solid var(--accent)',
                     borderRadius: 6, color: 'var(--accent)', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                   }}
-                  title="Auto-approve this tool category for the rest of the session"
+                  title={t('dash.cc.auto_approve_cat')}
                 >
                   Always
                 </button>
@@ -6399,7 +6428,7 @@ export function AvaChatPage() {
                       </div>
                     </div>
                   </div>
-                  <Tooltip content="Close vault">
+                  <Tooltip content={t('dash.chat.close_vault')}>
                     <button
                       onClick={() => setShowVault(false)}
                       style={{
@@ -6627,18 +6656,18 @@ export function AvaChatPage() {
             // run), and a duplicate label implies a safety distinction that
             // doesn't exist. The irreversible floor + Ctrl+Alt+K cover both.
             const LEVELS: Array<{ id: 'watch' | 'drive'; label: string }> = [
-              { id: 'watch', label: 'Watch' },
-              { id: 'drive', label: 'Drive' },
+              { id: 'watch', label: t('dash.desktop.level.watch') },
+              { id: 'drive', label: t('dash.desktop.level.drive') },
             ];
             const MEANING: Record<string, string> = {
               watch: 'Watch · approve the task once, then watch Ava work it, narrated as she goes. Anything that can\'t be undone (Send, Pay, Delete…) still asks.',
               drive: 'Drive · Ava just goes — no upfront card. Anything that can\'t be undone still always asks.',
             };
             const QUICK: Array<{ label: string; fill: string }> = [
-              { label: 'Open an app', fill: 'Open Notepad' },
-              { label: 'Fill a form', fill: 'Fill in the form on screen: ' },
-              { label: 'Tidy my files', fill: 'Organise the files in this folder: ' },
-              { label: 'Research → paste', fill: 'Search the web and paste a short summary into the open document: ' },
+              { label: t('dash.desktop.starter.app'), fill: t('dash.desktop.starter.app_p') },
+              { label: t('dash.desktop.starter.form'), fill: t('dash.desktop.starter.form_p') },
+              { label: t('dash.desktop.starter.files'), fill: t('dash.desktop.starter.files_p') },
+              { label: t('dash.desktop.starter.research'), fill: t('dash.desktop.starter.research_p') },
             ];
             const labelStyle: React.CSSProperties = { fontSize: 10, color: '#7f849c', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, flexShrink: 0 };
             return (
@@ -6790,7 +6819,7 @@ export function AvaChatPage() {
                             color: 'var(--accent)', fontSize: 8, fontWeight: 700,
                             letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.5,
                             whiteSpace: 'nowrap',
-                          }}>Early Access</span>
+                          }}>{t('dash.cc.early_access')}</span>
                         )}
                       </span>
                       <span style={{ fontSize: 9, opacity: 0.4, fontFamily: 'monospace' }}>Ctrl+Shift+{idx + 1}</span>
@@ -7295,12 +7324,12 @@ export function ChatHistoryPage() {
 
   // Only offer a tab for a room that actually has something in it.
   const surfaceTabs = ([
-    { key: 'all', label: 'All' },
-    { key: 'main', label: 'Chat' },
-    { key: 'design', label: 'Design' },
-    { key: 'health', label: 'Health' },
-    { key: 'learning', label: 'Learning' },
-    { key: 'social', label: 'Social' },
+    { key: 'all', label: t('dash.history.surface.all') },
+    { key: 'main', label: t('dash.history.surface.main') },
+    { key: 'design', label: t('dash.history.surface.design') },
+    { key: 'health', label: t('dash.history.surface.health') },
+    { key: 'learning', label: t('dash.history.surface.learning') },
+    { key: 'social', label: t('dash.history.surface.social') },
   ] as const).filter(tb => tb.key === 'all' || (surfaceCounts[tb.key] ?? 0) > 0);
 
   const byRoom = surfaceTab === 'all'
@@ -7626,12 +7655,12 @@ export function ChatHistoryPage() {
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditTitle(conv.title || ''); setEditingId(conv.id); }}
                         style={{ background: 'none', border: 'none', color: '#585b70', cursor: 'pointer', fontSize: 12, padding: '2px 4px' }}
-                        title="Rename conversation"
+                        title={t('dash.chat.rename_conv')}
                       >✎</button>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
                         style={{ background: 'none', border: 'none', color: '#585b70', cursor: 'pointer', fontSize: 12, padding: '2px 4px' }}
-                        title="Delete conversation"
+                        title={t('dash.chat.delete_conv')}
                       >✕</button>
                     </div>
                   </div>
@@ -7827,7 +7856,7 @@ export function MemoryPage() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={handleRefresh} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'transparent', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
-              Refresh
+              {t('dash.common.refresh')}
             </button>
             {memories.length > 0 && !deletingAll && (
               <button onClick={() => setConfirmDeleteAll(true)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: 12, cursor: 'pointer' }}>
@@ -7889,9 +7918,9 @@ export function MemoryPage() {
         {memories.length > 0 && (
           <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
             {([
-              { key: 'active' as MemoryViewMode, label: 'Active', count: activeMemories.length, color: 'var(--accent)' },
-              { key: 'stale' as MemoryViewMode, label: 'Stale', count: staleMemories.length, color: '#f59e0b' },
-              { key: 'archived' as MemoryViewMode, label: 'Archived', count: archivedMemories.length, color: '#6c7086' },
+              { key: 'active' as MemoryViewMode, label: t('memory.tab.active'), count: activeMemories.length, color: 'var(--accent)' },
+              { key: 'stale' as MemoryViewMode, label: t('memory.tab.stale'), count: staleMemories.length, color: '#f59e0b' },
+              { key: 'archived' as MemoryViewMode, label: t('memory.tab.archived'), count: archivedMemories.length, color: '#6c7086' },
             ]).map(tab => {
               const active = viewMode === tab.key;
               return (
@@ -10131,7 +10160,7 @@ export function LearningLibraryPage() {
           {/* Curriculum \u2014 a visual learning path */}
           {modules.length > 0 && (
             <div style={{ marginBottom: 24 }}>
-              <h3 style={{ fontSize: 11, fontWeight: 700, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 16px' }}>Your learning path</h3>
+              <h3 style={{ fontSize: 11, fontWeight: 700, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 16px' }}>{t('dash.learning.your_path')}</h3>
               <div style={{ position: 'relative' }}>
                 {/* The vertical journey spine */}
                 <div style={{ position: 'absolute', left: 17, top: 8, bottom: 8, width: 2, background: 'linear-gradient(to bottom, var(--accent), #6366f1)', opacity: 0.4 }} />
@@ -10194,7 +10223,7 @@ export function LearningLibraryPage() {
 
           {detail.prerequisites && (
             <p style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5, marginTop: 12 }}>
-              <strong style={{ color: '#a6adc8' }}>Prerequisites:</strong> {detail.prerequisites}
+              <strong style={{ color: '#a6adc8' }}>{t('dash.learning.prerequisites')}</strong> {detail.prerequisites}
             </p>
           )}
         </div>
@@ -10208,8 +10237,8 @@ export function LearningLibraryPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div style={pageTitle}>{t('dash.learning_library.title')}</div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => refetch()} title="Refresh" style={{ background: 'none', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, padding: '4px 12px', color: '#a6adc8', cursor: 'pointer', fontSize: 11 }}>
-            Refresh
+          <button onClick={() => refetch()} title={t('dash.common.refresh')} style={{ background: 'none', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, padding: '4px 12px', color: '#a6adc8', cursor: 'pointer', fontSize: 11 }}>
+            {t('dash.common.refresh')}
           </button>
           <button onClick={() => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }))} style={{ background: 'none', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, padding: '4px 12px', color: '#a6adc8', cursor: 'pointer', fontSize: 11 }}>
             {t('dash.learning_library.my_learning')}
@@ -10417,7 +10446,7 @@ export function LibraryPage() {
           {/* Storage — same bar as the Command Centre. In the header rather than
               above the asset grid so it stays visible on every Library tab. */}
           <div style={{ width: '100%', maxWidth: 320, marginBottom: 16 }}>
-            <StorageBar label="Storage" />
+            <StorageBar label={t('dash.cc.storage')} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
@@ -10728,11 +10757,11 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
             source), so the cloud/local split is dropped there. */}
         {kind !== 'assets' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500 }}>Source</span>
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500 }}>{localised('dash.library.source', 'Source')}</span>
           {([
-            { id: 'all', label: 'All', count: sourceCounts.all },
-            { id: 'cloud', label: 'Cloud', count: sourceCounts.cloud },
-            { id: 'local', label: 'Local', count: sourceCounts.local },
+            { id: 'all', label: t('dash.chat.all'), count: sourceCounts.all },
+            { id: 'cloud', label: t('dash.chat.cloud'), count: sourceCounts.cloud },
+            { id: 'local', label: t('dash.chat.local'), count: sourceCounts.local },
           ] as const).map((s) => (
             <button
               key={s.id}
@@ -10774,13 +10803,13 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                   display: 'flex', alignItems: 'center', gap: 6, marginRight: 6,
                 }}
               >
-                + New document
+                {t('dash.common.new_document')}
               </button>
             )}
             {kind === 'assets' && (
               <button
                 onClick={openCreativeFolder}
-                title="Open the local creative folder on disk"
+                title={t('dash.library.open_folder')}
                 style={{
                   padding: '6px 14px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
                   cursor: 'pointer', fontSize: 12, fontWeight: 600,
@@ -11215,7 +11244,7 @@ function LibraryPreviewModal({
       >
         <button
           onClick={onClose}
-          aria-label="Close preview"
+          aria-label={t('dash.library.close_preview')}
           style={{
             position: 'absolute', top: 12, right: 12, zIndex: 10,
             width: 32, height: 32, borderRadius: 16,
@@ -11427,42 +11456,42 @@ function LibraryMediaPlayer({ src, kind }: { src: string; kind: 'audio' | 'video
 //   - pdf            : built with pdf-lib (replaces pdfkit which is Node-only)
 type NewDocFormat = 'md' | 'txt' | 'csv' | 'docx' | 'xlsx' | 'pdf';
 const NEW_DOC_BLANK_FORMATS: { id: NewDocFormat; label: string; ext: string }[] = [
-  { id: 'docx', label: 'Word Document', ext: 'docx' },
-  { id: 'xlsx', label: 'Spreadsheet',   ext: 'xlsx' },
+  { id: 'docx', label: t('dash.docs.type.docx'), ext: 'docx' },
+  { id: 'xlsx', label: t('dash.docs.type.xlsx'), ext: 'xlsx' },
   { id: 'pdf',  label: 'PDF',           ext: 'pdf'  },
-  { id: 'md',   label: 'Markdown',      ext: 'md'   },
-  { id: 'txt',  label: 'Text file',     ext: 'txt'  },
+  { id: 'md',   label: t('dash.docs.type.md'), ext: 'md' },
+  { id: 'txt',  label: t('dash.docs.type.txt'), ext: 'txt' },
   { id: 'csv',  label: 'CSV',           ext: 'csv'  },
 ];
 
 const NEW_DOC_TEMPLATES: { id: string; label: string; desc: string; filename: string; body: string }[] = [
   {
-    id: 'proposal', label: 'Project Proposal', desc: 'Executive summary, objectives, timeline',
+    id: 'proposal', label: t('dash.docs.tpl.proposal'), desc: t('dash.docs.tpl.proposal_d'),
     filename: 'proposal.md',
     body: '# Project Proposal\n\n## Executive Summary\n\n\n## Objectives\n\n\n## Scope\n\n\n## Timeline\n\n| Phase | Deliverable | Date |\n|-------|-------------|------|\n|       |             |      |\n\n## Budget\n\n\n## Team\n\n',
   },
   {
-    id: 'report', label: 'Status Report', desc: 'Progress, issues, next steps',
+    id: 'report', label: t('dash.docs.tpl.status'), desc: t('dash.docs.tpl.status_d'),
     filename: 'status-report.md',
     body: '# Status Report\n\n**Week of:** _\n\n## Progress\n\n- \n\n## Issues & blockers\n\n- \n\n## Next week\n\n- \n\n## Notes\n\n',
   },
   {
-    id: 'invoice', label: 'Invoice', desc: 'Items table, payment terms',
+    id: 'invoice', label: t('dash.docs.tpl.invoice'), desc: t('dash.docs.tpl.invoice_d'),
     filename: 'invoice.md',
     body: '# Invoice\n\n**Invoice #:**\n**Date:**\n**Due:**\n\n**Bill to:**\n\n\n| Item | Qty | Rate | Total |\n|------|-----|------|-------|\n|      |     |      |       |\n\n**Subtotal:**\n**Tax:**\n**Total:**\n\n## Payment terms\n\nNet 30. Please remit within 30 days.\n',
   },
   {
-    id: 'letter', label: 'Formal Letter', desc: 'Recipient, body, closing',
+    id: 'letter', label: t('dash.docs.tpl.letter'), desc: t('dash.docs.tpl.letter_d'),
     filename: 'letter.md',
     body: '[Your name]\n[Your address]\n\n[Date]\n\n[Recipient name]\n[Recipient address]\n\nDear [Recipient],\n\n\n\nSincerely,\n[Your name]\n',
   },
   {
-    id: 'meeting_notes', label: 'Meeting Notes', desc: 'Agenda, discussion, action items',
+    id: 'meeting_notes', label: t('dash.docs.tpl.meeting'), desc: t('dash.docs.tpl.meeting_d'),
     filename: 'meeting-notes.md',
     body: '# Meeting Notes\n\n**Date:**\n**Attendees:**\n\n## Agenda\n\n1. \n\n## Discussion\n\n\n## Decisions\n\n- \n\n## Action items\n\n- [ ] \n',
   },
   {
-    id: 'resume', label: 'Resume', desc: 'Contact, experience, education, skills',
+    id: 'resume', label: t('dash.docs.tpl.resume'), desc: t('dash.docs.tpl.resume_d'),
     filename: 'resume.md',
     body: '# [Your name]\n\n_[Role] — [Location] — [Email] — [Phone]_\n\n## Summary\n\n\n## Experience\n\n### [Role], [Company]\n_[Start] – [End]_\n\n- \n\n## Education\n\n### [Degree], [Institution]\n_[Year]_\n\n## Skills\n\n',
   },
@@ -13992,11 +14021,11 @@ export function SettingsPage() {
           borderBottom: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
         }}>
           {([
-            { id: 'general',  label: 'General' },
-            { id: 'models',   label: 'Models' },
-            { id: 'behavior', label: 'Behavior' },
-            { id: 'desktop',  label: 'Desktop Automation' },
-            { id: 'privacy',  label: 'Privacy' },
+            { id: 'general',  label: t('dash.settings.tab.general') },
+            { id: 'models',   label: t('dash.settings.tab.models') },
+            { id: 'behavior', label: t('dash.settings.tab.behavior') },
+            { id: 'desktop',  label: t('dash.settings.tab.desktop') },
+            { id: 'privacy',  label: t('dash.settings.tab.privacy') },
           ] as const).map(tab => {
             const active = settingsTab === tab.id;
             return (
@@ -14224,16 +14253,18 @@ export function SettingsPage() {
             </summary>
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
               {([
-                { id: 'file_ops', icon: '📁', label: 'File Operations', desc: 'read, write, edit, glob, grep' },
-                { id: 'shell', icon: '💻', label: 'Shell', desc: 'bash, test_run, test_generate' },
-                { id: 'git', icon: '🔀', label: 'Git', desc: 'status, diff, commit, PR, rollback' },
-                { id: 'web', icon: '🌐', label: 'Web', desc: 'search, http_request, browser' },
-                { id: 'media', icon: '🎨', label: 'Media', desc: 'generate_image, generate_video, generate_voice, generate_music' },
-                { id: 'database', icon: '🗄️', label: 'Database', desc: 'database_query' },
-                { id: 'system', icon: '🖥️', label: 'System', desc: 'desktop_*, browser_*' },
-                { id: 'documents', icon: '📄', label: 'Documents', desc: 'docs, presentations, reports' },
-                { id: 'memory', icon: '🧠', label: 'Memory', desc: 'save, recall, update, delete' },
-                { id: 'learning', icon: '🎓', label: 'Learning', desc: 'create, teach, progress' },
+                // Labels are translated; each `desc` is a list of literal tool
+                // names (bash, glob, test_run) — identifiers, not prose.
+                { id: 'file_ops', icon: '📁', label: t('dash.perm.cat.file_ops'), desc: 'read, write, edit, glob, grep' },
+                { id: 'shell', icon: '💻', label: t('dash.perm.cat.shell'), desc: 'bash, test_run, test_generate' },
+                { id: 'git', icon: '🔀', label: t('dash.perm.cat.git'), desc: 'status, diff, commit, PR, rollback' },
+                { id: 'web', icon: '🌐', label: t('dash.perm.cat.web'), desc: 'search, http_request, browser' },
+                { id: 'media', icon: '🎨', label: t('dash.perm.cat.media'), desc: 'generate_image, generate_video, generate_voice, generate_music' },
+                { id: 'database', icon: '🗄️', label: t('dash.perm.cat.database'), desc: 'database_query' },
+                { id: 'system', icon: '🖥️', label: t('dash.perm.cat.system'), desc: 'desktop_*, browser_*' },
+                { id: 'documents', icon: '📄', label: t('dash.perm.cat.documents'), desc: 'docs, presentations, reports' },
+                { id: 'memory', icon: '🧠', label: t('dash.perm.cat.memory'), desc: 'save, recall, update, delete' },
+                { id: 'learning', icon: '🎓', label: t('dash.perm.cat.learning'), desc: 'create, teach, progress' },
               ] as const).map(cat => {
                 const currentPerm = (settings as any).categoryPermissions?.[cat.id] || 'auto';
                 return (
@@ -14606,9 +14637,9 @@ export function SettingsPage() {
                 switching between lanes; the choice IS the consent. */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               {([
-                { id: 'off' as const,   label: 'Off' },
-                { id: 'local' as const, label: 'Private' },
-                { id: 'cloud' as const, label: 'Fast' },
+                { id: 'off' as const,   label: t('dash.settings.vision.off') },
+                { id: 'local' as const, label: t('dash.settings.vision.private') },
+                { id: 'cloud' as const, label: t('dash.settings.vision.fast') },
               ]).map((opt) => {
                 const active = desktopVisionMode === opt.id;
                 // Private IS the on-device model — a lane you can't run yet
@@ -14870,7 +14901,7 @@ export function BillingPage() {
                 <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, color: tc.color, background: tc.bg }}>{tc.limit}</span>
               </div>
             </div>
-            <button onClick={openBilling} style={{ ...btnPrimary, fontSize: 12, fontWeight: 600 }}>Manage Plan</button>
+            <button onClick={openBilling} style={{ ...btnPrimary, fontSize: 12, fontWeight: 600 }}>{t('dash.billing.manage_plan')}</button>
           </div>
 
           {/* Credit Balance — single card. Free tier shows the free pool;
@@ -14915,7 +14946,7 @@ export function BillingPage() {
                 </div>
                 <div style={{ fontSize: 11, color: '#6c7086', marginTop: 8 }}>
                   {isAdmin
-                    ? 'Unlimited usage.'
+                    ? t('dash.billing.unlimited_usage')
                     : tier === 'free'
                       ? 'Resets monthly. Upgrade for more.'
                       : 'Includes your monthly plan allowance + any top-ups.'}
@@ -14939,18 +14970,20 @@ export function BillingPage() {
               Same visual language as the extension + the website pricing
               page. Effective rate makes the 10M "Best value" honest —
               20-40% cheaper per token. */}
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>Top-Up Packages</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>{t('dash.billing.topups_title')}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             {CREDIT_TOPUPS.map((pkg) => (
               <IdePurchaseCard
                 key={pkg.id}
-                title={pkg.label}
-                subtitle={pkg.subtitle}
+                // Label + subtitle come from core's CREDIT_TOPUPS (Stripe-linked),
+                // so map by id and fall back to core's English.
+                title={t('dash.billing.credits_n', { n: pkg.credits.toLocaleString() })}
+                subtitle={tOr(`dash.billing.topup.${pkg.id}`, pkg.subtitle)}
                 price={`$${pkg.price}`}
                 effectiveRate={pkg.effectiveRate}
                 popular={pkg.popular}
                 state="live"
-                ctaLabel="Get credits"
+                ctaLabel={t('dash.billing.get_credits')}
                 onClick={openBilling}
               />
             ))}
@@ -14960,7 +14993,7 @@ export function BillingPage() {
               tier flagged "Your plan"; every other card opens the web dashboard. */}
           {(
             <>
-              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 32, marginBottom: 12 }}>Plans</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 32, marginBottom: 12 }}>{t('dash.billing.plans_title')}</h2>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr 1fr 1fr',
@@ -14986,13 +15019,17 @@ export function BillingPage() {
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>{plan.name}</div>
                       <div style={{ marginBottom: 12 }}>
                         <span style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>${plan.price}</span>
-                        <span style={{ fontSize: 11, color: '#6c7086', marginLeft: 4 }}>/mo</span>
+                        <span style={{ fontSize: 11, color: '#6c7086', marginLeft: 4 }}>{t('dash.billing.per_month')}</span>
                       </div>
                       <ul style={{ margin: 0, padding: 0, listStyle: 'none', marginBottom: 14 }}>
-                        {plan.features.map((f) => (
+                        {/* Feature text lives in core's billing module (shared with
+                            Stripe + the platform), so it is not rewritten there.
+                            Map tier+index -> key, and fall back to core's English
+                            if a key is ever missing. */}
+                        {plan.features.map((f, fi) => (
                           <li key={f} style={{ fontSize: 11, color: '#a6adc8', marginBottom: 6, paddingLeft: 14, position: 'relative' }}>
                             <span style={{ position: 'absolute', left: 0, color: 'var(--accent)' }}>{'\u2713'}</span>
-                            {f}
+                            {tOr(`dash.billing.feat.${target}.${fi + 1}`, f)}
                           </li>
                         ))}
                       </ul>
@@ -15001,11 +15038,13 @@ export function BillingPage() {
                           marginTop: 'auto', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
                           background: 'rgba(166,227,161,0.10)', color: '#a6e3a1',
                           border: '1px solid rgba(166,227,161,0.25)', textAlign: 'center',
-                        }}>Current plan</div>
+                        }}>{t('dash.billing.current_plan')}</div>
                       ) : (
                         // Every plan change is managed on the web billing dashboard.
                         <button onClick={openBilling} style={{ ...btnPrimary, marginTop: 'auto', width: '100%', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
-                          {target === 'free' ? 'Manage in portal' : `Upgrade to ${plan.name}`}
+                          {target === 'free'
+                            ? t('dash.billing.manage_in_portal')
+                            : t('dash.billing.upgrade_to', { plan: plan.name })}
                         </button>
                       )}
                     </div>
@@ -15138,18 +15177,29 @@ function supportStatusChip(status: string): { label: string; color: string; bg: 
 
 // Intent-based ticket reasons (migration 317) — mirrors the web dashboard.
 // Evergreen: they describe what the user needs, not which feature.
+// Keys, not text — this is a module-level const, so resolved strings here would
+// evaluate once at import (before initLocale) and freeze in English.
+// supportCategoryMeta() resolves them at call time.
 const SUPPORT_CATEGORIES = [
-  { slug: 'bug', label: 'Bug or broken', icon: '🐞', placeholder: 'What broke, and what were you doing when it happened?' },
-  { slug: 'question', label: 'Question / how-to', icon: '❓', placeholder: 'What are you trying to do?' },
-  { slug: 'feature', label: 'Feature request', icon: '✨', placeholder: 'What would you love Ava to do?' },
-  { slug: 'billing', label: 'Billing & payments', icon: '💳', placeholder: 'Tell us about the billing or payment issue…' },
-  { slug: 'account', label: 'Account & login', icon: '👤', placeholder: 'What is happening with your account or sign-in?' },
-  { slug: 'feedback', label: 'Feedback', icon: '💬', placeholder: 'What is on your mind?' },
-  { slug: 'other', label: 'Something else', icon: '💭', placeholder: 'How can we help?' },
+  { slug: 'bug', icon: '🐞' },
+  { slug: 'question', icon: '❓' },
+  { slug: 'feature', icon: '✨' },
+  { slug: 'billing', icon: '💳' },
+  { slug: 'account', icon: '👤' },
+  { slug: 'feedback', icon: '💬' },
+  { slug: 'other', icon: '💭' },
 ] as const;
 
+
+/** Category + its label/placeholder resolved at CALL time, so they follow the locale. */
 function supportCategoryMeta(slug?: string | null) {
-  return SUPPORT_CATEGORIES.find(c => c.slug === slug) || null;
+  const c = SUPPORT_CATEGORIES.find(x => x.slug === slug);
+  if (!c) return null;
+  return {
+    ...c,
+    label: t(`dash.support.cat.${c.slug}`),
+    placeholder: t(`dash.support.cat.${c.slug}_ph`),
+  };
 }
 
 export function SupportPage() {
@@ -15259,7 +15309,7 @@ export function SupportPage() {
               <span style={{ fontSize: 24 }}>🐙</span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>GitHub Issues</div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Report bugs, request features, or ask questions</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.support.header_sub')}</div>
               </div>
             </div>
             <div style={linkCard} onClick={() => openExternal('https://discord.gg/tuHZzUGxA6')}>
@@ -15294,16 +15344,16 @@ export function SupportPage() {
       {/* ── Ticket list ─────────────────────────────────────────── */}
       <div style={{ display: 'flex', width: 256, flexShrink: 0, flexDirection: 'column', borderRight: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(49,34,68,0.25)' }}>
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '14px 16px' }}>
-          <span style={{ fontSize: 13, fontWeight: 300, color: '#cdd6f4' }}>Support tickets</span>
+          <span style={{ fontSize: 13, fontWeight: 300, color: '#cdd6f4' }}>{t('dash.support.tickets')}</span>
           <button
             onClick={() => setMenuOpen(o => !o)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'transparent', padding: '4px 10px', fontSize: 11, color: '#a6adc8', cursor: 'pointer' }}
-          >+ New</button>
+          >{t('dash.support.new')}</button>
           {menuOpen && (
             <>
               <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
               <div style={{ position: 'absolute', right: 12, top: 48, zIndex: 50, width: 220, borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: '#1a1028', padding: 4, boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
-                <div style={{ padding: '6px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>New ticket — pick a reason</div>
+                <div style={{ padding: '6px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{t('dash.support.pick_reason')}</div>
                 {SUPPORT_CATEGORIES.map(c => (
                   <button
                     key={c.slug}
@@ -15312,7 +15362,7 @@ export function SupportPage() {
                     onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                     style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10, borderRadius: 8, border: 'none', background: 'transparent', padding: '8px 10px', textAlign: 'left', fontSize: 12, color: '#a6adc8', cursor: 'pointer' }}
                   >
-                    <span style={{ fontSize: 14 }}>{c.icon}</span>{c.label}
+                    <span style={{ fontSize: 14 }}>{c.icon}</span>{t(`dash.support.cat.${c.slug}`)}
                   </button>
                 ))}
               </div>
@@ -15357,7 +15407,7 @@ export function SupportPage() {
             );
           })}
           {conversations.length === 0 && (
-            <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 11, color: '#6c7086' }}>No tickets yet</div>
+            <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 11, color: '#6c7086' }}>{t('dash.support.none_yet')}</div>
           )}
         </div>
       </div>
@@ -15371,12 +15421,12 @@ export function SupportPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '14px 20px' }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: '#cdd6f4' }}>
-              {activeConv?.summary || (messages[0]?.body ? messages[0].body.slice(0, 60) : 'New ticket')}
+              {activeConv?.summary || (messages[0]?.body ? messages[0].body.slice(0, 60) : t('dash.support.new_ticket_title'))}
             </div>
             <div style={{ marginTop: 2, fontSize: 11, color: '#6c7086' }}>
               {activeConv
                 ? `Opened ${new Date(activeConv.last_message_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}${messages.some((m: any) => m.is_ava) ? ' · Ava is helping' : ''}`
-                : 'Ava answers first — instantly'}
+                : t('dash.support.ava_first')}
             </div>
           </div>
           <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 8 }}>
@@ -15430,14 +15480,14 @@ export function SupportPage() {
                 <>
                   <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>{newCatMeta.icon} {newCatMeta.label}</div>
                   <div style={{ maxWidth: 360, fontSize: 13, color: '#6c7086', lineHeight: 1.6 }}>
-                    Tell us what&apos;s going on below — Ava answers first, instantly. If she can&apos;t solve it, the team picks up the same thread.
+                    {t('dash.support.intro')}
                   </div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>How can we help?</div>
+                  <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>{t('dash.support.how_can_we_help')}</div>
                   <div style={{ maxWidth: 360, fontSize: 13, color: '#6c7086', lineHeight: 1.6 }}>
-                    Hit <span style={{ color: '#a6adc8' }}>+ New</span> up top and pick a reason to open a ticket. Ava answers first — instantly.
+                    {t('dash.support.empty_hint')}
                   </div>
                 </>
               )}
@@ -15453,7 +15503,7 @@ export function SupportPage() {
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
               disabled={isNewTicket && !newCategory}
-              placeholder={isNewTicket ? (newCatMeta ? newCatMeta.placeholder : 'Pick a reason above to start…') : 'Reply to this ticket…'}
+              placeholder={isNewTicket ? (newCatMeta ? newCatMeta.placeholder : t('dash.support.pick_reason_ph')) : t('dash.support.reply_ph')}
               rows={1}
               style={{ flex: 1, resize: 'none', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(10,6,18,0.8)', padding: '10px 16px', fontSize: 13, color: '#cdd6f4', outline: 'none', fontFamily: 'inherit', opacity: isNewTicket && !newCategory ? 0.5 : 1 }}
             />
@@ -15461,7 +15511,7 @@ export function SupportPage() {
               onClick={handleSend}
               disabled={!input.trim() || sending || (isNewTicket && !newCategory)}
               style={{ flexShrink: 0, borderRadius: 12, border: 'none', background: 'var(--accent)', padding: '10px 20px', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', opacity: !input.trim() || sending || (isNewTicket && !newCategory) ? 0.3 : 1 }}
-            >{sending ? 'Sending…' : 'Send'}</button>
+            >{sending ? t('dash.chat.sending') : t('dash.support.send')}</button>
           </div>
         </div>
       </div>
@@ -15477,12 +15527,16 @@ const PLATFORM_COLOURS: Record<string, string> = {
   ide: '#a6e3a1',
   companion: '#fab387',
 };
-const PLATFORM_LABELS: Record<string, string> = {
-  core: t('dash.releases.core'),
-  extension: t('dash.releases.extension'),
-  ide: t('dash.releases.ide'),
-  companion: t('dash.releases.companion'),
+// Resolved at CALL time, not module load. As a const object of t() results these
+// ran once at import — before initLocale() — so the labels were frozen in
+// English for every locale, forever.
+const PLATFORM_KEYS: Record<string, string> = {
+  core: 'dash.releases.core',
+  extension: 'dash.releases.extension',
+  ide: 'dash.releases.ide',
+  companion: 'dash.releases.companion',
 };
+const platformLabel = (p: string): string => (PLATFORM_KEYS[p] ? t(PLATFORM_KEYS[p]) : p);
 
 export function ReleaseNotesPage() {
   useLocale();
@@ -15603,7 +15657,7 @@ export function ReleaseNotesPage() {
                   color: isActive ? (tab === 'all' || tab === 'ide' || tab === 'companion' ? '#11111b' : '#fff') : '#6c7086',
                 }}
               >
-                {tab === 'all' ? t('dash.releases.all') : PLATFORM_LABELS[tab]}
+                {tab === 'all' ? t('dash.releases.all') : platformLabel(tab)}
               </button>
             );
           })}
@@ -15659,7 +15713,7 @@ export function ReleaseNotesPage() {
                                 background: `${platColour}18`, padding: '2px 8px',
                                 borderRadius: 4, letterSpacing: 0.5, textTransform: 'uppercase' as const,
                               }}>
-                                {PLATFORM_LABELS[plat] || plat}
+                                {platformLabel(plat)}
                               </span>
                             );
                           })()}
@@ -15780,9 +15834,9 @@ export function PlannerPage() {
   // extension) \u2014 the Planner keeps tasks, journal and health plans.
   const [tab, setTab] = useState<'tasks' | 'journal' | 'plans'>('tasks');
   const tabs = [
-    { key: 'tasks' as const, icon: '\u2713', label: 'Tasks' },
-    { key: 'journal' as const, icon: '\u270E', label: 'Journal' },
-    { key: 'plans' as const, icon: '\u2630', label: 'Plans' },
+    { key: 'tasks' as const, icon: '\u2713', label: t('dash.nav.tasks') },
+    { key: 'journal' as const, icon: '\u270E', label: t('dash.nav.journal') },
+    { key: 'plans' as const, icon: '\u2630', label: t('dash.planner.tab_plans') },
   ];
   return (
     <div style={pageWrapper}>
@@ -15837,11 +15891,11 @@ export function AccountPage() {
     return () => window.removeEventListener('ava-auth-changed', onChange);
   }, []);
   const tabs = [
-    { key: 'settings' as const, label: 'Settings' },
-    ...(connected ? [{ key: 'billing' as const, label: 'Billing' }] : []),
+    { key: 'settings' as const, label: t('dash.nav.settings') },
+    ...(connected ? [{ key: 'billing' as const, label: t('dash.nav.billing') }] : []),
     // Connections tab hidden for now — being reworked later this week.
     // Re-enable by restoring: { key: 'connections' as const, label: 'Connections' },
-    { key: 'personality' as const, label: "Ava's Style" },
+    { key: 'personality' as const, label: t('dash.account.tab_style') },
     { key: 'profile' as const, label: profileLabel },
     // Sync tab removed — Ava is local-first; nothing syncs to the cloud.
   ];
@@ -15854,8 +15908,8 @@ export function AccountPage() {
   return (
     <div style={pageWrapper}>
       <div style={{ marginBottom: 16 }}>
-        <h2 style={pageTitle}>Account</h2>
-        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Settings, billing, connections, and personalisation</p>
+        <h2 style={pageTitle}>{t('dash.page.account')}</h2>
+        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>{t('dash.page.account_sub')}</p>
       </div>
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
         {tabs.map(t => (
@@ -15912,10 +15966,10 @@ export function HelpPage() {
     return () => window.removeEventListener('ava-support-nav-docs', handler);
   }, []);
   const tabs = [
-    { key: 'support' as const, label: 'Support' },
-    { key: 'docs' as const, label: 'Docs' },
-    { key: 'releases' as const, label: 'Releases' },
-    { key: 'roadmap' as const, label: 'Roadmap' },
+    { key: 'support' as const, label: t('dash.help.tab_support') },
+    { key: 'docs' as const, label: t('dash.help.tab_docs') },
+    { key: 'releases' as const, label: t('dash.help.tab_releases') },
+    { key: 'roadmap' as const, label: t('dash.help.tab_roadmap') },
   ];
   // Support is a full-bleed app shell (its own panes scroll); the other tabs
   // are scrollable content. So on the support tab, turn this wrapper into a
@@ -15925,8 +15979,8 @@ export function HelpPage() {
   return (
     <div style={isSupport ? { ...pageWrapper, display: 'flex', flexDirection: 'column', overflowY: 'hidden' } : pageWrapper}>
       <div style={{ marginBottom: 16 }}>
-        <h2 style={pageTitle}>Help</h2>
-        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Support, documentation, release notes, and roadmap</p>
+        <h2 style={pageTitle}>{t('dash.page.help')}</h2>
+        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>{t('dash.page.help_sub')}</p>
       </div>
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
         {tabs.map(t => (
@@ -16148,15 +16202,15 @@ export function _CreativeLibraryTab() {
   }, []);
 
   const FILTERS: { key: CreativeLibFilter; label: string; icon: string }[] = [
-    { key: 'all', label: 'All', icon: '📋' },
-    { key: 'images', label: 'Images', icon: '🖼️' },
-    { key: 'music', label: 'Music', icon: '🎵' },
-    { key: 'video', label: 'Video', icon: '🎬' },
-    { key: 'voice', label: 'Voice', icon: '🎙️' },
+    { key: 'all', label: t('dash.creative.filter.all'), icon: '📋' },
+    { key: 'images', label: t('dash.creative.filter.images'), icon: '🖼️' },
+    { key: 'music', label: t('dash.creative.filter.music'), icon: '🎵' },
+    { key: 'video', label: t('dash.creative.filter.video'), icon: '🎬' },
+    { key: 'voice', label: t('dash.creative.filter.voice'), icon: '🎙️' },
     /* { key: 'sfx', label: 'SFX', icon: '🔊' }, — in development */
-    { key: 'documents', label: 'Documents', icon: '📄' },
-    { key: 'spreadsheets', label: 'Spreadsheets', icon: '📊' },
-    { key: 'presentations', label: 'Presentations', icon: '📽️' },
+    { key: 'documents', label: t('dash.creative.filter.documents'), icon: '📄' },
+    { key: 'spreadsheets', label: t('dash.creative.filter.spreadsheets'), icon: '📊' },
+    { key: 'presentations', label: t('dash.creative.filter.presentations'), icon: '📽️' },
   ];
 
   // Fetch assets based on source toggle
@@ -16621,7 +16675,7 @@ function IdeAuditView({
           >🛡 Security <span style={{ opacity: 0.7 }}>({securityCount})</span></button>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <button onClick={onRefresh} style={btnStyle} title="Refresh — re-verify file integrity and load new entries">↻ Refresh</button>
+          <button onClick={onRefresh} style={btnStyle} title={t('dash.audit.refresh_hint')}>↻ {t('dash.common.refresh')}</button>
           <button onClick={() => onExport('markdown')} style={btnStyle} title="Export as Markdown — human-readable, never leaves your machine">Export .md</button>
           <button onClick={() => onExport('json')} style={btnStyle} title="Export as JSON — for SIEM ingest or programmatic analysis">Export .json</button>
         </div>

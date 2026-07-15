@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { t } from '../lib/i18n';
 import { check } from '@tauri-apps/plugin-updater';
 
 // Single source of truth is src/version.ts; re-exported for back-compat.
@@ -97,7 +98,7 @@ export default function UpdateChecker() {
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <span style={{ fontSize: 14, animation: 'spin 1s linear infinite' }}>⟳</span>
-        <span style={{ fontSize: 12, color: '#a6adc8' }}>Checking for updates...</span>
+        <span style={{ fontSize: 12, color: '#a6adc8' }}>{t('ide.update.checking')}</span>
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
@@ -132,7 +133,7 @@ export default function UpdateChecker() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>🚀</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Update Available</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('ide.update.available')}</span>
         </div>
         <button
           onClick={() => setDismissed(true)}
@@ -171,27 +172,27 @@ export default function UpdateChecker() {
             <button
               onClick={() => setDismissed(true)}
               style={{ padding: '6px 14px', background: 'none', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, color: '#6c7086', fontSize: 11, cursor: 'pointer' }}
-            >Later</button>
+            >{t('ide.update.later')}</button>
             <button
               onClick={handleUpdate}
               style={{ padding: '6px 14px', background: 'var(--accent)', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-            >Update Now</button>
+            >{t('ide.update.now')}</button>
           </>
         )}
         {status === 'downloading' && (
-          <span style={{ fontSize: 11, color: '#6c7086' }}>Downloading...</span>
+          <span style={{ fontSize: 11, color: '#6c7086' }}>{t('ide.update.downloading')}</span>
         )}
         {status === 'ready' && (
           <button
             onClick={handleRelaunch}
             style={{ padding: '6px 14px', background: '#a6e3a1', border: 'none', borderRadius: 6, color: '#11111b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-          >Restart to Apply</button>
+          >{t('ide.update.restart')}</button>
         )}
         {status === 'error' && (
           <button
             onClick={handleUpdate}
             style={{ padding: '6px 14px', background: '#f87171', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-          >Retry</button>
+          >{t('ide.update.retry')}</button>
         )}
       </div>
     </div>

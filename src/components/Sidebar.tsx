@@ -143,6 +143,7 @@ function FileTreeNode({ entry, depth, expandedDirs, onToggle, onFileOpen }: { en
 }
 
 function ExplorerPanel({ onFileOpen }: { onFileOpen?: (path: string) => void }) {
+  useLocale(); // re-render on locale change; `t` is a direct import
   const [entries, setEntries] = useState<FsEntry[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [projectFolder, setProjectFolder] = useState<string | null>(localStorage.getItem('ava-ide-project-folder'));
@@ -229,7 +230,7 @@ function ExplorerPanel({ onFileOpen }: { onFileOpen?: (path: string) => void }) 
   return (
     <div style={{ padding: '4px 0' }}>
       <div style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, color: '#cdd6f4', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-        {folderName || 'No folder open'}
+        {folderName || t('dash.sidebar.no_folder')}
       </div>
       {!projectFolder && (
         <div style={{ padding: '12px 16px', fontSize: 12, color: '#6c7086' }}>
@@ -248,6 +249,7 @@ function ExplorerPanel({ onFileOpen }: { onFileOpen?: (path: string) => void }) 
 // (respects .gitignore, hidden files, etc.). Replaces the previous
 // stub-input panel that didn't actually search anything.
 function SearchPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) {
+  useLocale(); // re-render on locale change; `t` is a direct import
   const [query, setQuery] = useState('');
   const [glob, setGlob] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -270,7 +272,7 @@ function SearchPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {
       try {
         const root = localStorage.getItem('ava-ide-project-folder');
         if (!root) {
-          setError('Open a folder first — search needs a workspace to walk.');
+          setError(t('dash.sidebar.search_needs_folder'));
           setResults([]);
           return;
         }
@@ -324,21 +326,21 @@ function SearchPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search"
+          placeholder={t('dash.sidebar.search_placeholder')}
           style={{ ...inputStyle, flex: 1 }}
           onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
           onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
         />
       </div>
       <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center' }}>
-        <Tooltip content="Match case"><button onClick={() => setCaseSensitive(v => !v)} style={toggleStyle(caseSensitive)}>Aa</button></Tooltip>
-        <Tooltip content="Whole word"><button onClick={() => setWholeWord(v => !v)} style={toggleStyle(wholeWord)}>ab</button></Tooltip>
-        <Tooltip content="Use regular expression"><button onClick={() => setIsRegex(v => !v)} style={toggleStyle(isRegex)}>.*</button></Tooltip>
+        <Tooltip content={t('dash.sidebar.match_case')}><button onClick={() => setCaseSensitive(v => !v)} style={toggleStyle(caseSensitive)}>Aa</button></Tooltip>
+        <Tooltip content={t('dash.sidebar.whole_word')}><button onClick={() => setWholeWord(v => !v)} style={toggleStyle(wholeWord)}>ab</button></Tooltip>
+        <Tooltip content={t('dash.sidebar.regex')}><button onClick={() => setIsRegex(v => !v)} style={toggleStyle(isRegex)}>.*</button></Tooltip>
         <input
           type="text"
           value={glob}
           onChange={(e) => setGlob(e.target.value)}
-          placeholder="files to include (e.g. *.ts,src/**)"
+          placeholder={t('dash.sidebar.files_to_include')}
           style={{ ...inputStyle, flex: 1, fontSize: 11, height: 24 }}
         />
       </div>
@@ -350,10 +352,10 @@ function SearchPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {
           </div>
         )}
         {!error && busy && results.length === 0 && (
-          <div style={{ padding: 16, textAlign: 'center', color: '#6c7086', fontSize: 12 }}>Searching…</div>
+          <div style={{ padding: 16, textAlign: 'center', color: '#6c7086', fontSize: 12 }}>{t('dash.sidebar.searching')}</div>
         )}
         {!error && !busy && touched && results.length === 0 && (
-          <div style={{ padding: 16, textAlign: 'center', color: '#6c7086', fontSize: 12 }}>No matches.</div>
+          <div style={{ padding: 16, textAlign: 'center', color: '#6c7086', fontSize: 12 }}>{t('dash.sidebar.no_matches')}</div>
         )}
         {!error && !touched && results.length === 0 && (
           <div style={{ padding: 16, textAlign: 'center', color: '#6c7086', fontSize: 12 }}>
@@ -422,6 +424,7 @@ interface GitStatusReport {
   files: GitFileEntry[];
 }
 function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) {
+  useLocale(); // re-render on locale change; `t` is a direct import
   const [status, setStatus] = useState<GitStatusReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -528,12 +531,12 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
         <div style={{ padding: '12px 14px', borderRadius: 6, background: 'rgba(243,139,168,0.08)', color: '#f9b3c4', fontSize: 11, lineHeight: 1.6 }}>
           {error}
         </div>
-        <button onClick={() => void refresh()} style={{ marginTop: 12, width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', background: 'rgba(49,34,68,0.5)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer' }}>Retry</button>
+        <button onClick={() => void refresh()} style={{ marginTop: 12, width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', background: 'rgba(49,34,68,0.5)', color: '#cdd6f4', fontSize: 11, cursor: 'pointer' }}>{t('dash.sidebar.retry')}</button>
       </div>
     );
   }
   if (!status) {
-    return <div style={{ padding: 16, fontSize: 12, color: '#6c7086', textAlign: 'center' }}>Loading…</div>;
+    return <div style={{ padding: 16, fontSize: 12, color: '#6c7086', textAlign: 'center' }}>{t('dash.sidebar.loading')}</div>;
   }
 
   const staged = status.files.filter(f => f.section === 'staged');
@@ -599,8 +602,8 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
       {/* Branch + status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#cdd6f4', marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'monospace', color: '#cba6f7', fontWeight: 600 }}>⎇ {status.branch}</span>
-        {status.ahead != null && status.ahead > 0 && <Tooltip content="Commits ahead of upstream"><span style={{ color: '#a6e3a1' }}>↑{status.ahead}</span></Tooltip>}
-        {status.behind != null && status.behind > 0 && <Tooltip content="Commits behind upstream"><span style={{ color: '#f9e2af' }}>↓{status.behind}</span></Tooltip>}
+        {status.ahead != null && status.ahead > 0 && <Tooltip content={t('dash.sidebar.commits_ahead')}><span style={{ color: '#a6e3a1' }}>↑{status.ahead}</span></Tooltip>}
+        {status.behind != null && status.behind > 0 && <Tooltip content={t('dash.sidebar.commits_behind')}><span style={{ color: '#f9e2af' }}>↓{status.behind}</span></Tooltip>}
         <button onClick={() => void refresh()} disabled={busy}
           style={{ marginLeft: 'auto', padding: '2px 8px', borderRadius: 4, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', background: 'rgba(49,34,68,0.5)', color: '#a6adc8', fontSize: 10, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>
           ↻
@@ -611,7 +614,7 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
       <textarea value={commitMessage}
         onChange={(e) => setCommitMessage(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void commit(); } }}
-        placeholder="Message (Ctrl+Enter to commit)"
+        placeholder={t('dash.sidebar.commit_placeholder')}
         style={inputStyle}
         onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
         onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
@@ -639,7 +642,7 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
           <>
             <div style={sectionHeader}>
               <span>Staged ({staged.length})</span>
-              <Tooltip content="Unstage all"><button onClick={() => void unstage(staged.map(f => f.path))}
+              <Tooltip content={t('dash.sidebar.unstage_all')}><button onClick={() => void unstage(staged.map(f => f.path))}
                 style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 11 }}>−</button></Tooltip>
             </div>
             {staged.map(f => fileRow(f, actionBtn('unstage', () => void unstage([f.path]))))}
@@ -650,9 +653,9 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
             <div style={sectionHeader}>
               <span>Changes ({unstaged.length})</span>
               <span style={{ display: 'flex', gap: 4 }}>
-                <Tooltip content="Discard all"><button onClick={() => void discard(unstaged.map(f => f.path))}
+                <Tooltip content={t('dash.sidebar.discard_all')}><button onClick={() => void discard(unstaged.map(f => f.path))}
                   style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13 }}>×</button></Tooltip>
-                <Tooltip content="Stage all"><button onClick={() => void stage(unstaged.map(f => f.path))}
+                <Tooltip content={t('dash.sidebar.stage_all')}><button onClick={() => void stage(unstaged.map(f => f.path))}
                   style={{ background: 'transparent', border: 'none', color: '#a6e3a1', cursor: 'pointer', fontSize: 13 }}>+</button></Tooltip>
               </span>
             </div>
@@ -666,7 +669,7 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
           <>
             <div style={sectionHeader}>
               <span>Untracked ({untracked.length})</span>
-              <Tooltip content="Stage all"><button onClick={() => void stage(untracked.map(f => f.path))}
+              <Tooltip content={t('dash.sidebar.stage_all')}><button onClick={() => void stage(untracked.map(f => f.path))}
                 style={{ background: 'transparent', border: 'none', color: '#a6e3a1', cursor: 'pointer', fontSize: 13 }}>+</button></Tooltip>
             </div>
             {untracked.map(f => fileRow(f, actionBtn('stage', () => void stage([f.path]), '#a6e3a1')))}
@@ -678,8 +681,9 @@ function GitPanel({ onFileOpen }: { onFileOpen?: (path: string) => void } = {}) 
 }
 
 function AvaPanel() {
+  useLocale();
   const [messages] = useState([
-    { role: 'ava' as const, text: 'Hello! I\'m Ava, your AI coding assistant. How can I help you today?' },
+    { role: 'ava' as const, text: t('dash.sidebar.ava_greeting') },
   ]);
   const [input, setInput] = useState('');
 
@@ -740,7 +744,7 @@ function AvaPanel() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask Ava..."
+            placeholder={t('dash.sidebar.ask_ava')}
             style={{
               flex: 1,
               height: 32,
@@ -784,6 +788,7 @@ function AvaPanel() {
 }
 
 function ExtensionsPanel() {
+  useLocale(); // re-render on locale change; `t` is a direct import
   const extensions = [
     { name: 'Ava Intelligence', publisher: 'Augmented Value Acceleration', installed: true },
     { name: 'Python', publisher: 'Microsoft', installed: true },
@@ -796,7 +801,7 @@ function ExtensionsPanel() {
     <div style={{ padding: 12 }}>
       <input
         type="text"
-        placeholder="Search Extensions..."
+        placeholder={t('dash.sidebar.search_extensions')}
         style={{
           width: '100%',
           height: 28,
@@ -866,6 +871,7 @@ function ExtensionsPanel() {
 }
 
 function DebugPanel() {
+  useLocale(); // re-render on locale change; `t` is a direct import
   return (
     <div style={{ padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -882,7 +888,7 @@ function DebugPanel() {
             outline: 'none',
           }}
         >
-          <option>No Configuration</option>
+          <option>{t('dash.sidebar.no_configuration')}</option>
         </select>
         <button
           style={{
@@ -912,6 +918,7 @@ function DebugPanel() {
 
 /* ---------- Auth + BYOK Section ---------- */
 function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
+  useLocale(); // re-render on locale change; `t` is a direct import
   const [platformKey, setPlatformKey] = useState(() => {
     try { return localStorage.getItem('ava-ide-platform-key') || ''; } catch { return ''; }
   });
@@ -1195,20 +1202,26 @@ function EarlyAccessBadge() {
 // Automation). It's not a warning — it tells someone where a feature actually is
 // in its development, which is exactly what we'd want to be told. Keep this in
 // step with the extension's NavSidebar.
-const NAV_ITEMS: { id: string; Icon: PhIconType; label: string; desc: string; earlyAccess?: boolean }[] = [
-  // Order + naming mirror the extension sidebar exactly (Health before
-  // Learning; "Ava Chat", "Usage & History", extension descriptions).
-  { id: 'command-centre',  Icon: PhCommand,  label: 'Command Centre',     desc: 'Overview of everything' },
-  { id: 'ava-chat',        Icon: PhChat,     label: 'Ava Chat',           desc: 'Full-width AI chat' },
-  { id: 'planner',         Icon: PhPlanner,  label: 'Planner',            desc: 'Tasks, journal, learning' },
-  { id: 'library',         Icon: PhLibrary,  label: 'Library',            desc: 'Images and documents' },
-  { id: 'health',          Icon: PhHealth,   label: 'Health & Nutrition', desc: 'Exercises, recipes, plans', earlyAccess: true },
-  { id: 'learning',        Icon: PhLearning, label: 'Learning',           desc: 'Courses, lessons, and teaching', earlyAccess: true },
-  { id: 'creative-studio', Icon: PhCreative, label: 'Creative Studio',    desc: 'Images, music, video, voice', earlyAccess: true },
-  { id: 'memory',          Icon: PhMemory,   label: 'Memory',             desc: 'View and manage memories' },
-  { id: 'chat-history',    Icon: PhHistory,  label: 'Usage & History',    desc: 'Credits, sessions, models' },
-  { id: 'account',         Icon: PhAccount,  label: 'Account',            desc: 'Settings, billing, personalisation' },
-  { id: 'help',            Icon: PhHelp,     label: 'Help',               desc: 'Support, releases, roadmap' },
+/**
+ * Order + naming mirror the extension sidebar exactly (Health before Learning;
+ * "Ava Chat", "Usage & History", extension descriptions).
+ *
+ * Labels are i18n KEYS resolved at render time, not strings. Holding resolved
+ * text here would freeze it at module load — the nav would keep the language it
+ * was first built in and never follow a locale change.
+ */
+const NAV_ITEMS: { id: string; Icon: PhIconType; labelKey: string; descKey: string; earlyAccess?: boolean }[] = [
+  { id: 'command-centre',  Icon: PhCommand,  labelKey: 'dash.nav.command_centre',  descKey: 'dash.nav.command_centre_desc' },
+  { id: 'ava-chat',        Icon: PhChat,     labelKey: 'dash.nav.ava_chat',        descKey: 'dash.nav.ava_chat_desc' },
+  { id: 'planner',         Icon: PhPlanner,  labelKey: 'dash.nav.planner',         descKey: 'dash.nav.planner_desc' },
+  { id: 'library',         Icon: PhLibrary,  labelKey: 'dash.nav.library',         descKey: 'dash.nav.library_desc' },
+  { id: 'health',          Icon: PhHealth,   labelKey: 'dash.nav.health',          descKey: 'dash.nav.health_desc', earlyAccess: true },
+  { id: 'learning',        Icon: PhLearning, labelKey: 'dash.nav.learning',        descKey: 'dash.nav.learning_desc', earlyAccess: true },
+  { id: 'creative-studio', Icon: PhCreative, labelKey: 'dash.nav.creative_studio', descKey: 'dash.nav.creative_studio_desc', earlyAccess: true },
+  { id: 'memory',          Icon: PhMemory,   labelKey: 'dash.nav.memory',          descKey: 'dash.nav.memory_desc' },
+  { id: 'chat-history',    Icon: PhHistory,  labelKey: 'dash.nav.usage_history',   descKey: 'dash.nav.history_desc' },
+  { id: 'account',         Icon: PhAccount,  labelKey: 'dash.nav.account',         descKey: 'dash.nav.account_desc' },
+  { id: 'help',            Icon: PhHelp,     labelKey: 'dash.nav.help',            descKey: 'dash.nav.help_desc' },
 ];
 
 function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { onDashboardSelect?: (page: string) => void; activePage?: string | null; collapsed?: boolean }) {
@@ -1232,7 +1245,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
           {NAV_ITEMS.map((item) => {
             const isActive = activePage === item.id;
             return (
-              <Tooltip key={item.id} content={`${item.label} — ${item.desc}`} placement="top">
+              <Tooltip key={item.id} content={`${t(item.labelKey)} — ${t(item.descKey)}`} placement="top">
               <button
                 type="button"
                 onClick={() => onDashboardSelect?.(item.id)}
@@ -1302,10 +1315,10 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
               </span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontWeight: 500, fontSize: 12 }}>{item.label}</span>
+                  <span style={{ fontWeight: 500, fontSize: 12 }}>{t(item.labelKey)}</span>
                   {item.earlyAccess && <EarlyAccessBadge />}
                 </div>
-                <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>
+                <div style={{ fontSize: 10, color: '#585b70', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(item.descKey)}</div>
               </div>
             </button>
           );
@@ -1341,7 +1354,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
-            title="Expand sidebar"
+            title={t('dash.sidebar.expand')}
             style={{
               position: 'absolute', top: '50%', transform: 'translateY(-50%)', zIndex: 20,
               [position === 'left' ? 'right' : 'left']: 0,
@@ -1450,7 +1463,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
       {onToggleCollapse && (
         <button
           onClick={onToggleCollapse}
-          title="Collapse sidebar"
+          title={t('dash.sidebar.collapse')}
           style={{
             position: 'absolute', top: '50%', transform: 'translateY(-50%)', zIndex: 20,
             [position === 'left' ? 'right' : 'left']: 0,
@@ -1548,6 +1561,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
 /* ── Sidebar Calendar ──────────────────────────────────────────────────── */
 
 function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: string) => void }) {
+  useLocale(); // re-render on locale change; `t` is a direct import
   const [monthOffset, setMonthOffset] = useState(0);
   const [taskDates, setTaskDates] = useState<Set<string>>(new Set());
   const [planMarks, setPlanMarks] = useState<Map<string, { training: boolean; meals: boolean }>>(new Map());
@@ -1621,7 +1635,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
   if (collapsed) {
     return (
       <div style={{ borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '10px 14px', flexShrink: 0 }}>
-        <button onClick={toggleCollapsed} title="Show calendar" style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer', color: '#a6adc8' }}>
+        <button onClick={toggleCollapsed} title={t('dash.sidebar.show_calendar')} style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer', color: '#a6adc8' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 9, fontWeight: 600 }}>{now.getDate()}</span>
             <span style={{ fontSize: 11 }}>{now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
@@ -1650,13 +1664,13 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
         <span style={{ fontSize: 10, fontWeight: 600, color: '#a6adc8' }}>{label}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button onClick={() => setMonthOffset(o => o + 1)} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 10, padding: 2 }}>{'\u25B6'}</button>
-          <button onClick={toggleCollapsed} title="Hide calendar" style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 9, padding: 2 }}>{'\u25B2'}</button>
+          <button onClick={toggleCollapsed} title={t('dash.sidebar.hide_calendar')} style={{ background: 'transparent', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 9, padding: 2 }}>{'\u25B2'}</button>
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4, fontSize: 7, color: '#6c7086' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />Training</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />Meals</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#38bdf8' }} />Tasks</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />{t('dash.sidebar.legend_training')}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />{t('dash.sidebar.legend_meals')}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#38bdf8' }} />{t('dash.sidebar.legend_tasks')}</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, textAlign: 'center', marginBottom: 2 }}>
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (

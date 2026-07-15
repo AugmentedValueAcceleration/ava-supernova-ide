@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { t } from '../lib/i18n';
 
 /**
  * Library → Papers page for the IDE. Mirrors the extension's
@@ -44,25 +45,25 @@ interface LibraryPaper {
   retracted?: boolean;
 }
 
-const DISCIPLINES: { id: 'all' | PaperDiscipline; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'ai_cs', label: 'AI & CS' },
-  { id: 'biology', label: 'Biology' },
-  { id: 'medicine', label: 'Medicine' },
-  { id: 'physics', label: 'Physics' },
-  { id: 'chemistry', label: 'Chemistry' },
-  { id: 'earth_sciences', label: 'Earth Sciences' },
-  { id: 'social_sciences', label: 'Social Sciences' },
-  { id: 'economics', label: 'Economics' },
-  { id: 'engineering', label: 'Engineering' },
-  { id: 'math', label: 'Math' },
-  { id: 'other', label: 'Other' },
+const DISCIPLINES: { id: 'all' | PaperDiscipline }[] = [
+  { id: 'all' },
+  { id: 'ai_cs' },
+  { id: 'biology' },
+  { id: 'medicine' },
+  { id: 'physics' },
+  { id: 'chemistry' },
+  { id: 'earth_sciences' },
+  { id: 'social_sciences' },
+  { id: 'economics' },
+  { id: 'engineering' },
+  { id: 'math' },
+  { id: 'other' },
 ];
 
-const TABS: { id: PapersTab; label: string; hint: string }[] = [
-  { id: 'featured', label: 'Featured', hint: "Ava's editorial picks" },
-  { id: 'trending', label: 'Trending', hint: "What's getting attention" },
-  { id: 'latest', label: 'Latest', hint: 'Newest additions' },
+const TABS: { id: PapersTab }[] = [
+  { id: 'featured' },
+  { id: 'trending' },
+  { id: 'latest' },
 ];
 
 const MEDICAL_DISCIPLINES = new Set<PaperDiscipline>(['medicine']);
@@ -200,7 +201,7 @@ export function LibraryPapersPage() {
               type="text"
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="Search across all sciences — title, author, topic..."
+              placeholder={t('ide.papers.search_ph')}
               style={{
                 width: '100%',
                 padding: '10px 36px 10px 14px',
@@ -220,7 +221,7 @@ export function LibraryPapersPage() {
                   background: 'transparent', border: 'none', color: 'var(--text-muted)',
                   fontSize: 14, cursor: 'pointer', padding: 4,
                 }}
-                aria-label="Clear search"
+                aria-label={t('ide.papers.clear_search')}
               >
                 ×
               </button>
@@ -245,7 +246,7 @@ export function LibraryPapersPage() {
                     transition: 'all 0.15s',
                   }}
                 >
-                  {d.label}
+                  {t(`ide.papers.disc.${d.id}`)}
                 </button>
               );
             })}
@@ -260,13 +261,13 @@ export function LibraryPapersPage() {
             borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
             marginBottom: 16,
           }}>
-            {TABS.map(t => {
-              const active = tab === t.id;
+            {TABS.map(tb => {
+              const active = tab === tb.id;
               return (
                 <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  title={t.hint}
+                  key={tb.id}
+                  onClick={() => setTab(tb.id)}
+                  title={t(`ide.papers.tab.${tb.id}_hint`)}
                   style={{
                     padding: '8px 14px',
                     border: 'none',
@@ -279,7 +280,7 @@ export function LibraryPapersPage() {
                     marginBottom: -1,
                   }}
                 >
-                  {t.label}
+                  {t(`ide.papers.tab.${tb.id}`)}
                 </button>
               );
             })}
@@ -514,7 +515,7 @@ function PaperDetailModal({
             color: 'white', fontSize: 16, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
-          aria-label="Close"
+          aria-label={t('ide.papers.close')}
         >
           ×
         </button>
@@ -574,7 +575,7 @@ function PaperDetailModal({
                 fontSize: 10, fontWeight: 500, color: 'var(--text-muted)',
                 textTransform: 'uppercase', letterSpacing: '0.6px',
                 margin: '0 0 6px 0',
-              }}>Abstract</h3>
+              }}>{t('ide.papers.abstract')}</h3>
               <p style={{
                 fontSize: 12.5, color: 'var(--text-secondary)',
                 lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0,
@@ -593,7 +594,7 @@ function PaperDetailModal({
               fontSize: 11,
               color: 'rgba(252, 211, 77, 0.9)', lineHeight: 1.5,
             }}>
-              <strong>Not medical advice.</strong> Ava's explanation is summarisation, not clinical guidance. Talk to a healthcare professional before acting on anything from this paper.
+              <strong>{t('ide.papers.not_medical_advice')}</strong> {t('ide.papers.not_medical_advice_body')}
             </p>
           )}
 

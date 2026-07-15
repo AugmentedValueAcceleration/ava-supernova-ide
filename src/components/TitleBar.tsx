@@ -31,7 +31,7 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
   const handleOpenFolder = async () => {
     setMenuOpen(false);
     let selected;
-    try { selected = await open({ directory: true, multiple: false, title: 'Open Folder' }); } catch { return; }
+    try { selected = await open({ directory: true, multiple: false, title: t('ide.titlebar.open_folder') }); } catch { return; }
     if (selected && typeof selected === 'string') {
       onOpenFolder?.(selected);
     }
@@ -128,7 +128,7 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2v11z" />
                 </svg>
-                Open Folder
+                {t('ide.titlebar.open_folder')}
               </button>
             </div>
           )}
