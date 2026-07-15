@@ -540,6 +540,37 @@ function tOr(key: string, fallback: string): string {
   return s === key ? fallback : s;
 }
 
+/**
+ * Localize an audit finding from its structured kind + params, rather than the
+ * baked-English `message`/`suggestion` core produces (core is locale-agnostic —
+ * it logs, it doesn't know the UI language). Falls back to the raw strings if a
+ * kind is ever unrecognised.
+ */
+function auditFindingText(f: { kind?: string; params?: any; message: string; suggestion?: string }): { message: string; suggestion?: string } {
+  const p = f.params ?? {};
+  switch (f.kind) {
+    case 'retry-loop': {
+      const time = p.atISO ? new Date(p.atISO).toLocaleTimeString(getLocale()) : '';
+      return {
+        message: t('dash.audit.finding_retry', { tool: p.tool, count: p.count, time }),
+        suggestion: t('dash.audit.finding_retry_hint'),
+      };
+    }
+    case 'auto-fail':
+      return {
+        message: t('dash.audit.finding_auto_fail', { tool: p.tool, pct: p.pct, failed: p.failed, total: p.total }),
+        suggestion: t('dash.audit.finding_auto_fail_hint'),
+      };
+    case 'dangerous-succeeded':
+      return {
+        message: t(p.count === 1 ? 'dash.audit.finding_dangerous_one' : 'dash.audit.finding_dangerous_other', { n: p.count }),
+        suggestion: t('dash.audit.finding_dangerous_hint'),
+      };
+    default:
+      return { message: f.message, suggestion: f.suggestion };
+  }
+}
+
 function formatCategoryLabel(slug: string): string {
   // Localised name if we have a translation, else the canonical English label,
   // else a title-cased fallback.
@@ -1980,8 +2011,10 @@ function CCTrustNudges({ findings, onReview }: { findings: any[]; onReview: () =
           <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11, lineHeight: 1.6 }}>
             <span style={{ marginTop: 6, height: 6, width: 6, flexShrink: 0, borderRadius: '50%', background: dotColor(f.severity) }} />
             <div>
-              <span style={{ color: '#a6adc8' }}>{f.message}</span>
-              {f.suggestion && <span style={{ color: '#6c7086' }}> {f.suggestion}</span>}
+              {(() => { const ft = auditFindingText(f); return <>
+                <span style={{ color: '#a6adc8' }}>{ft.message}</span>
+                {ft.suggestion && <span style={{ color: '#6c7086' }}> {ft.suggestion}</span>}
+              </>; })()}
             </div>
           </div>
         ))}
@@ -5175,9 +5208,9 @@ export function AvaChatPage() {
                   // them up the moment the right keys are present
                   // (Maestro=Qwen, Supernova=DeepSeek+Qwen, Aurora=Mistral).
                   const orchestrated = [
-                    { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: 'Aurora — Mistral-only three-tier EU stack. Medium 3.5 leads (coordinator + Builder + vision + deep specialists), Small 4 carries the volume (chat, long-context, brainstorm, intent gate), Large 3 is the heavy reserve. Stays inside European infrastructure.' },
-                    { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova', enabled: modeAvailability.supernova, title: 'Supernova — DeepSeek V4 Pro coordinator + V4 Flash specialists with Qwen builders. Heavy multi-step work.' },
-                    { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   enabled: modeAvailability.maestro,   title: 'Maestro — single Qwen 3.7 Plus conductor. Daily work, predictable cost.' },
+                    { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: t('dash.model.aurora_title') },
+                    { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova', enabled: modeAvailability.supernova, title: t('dash.model.supernova_title') },
+                    { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   enabled: modeAvailability.maestro,   title: t('dash.model.maestro_title') },
                   ].map(o => ({ ...o, subtitle: modeSubtitle(o.modeId, modeAvailability, modeState) }));
                   return orchestrated.map((o) => {
                     const active = model === o.id;
@@ -16630,25 +16663,27 @@ function IdeAuditView({
             const c = sevColors[f.severity];
             return (
               <div key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, padding: '10px 14px', color: c.text, fontSize: 11, lineHeight: 1.6 }}>
-                <div style={{ fontWeight: 600 }}>{f.message}</div>
-                {f.suggestion && <div style={{ marginTop: 4, opacity: 0.85, fontSize: 10 }}>{f.suggestion}</div>}
+                {(() => { const ft = auditFindingText(f); return <>
+                  <div style={{ fontWeight: 600 }}>{ft.message}</div>
+                  {ft.suggestion && <div style={{ marginTop: 4, opacity: 0.85, fontSize: 10 }}>{ft.suggestion}</div>}
+                </>; })()}
               </div>
             );
           })}
         </div>
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', background: 'rgba(26,16,40,0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: 10 }}>
-        <input type="text" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Filter by tool name or argument..." style={{ ...inputStyle, flex: 1, minWidth: 160, height: 32, boxSizing: 'border-box' }} />
+        <input type="text" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder={t('dash.audit.filter_placeholder')} style={{ ...inputStyle, flex: 1, minWidth: 160, height: 32, boxSizing: 'border-box' }} />
         <CustomSelect
           value={riskFilter}
           onChange={onRiskFilterChange}
           width={130}
           height={32}
           options={[
-            { value: 'all', label: 'All risk' },
-            { value: 'safe', label: 'Safe' },
-            { value: 'write', label: 'Write' },
-            { value: 'dangerous', label: 'Dangerous' },
+            { value: 'all', label: t('dash.audit.risk_all') },
+            { value: 'safe', label: t('dash.audit.risk_safe') },
+            { value: 'write', label: t('dash.audit.risk_write') },
+            { value: 'dangerous', label: t('dash.audit.risk_dangerous') },
           ]}
         />
         <CustomSelect
@@ -16657,45 +16692,45 @@ function IdeAuditView({
           width={130}
           height={32}
           options={[
-            { value: 'all', label: 'All status' },
-            { value: 'success', label: 'Success' },
-            { value: 'failed', label: 'Failed' },
-            { value: 'denied', label: 'Denied' },
+            { value: 'all', label: t('dash.audit.status_all') },
+            { value: 'success', label: t('dash.audit.status_success') },
+            { value: 'failed', label: t('dash.audit.status_failed') },
+            { value: 'denied', label: t('dash.audit.status_denied') },
           ]}
         />
         {securityCount > 0 && (
           <button
             onClick={() => setSecurityOnly(v => !v)}
-            title="Security lens — show only calls that crossed a sandbox boundary: network, out-of-workspace writes, secret access, dangerous tools"
+            title={t('dash.audit.security_lens_title')}
             style={{
               ...btnStyle,
               border: securityOnly ? '1px solid var(--accent)' : btnStyle.border,
               background: securityOnly ? 'color-mix(in srgb, var(--accent) 22%, transparent)' : btnStyle.background,
             }}
-          >🛡 Security <span style={{ opacity: 0.7 }}>({securityCount})</span></button>
+          >🛡 {t('dash.audit.security_lens')} <span style={{ opacity: 0.7 }}>({securityCount})</span></button>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           <button onClick={onRefresh} style={btnStyle} title={t('dash.audit.refresh_hint')}>↻ {t('dash.common.refresh')}</button>
-          <button onClick={() => onExport('markdown')} style={btnStyle} title="Export as Markdown — human-readable, never leaves your machine">Export .md</button>
-          <button onClick={() => onExport('json')} style={btnStyle} title="Export as JSON — for SIEM ingest or programmatic analysis">Export .json</button>
+          <button onClick={() => onExport('markdown')} style={btnStyle} title={t('dash.audit.export_md_title')}>{t('dash.audit.export_md')}</button>
+          <button onClick={() => onExport('json')} style={btnStyle} title={t('dash.audit.export_json_title')}>{t('dash.audit.export_json')}</button>
         </div>
       </div>
       {(totals.credits > 0 || totals.usd > 0) && (
         <div style={{ display: 'flex', gap: 16, background: 'rgba(26,16,40,0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '8px 14px', fontSize: 11 }}>
-          {totals.credits > 0 && <span><span style={{ color: '#6c7086' }}>Credits:</span> <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{totals.credits.toLocaleString()}</span></span>}
-          {totals.usd > 0 && <span><span style={{ color: '#6c7086' }}>BYOK estimate:</span> <span style={{ color: '#cdd6f4', fontWeight: 600 }}>${totals.usd.toFixed(4)}</span></span>}
-          <span style={{ marginLeft: 'auto', color: '#6c7086' }}>{filtered.length} of {entries.length} entries shown</span>
+          {totals.credits > 0 && <span><span style={{ color: '#6c7086' }}>{t('dash.audit.credits_label')}</span> <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{totals.credits.toLocaleString()}</span></span>}
+          {totals.usd > 0 && <span><span style={{ color: '#6c7086' }}>{t('dash.audit.byok_estimate_label')}</span> <span style={{ color: '#cdd6f4', fontWeight: 600 }}>${totals.usd.toFixed(4)}</span></span>}
+          <span style={{ marginLeft: 'auto', color: '#6c7086' }}>{t('dash.audit.entries_shown', { shown: filtered.length, total: entries.length })}</span>
         </div>
       )}
       {filtered.length === 0 ? (
         <div style={{ background: 'rgba(26,16,40,0.6)', border: '1px dashed color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '32px 20px', textAlign: 'center' }}>
           <div style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>📋</div>
-          <div style={{ fontSize: 13, color: '#6c7086' }}>{entries.length === 0 ? 'No tool calls recorded yet.' : 'No entries match your filters.'}</div>
+          <div style={{ fontSize: 13, color: '#6c7086' }}>{entries.length === 0 ? t('dash.audit.empty_none') : t('dash.audit.empty_filtered')}</div>
         </div>
       ) : (
         <div style={{ background: 'rgba(26,16,40,0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 60px 90px 80px 60px', gap: 8, padding: '8px 12px', borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' as const, color: '#6c7086' }}>
-            <span>Time</span><span>Tool</span><span>Category</span><span>Risk</span><span>Approval</span><span style={{ textAlign: 'right' }}>Cost</span><span>Status</span>
+            <span>{t('dash.audit.col_time')}</span><span>{t('dash.audit.col_tool')}</span><span>{t('dash.audit.col_category')}</span><span>{t('dash.audit.col_risk')}</span><span>{t('dash.audit.col_approval')}</span><span style={{ textAlign: 'right' }}>{t('dash.audit.col_cost')}</span><span>{t('dash.audit.col_status')}</span>
           </div>
           {paged.map((entry, localI) => {
             // Use the absolute filtered index so expandedIdx stays
@@ -16703,12 +16738,14 @@ function IdeAuditView({
             // page 1, flipping to page 2, then back, sees their row
             // still open).
             const i = pageStart + localI;
-            const time = new Date(entry.timestamp).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const time = new Date(entry.timestamp).toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
             const isExp = expandedIdx === i;
             const approvalColors: Record<string, string> = { 'auto': '#34d399', 'first-time': '#60a5fa', 'user-approved': '#fbbf24', 'denied': '#f87171' };
             const statusColors: Record<string, string> = { 'success': '#34d399', 'failed': '#f87171', 'denied': '#f87171' };
             const riskColors: Record<string, string> = { 'safe': '#34d399', 'write': '#fbbf24', 'dangerous': '#f87171' };
-            const catLabels: Record<string, string> = { file_ops: 'File Ops', shell: 'Shell', git: 'Git', web: 'Web', media: 'Media', database: 'Database', system: 'System', documents: 'Docs', memory: 'Memory', learning: 'Learning' };
+            // Localized value with the raw enum as fallback (tOr) — a new enum
+            // value from core shows through untranslated rather than as a key.
+            const catLabel = tOr(`dash.audit.cat_${entry.category}`, entry.category);
             return (
               <div key={i}>
                 <button onClick={() => onToggleExpand(i)} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 60px 90px 80px 60px', gap: 8, width: '100%', padding: '8px 12px', textAlign: 'left', fontSize: 11, border: 'none', background: 'transparent', cursor: 'pointer' }}>
@@ -16724,11 +16761,11 @@ function IdeAuditView({
                       <span key={c} style={{ flexShrink: 0, fontSize: 8, fontWeight: 600, padding: '1px 4px', borderRadius: 4, color: IDE_SECURITY_META[c].color, background: IDE_SECURITY_META[c].bg }}>{IDE_SECURITY_META[c].label}</span>
                     ))}
                   </span>
-                  <span style={{ color: '#a6adc8' }}>{catLabels[entry.category] || entry.category}</span>
-                  <span style={{ color: riskColors[entry.riskLevel] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.riskLevel}</span>
-                  <span style={{ color: approvalColors[entry.approvalMethod] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.approvalMethod}</span>
+                  <span style={{ color: '#a6adc8' }}>{catLabel}</span>
+                  <span style={{ color: riskColors[entry.riskLevel] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{tOr(`dash.audit.risk_${entry.riskLevel}`, entry.riskLevel)}</span>
+                  <span style={{ color: approvalColors[entry.approvalMethod] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{tOr(`dash.audit.appr_${entry.approvalMethod}`, entry.approvalMethod)}</span>
                   <span style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 10, color: '#a6adc8' }}>{ideFormatAuditCost(entry.cost)}</span>
-                  <span style={{ color: statusColors[entry.status] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{entry.status}</span>
+                  <span style={{ color: statusColors[entry.status] || '#6c7086', fontSize: 10, fontWeight: 500 }}>{tOr(`dash.audit.status_${entry.status}`, entry.status)}</span>
                 </button>
                 {isExp && (
                   <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -16784,20 +16821,20 @@ function IdeAuditView({
           {totalPages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', fontSize: 11, color: '#6c7086' }}>
               <span>
-                Showing {pageStart + 1}–{Math.min(pageStart + AUDIT_PAGE_SIZE, filtered.length)} of {filtered.length}
+                {t('dash.audit.showing_range', { from: pageStart + 1, to: Math.min(pageStart + AUDIT_PAGE_SIZE, filtered.length), total: filtered.length })}
               </span>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <button
                   onClick={() => setPage(p => Math.max(0, p - 1))}
                   disabled={safePage === 0}
                   style={{ ...btnStyle, opacity: safePage === 0 ? 0.4 : 1, cursor: safePage === 0 ? 'default' : 'pointer' }}
-                >Prev</button>
-                <span style={{ minWidth: 60, textAlign: 'center' }}>Page {safePage + 1} of {totalPages}</span>
+                >{t('dash.audit.prev')}</button>
+                <span style={{ minWidth: 60, textAlign: 'center' }}>{t('dash.audit.page', { n: safePage + 1, total: totalPages })}</span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                   disabled={safePage >= totalPages - 1}
                   style={{ ...btnStyle, opacity: safePage >= totalPages - 1 ? 0.4 : 1, cursor: safePage >= totalPages - 1 ? 'default' : 'pointer' }}
-                >Next</button>
+                >{t('dash.audit.next')}</button>
               </div>
             </div>
           )}

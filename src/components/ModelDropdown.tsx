@@ -16,6 +16,7 @@
 // renders whatever is passed in.
 
 import { useState, useRef, useEffect } from 'react';
+import { t, useLocale } from '../lib/i18n';
 import { Tooltip } from './Tooltip';
 import { useModeAvailability, modeSubtitle, type ModeId } from '../lib/mode-availability';
 
@@ -36,28 +37,16 @@ interface ModelDropdownProps {
 
 // IDs match the picker's setModel target. modeId is the lookup into
 // the shared mode-availability lib for unlock-path messaging.
-const ORCHESTRATED: { id: string; modeId: ModeId; label: string; title: string }[] = [
-  {
-    id: 'aurora',
-    modeId: 'aurora',
-    label: '✦ Aurora',
-    title: 'Aurora — Mistral-only EU stack. Three-tier fleet: Mistral Medium 3.5 leads (coordinator + Builder + vision + deep specialists), Mistral Small 4 carries the volume (chat, long-context, brainstorm, intent gate), Mistral Large 3 is the heavy reserve. EU-only data residency, GDPR-strict, open weights.',
-  },
-  {
-    id: 'supernova',
-    modeId: 'supernova',
-    label: '✦ Supernova',
-    title: 'Supernova — DeepSeek V4 Pro coordinator + V4 Flash specialists with Qwen builders. Heavy multi-step work.',
-  },
-  {
-    id: 'auto',
-    modeId: 'maestro',
-    label: '✦ Maestro',
-    title: 'Maestro — single Qwen 3.7 Plus conductor. Daily work, predictable cost.',
-  },
+// titleKey, not title — resolved at render, and shared with the CC model picker
+// via core keys (the two had drifted into different copies). Names stay as-is.
+const ORCHESTRATED: { id: string; modeId: ModeId; label: string; titleKey: string }[] = [
+  { id: 'aurora',    modeId: 'aurora',    label: '✦ Aurora',    titleKey: 'dash.model.aurora_title' },
+  { id: 'supernova', modeId: 'supernova', label: '✦ Supernova', titleKey: 'dash.model.supernova_title' },
+  { id: 'auto',      modeId: 'maestro',   label: '✦ Maestro',   titleKey: 'dash.model.maestro_title' },
 ];
 
 export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDropdownProps) {
+  useLocale();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { state: modeState, availability: modeAvailability } = useModeAvailability();
@@ -80,7 +69,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
       ? 'Supernova'
       : isAurora
         ? 'Aurora'
-        : models.find((m) => m.id === activeModel)?.name ?? 'Select model';
+        : models.find((m) => m.id === activeModel)?.name ?? t('dash.model.select');
 
   // Orchestrated entries first, then raw models alphabetically.
   const rawModels = [...models]
@@ -146,7 +135,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
             const subtitle = modeSubtitle(o.modeId, modeAvailability, modeState);
             const isActive = activeModel === o.id;
             const tooltipContent = enabled
-              ? o.title
+              ? t(o.titleKey)
               : `${o.label.replace('✦ ', '')} — ${subtitle}`;
             return (
               <Tooltip key={o.id} content={tooltipContent} placement="top">

@@ -20,7 +20,7 @@ import {
 } from '@phosphor-icons/react';
 import type { ActivityItem, SidebarPosition } from '../App';
 import { getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
-import { t, useLocale } from '../lib/i18n';
+import { t, useLocale, getLocale } from '../lib/i18n';
 import { SignInPanel } from './SignInPanel';
 
 type PhIconType = React.ComponentType<{ size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone' }>;
@@ -1174,6 +1174,7 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
  * find out by being surprised costs their trust.
  */
 function EarlyAccessBadge() {
+  useLocale();
   return (
     <span style={{
       flexShrink: 0,
@@ -1189,7 +1190,7 @@ function EarlyAccessBadge() {
       lineHeight: 1.5,
       whiteSpace: 'nowrap',
     }}>
-      Early Access
+      {t('dash.cc.early_access')}
     </span>
   );
 }
@@ -1629,8 +1630,12 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const label = target.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+  const label = target.toLocaleDateString(getLocale(), { month: 'short', year: 'numeric' });
   const todayStr = now.toISOString().slice(0, 10);
+  // Narrow weekday initials in the user's language, Sunday-first to match the
+  // grid (firstDay = getDay(), 0 = Sunday). Jan 1 2023 was a Sunday.
+  const weekdayNarrow = Array.from({ length: 7 }, (_, i) =>
+    new Date(2023, 0, 1 + i).toLocaleDateString(getLocale(), { weekday: 'narrow' }));
 
   if (collapsed) {
     return (
@@ -1638,7 +1643,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
         <button onClick={toggleCollapsed} title={t('dash.sidebar.show_calendar')} style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer', color: '#a6adc8' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 9, fontWeight: 600 }}>{now.getDate()}</span>
-            <span style={{ fontSize: 11 }}>{now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+            <span style={{ fontSize: 11 }}>{now.toLocaleDateString(getLocale(), { weekday: 'short', day: 'numeric', month: 'short' })}</span>
           </span>
           <span style={{ fontSize: 9, color: '#6c7086' }}>{'▼'}</span>
         </button>
@@ -1673,7 +1678,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#38bdf8' }} />{t('dash.sidebar.legend_tasks')}</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, textAlign: 'center', marginBottom: 2 }}>
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+        {weekdayNarrow.map((d, i) => (
           <span key={i} style={{ fontSize: 8, color: '#45475a', fontWeight: 600 }}>{d}</span>
         ))}
       </div>
