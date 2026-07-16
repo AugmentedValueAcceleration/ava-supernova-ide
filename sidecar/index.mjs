@@ -1709,6 +1709,12 @@ async function handleInit(data) {
       // Machine-global dir (AVA_HOME) — lets record_machine_rule persist a
       // standing rule to <AVA_HOME>/Decisions/machine-rules.md.
       globalDir: AVA_HOME,
+      // Creative Studio library root — account-scoped, outside any project, and
+      // the SAME folder the extension writes to (see src/lib/creative-gallery.ts).
+      // browse_library reads this so Studio assets are visible to Ava; without
+      // it she only ever saw project files and would offer to regenerate things
+      // the user already owned.
+      creativeDir: join(ACCOUNT_ROOT, 'creative'),
       journalManager,
       taskManager,
       // Surface-injected health plan store — Node-fs impl pointed at
