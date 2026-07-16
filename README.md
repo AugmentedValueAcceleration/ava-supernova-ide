@@ -59,6 +59,7 @@ Same engine as the CLI and the VS Code extension — so everything you learn in 
 - **Three fleets** — **Maestro** (Qwen ensemble, ships) and **Aurora** (EU-sovereign Mistral stack, ships) are live; **Supernova** (polyglot — DeepSeek V4 Pro coordinator + Qwen builders) runs on your own DeepSeek + Qwen keys, with the managed version in preview.
 - **60+ tools**, plus the IDE-only desktop- and browser-automation tools described above.
 - **Knowledge packs** — toggle domain expertise on/off in the chat bar; the system prompt rebuilds live, no restart.
+- **20 languages, live** — the whole interface translates, not just the chat, and switches the moment you change language — no restart, and Ava's replies follow too. Pick your language right from the welcome flow. Dates format the way your language writes them.
 - **5-layer memory** — local-first, curated by a dedicated Memory Agent so context stays lean.
 - **Honesty gate** — completion/state claims are checked against the verifying tools run that turn; an unbacked claim is flagged rather than stated as fact. Always on, no off-switch.
 - **Tick Engine** — background awareness every couple of minutes; surfaces tasks, token balance, and support messages only when they matter.
