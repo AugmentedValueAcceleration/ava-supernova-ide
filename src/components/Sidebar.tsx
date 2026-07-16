@@ -1091,7 +1091,22 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
                   // user's own model.
                   window.dispatchEvent(new Event('ava-ide-source-changed'));
                 }}
-                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer', background: active ? 'var(--accent)' : 'rgba(49, 34, 68, 0.5)', color: active ? '#fff' : '#6c7086' }}>
+                  /* House button style — the chat's "New Chat" pill: translucent
+                     accent fill, accent border + text. Selected sits at 18%/40%,
+                     unselected transparent with a muted border, so the pair still
+                     reads as one segmented control. Was solid-accent + white vs
+                     flat grey, which matched nothing else. */
+                  onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}
+                  onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                  style={{
+                    flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    transition: 'background 0.15s',
+                    background: active ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
+                    border: active
+                      ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)'
+                      : '1px solid var(--border, #2a2440)',
+                    color: active ? 'var(--accent)' : '#6c7086',
+                  }}>
                   {t(labelKey)}
                 </button>
               );

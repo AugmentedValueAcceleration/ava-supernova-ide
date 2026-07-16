@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { t, useLocale } from '../lib/i18n';
+import { DateField } from './MiniDatePicker';
 // Shared field registry — same source the sidecar saves from, so "what Ava
 // asks", "what this card renders", and "where it saves" never drift. Pure data
 // (no node deps), imported from the built core like the i18n strings.
@@ -140,7 +141,8 @@ export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSk
 
       {def.control === 'date' && (
         <>
-          <input type="date" value={text} onChange={(e) => setText(e.target.value)} style={inputStyle} />
+          {/* Our MiniDatePicker, not the native (light) browser calendar. */}
+          <DateField value={text || null} onChange={(iso) => setText(iso ?? '')} style={inputStyle} />
           <Actions onSave={() => onSubmit(text)} onSkip={onSkip} disabled={!text} />
         </>
       )}

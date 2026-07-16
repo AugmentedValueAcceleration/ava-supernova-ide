@@ -35,7 +35,19 @@ import {
   Clock as PhClock,
   Rocket as PhRocket,
   ShieldCheck as PhShieldCheck,
+  // Course identities + lesson types — replacing the emoji that used to sit here.
+  Sparkle as PhSparkle,
+  Palette as PhPalette,
+  ChartBar as PhChartBar,
+  Gear as PhGear,
+  GameController as PhGameController,
+  Books as PhBooks,
+  Code as PhCode,
+  Wrench as PhWrench,
+  Question as PhQuestion,
+  Trophy as PhTrophy,
 } from '@phosphor-icons/react';
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { DesignStudio } from './DesignStudio';
 import { t, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
@@ -45,6 +57,7 @@ import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sideca
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
 import { Tooltip } from './Tooltip';
+import { DateField } from './MiniDatePicker';
 import { LessonPlayer, type PlayableLesson, type LessonStep } from './LessonPlayer';
 import { LearningRoomChat, seedLearningRoom } from './LearningRoomChat';
 import { seedHealthRoom } from './HealthRoomChat';
@@ -8486,14 +8499,13 @@ export function TasksPage() {
               {/* Due date */}
               <div style={{ minWidth: 160 }}>
                 <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{t('dash.tasks.label_due_date')}</div>
-                <input
-                  type="date"
-                  value={formDueDate}
-                  onChange={(e) => setFormDueDate(e.target.value)}
-                  style={{
-                    ...inputStyle, height: 34, width: '100%',
-                    colorScheme: 'dark',
-                  }}
+                {/* Our MiniDatePicker via DateField, not the native browser
+                    calendar — which needed a colorScheme:'dark' hack to be
+                    even passably dark and still didn't match anything. */}
+                <DateField
+                  value={formDueDate || null}
+                  onChange={(iso) => setFormDueDate(iso ?? '')}
+                  style={{ ...inputStyle, height: 34, width: '100%' }}
                 />
               </div>
               {/* Category */}
@@ -9361,8 +9373,10 @@ export function LearningPage() {
     mixed:        { color: '#a78bfa', bg: 'rgba(167,139,250,0.10)' },
   };
 
-  const typeIcons: Record<string, string> = {
-    concept: '\uD83D\uDCD6', exercise: '\uD83D\uDCBB', project: '\uD83D\uDEE0', quiz: '\u2753', recap: '\uD83D\uDD04',
+  // Same lesson-type glyphs the Learning Library uses \u2014 our icon set, not
+  // emoji, so they inherit colour and sit at the app's weight.
+  const typeIcons: Record<string, PhosphorIcon> = {
+    concept: PhBook, exercise: PhCode, project: PhWrench, quiz: PhQuestion, recap: PhArrowsClockwise,
   };
 
   const inProgress = curricula.filter((c: any) => c.status === 'active' || c.status === 'in_progress').length;
@@ -9538,7 +9552,9 @@ export function LearningPage() {
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(49, 34, 68, 0.5)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                           >
-                            <span>{typeIcons[lesson.type] || '\uD83D\uDCD6'}</span>
+                            <span style={{ display: 'flex', alignItems: 'center', color: '#6c7086', flexShrink: 0 }}>
+                              {(() => { const G = typeIcons[lesson.type] ?? PhBook; return <G size={14} weight="duotone" />; })()}
+                            </span>
                             <span style={{
                               color: lesson.status === 'completed' ? '#6c7086' : '#cdd6f4',
                               textDecoration: lesson.status === 'completed' ? 'line-through' : 'none',
@@ -10019,19 +10035,22 @@ async function scanLocalLibrary(projectFolder: string): Promise<LibraryFile[]> {
 // A small, friendly visual identity per course — a soft gradient + icon
 // derived from the subject, so each tile feels distinct and inviting at a
 // glance. Mirrors the extension's LearningLibrary identityFor.
-type CourseIdentity = { from: string; to: string; tint: string; icon: string };
+// `icon` is a Phosphor component, not an emoji. These were ✨🎨📊🔒⚙️🎮🧮📚, which
+// render at a different weight on every platform, can't inherit a colour, and
+// read as clip-art next to the rest of the IDE's line icons.
+type CourseIdentity = { from: string; to: string; tint: string; icon: PhosphorIcon };
 
 const COURSE_SUBJECT_IDENTITIES: { match: string[]; identity: CourseIdentity }[] = [
-  { match: ['prompt', 'ai', 'llm', 'agent', 'machine'], identity: { from: 'var(--accent)', to: '#7c3aed', tint: 'color-mix(in srgb, var(--accent) 12%, transparent)', icon: '✨' } },
-  { match: ['web', 'frontend', 'react', 'css', 'html', 'ui', 'design'], identity: { from: '#38bdf8', to: '#2563eb', tint: 'rgba(56,189,248,0.12)', icon: '🎨' } },
-  { match: ['python', 'data', 'analysis', 'science', 'ml'], identity: { from: '#34d399', to: '#0ea5e9', tint: 'rgba(52,211,153,0.12)', icon: '📊' } },
-  { match: ['security', 'crypto', 'network', 'cyber'], identity: { from: '#f87171', to: '#b91c1c', tint: 'rgba(248,113,113,0.12)', icon: '🔒' } },
-  { match: ['backend', 'server', 'api', 'database', 'sql', 'devops', 'cloud'], identity: { from: '#fbbf24', to: '#d97706', tint: 'rgba(251,191,36,0.12)', icon: '⚙️' } },
-  { match: ['game', 'graphics', '3d', 'shader'], identity: { from: '#f472b6', to: '#db2777', tint: 'rgba(244,114,182,0.12)', icon: '🎮' } },
-  { match: ['math', 'algorithm', 'logic'], identity: { from: '#818cf8', to: '#4f46e5', tint: 'rgba(129,140,248,0.12)', icon: '🧮' } },
+  { match: ['prompt', 'ai', 'llm', 'agent', 'machine'], identity: { from: 'var(--accent)', to: '#7c3aed', tint: 'color-mix(in srgb, var(--accent) 12%, transparent)', icon: PhSparkle } },
+  { match: ['web', 'frontend', 'react', 'css', 'html', 'ui', 'design'], identity: { from: '#38bdf8', to: '#2563eb', tint: 'rgba(56,189,248,0.12)', icon: PhPalette } },
+  { match: ['python', 'data', 'analysis', 'science', 'ml'], identity: { from: '#34d399', to: '#0ea5e9', tint: 'rgba(52,211,153,0.12)', icon: PhChartBar } },
+  { match: ['security', 'crypto', 'network', 'cyber'], identity: { from: '#f87171', to: '#b91c1c', tint: 'rgba(248,113,113,0.12)', icon: PhLock } },
+  { match: ['backend', 'server', 'api', 'database', 'sql', 'devops', 'cloud'], identity: { from: '#fbbf24', to: '#d97706', tint: 'rgba(251,191,36,0.12)', icon: PhGear } },
+  { match: ['game', 'graphics', '3d', 'shader'], identity: { from: '#f472b6', to: '#db2777', tint: 'rgba(244,114,182,0.12)', icon: PhGameController } },
+  { match: ['math', 'algorithm', 'logic'], identity: { from: '#818cf8', to: '#4f46e5', tint: 'rgba(129,140,248,0.12)', icon: PhBrain } },
 ];
 
-const COURSE_DEFAULT_IDENTITY: CourseIdentity = { from: 'var(--accent)', to: '#7c3aed', tint: 'color-mix(in srgb, var(--accent) 10%, transparent)', icon: '📚' };
+const COURSE_DEFAULT_IDENTITY: CourseIdentity = { from: 'var(--accent)', to: '#7c3aed', tint: 'color-mix(in srgb, var(--accent) 10%, transparent)', icon: PhBooks };
 
 function identityFor(subject?: string, title?: string): CourseIdentity {
   const hay = `${subject || ''} ${title || ''}`.toLowerCase();
@@ -10041,8 +10060,8 @@ function identityFor(subject?: string, title?: string): CourseIdentity {
   return COURSE_DEFAULT_IDENTITY;
 }
 
-const COURSE_TYPE_ICONS: Record<string, string> = {
-  concept: '📖', exercise: '💻', project: '🛠', quiz: '❓', recap: '🔄', challenge: '🏆',
+const COURSE_TYPE_ICONS: Record<string, PhosphorIcon> = {
+  concept: PhBook, exercise: PhCode, project: PhWrench, quiz: PhQuestion, recap: PhArrowsClockwise, challenge: PhTrophy,
 };
 
 // A small stat block for the course-detail hero — icon, bold value, quiet label.
@@ -10136,7 +10155,9 @@ export function LearningLibraryPage() {
     const avgRating = detail.rating_count > 0 ? (detail.rating_sum / detail.rating_count).toFixed(1) : null;
     return (
       <div style={pageWrapper}>
-        <div style={{ width: '100%', maxWidth: 860, margin: '0 auto' }}>
+        {/* Full width — the course detail was pinned to 860px and centred,
+            which left most of the panel empty at any real window size. */}
+        <div style={{ width: '100%' }}>
           <button onClick={() => { setSelectedId(null); setDetail(null); }} style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>
             &larr; Back to Library
           </button>
@@ -10154,8 +10175,9 @@ export function LearningLibraryPage() {
                 alignItems: 'center', justifyContent: 'center', fontSize: 28,
                 background: `linear-gradient(135deg, ${id.from}, ${id.to})`,
                 boxShadow: `0 6px 20px -6px ${id.from}`,
+                color: '#fff',
               }}>
-                {id.icon}
+                <id.icon size={26} weight="duotone" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -10236,7 +10258,9 @@ export function LearningLibraryPage() {
                             color: '#a6adc8', padding: '7px 10px', borderRadius: 8,
                             background: 'rgba(49,34,68,0.4)',
                           }}>
-                            <span style={{ fontSize: 15, lineHeight: 1 }}>{COURSE_TYPE_ICONS[l.type] || '\u25CB'}</span>
+                            <span style={{ display: 'flex', alignItems: 'center', color: '#6c7086', flexShrink: 0 }}>
+                              {(() => { const G = COURSE_TYPE_ICONS[l.type] ?? PhNote; return <G size={15} weight="duotone" />; })()}
+                            </span>
                             <span style={{ flex: 1 }}>{l.title}</span>
                             {l.difficulty && (
                               <span style={{ fontSize: 9, fontWeight: 600, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.4 }}>{l.difficulty}</span>
@@ -10258,12 +10282,21 @@ export function LearningLibraryPage() {
             background: `linear-gradient(135deg, ${id.tint}, transparent), rgba(26,16,40,0.6)`,
             padding: 18,
           }}>
-            <button onClick={() => handleFork(detail.id)} disabled={forking} style={{
-              padding: '11px 26px', borderRadius: 10, cursor: forking ? 'wait' : 'pointer',
-              border: '1px solid color-mix(in srgb, var(--accent) 45%, transparent)',
-              background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 600,
-              opacity: forking ? 0.7 : 1, transition: 'opacity 0.15s',
-            }}>
+            {/* House button style — the chat's "New Chat" pill: translucent
+                accent fill, accent border + text. Was solid accent with white
+                text, which matched nothing else. */}
+            <button
+              onClick={() => handleFork(detail.id)}
+              disabled={forking}
+              onMouseEnter={(e) => { if (!forking) (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 20%, transparent)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 10%, transparent)'; }}
+              style={{
+                padding: '11px 26px', borderRadius: 8, cursor: forking ? 'wait' : 'pointer',
+                border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                color: 'var(--accent)', fontSize: 14, fontWeight: 600,
+                opacity: forking ? 0.7 : 1, transition: 'background 0.15s, opacity 0.15s',
+              }}>
               {forking ? 'Starting...' : 'Start Learning'}
             </button>
           </div>
@@ -10393,9 +10426,9 @@ export function LearningLibraryPage() {
                   {!p.cover_image_url && (
                     <div style={{
                       width: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', fontSize: 22, background: 'rgba(0,0,0,0.18)',
+                      justifyContent: 'center', background: 'rgba(0,0,0,0.18)', color: '#fff',
                     }}>
-                      {id.icon}
+                      <id.icon size={20} weight="duotone" />
                     </div>
                   )}
                   <span style={{

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { t, useLocale } from '../lib/i18n';
+import { Combobox } from './Combobox';
+import { DateField } from './MiniDatePicker';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -304,11 +306,17 @@ function TaskEditForm({ task, onSave, onCancel }: {
         <select value={priority} onChange={(e) => setPriority(e.target.value as TodayTaskUI['priority'])} style={small}>
           {PRIORITY_OPTIONS.map(p => <option key={p} value={p} style={{ background: '#1a1028' }}>{t(`tasks.priority_${p}`)}</option>)}
         </select>
-        <input list="ide-edit-cats" value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...small, cursor: 'text' }} />
-        <datalist id="ide-edit-cats">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist>
+        {/* Themed Combobox rather than <input list> + <datalist>, whose dropdown
+            the browser draws (light, unstyleable). Still free-form. */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Combobox value={category} onChange={setCategory} options={CATEGORY_OPTIONS} style={{ ...small, flex: undefined, width: '100%', cursor: 'text' }} />
+        </div>
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
-        <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={small} />
+        {/* Our MiniDatePicker, not the native (light) browser calendar. */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <DateField value={dueDate || null} onChange={(iso) => setDueDate(iso ?? '')} style={{ ...small, flex: undefined, width: '100%' }} />
+        </div>
         <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} style={small} />
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
@@ -462,15 +470,14 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
           </div>
           <div style={{ flex: 1 }}>
             <span style={fieldLabel}>{t('tasks.category')}</span>
-            <input list="ide-quickadd-categories" value={category} onChange={(e) => setCategory(e.target.value)} style={mInput} />
-            <datalist id="ide-quickadd-categories">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist>
+            <Combobox value={category} onChange={setCategory} options={CATEGORY_OPTIONS} style={mInput} />
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
             <span style={fieldLabel}>{t('tasks.due_date')}</span>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...mInput, cursor: 'pointer' }} />
+            <DateField value={dueDate || null} onChange={(iso) => setDueDate(iso ?? '')} style={{ ...mInput, cursor: 'pointer' }} />
           </div>
           <div style={{ flex: 1 }}>
             <span style={fieldLabel}>{t('tasks.due_time')}</span>

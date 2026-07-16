@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { t } from '../lib/i18n';
 
 /**
@@ -71,16 +72,81 @@ function MiniDatePicker({ value, onChange }: { value: string; onChange: (iso: st
  * Themed date field: a button showing the picked date (or "—") that opens the
  * MiniDatePicker popover. Drop-in replacement for `<input type="date">`.
  */
-export function DateField({ value, onChange, style }: { value: string | null; onChange: (iso: string | null) => void; style?: React.CSSProperties }) {
+// MiniDatePicker renders a fixed-width panel; this is its approximate height
+// (header + up to 6 week rows), used to decide whether to flip above the field.
+const CAL_WIDTH = 220;
+const CAL_DESIRED_HEIGHT = 260;
+
+/**
+ * A themed date field: a button showing the picked date that opens the
+ * MiniDatePicker, replacing the native (light) browser date input.
+ *
+ * The calendar is portaled to <body> with fixed positioning so a dialog's
+ * max-height/overflow can't clip it, and it flips above the field when there
+ * isn't room below. It was absolutely positioned, which meant it got cut off
+ * at the bottom of any modal it sat near.
+ *
+ * `placeholder` is shown when no date is picked. `style` passes through to the
+ * trigger so callers keep matching the register of the controls beside them.
+ */
+export function DateField({
+  value,
+  onChange,
+  style,
+  placeholder = '—',
+}: {
+  value: string | null;
+  onChange: (iso: string | null) => void;
+  style?: React.CSSProperties;
+  placeholder?: string;
+}) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
+  const calRef = useRef<HTMLDivElement>(null);
+  const [calStyle, setCalStyle] = useState<React.CSSProperties>({});
+
+  const reposition = useCallback(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < CAL_DESIRED_HEIGHT && rect.top > spaceBelow;
+    // Keep the panel on-screen when the field sits near the right edge.
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - CAL_WIDTH - 8));
+    setCalStyle({
+      position: 'fixed',
+      left,
+      zIndex: 1000,
+      ...(openUp ? { bottom: window.innerHeight - rect.top + gap } : { top: rect.bottom + gap }),
+    });
+  }, []);
+
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false); };
+    reposition();
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (wrap.current?.contains(target)) return;
+      if (calRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onScrollResize = () => reposition();
     document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
-  const pretty = value ? new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    // capture: catch scrolls on any ancestor, not just window
+    window.addEventListener('scroll', onScrollResize, true);
+    window.addEventListener('resize', onScrollResize);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('scroll', onScrollResize, true);
+      window.removeEventListener('resize', onScrollResize);
+    };
+  }, [open, reposition]);
+
+  const pretty = value
+    ? new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    : placeholder;
+
   return (
     <div style={{ position: 'relative' }} ref={wrap}>
       <button
@@ -91,10 +157,11 @@ export function DateField({ value, onChange, style }: { value: string | null; on
         <span style={{ color: value ? '#cdd6f4' : '#6c7086' }}>{pretty}</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
       </button>
-      {open && (
-        <div style={{ position: 'absolute', left: 0, marginTop: 4, zIndex: 40 }}>
+      {open && createPortal(
+        <div ref={calRef} style={calStyle}>
           <MiniDatePicker value={value ?? ''} onChange={(iso) => { onChange(iso || null); setOpen(false); }} />
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

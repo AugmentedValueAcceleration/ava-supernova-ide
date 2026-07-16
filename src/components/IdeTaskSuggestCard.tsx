@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Combobox } from './Combobox';
+import { DateField } from './MiniDatePicker';
 
 /**
  * Task-suggestion card (IDE) — "Ava suggests, you decide".
@@ -95,11 +97,17 @@ export function IdeTaskSuggestCard({ args, onAdd, onDismiss }: Props) {
             <select value={priority} onChange={(e) => setPriority(e.target.value)} style={small}>
               {PRIORITY_OPTIONS.map(p => <option key={p} value={p} style={{ background: '#1a1028' }}>{p}</option>)}
             </select>
-            <input list="ide-suggest-cats" value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...small, cursor: 'text' }} />
-            <datalist id="ide-suggest-cats">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist>
+            {/* Themed Combobox rather than <input list> + <datalist>, whose
+                dropdown the browser draws (light, unstyleable). Still free-form. */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Combobox value={category} onChange={setCategory} options={CATEGORY_OPTIONS} style={{ ...small, flex: undefined, width: '100%' }} />
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={small} />
+            {/* Our MiniDatePicker, not the native (light) browser calendar. */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <DateField value={dueDate || null} onChange={(iso) => setDueDate(iso ?? '')} style={{ ...small, flex: undefined, width: '100%' }} />
+            </div>
             <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} style={small} />
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
