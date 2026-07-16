@@ -108,7 +108,7 @@ import { IdePurchaseCard } from './_IdePurchaseCard';
 // the chat header calls setCloudSync(); a single localStorage value is
 // the source of truth across the IDE.
 import { cloudSyncEnabled } from '../lib/data-mode';
-import { readAllLocalCreative, removeLocalCreative, type GalleryItem } from '../lib/creative-gallery';
+import { readAllLocalCreative, removeLocalCreative, renameLocalCreative, copyCreativeToProject, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
 import { GeneralProfilePage, ProfileTab, MySubmissionsTab, ContributeModal, requestHealthRoomTab } from './HealthPage';
@@ -11110,6 +11110,13 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
             setCloudFiles(prev => prev.filter(f => f.id !== id && f.path !== id));
             setLocalFiles(prev => prev.filter(f => f.id !== id && f.path !== id));
           }}
+          onRenamed={(id, title) => {
+            // Creative assets sit in cloudFiles even when source==='local' (see
+            // the note above), so patch the name in both lists by id.
+            setCloudFiles(prev => prev.map(f => (f.id === id ? { ...f, name: title } : f)));
+            setLocalFiles(prev => prev.map(f => (f.id === id ? { ...f, name: title } : f)));
+            setSelectedFile(prev => (prev && prev.id === id ? { ...prev, name: title } : prev));
+          }}
         />
       )}
 
@@ -11143,17 +11150,22 @@ function LibraryPreviewModal({
   projectFolder,
   onClose,
   onDeleted,
+  onRenamed,
 }: {
   file: LibraryFile;
   projectFolder: string | null;
   onClose: () => void;
   onDeleted: (id: string, source: 'cloud' | 'local') => void;
+  /** Fired after a successful rename so the grid re-reads the title. */
+  onRenamed?: (id: string, title: string) => void;
 }) {
   useLocale();
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [busy, setBusy] = useState<null | 'download' | 'delete' | 'open' | 'reveal'>(null);
+  const [busy, setBusy] = useState<null | 'download' | 'delete' | 'open' | 'reveal' | 'useInProject'>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(file.name ?? '');
 
   const isCloud = file.source === 'cloud';
   const mediaKind = classifyMediaKind(file);
@@ -11276,6 +11288,33 @@ function LibraryPreviewModal({
     } catch { showToast('Clipboard unavailable.'); }
   };
 
+  // Copy a Studio asset into the open project. The library lives account-scoped
+  // outside any project, so this is what makes an asset usable in code — the
+  // destination follows the project's own conventions.
+  const handleUseInProject = async () => {
+    if (isCloud || !file.id) return;
+    setBusy('useInProject');
+    try {
+      const copied = await copyCreativeToProject(file.id);
+      if (!copied) { showToast(projectFolder ? 'Could not find that asset to copy.' : 'Open a project folder first.'); return; }
+      await navigator.clipboard.writeText(copied.relPath).catch(() => { /* clipboard optional */ });
+      showToast(`Copied to ${copied.relPath} — path on your clipboard`);
+    } catch (err) {
+      showToast(`Copy failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally { setBusy(null); }
+  };
+
+  const handleRename = async () => {
+    const next = renameValue.trim();
+    if (!next || !file.id) { setRenaming(false); return; }
+    try {
+      const saved = await renameLocalCreative(file.id, next);
+      if (saved) { onRenamed?.(file.id, saved); showToast('Renamed'); }
+    } catch (err) {
+      showToast(`Rename failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally { setRenaming(false); }
+  };
+
   const actionBtn = (
     label: string,
     onClick: () => void,
@@ -11365,11 +11404,44 @@ function LibraryPreviewModal({
             </p>
           )}
 
+          {/* Rename — inline, so the name the user gave an asset is editable
+              without leaving the modal. Metadata title only; the file keeps its
+              name so paths already in use stay valid. */}
+          {!isCloud && file.id && renaming && (
+            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+              <input
+                autoFocus
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleRename();
+                  if (e.key === 'Escape') { setRenameValue(file.name ?? ''); setRenaming(false); }
+                }}
+                style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: 12,
+                  background: 'rgba(26,16,40,0.6)', color: '#cdd6f4',
+                  border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', outline: 'none',
+                }}
+              />
+              {actionBtn('Save', () => void handleRename(), { primary: true })}
+            </div>
+          )}
+
           <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {/* Use in project — what makes a Studio asset usable in code. */}
+            {!isCloud && file.id && actionBtn(
+              busy === 'useInProject' ? 'Copying…' : 'Use in project',
+              () => void handleUseInProject(),
+              { primary: true, disabled: !projectFolder },
+            )}
+            {!isCloud && file.id && !renaming && actionBtn(
+              'Rename',
+              () => { setRenameValue(file.name ?? ''); setRenaming(true); },
+            )}
             {!isCloud && actionBtn(
               busy === 'open' ? 'Opening…' : (isOfficeDoc ? 'Open (LibreOffice)' : 'Open'),
               handleOpen,
-              { primary: true, disabled: !projectFolder },
+              { disabled: !projectFolder },
             )}
             {!isCloud && actionBtn(busy === 'reveal' ? 'Revealing…' : 'Reveal', handleReveal, { disabled: !projectFolder })}
             {actionBtn(

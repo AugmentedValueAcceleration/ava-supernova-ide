@@ -12,7 +12,7 @@
  * items array. The OutputCard component renders each entry.
  */
 
-import { writeFile, writeTextFile, readTextFile, mkdir, BaseDirectory, remove } from '@tauri-apps/plugin-fs';
+import { writeFile, writeTextFile, readFile, readTextFile, mkdir, stat, BaseDirectory, remove } from '@tauri-apps/plugin-fs';
 import { homeDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { accountRoot } from './account-scope';
@@ -155,6 +155,99 @@ async function deleteFromDisk(localPath: string): Promise<void> {
 export async function removeLocalCreative(id: string): Promise<void> {
   const meta = await readLocalMetadata();
   await writeLocalMetadata(meta.filter((m) => m.id !== id)).catch(() => {});
+}
+
+/** Rename a stored asset. Only the metadata `title` changes — the file on disk
+ *  keeps its id-based name, so every path already handed out (to the Library,
+ *  to Ava via browse_library, or copied into a project) stays valid. Renaming
+ *  the file would silently break those. Returns the new title, or null if the
+ *  id is unknown / the title is empty. */
+export async function renameLocalCreative(id: string, title: string): Promise<string | null> {
+  const next = title.trim();
+  if (!next) return null;
+  const meta = await readLocalMetadata();
+  const item = meta.find((m) => m.id === id);
+  if (!item) return null;
+  item.title = next;
+  await writeLocalMetadata(meta).catch(() => {});
+  return next;
+}
+
+/** Where the user's project is, as the app records it. App.tsx keeps this key
+ *  deliberately in sync with its own state so the sidecar and other components
+ *  agree; reading it here avoids threading the folder through every caller. */
+function currentProjectFolder(): string | null {
+  try { return localStorage.getItem('ava-ide-project-folder') || null; } catch { return null; }
+}
+
+/**
+ * Copy a Studio asset into the user's project so it can actually be used in
+ * code — the library lives account-scoped outside any project, so a reference
+ * to it would only ever work on this machine.
+ *
+ * Destination follows the project's OWN convention: the first of public/,
+ * src/assets/, assets/, static/, images/ that already exists, falling back to
+ * creating images/. Deliberately NOT <project>/.ava/creative — that's
+ * gitignored, so the asset would work locally and vanish for everyone else.
+ *
+ * Returns the project-relative path, ready to paste into code, plus the
+ * absolute one for revealing. Null if there's no project open or no such asset.
+ */
+export async function copyCreativeToProject(
+  id: string,
+): Promise<{ relPath: string; absPath: string } | null> {
+  const projectRoot = currentProjectFolder();
+  if (!projectRoot) return null;
+
+  const meta = await readLocalMetadata();
+  const item = meta.find((m) => m.id === id);
+  if (!item) return null;
+
+  // localPath is the absolute on-disk path stamped at save time.
+  const source = item.localPath;
+  if (!source) return null;
+
+  // stat(), not exists(): fs:allow-stat is in the capability scope but
+  // fs:allow-exists is NOT, so exists() would be denied at runtime.
+  const isDir = async (p: string): Promise<boolean> => {
+    try { return (await stat(p)).isDirectory; } catch { return false; }
+  };
+  const isTaken = async (p: string): Promise<boolean> => {
+    try { await stat(p); return true; } catch { return false; }
+  };
+
+  const PREFERRED = ['public', 'src/assets', 'assets', 'static', 'images'];
+  let destDir: string | null = null;
+  for (const candidate of PREFERRED) {
+    const abs = `${projectRoot}/${candidate}`;
+    if (await isDir(abs)) { destDir = abs; break; }
+  }
+  if (!destDir) {
+    destDir = `${projectRoot}/images`;
+    await mkdir(destDir, { recursive: true }).catch(() => {});
+  }
+
+  // Name it after the user's title where we can — that's the name they gave it
+  // — keeping the original extension, and never clobbering an existing file.
+  const ext = item.ext ?? TYPE_TO_EXT[item.kind];
+  const base = (item.title || 'asset')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'asset';
+
+  let filename = `${base}.${ext}`;
+  let n = 2;
+  while (await isTaken(`${destDir}/${filename}`)) {
+    filename = `${base}-${n++}.${ext}`;
+  }
+
+  const absPath = `${destDir}/${filename}`;
+  const bytes = await readFile(source);
+  await writeFile(absPath, bytes);
+
+  const relPath = absPath.slice(projectRoot.length + 1);
+  return { relPath, absPath };
 }
 
 /** Every local creative item across all media, newest-first — for the Library
