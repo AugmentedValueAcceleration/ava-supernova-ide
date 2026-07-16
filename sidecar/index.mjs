@@ -3375,9 +3375,10 @@ async function handleSetModel(data) {
     // Maestro / Supernova / Aurora orchestrated modes — all go through
     // AutoCoordinator. Supernova pins coordinator to DeepSeek V4 Pro and
     // runs Builder spawns on Qwen 3.6 Plus per the polyglot routing map.
-    // Aurora pins coordinator to Mistral Large 3 with Mistral-only
-    // resolution chain — never silently routes to a non-Mistral model
-    // (the EU-stack guarantee). Maestro uses the default coordinator
+    // Aurora pins coordinator to Mistral Medium 3.5 (AURORA_COORDINATOR_ID)
+    // with a Mistral-only resolution chain — never silently routes to a
+    // non-Mistral model (the EU-stack guarantee). Large 3 is the heavy
+    // reserve, not the coordinator. Maestro uses the default coordinator
     // priority ladder. Mirrors AvaViewProvider.setActiveModel in the
     // extension.
     if (data.model === 'auto' || data.model === 'supernova' || data.model === 'aurora') {
