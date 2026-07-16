@@ -3397,12 +3397,20 @@ async function handleSetModel(data) {
       if (sharedState.mistralApiKey) availableProviders.add('mistral');
       if (sharedState.anthropicApiKey) availableProviders.add('anthropic');
 
-      // Aurora's Mistral-only coordinator chain — try platform-managed
-      // Large 3 first, then BYOK Mistral Large 3, then Small 4 fallback.
-      // The first resolvable wins. Same chain as the extension.
+      // Aurora's Mistral-only coordinator chain — Medium 3.5 first, it's the
+      // lead seat (AURORA_COORDINATOR_ID). Large 3 is the heavy RESERVE and
+      // Small 4 the volume workhorse, so they're fallbacks. First resolvable
+      // wins. Same chain as the extension.
+      //
+      // This used to start at Large 3 and never listed Medium 3.5 at all, so
+      // Aurora ran on a non-reasoning, text-only reserve model — while
+      // credits.ts had already been rebalanced assuming Medium 3.5 leads.
       let preferredCoordinatorId;
       if (data.model === 'aurora') {
         const tries = [
+          'platform:mistral-medium-3.5-platform',
+          'mistral:mistral-medium-3.5',
+          'mistral-medium-3.5',
           'platform:mistral-large-3-platform',
           'mistral:mistral-large-3',
           'mistral-large-3',
