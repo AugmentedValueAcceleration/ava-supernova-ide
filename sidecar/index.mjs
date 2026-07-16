@@ -2640,12 +2640,15 @@ async function handleMessage(data) {
     // Build multimodal content if attachments are present (images, files)
     if (data.attachments && Array.isArray(data.attachments) && data.attachments.length > 0) {
       emit({ event: 'info', message: `Attachments received: ${data.attachments.length}` });
-      // Warn user immediately if current model can't process images
-      const hasImages = data.attachments.some(a => a.mimeType?.startsWith('image/'));
-      const currentModel = globalThis._currentModel;
-      if (hasImages && currentModel && !currentModel.supportsVision) {
-        emit({ event: 'warning', message: `Your current model (${currentModel.name || currentModel.id}) doesn't support vision. Images will be ignored. Switch to a vision model like Qwen 3.7 Plus to analyse images.` });
-      }
+      // A model without vision is NOT an error — it's a property of the model
+      // the user picked, so Ava says it herself in her own voice (see the
+      // vision bridge's fallbackNote in @ava/core) rather than us firing an
+      // error bubble at them. Errors stay reserved for things that actually
+      // went wrong.
+      //
+      // This used to emit `event: 'warning'`, which the IDE renders with
+      // role:'error' — and it claimed "Images will be ignored", which was false
+      // whenever the vision bridge relayed them through a describer model.
       const parts = [];
       const baseContent = combinedDesktopPrefix && effectiveContent
         ? `${combinedDesktopPrefix}\n\n${effectiveContent}`

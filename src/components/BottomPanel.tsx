@@ -97,10 +97,15 @@ function AvaCliPanel() {
     // chat picker via mode-availability lib. Plan path lights up
     // Maestro for everyone, Aurora/Supernova for admins; BYOK path
     // lights each one up the moment the right keys are present.
+    // The fleets always accept images. Maestro and Aurora have vision-capable
+    // coordinators outright; Supernova's (DeepSeek V4) is blind, but the vision
+    // bridge describes the image and injects the description, so attaching
+    // works from the user's side. Report EFFECTIVE capability, not the
+    // coordinator's raw flag.
     const orchestrated: IdeModelOption[] = [
-      { id: 'aurora',    name: 'Aurora',    provider: 'platform', available: modeAvailability.aurora },
-      { id: 'supernova', name: 'Supernova', provider: 'platform', available: modeAvailability.supernova },
-      { id: 'auto',      name: 'Maestro',   provider: 'platform', available: modeAvailability.maestro },
+      { id: 'aurora',    name: 'Aurora',    provider: 'platform', available: modeAvailability.aurora,    supportsVision: true },
+      { id: 'supernova', name: 'Supernova', provider: 'platform', available: modeAvailability.supernova, supportsVision: true },
+      { id: 'auto',      name: 'Maestro',   provider: 'platform', available: modeAvailability.maestro,   supportsVision: true },
     ];
     // Raw individual models are now BYOK-only. Plans surface only the
     // 3 modes; raw model selection is a BYOK-side power-user path.
@@ -113,6 +118,8 @@ function AvaCliPanel() {
         name: m.name,
         provider: m.provider,
         available: true,
+        // The API already reports this per model; the picker just never read it.
+        supportsVision: m.supports_vision === true,
       }));
     return [...orchestrated, ...raw];
   }, [platformModels, modeAvailability]);

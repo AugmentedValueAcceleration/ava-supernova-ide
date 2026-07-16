@@ -15,10 +15,54 @@
 // admin_only models, non-admins get the filtered list). This component just
 // renders whatever is passed in.
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { t, useLocale } from '../lib/i18n';
 import { Tooltip } from './Tooltip';
 import { useModeAvailability, modeSubtitle, type ModeId } from '../lib/mode-availability';
+
+/**
+ * Paperclip = "this model takes image attachments" — deliberately the SAME
+ * glyph as the composer's attach button, struck through when it doesn't.
+ * Reusing the composer icon means there's nothing new to learn: that symbol is
+ * the attach button, so a strike reads as "attach won't work here".
+ *
+ * Shown on every row AND on the collapsed toggle — the answer you most need is
+ * "can the model I'm on right now see?", and that shouldn't cost a click. On
+ * the rows it's on every one, not just the blind ones, so absence is comparable
+ * at a glance; a marker you only see occasionally is a marker nobody learns.
+ *
+ * The strike cuts a real transparent gap via an SVG mask rather than painting a
+ * halo in the surface colour: the menu and the toggle sit on different
+ * backgrounds, so any hard-coded halo would be wrong on one of them.
+ *
+ * Icon-only, so it costs no translation; the tooltip carries the words.
+ *
+ * Mirror of the extension's ModelSelector (both webview + dashboard copies).
+ */
+function VisionGlyph({ supported }: { supported: boolean }) {
+  const maskId = useId();
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"
+      style={{ color: '#6c7086', opacity: supported ? 0.45 : 0.9, flexShrink: 0 }}
+    >
+      {!supported && (
+        <mask id={maskId}>
+          <rect width="16" height="16" fill="white" />
+          <line x1="2.5" y1="13.5" x2="13.5" y2="2.5" stroke="black" strokeWidth="3" strokeLinecap="round" />
+        </mask>
+      )}
+      <path
+        d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a2.75 2.75 0 1 1-3.935-3.84l4.486-4.486a1.75 1.75 0 0 1 2.505 2.44L6.623 9.573a.75.75 0 0 1-1.08-1.04l4.473-4.563z"
+        fill="currentColor"
+        mask={supported ? undefined : `url(#${maskId})`}
+      />
+      {!supported && (
+        <line x1="2.5" y1="13.5" x2="13.5" y2="2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
 
 export interface IdeModelOption {
   id: string;
@@ -27,6 +71,9 @@ export interface IdeModelOption {
   /** True if this model can actually be selected by the current user.
    *  False = visible but disabled (e.g. Supernova for non-admin). */
   available: boolean;
+  /** Whether this model accepts image attachments. Undefined = unknown,
+   *  treated as supported so we never brand a model blind on a guess. */
+  supportsVision?: boolean;
 }
 
 interface ModelDropdownProps {
@@ -71,6 +118,11 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
         ? 'Aurora'
         : models.find((m) => m.id === activeModel)?.name ?? t('dash.model.select');
 
+  // Vision state of the model you're actually on — surfaced on the collapsed
+  // toggle so "can this see?" doesn't require opening the picker. The fleets
+  // live in `models` too, so this covers them without special-casing.
+  const activeSupportsVision = models.find((m) => m.id === activeModel)?.supportsVision;
+
   // Orchestrated entries first, then raw models alphabetically.
   const rawModels = [...models]
     .filter((m) => m.id !== 'auto' && m.id !== 'supernova' && m.id !== 'aurora')
@@ -109,6 +161,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
           }}
         />
         {isAuto ? '✦ Maestro' : isSupernova ? '✦ Supernova' : isAurora ? '✦ Aurora' : activeName}
+        <VisionGlyph supported={activeSupportsVision !== false} />
         <span style={{ fontSize: 8, opacity: 0.5, marginLeft: 2 }}>▼</span>
       </button>
 
@@ -118,7 +171,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
             position: 'absolute',
             bottom: 'calc(100% + 4px)',
             left: 0,
-            minWidth: 240,
+            minWidth: 300,
             maxHeight: 360,
             overflowY: 'auto',
             background: '#1e1b2e',
@@ -217,7 +270,11 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
             return (
               <Tooltip
                 key={m.id}
-                content={m.available ? m.name : `Add ${m.provider} API key to use ${m.name}`}
+                content={!m.available
+                  ? `Add ${m.provider} API key to use ${m.name}`
+                  : m.supportsVision === false
+                    ? `${m.name} — ${t('model.no_vision_title')}`
+                    : m.name}
                 placement="top"
               >
                 <button
@@ -260,6 +317,9 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
                   />
                   <span style={{ fontWeight: isActive && m.available ? 600 : 400 }}>{m.name}</span>
                   <span style={{ fontSize: 10, opacity: 0.35, marginLeft: 'auto' }}>{m.provider}</span>
+                  {/* `!== false` mirrors the composer gate: an unknown flag
+                      means unknown, and we don't brand a model blind on a guess. */}
+                  <VisionGlyph supported={m.supportsVision !== false} />
                 </button>
               </Tooltip>
             );
