@@ -2591,14 +2591,20 @@ export function AvaChatPage() {
     'supernova': 'supernova',
     'aurora': 'aurora',
     'qwen3.7-plus': 'platform:qwen3.7-plus',
+    'kimi-k3': 'kimi:kimi-k3',
+    'kimi-k2.7-code': 'kimi:kimi-k2.7-code',
     'kimi-k2.6': 'kimi:kimi-k2.6',
     'kimi-k2.5': 'kimi:kimi-k2.5',
     'qwen3.5-omni-flash': 'platform:qwen3.5-omni-flash',
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
     'qwen3.5-plus': 'platform:qwen3.5-plus',
     'qwen3.5-flash': 'platform:qwen-flash',
-    'deepseek-chat': 'deepseek:deepseek-chat',
-    'deepseek-reasoner': 'deepseek:deepseek-reasoner',
+    // `deepseek-chat`/`deepseek-reasoner` retire upstream 2026-07-24 — old
+    // picker ids stay mapped, pointed at the V4 tier each one meant.
+    'deepseek-chat': 'deepseek:deepseek-v4-flash',
+    'deepseek-reasoner': 'deepseek:deepseek-v4-pro',
+    'deepseek-v4-pro': 'deepseek:deepseek-v4-pro',
+    'deepseek-v4-flash': 'deepseek:deepseek-v4-flash',
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
     'glm-4-plus': 'zhipu:glm-4-plus',
     'mistral-large': 'mistral:mistral-large-3',
@@ -4945,10 +4951,13 @@ export function AvaChatPage() {
                     const total = json.usage.prompt_tokens + json.usage.completion_tokens;
                     // Use model's actual context window for percentage
                     const MODEL_CTX: Record<string, number> = {
-                      'qwen3.7-plus': 1048576, 'kimi-k2.6': 262144, 'kimi-k2.5': 262144,
+                      'qwen3.7-plus': 1048576, 'qwen3.7-max': 1048576,
+                      'kimi-k3': 1000000, 'kimi-k2.7-code': 256000, 'kimi-k2.6': 262144, 'kimi-k2.5': 262144,
                       'MiniMax-M3': 1048576, 'MiniMax-M2.7': 204800, 'MiniMax-M2.7-highspeed': 204800,
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
-                      'qwen3.5-flash': 262144, 'deepseek-chat': 131072, 'deepseek-reasoner': 131072,
+                      // DeepSeek V4 is 1M context — the 131072 here was V3-era and
+                      // made the context meter read ~8x fuller than reality.
+                      'qwen3.5-flash': 262144, 'deepseek-v4-pro': 1000000, 'deepseek-v4-flash': 1000000,
                       'claude-opus-4-8': 200000, 'claude-sonnet-5': 200000,
                       'claude-haiku-4-5-20251001': 200000, 'glm-5.2': 1000000, 'glm-4.5-air': 128000,
                       'hy3-preview': 262144, 'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
@@ -7205,9 +7214,13 @@ export function AvaChatPage() {
             {([
               { id: 'auto', label: 'Maestro', note: 'One coordinator handles everything — production-tuned.' },
               { id: 'qwen3.7-plus', label: 'Qwen 3.7 Plus', note: 'Flagship Qwen. 1M context.' },
+              { id: 'kimi-k3', label: 'Kimi K3', note: 'Moonshot frontier model. 1M context.' },
               { id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code', note: 'Agentic coding leader.' },
             ]).map(opt => {
-              const isByokOnly = opt.id === 'kimi-k2.7-code';
+              // Every Kimi model is BYOK-only — was a hardcoded equality check
+              // against K2.7 Code, which silently enabled K3 for everyone the
+              // moment it was added here.
+              const isByokOnly = opt.id.startsWith('kimi-');
               const hasKey = byokModels.some(m => m.id === opt.id);
               const enabled = !isByokOnly || hasKey;
               return (
@@ -13094,7 +13107,13 @@ export function UsagePage() {
     'MiniMax-M3': { input: 0.60, output: 2.40 },
     'MiniMax-M2.7': { input: 0.30, output: 1.20 },
     'MiniMax-M2.7-highspeed': { input: 0.60, output: 2.40 },
-    'deepseek-chat': { input: 0.14, output: 0.28 },
+    // Kimi + DeepSeek verified against the providers' own pricing pages 2026-07-17.
+    'kimi-k3': { input: 3.00, output: 15.00 },
+    'kimi-k2.7-code': { input: 0.95, output: 4.00 },
+    'kimi-k2.6': { input: 0.95, output: 4.00 },
+    'kimi-k2.5': { input: 0.60, output: 3.00 },
+    'deepseek-v4-pro': { input: 0.435, output: 0.87 },
+    'deepseek-v4-flash': { input: 0.14, output: 0.28 },
   };
   const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
   const estimateCost = (inp: number, out: number, model: string) => {
