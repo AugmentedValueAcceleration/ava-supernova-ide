@@ -2646,8 +2646,8 @@ export function AvaChatPage() {
     'deepseek-v4-pro-platform', 'deepseek-v4-pro',
     // Platform Mistral (Aurora's fleet, available on platform)
     'mistral-large-3-platform', 'mistral-small-4-platform',
-    // Anthropic ('claude-fable-5' DISABLED 2026-06-14, US-gov restriction — re-add to re-enable)
-    'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001',
+    // Anthropic — Fable 5 re-enabled 2026-07-17 (US-gov restriction lifted)
+    'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001',
     // Kimi
     'kimi-k2.6', 'kimi-k2.5',
     // Mistral
@@ -4958,7 +4958,7 @@ export function AvaChatPage() {
                       // DeepSeek V4 is 1M context — the 131072 here was V3-era and
                       // made the context meter read ~8x fuller than reality.
                       'qwen3.5-flash': 262144, 'deepseek-v4-pro': 1000000, 'deepseek-v4-flash': 1000000,
-                      'claude-opus-4-8': 200000, 'claude-sonnet-5': 200000,
+                      'claude-fable-5': 1000000, 'claude-opus-4-8': 200000, 'claude-sonnet-5': 200000,
                       'claude-haiku-4-5-20251001': 200000, 'glm-5.2': 1000000, 'glm-4.5-air': 128000,
                       'hy3-preview': 262144, 'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
                     };
