@@ -70,6 +70,19 @@ try {
 }
 const { NodeHealthPlanStore } = healthCore;
 
+// Desktop TOOLS subpath — deliberately separate from registerBuiltins so the
+// VS Code extension never links these classes into its bundle (Microsoft
+// required their removal to reinstate it). The IDE ships outside the
+// marketplace, so it opts in here. See core/src/tools/desktop-tools.ts.
+let desktopToolsCore;
+try {
+  desktopToolsCore = await import('@ava/core/desktop-tools');
+} catch {
+  const desktopToolsPath = join(__dirname, '..', '..', 'core', 'dist', 'tools', 'desktop-tools.js');
+  desktopToolsCore = await import(`file://${desktopToolsPath.replace(/\\/g, '/')}`);
+}
+const { registerDesktopTools } = desktopToolsCore;
+
 // Learning subpath — pure progression derivation + the system-prompt context
 // formatter, shared with the extension so both build identical Teach context.
 let learningCore;
@@ -1380,6 +1393,12 @@ async function handleInit(data) {
     // Tools
     toolRegistry = new ToolRegistry();
     toolRegistry.registerBuiltins();
+    // Desktop automation + browser control. These are NOT in registerBuiltins:
+    // they're split into @ava/core/desktop-tools so the VS Code extension never
+    // links them into its bundle (Microsoft required their removal to reinstate
+    // the extension — see packages/core/src/tools/desktop-tools.ts). The IDE
+    // ships outside the marketplace, so it registers the full toolkit here.
+    registerDesktopTools(toolRegistry);
     toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
 
     // ── Desktop Automation Mode — Tools live in @ava/core ───────────────
