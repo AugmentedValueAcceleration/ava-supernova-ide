@@ -3,7 +3,7 @@
 // Sidebar is scroll-anchored (matches the extension). Audience toggle collapses power-only pages.
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { useLocale } from '../lib/i18n';
+import { t, useLocale } from '../lib/i18n';
 import {
   type RendererAdapter,
   type DocBlock,
@@ -206,7 +206,7 @@ function makeAdapter(): RendererAdapter<React.ReactNode> {
         {blocks}
         {extras?.deeper && extras.deeper.length > 0 && (
           <details style={{ marginTop: 16, borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD }}>
-            <summary style={{ cursor: 'pointer', userSelect: 'none', padding: '8px 12px', fontSize: 12, fontWeight: 500, color: ACCENT }}>Show me the details</summary>
+            <summary style={{ cursor: 'pointer', userSelect: 'none', padding: '8px 12px', fontSize: 12, fontWeight: 500, color: ACCENT }}>{t('docs.show_details')}</summary>
             <div style={{ padding: '4px 12px 12px' }}>{extras.deeper}</div>
           </details>
         )}
