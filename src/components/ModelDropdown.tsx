@@ -18,7 +18,7 @@
 import { useState, useRef, useEffect, useId } from 'react';
 import { t, useLocale } from '../lib/i18n';
 import { Tooltip } from './Tooltip';
-import { useModeAvailability, modeSubtitle, type ModeId } from '../lib/mode-availability';
+import { useModeAvailability, modeSubtitle, isModeListed, type ModeId } from '../lib/mode-availability';
 
 /**
  * Paperclip = "this model takes image attachments" — deliberately the SAME
@@ -87,10 +87,11 @@ interface ModelDropdownProps {
 // titleKey, not title — resolved at render, and shared with the CC model picker
 // via core keys (the two had drifted into different copies). Names stay as-is.
 const ORCHESTRATED: { id: string; modeId: ModeId; label: string; titleKey: string }[] = [
-  { id: 'aurora',    modeId: 'aurora',    label: '✦ Aurora',    titleKey: 'dash.model.aurora_title' },
-  { id: 'supernova', modeId: 'supernova', label: '✦ Supernova', titleKey: 'dash.model.supernova_title' },
-  { id: 'auto',      modeId: 'maestro',   label: '✦ Maestro',   titleKey: 'dash.model.maestro_title' },
-];
+  { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    titleKey: 'dash.model.aurora_title' },
+  { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova', titleKey: 'dash.model.supernova_title' },
+  { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   titleKey: 'dash.model.maestro_title' },
+  { id: 'longxiang', modeId: 'longxiang' as const, label: '✦ Longxiang', titleKey: 'dash.model.longxiang_title' },
+].filter((o) => isModeListed(o.modeId));
 
 export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDropdownProps) {
   useLocale();

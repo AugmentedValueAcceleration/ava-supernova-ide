@@ -10,33 +10,12 @@
 import { getSidecar, type SidecarConfig } from './sidecar';
 import { getPlatformKey } from './api';
 import { cloudSyncEnabled } from './data-mode';
+import { resolveSidecarModel } from './chat-models';
 
-// Mirror of AvaChatPage's SIDECAR_MODEL_MAP — orchestrated modes pass through by id;
-// raw model ids get their provider prefix so the sidecar resolver finds them.
-const SIDECAR_MODEL_MAP: Record<string, string> = {
-  'auto': 'auto',
-  'supernova': 'supernova',
-  'aurora': 'aurora',
-  'qwen3.7-plus': 'platform:qwen3.7-plus',
-  'kimi-k3': 'kimi:kimi-k3',
-  'kimi-k2.7-code': 'kimi:kimi-k2.7-code',
-  'kimi-k2.6': 'kimi:kimi-k2.6',
-  'kimi-k2.5': 'kimi:kimi-k2.5',
-  'qwen3.5-omni-flash': 'platform:qwen3.5-omni-flash',
-  'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
-  'qwen3.5-plus': 'platform:qwen3.5-plus',
-  'qwen3.5-flash': 'platform:qwen-flash',
-  // DeepSeek retires `deepseek-chat`/`deepseek-reasoner` upstream on 2026-07-24.
-  // Old picker ids stay mapped so a stored preference still resolves, pointed at
-  // the V4 tier each one used to mean.
-  'deepseek-chat': 'deepseek:deepseek-v4-flash',
-  'deepseek-reasoner': 'deepseek:deepseek-v4-pro',
-  'deepseek-v4-pro': 'deepseek:deepseek-v4-pro',
-  'deepseek-v4-flash': 'deepseek:deepseek-v4-flash',
-  'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
-  'glm-4-plus': 'zhipu:glm-4-plus',
-  'mistral-large': 'mistral:mistral-large-3',
-};
+// This file used to keep its own byte-for-byte copy of chat-models.ts's
+// SIDECAR_MODEL_MAP plus a duplicated `auto|supernova|aurora` fallback. Two
+// copies meant adding a fleet in one place left the other resolving it to
+// `platform:<fleet>` — a nonexistent id. Now imported from the one source.
 
 function ls(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -99,7 +78,7 @@ export function buildSidecarConfig(): SidecarConfig {
   return {
     providers,
     platformKey: usePlatform ? (getPlatformKey() || undefined) : undefined,
-    activeModel: SIDECAR_MODEL_MAP[model] || (model === 'auto' || model === 'supernova' || model === 'aurora' ? model : `platform:${model}`),
+    activeModel: resolveSidecarModel(model),
     cwd: ls('ava-ide-project-folder') || '.',
     mode,
     // The chosen UI language — the sidecar setLocale()s this so Ava replies in it

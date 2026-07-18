@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getSidecar } from '../lib/sidecar';
-import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
+import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
 import { getKeyedProviders, buildModelCatalogue, resolveSidecarModel } from '../lib/chat-models';
 
 /**
@@ -17,7 +17,8 @@ const ORCHESTRATED = [
   { id: 'aurora', modeId: 'aurora' as const, label: '✦ Aurora' },
   { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova' },
   { id: 'auto', modeId: 'maestro' as const, label: '✦ Maestro' },
-];
+  { id: 'longxiang', modeId: 'longxiang' as const, label: '✦ Longxiang' },
+].filter((o) => isModeListed(o.modeId));
 
 function readModel(): string {
   try { return localStorage.getItem(MODEL_KEY) || 'auto'; } catch { return 'auto'; }

@@ -3,7 +3,7 @@ import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { ensureSidecarLog, getSidecarLog, subscribeSidecarLog, clearSidecarLog, type SidecarLogEntry, type SidecarLogLevel } from '../lib/sidecar-log';
 import { getPlatformKey, apiStreamUrl, fetchPlatformModels, getCachedModels, type PlatformModel } from '../lib/api';
-import { useModeAvailability } from '../lib/mode-availability';
+import { useModeAvailability, isModeListed, type ModeId } from '../lib/mode-availability';
 import { t, useLocale } from '../lib/i18n';
 import ModelDropdown, { type IdeModelOption } from './ModelDropdown';
 
@@ -102,11 +102,18 @@ function AvaCliPanel() {
     // bridge describes the image and injects the description, so attaching
     // works from the user's side. Report EFFECTIVE capability, not the
     // coordinator's raw flag.
-    const orchestrated: IdeModelOption[] = [
-      { id: 'aurora',    name: 'Aurora',    provider: 'platform', available: modeAvailability.aurora,    supportsVision: true },
-      { id: 'supernova', name: 'Supernova', provider: 'platform', available: modeAvailability.supernova, supportsVision: true },
-      { id: 'auto',      name: 'Maestro',   provider: 'platform', available: modeAvailability.maestro,   supportsVision: true },
-    ];
+    const orchestrated: IdeModelOption[] = ([
+      { id: 'aurora',    name: 'Aurora',    provider: 'platform', available: modeAvailability.aurora,    supportsVision: true, modeId: 'aurora' as const },
+      { id: 'supernova', name: 'Supernova', provider: 'platform', available: modeAvailability.supernova, supportsVision: true, modeId: 'supernova' as const },
+      { id: 'auto',      name: 'Maestro',   provider: 'platform', available: modeAvailability.maestro,   supportsVision: true, modeId: 'maestro' as const },
+      // Longxiang's provider is 'kimi', not 'platform' — it is the one fleet
+      // with no managed path, and labelling it 'platform' would imply a plan
+      // could run it. Vision is genuine here: K3 and Qwen 3.7 Plus both see
+      // natively, so no bridge is involved.
+      { id: 'longxiang', name: 'Longxiang', provider: 'kimi',     available: modeAvailability.longxiang, supportsVision: true, modeId: 'longxiang' as const },
+    ] satisfies (IdeModelOption & { modeId: ModeId })[])
+      .filter((o) => isModeListed(o.modeId))
+      .map(({ modeId: _modeId, ...rest }) => rest);
     // Raw individual models are now BYOK-only. Plans surface only the
     // 3 modes; raw model selection is a BYOK-side power-user path.
     // section==='byok' means the server returned this model because

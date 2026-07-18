@@ -52,7 +52,7 @@ import { DesignStudio } from './DesignStudio';
 import { t, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
 import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
-import { useModeAvailability, modeSubtitle } from '../lib/mode-availability';
+import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
@@ -5245,7 +5245,9 @@ export function AvaChatPage() {
                     { id: 'aurora',    modeId: 'aurora'    as const, label: '✦ Aurora',    enabled: modeAvailability.aurora,    title: t('dash.model.aurora_title') },
                     { id: 'supernova', modeId: 'supernova' as const, label: '✦ Supernova', enabled: modeAvailability.supernova, title: t('dash.model.supernova_title') },
                     { id: 'auto',      modeId: 'maestro'   as const, label: '✦ Maestro',   enabled: modeAvailability.maestro,   title: t('dash.model.maestro_title') },
-                  ].map(o => ({ ...o, subtitle: modeSubtitle(o.modeId, modeAvailability, modeState) }));
+                    { id: 'longxiang', modeId: 'longxiang' as const, label: '✦ Longxiang', enabled: modeAvailability.longxiang, title: t('dash.model.longxiang_title') },
+                  ].filter(o => isModeListed(o.modeId))
+                   .map(o => ({ ...o, subtitle: modeSubtitle(o.modeId, modeAvailability, modeState) }));
                   return orchestrated.map((o) => {
                     const active = model === o.id;
                     return (

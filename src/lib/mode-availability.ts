@@ -21,7 +21,25 @@ import { t } from './i18n';
 import { useEffect, useState } from 'react';
 import { getPlatformKey } from './api';
 
-export type ModeId = 'maestro' | 'supernova' | 'aurora';
+//   Longxiang → open-weights Kimi/Qwen/DeepSeek stack (K3 lead + Builder,
+//               Qwen 3.7 Plus mid-tier + vision, V4 Flash volume).
+//               BYOK-ONLY — see LONGXIANG_LIVE below.
+
+export type ModeId = 'maestro' | 'supernova' | 'aurora' | 'longxiang';
+
+/**
+ * Longxiang's launch flag, imported from core rather than mirrored — there is
+ * exactly ONE boolean and every surface reads it, so the fleet can't go live
+ * on one surface and stay dark on another.
+ *
+ * Imported from core's built output the same way i18n.ts pulls its locales.
+ * Safe to bundle into the browser: longxiang-router's only import is a
+ * type-only one, so the compiled module has zero runtime dependencies.
+ */
+// @ts-ignore — untyped deep import into core's dist, matching i18n.ts
+import { LONGXIANG_ENABLED } from '../../../core/dist/auto/longxiang-router.js';
+
+export const LONGXIANG_LIVE: boolean = LONGXIANG_ENABLED;
 
 export interface ByokKeys {
   qwen: boolean;
@@ -43,6 +61,7 @@ export interface ModeAvailability {
   maestro: boolean;
   supernova: boolean;
   aurora: boolean;
+  longxiang: boolean;
 }
 
 const EMPTY_BYOK: ByokKeys = {
@@ -92,13 +111,34 @@ export function readTier(): string {
 // the mode whenever the relevant fleet of keys is present. The two
 // paths are an OR — a plan user with their own Mistral key gets
 // Aurora the same way; isAdmin is no longer load-bearing.
+// Longxiang follows the SAME rule as every other fleet — a signed-in plan
+// runs it on credits, BYOK unlocks it once all three keys are present. The
+// only extra condition is the launch flag, which is about whether the fleet
+// has shipped, not about who may use it.
 export function getModeAvailability(state: ModeAvailabilityState): ModeAvailability {
   const { platformConnected, byok } = state;
   return {
     maestro:   platformConnected || byok.qwen,
     supernova: platformConnected || (byok.qwen && byok.deepseek),
     aurora:    platformConnected || byok.mistral,
+    longxiang: LONGXIANG_LIVE && (platformConnected || (byok.moonshot && byok.qwen && byok.deepseek)),
   };
+}
+
+/**
+ * Should this mode appear in a picker AT ALL?
+ *
+ * Distinct from `availability[mode]`, and the difference matters:
+ *   - isModeListed  → has this fleet LAUNCHED? (product decision)
+ *   - availability  → can THIS user run it? (their keys / plan)
+ *
+ * A mode that is listed-but-unavailable renders greyed out with an unlock
+ * hint — correct for Aurora when you lack a Mistral key. An unlaunched mode
+ * must not render at all, greyed or otherwise, because a locked row still
+ * displays the fleet's name and we are not announcing Longxiang early.
+ */
+export function isModeListed(mode: ModeId): boolean {
+  return mode !== 'longxiang' || LONGXIANG_LIVE;
 }
 
 // Reactive hook — recomputes when the user signs in/out, switches
@@ -144,6 +184,7 @@ export function modeSubtitle(mode: ModeId, av: ModeAvailability, state: ModeAvai
     if (mode === 'maestro')   return t(state.platformConnected ? 'dash.model.sub.maestro_best'   : 'dash.model.sub.byok_qwen');
     if (mode === 'supernova') return t(state.platformConnected ? 'dash.model.sub.supernova_poly' : 'dash.model.sub.byok_ds_qwen');
     if (mode === 'aurora')    return t(state.platformConnected ? 'dash.model.sub.aurora_eu'      : 'dash.model.sub.byok_mistral');
+    if (mode === 'longxiang') return t(state.platformConnected ? 'dash.model.sub.longxiang_open' : 'dash.model.sub.byok_longxiang');
   }
   // Locked — explain the unlock path. Admin gate retired 2026-04-30,
   // so locked = not-signed-in AND missing the BYOK keys for this mode.
@@ -154,6 +195,17 @@ export function modeSubtitle(mode: ModeId, av: ModeAvailability, state: ModeAvai
   }
   if (mode === 'aurora') {
     return t('dash.model.sub.connect_mistral');
+  }
+  if (mode === 'longxiang') {
+    // Name the specific key still missing — Moonshot first, since it holds the
+    // lead seat and is the one a BYOK user is most likely to lack. Falls back
+    // to the connect-or-add wording when they have none of the three.
+    if (state.byok.moonshot || state.byok.qwen || state.byok.deepseek) {
+      if (!state.byok.moonshot) return t('dash.model.sub.add_moonshot');
+      if (!state.byok.qwen)     return t('dash.model.sub.add_qwen');
+      return t('dash.model.sub.add_deepseek');
+    }
+    return t('dash.model.sub.connect_longxiang');
   }
   // maestro
   return t('dash.model.sub.connect_qwen');

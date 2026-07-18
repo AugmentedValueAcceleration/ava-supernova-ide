@@ -14,6 +14,7 @@ export const SIDECAR_MODEL_MAP: Record<string, string> = {
   auto: 'auto',
   supernova: 'supernova',
   aurora: 'aurora',
+  longxiang: 'longxiang',
   'qwen3.7-plus': 'platform:qwen3.7-plus',
   'kimi-k3': 'kimi:kimi-k3',
   'kimi-k2.7-code': 'kimi:kimi-k2.7-code',
@@ -37,9 +38,15 @@ export const SIDECAR_MODEL_MAP: Record<string, string> = {
 };
 
 /** Resolve a picker model id to the sidecar id (mirrors AvaChatPage's call). */
+const ORCHESTRATED_IDS = new Set(['auto', 'supernova', 'aurora', 'longxiang']);
+
 export function resolveSidecarModel(model: string): string {
+  // Orchestrated fleet ids pass through unprefixed. The fallback branch used to
+  // spell the list out inline, which meant a new fleet silently resolved to
+  // `platform:<fleet>` — a model id that does not exist, and for Longxiang a
+  // managed path that will never exist.
   return SIDECAR_MODEL_MAP[model]
-    || (model === 'auto' || model === 'supernova' || model === 'aurora' ? model : `platform:${model}`);
+    || (ORCHESTRATED_IDS.has(model) ? model : `platform:${model}`);
 }
 
 /** Providers the user holds a BYOK key for (store-name keys: Qwen, Moonshot…). */
