@@ -56,7 +56,7 @@ Same engine as the CLI and the VS Code extension — so everything you learn in 
 
 - **7 modes** — Code (`>>`), Plan (`::`), Chat (`..`), Teach (`??`), Security (`!!`), Brainstorm (`**`), Write (`<<`).
 - **24 specialist personas** — complex tasks activate an internal team (Scout → Architect → Verifier → Sequencer → Challenger → Builder for code); simple tasks go direct.
-- **Three fleets** — **Maestro** (Qwen ensemble, ships) and **Aurora** (EU-sovereign Mistral stack, ships) are live; **Supernova** (polyglot — DeepSeek V4 Pro coordinator + Qwen builders) runs on your own DeepSeek + Qwen keys, with the managed version in preview.
+- **Four fleets** — **Maestro** (Qwen ensemble), **Aurora** (EU-sovereign Mistral stack) and **Longxiang** 龙翔 (built entirely on Chinese models — Kimi K3 leads and builds, Qwen 3.7 Plus takes vision and long context, DeepSeek V4 Flash handles chat) are live; **Supernova** (polyglot — DeepSeek V4 Pro coordinator + Qwen builders) runs on your own DeepSeek + Qwen keys, with the managed version in preview.
 - **60+ tools**, plus the IDE-only desktop- and browser-automation tools described above.
 - **Knowledge packs** — toggle domain expertise on/off in the chat bar; the system prompt rebuilds live, no restart.
 - **20 languages, live** — the whole interface translates, not just the chat, and switches the moment you change language — no restart, and Ava's replies follow too. Pick your language right from the welcome flow. Dates format the way your language writes them.
