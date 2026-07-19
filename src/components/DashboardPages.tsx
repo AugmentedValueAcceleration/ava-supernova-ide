@@ -697,11 +697,21 @@ function setCachedWeather(data: WeatherData): void {
 
 const PUBLIC_API = 'https://ava-supernova.com/api';
 
+/** The platform translates news into every supported locale and serves it off
+ *  `?locale=`. Resolved here rather than taken as a parameter — this call site
+ *  shipped without a locale for months precisely because it was the caller's
+ *  job to remember, so a future caller cannot forget it either. Omitted for
+ *  English so the URL (and any cache keyed on it) stays untouched. */
+function localeQs(): string {
+  const locale = getLocale();
+  return locale && locale !== 'en' ? `&locale=${encodeURIComponent(locale)}` : '';
+}
+
 async function fetchNewsDirect(category?: string): Promise<NewsArticle[]> {
   try {
     const url = category
-      ? `${PUBLIC_API}/news?category=${category}&limit=24`
-      : `${PUBLIC_API}/news?limit=24`;
+      ? `${PUBLIC_API}/news?category=${category}&limit=24${localeQs()}`
+      : `${PUBLIC_API}/news?limit=24${localeQs()}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return [];
     const data = await res.json();
@@ -711,7 +721,8 @@ async function fetchNewsDirect(category?: string): Promise<NewsArticle[]> {
 
 async function fetchArticleDirect(slug: string): Promise<{ post: any; related: any[] } | null> {
   try {
-    const res = await fetch(`${PUBLIC_API}/news/${encodeURIComponent(slug)}`, { signal: AbortSignal.timeout(8000) });
+    const qs = localeQs().replace(/^&/, '?');
+    const res = await fetch(`${PUBLIC_API}/news/${encodeURIComponent(slug)}${qs}`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const data = await res.json();
     return { post: data.post || null, related: data.related || [] };
@@ -2055,7 +2066,7 @@ type CcTab = 'daily' | 'briefing' | 'reflect' | 'health';
 let lastCcTab: CcTab = 'daily';
 
 export function CommandCentrePage() {
-  useLocale();
+  const locale = useLocale();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t('dash.cc.greeting_morning') : hour < 18 ? t('dash.cc.greeting_afternoon') : t('dash.cc.greeting_evening');
 
@@ -2190,7 +2201,10 @@ export function CommandCentrePage() {
       .finally(() => setNewsLoading(false));
   }, []);
 
-  useEffect(() => { loadNews(); }, [loadNews]);
+  // Refetch on language change. The locale lives in the URL, so a re-render
+  // alone leaves the old language on screen until you navigate away — which is
+  // not how the rest of the product behaves (recipes swap immediately).
+  useEffect(() => { loadNews(newsCategory); }, [loadNews, locale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNewsCategory = (cat: string | null) => {
     setNewsCategory(cat);
@@ -2212,6 +2226,12 @@ export function CommandCentrePage() {
       setArticleLoading(false);
     });
   }, []);
+
+  // An article already on screen when the language changes reloads in place,
+  // rather than staying English until you close and reopen it.
+  useEffect(() => {
+    if (activeArticle?.slug) openArticle(activeArticle.slug);
+  }, [locale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Platform API data (tasks, journal, learning, memory, release) ──
   // Tasks are local-first — read the local task store (~/.ava[/users/<id>]/
