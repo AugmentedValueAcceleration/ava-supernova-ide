@@ -888,7 +888,7 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
   const alternatives = [
     ...(ex.regression ? [{ ...ex.regression, kind: 'Easier' }] : []),
     ...(ex.progression ? [{ ...ex.progression, kind: 'Harder' }] : []),
-    ...ex.substitutions.map(s => ({ ...s, kind: 'Instead' })),
+    ...(ex.substitutions ?? []).map(s => ({ ...s, kind: 'Instead' })),
   ];
   const SEV: Record<string, string> = { avoid: '#f87171', modify: '#fbbf24', caution: '#fbbf24' };
 
@@ -932,10 +932,10 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
         {tab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {/* Who should take care — the safety floor, above the method. */}
-            {ex.contraindications.length > 0 && (
+            {(ex.contraindications?.length ?? 0) > 0 && (
               <div style={{ borderRadius: 8, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.06)', padding: '12px 14px' }}>
                 <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#f87171', marginBottom: 8 }}>Take care with</div>
-                {ex.contraindications.map(c => (
+                {ex.contraindications!.map(c => (
                   <div key={c.slug} style={{ fontSize: 12, lineHeight: 1.6, color: '#cdd6f4' }}>
                     <span style={{ fontWeight: 600, textTransform: 'uppercase', color: SEV[c.severity] ?? '#fbbf24' }}>{c.severity}</span>
                     {' · '}{c.name}{c.note ? ` — ${c.note}` : ''}
@@ -985,11 +985,11 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
                 </div>
               </div>
             )}
-            {ex.coaching_cues.length > 0 && (
+            {(ex.coaching_cues?.length ?? 0) > 0 && (
               <div>
                 {sectionLabel('Cues')}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {ex.coaching_cues.map((c, i) => (
+                  {ex.coaching_cues!.map((c, i) => (
                     <span key={i} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#cdd6f4' }}>{c}</span>
                   ))}
                 </div>
@@ -1031,8 +1031,8 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
               </div>
             )}
             {!ex.description && !ex.beginner_detail && !ex.common_mistakes && !hasRoutine && !hasMuscles
-              && ex.contraindications.length === 0 && cardio.length === 0
-              && ex.coaching_cues.length === 0 && alternatives.length === 0 && (
+              && (ex.contraindications?.length ?? 0) === 0 && cardio.length === 0
+              && (ex.coaching_cues?.length ?? 0) === 0 && alternatives.length === 0 && (
               <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>{t('health.browse.nothing_here')}</p>
             )}
           </div>
