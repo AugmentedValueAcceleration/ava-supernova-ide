@@ -1599,190 +1599,145 @@ const NUTRITION_DISPLAY: Array<[NutritionDisplayKey, string]> = [
   ['calories', 'Calories (kcal)'], ['protein_g', 'Protein (g)'], ['carbs_g', 'Carbs (g)'], ['fat_g', 'Fat (g)'],
   ['fibre_g', 'Fibre (g)'], ['sugar_g', 'Sugar (g)'], ['sodium_mg', 'Sodium (mg)'], ['saturated_fat_g', 'Saturated fat (g)'],
 ];
-// i18n key per nutrient for the compact table header (units dropped).
-const NUTRI_LABEL_KEY: Record<NutritionDisplayKey, string> = {
-  calories: 'health.browse.nutri.calories', protein_g: 'health.browse.nutri.protein',
-  carbs_g: 'health.browse.nutri.carbs', fat_g: 'health.browse.nutri.fat',
-  fibre_g: 'health.browse.nutri.fibre', sugar_g: 'health.browse.nutri.sugar',
-  sodium_mg: 'health.browse.nutri.sodium', saturated_fat_g: 'health.browse.nutri.sat_fat',
-};
 
 /** Per-serving nutrition as a table — one row per skill level. Columns with no
  *  data on any level are dropped. */
-function NutritionTable({ versions }: { versions: HealthRecipeDetail['versions'] }) {
-  const cols = NUTRITION_DISPLAY.filter(([k]) => versions.some((vv) => typeof vv.nutrition?.[k] === 'number'));
-  if (cols.length === 0) return null;
-  const cell: React.CSSProperties = { padding: '7px 12px', fontSize: 12, color: '#cdd6f4' };
-  const th: React.CSSProperties = { padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#6c7086', textAlign: 'left', whiteSpace: 'nowrap' };
-  return (
-    <div>
-      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)' }}>
-              <th style={th}>{t('health.browse.per_serving')}</th>
-              {cols.map(([k]) => <th key={k} style={th}>{t(NUTRI_LABEL_KEY[k])}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {versions.map((vv, i) => (
-              <tr key={vv.level} style={i < versions.length - 1 ? { borderBottom: '1px solid color-mix(in srgb, var(--accent) 10%, transparent)' } : undefined}>
-                <td style={{ ...cell, textTransform: 'capitalize', color: '#9b8caa' }}>{t(`health.browse.level.${vv.level}`)}</td>
-                {cols.map(([k]) => <td key={k} style={cell}>{typeof vv.nutrition?.[k] === 'number' ? vv.nutrition[k] : '—'}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p style={{ margin: '8px 0 0', fontSize: 10, color: '#6c7086' }}>{t('health.browse.per_serving_estimated')}</p>
-    </div>
-  );
-}
 
 export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
-  const levels = r.versions.map(v => v.level);
-  const [level, setLevel] = useState<HealthRecipeSkillLevel>(levels[0] ?? 'beginner');
-  const v = r.versions.find(vv => vv.level === level) ?? r.versions[0];
-
-  type RTab = 'overview' | 'ingredients' | 'method' | 'storage';
-  const hasNutrition = r.versions.some((vv) => NUTRITION_DISPLAY.some(([k]) => typeof vv.nutrition?.[k] === 'number'));
+  // Single-scroll, matching the hub's redesigned recipe view. Skill-level tabs
+  // drive everything below; the shopping list splits into shared plus "just for
+  // this level". No operator diagnostics.
+  const [level, setLevel] = useState<'beginner' | 'intermediate' | 'expert'>('beginner');
+  const v = r.versions.find(vv => vv.level === level) || r.versions[0];
   const st = r.storage;
-  const hasStorage = !!st && (st.keeps_fridge_days != null || st.keeps_freezer_months != null || !!st.from_frozen_notes);
-  const tabs: { key: RTab; label: string }[] = [
-    { key: 'overview', label: t('health.browse.overview') },
-    ...(r.ingredients.length > 0 ? [{ key: 'ingredients' as RTab, label: t('health.browse.ingredients') }] : []),
-    ...(r.versions.length > 0 ? [{ key: 'method' as RTab, label: t('health.browse.method') }] : []),
-    ...(hasStorage ? [{ key: 'storage' as RTab, label: t('health.browse.storage') }] : []),
-  ];
-  const [tab, setTab] = useState<RTab>('overview');
-
-  const levelPills = (
-    <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-      {(['beginner', 'intermediate', 'expert'] as HealthRecipeSkillLevel[]).filter(l => levels.includes(l)).map(l => (
-        <button key={l} onClick={() => setLevel(l)} style={{
-          padding: '3px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer',
-          borderRadius: 6, border: 'none',
-          background: l === level ? 'rgba(251,191,36,0.18)' : 'transparent',
-          color: l === level ? '#fbbf24' : '#6c7086',
-        }}>{t(`health.browse.level.${l}`)}</button>
-      ))}
-    </div>
-  );
+  const nut = v?.nutrition ?? null;
+  const cuisineLine = (r.cuisines && r.cuisines.length ? r.cuisines.join(' · ') : r.cuisine_name) || '';
+  const shared = r.ingredients.filter(ing => !ing.level);
+  const own = r.ingredients.filter(ing => ing.level && ing.level === level);
+  const qty = (ing: HealthRecipeDetail['ingredients'][number]) =>
+    ing.quantity != null ? String(ing.quantity) + (ing.unit ? ' ' + ing.unit : '') : (ing.unit ?? '');
+  const levels = (['beginner', 'intermediate', 'expert'] as const).filter(l => r.versions.some(vv => vv.level === l));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* Hero image — leads the overlay, bleeds to the modal edges. */}
       {r.hero_image_url && (
         <div style={{ flexShrink: 0, height: 184, overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
           <img src={r.hero_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         </div>
       )}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 28px 28px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          <div>
+            {cuisineLine && <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#fbbf24', marginBottom: 6 }}>{cuisineLine}</div>}
+            <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{r.name}</h2>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+              {r.course && <span style={{ fontSize: 11, textTransform: 'capitalize', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6, color: '#9b8caa' }}>{courseLabel(r.course)}</span>}
+              {r.origin_country && <span style={{ fontSize: 11, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6, color: '#9b8caa' }}>{r.origin_country}</span>}
+            </div>
+          </div>
 
-      {/* Fixed header + tabs. */}
-      <div style={{ flexShrink: 0, padding: '20px 28px 0' }}>
-        <div style={{ marginBottom: 14 }}>
-          {/* All cuisines it belongs to, not just one. */}
-          {(r.cuisines && r.cuisines.length ? r.cuisines.join(' · ') : r.cuisine_name) && (
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#fbbf24', marginBottom: 6 }}>
-              {r.cuisines && r.cuisines.length ? r.cuisines.join(' · ') : r.cuisine_name}
+          {r.overview && <p style={{ fontSize: 14, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{r.overview}</p>}
+
+          {levels.length > 1 && (
+            <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)' }}>
+              {levels.map(l => (
+                <button key={l} type="button" onClick={() => setLevel(l)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, padding: '8px 14px',
+                    color: l === level ? '#fbbf24' : '#9b8caa',
+                    borderBottom: l === level ? '2px solid #fbbf24' : '2px solid transparent', marginBottom: -1 }}>
+                  {t('health.browse.level.' + l)}
+                </button>
+              ))}
             </div>
           )}
-          <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{r.name}</h2>
-          {(r.origin_country || r.course) && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
-              {r.origin_country && <span style={{ background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6 }}>{r.origin_country}</span>}
-              {r.course && <span style={{ background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6, textTransform: 'capitalize' }}>{courseLabel(r.course)}</span>}
+
+          {v && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', fontSize: 12, color: '#9b8caa' }}>
+              {v.prep_time_minutes != null && <span>{t('health.browse.prep')} <strong style={{ color: '#cdd6f4' }}>{v.prep_time_minutes}m</strong></span>}
+              {v.cook_time_minutes != null && <span>{t('health.browse.cook')} <strong style={{ color: '#cdd6f4' }}>{v.cook_time_minutes}m</strong></span>}
+              {v.total_time_minutes != null && <span>{t('health.browse.total')} <strong style={{ color: '#cdd6f4' }}>{v.total_time_minutes}m</strong></span>}
+              {v.default_servings != null && <span>{t('health.browse.serves')} <strong style={{ color: '#cdd6f4' }}>{v.default_servings}</strong></span>}
+              {st?.keeps_fridge_days != null && <span>{t('health.storage.fridge')} <strong style={{ color: '#cdd6f4' }}>{st.keeps_fridge_days}d</strong></span>}
+              {st?.keeps_freezer_months != null && <span>{t('health.storage.freezer')} <strong style={{ color: '#cdd6f4' }}>{st.keeps_freezer_months}mo</strong></span>}
+            </div>
+          )}
+
+          {v?.description && <p style={{ fontSize: 12, fontStyle: 'italic', lineHeight: 1.6, color: '#9b8caa', margin: 0 }}>{v.description}</p>}
+
+          {r.ingredients.length > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.ingredients'))}
+              <div style={{ fontSize: 13, lineHeight: 1.9, color: '#cdd6f4' }}>
+                {shared.map((ing, i) => (
+                  <div key={'s' + i}>{qty(ing) && <span style={{ color: '#6c7086' }}>{qty(ing)} </span>}{ing.name}{ing.optional && <span style={{ color: '#6c7086' }}> {t('health.browse.opt')}</span>}</div>
+                ))}
+                {own.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086', marginTop: 10, marginBottom: 2 }}>{t('health.browse.just_for_level')} {t('health.browse.level.' + level)}</div>
+                    {own.map((ing, i) => (
+                      <div key={'o' + i}>{qty(ing) && <span style={{ color: '#6c7086' }}>{qty(ing)} </span>}{ing.name}{ing.optional && <span style={{ color: '#6c7086' }}> {t('health.browse.opt')}</span>}</div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {v?.equipment && v.equipment.length > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.equipment'))}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {v.equipment.map((e, i) => (
+                  <span key={i} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#9b8caa' }}>{e.name}{e.optional ? ' ' + t('health.browse.optional') : ''}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {((v?.diets && v.diets.length > 0) || (v?.dietary_flags && v.dietary_flags.length > 0)) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {v?.diets?.map(d => <span key={'d' + d} style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 10px', borderRadius: 9999, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', color: '#c084fc' }}>{d}</span>)}
+              {v?.dietary_flags?.map(f => <span key={'f' + f} style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 10px', borderRadius: 9999, border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>{f}</span>)}
+            </div>
+          )}
+
+          {v && v.steps.length > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.method'))}
+              <ol style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {v.steps.map((s, i) => (
+                  <li key={i} style={{ display: 'flex', gap: 12 }}>
+                    <span style={{ flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: '1px solid #fbbf24', fontSize: 11, fontWeight: 500, color: '#fbbf24' }}>{i + 1}</span>
+                    <div style={{ flex: 1, fontSize: 13, lineHeight: 1.6 }}>
+                      <span style={{ color: '#cdd6f4' }}>{s.action}</span>
+                      {s.tricky_flag && <span style={{ marginLeft: 8, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, background: 'rgba(251,191,36,0.15)', color: '#fbbf24', padding: '1px 6px', borderRadius: 3 }}>{t('health.browse.tricky')}</span>}
+                      {s.technique_term && <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(251,191,36,0.8)', marginTop: 3 }}>{s.technique_term}</div>}
+                      {s.notes && <div style={{ fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 3 }}>{s.notes}</div>}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {nut && Object.keys(nut).length > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.nutrition') + ' · ' + t('health.browse.per_serving_est'))}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 12, color: '#9b8caa' }}>
+                {NUTRITION_DISPLAY.map(([k, label]) => typeof nut[k] === 'number' && (
+                  <span key={k}>{label} <strong style={{ color: '#cdd6f4' }}>{nut[k]}</strong></span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {st?.from_frozen_notes && (
+            <div>
+              {sectionLabel(t('health.storage.cooking_frozen'))}
+              <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{st.from_frozen_notes}</p>
             </div>
           )}
         </div>
-        <DetailTabBar tabs={tabs} active={tab} onChange={setTab} />
-      </div>
-
-      {/* Content — flexes to fill the consistent modal height, scrolls. */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 28px 26px' }}>
-        {tab === 'overview' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {r.overview
-              ? <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{r.overview}</p>
-              : <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>{t('health.browse.no_overview')}</p>}
-            {hasNutrition && (
-              <div>
-                {sectionLabel(t('health.browse.nutrition'))}
-                <NutritionTable versions={r.versions} />
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab === 'ingredients' && (
-          <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {r.ingredients.map((ing, i) => (
-              <li key={i} style={{ fontSize: 13, color: '#cdd6f4' }}>
-                <span style={{ color: '#9b8caa', fontFamily: 'monospace', fontSize: 11, marginRight: 8 }}>
-                  {ing.quantity != null ? `${ing.quantity}${ing.unit ? ' ' + ing.unit : ''}` : (ing.unit ?? '—')}
-                </span>
-                {ing.name}{ing.optional && <span style={{ color: '#6c7086' }}> ({t('health.browse.optional')})</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {tab === 'method' && v && (
-          <div>
-            {levelPills}
-            {v.description && (
-              <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', marginTop: 0, marginBottom: 12 }}>{v.description}</p>
-            )}
-            <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {v.steps.map((s, i) => (
-                <li key={i} style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4' }}>
-                  {s.action}
-                  {s.notes && <span style={{ display: 'block', fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 2 }}>{s.notes}</span>}
-                </li>
-              ))}
-            </ol>
-            {((v.diets && v.diets.length > 0) || (v.dietary_flags && v.dietary_flags.length > 0)) && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
-                {v.diets.map(d => (
-                  <span key={`d-${d}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', color: '#c084fc' }}>{d}</span>
-                ))}
-                {v.dietary_flags.map(f => (
-                  <span key={`f-${f}`} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>{f}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab === 'storage' && st && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {(st.keeps_fridge_days != null || st.keeps_freezer_months != null) && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                {st.keeps_fridge_days != null && (
-                  <div style={{ borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', padding: 16 }}>
-                    <div style={{ fontSize: 18 }} aria-hidden>❄️</div>
-                    <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086', marginTop: 4 }}>{t('health.storage.fridge')}</div>
-                    <div style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', marginTop: 2 }}>{st.keeps_fridge_days} {t(st.keeps_fridge_days === 1 ? 'health.storage.day' : 'health.storage.days')}</div>
-                  </div>
-                )}
-                {st.keeps_freezer_months != null && (
-                  <div style={{ borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', padding: 16 }}>
-                    <div style={{ fontSize: 18 }} aria-hidden>🧊</div>
-                    <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086', marginTop: 4 }}>{t('health.storage.freezer')}</div>
-                    <div style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', marginTop: 2 }}>{st.keeps_freezer_months} {t(st.keeps_freezer_months === 1 ? 'health.storage.month' : 'health.storage.months')}</div>
-                  </div>
-                )}
-              </div>
-            )}
-            {st.from_frozen_notes && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086', marginBottom: 8 }}>{t('health.storage.cooking_frozen')}</div>
-                <p style={{ margin: 0, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)', padding: '12px 14px', fontSize: 13, lineHeight: 1.6, color: '#cdd6f4' }}>{st.from_frozen_notes}</p>
-              </div>
-            )}
-            <p style={{ margin: 0, fontSize: 10, color: '#6c7086' }}>{t('health.storage.disclaimer')}</p>
-          </div>
-        )}
       </div>
     </div>
   );
