@@ -868,9 +868,29 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
   if (ex.routine.reps_target) routine.push([t('health.browse.routine.reps'), ex.routine.reps_target]);
   if (ex.routine.rest_seconds != null) routine.push([t('health.browse.routine.rest'), `${ex.routine.rest_seconds}s`]);
   if (ex.routine.tempo) routine.push([t('health.browse.routine.tempo'), ex.routine.tempo]);
+  if (ex.routine.rpe != null) routine.push(['RPE', String(ex.routine.rpe)]);
+  else if (ex.routine.percent_1rm) routine.push(['%1RM', ex.routine.percent_1rm]);
+  if (ex.routine.seconds_per_set != null) routine.push(['Per set', `~${ex.routine.seconds_per_set}s`]);
   if (ex.routine.frequency_per_week) routine.push([t('health.browse.routine.freq'), ex.routine.frequency_per_week]);
   const primaries = ex.muscles.filter(m => m.role === 'primary');
   const secondaries = ex.muscles.filter(m => m.role === 'secondary');
+
+  const cardio: Array<[string, string]> = [];
+  if (ex.cardio) {
+    const c = ex.cardio;
+    if (c.style) cardio.push(['Style', c.style]);
+    if (c.duration_minutes != null) cardio.push(['Duration', `${c.duration_minutes} min`]);
+    if (c.heart_rate_zone) cardio.push(['HR zone', c.heart_rate_zone]);
+    if (c.work_seconds != null) cardio.push(['Work', `${c.work_seconds}s`]);
+    if (c.rest_seconds != null) cardio.push(['Rest', `${c.rest_seconds}s`]);
+    if (c.rounds != null) cardio.push(['Rounds', String(c.rounds)]);
+  }
+  const alternatives = [
+    ...(ex.regression ? [{ ...ex.regression, kind: 'Easier' }] : []),
+    ...(ex.progression ? [{ ...ex.progression, kind: 'Harder' }] : []),
+    ...ex.substitutions.map(s => ({ ...s, kind: 'Instead' })),
+  ];
+  const SEV: Record<string, string> = { avoid: '#f87171', modify: '#fbbf24', caution: '#fbbf24' };
 
   type ExTab = 'overview' | 'howto';
   const hasRoutine = routine.length > 0 || !!ex.routine.progression;
@@ -900,6 +920,9 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
             <span style={{ textTransform: 'capitalize', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
             <Dots value={ex.difficulty} accent={accent} />
             <span>{t('health.browse.difficulty_n', { n: ex.difficulty })}</span>
+            {ex.movement_pattern && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.movement_pattern.replace(/_/g, ' ')}</span>}
+            {ex.session_role && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.session_role}</span>}
+            {ex.laterality && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.laterality}</span>}
           </div>
         </div>
         <DetailTabBar tabs={tabs} active={tab} onChange={setTab} />
@@ -908,6 +931,18 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 28px 26px' }}>
         {tab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Who should take care — the safety floor, above the method. */}
+            {ex.contraindications.length > 0 && (
+              <div style={{ borderRadius: 8, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.06)', padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#f87171', marginBottom: 8 }}>Take care with</div>
+                {ex.contraindications.map(c => (
+                  <div key={c.slug} style={{ fontSize: 12, lineHeight: 1.6, color: '#cdd6f4' }}>
+                    <span style={{ fontWeight: 600, textTransform: 'uppercase', color: SEV[c.severity] ?? '#fbbf24' }}>{c.severity}</span>
+                    {' · '}{c.name}{c.note ? ` — ${c.note}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
             {ex.description && <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{ex.description}</p>}
             {ex.beginner_detail && (
               <div>
@@ -937,6 +972,41 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
                 )}
               </div>
             )}
+            {cardio.length > 0 && (
+              <div>
+                {sectionLabel('Cardio')}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+                  {cardio.map(([k, val]) => (
+                    <div key={k}>
+                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{k}</div>
+                      <div style={{ fontSize: 14, color: '#cdd6f4', marginTop: 2 }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {ex.coaching_cues.length > 0 && (
+              <div>
+                {sectionLabel('Cues')}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {ex.coaching_cues.map((c, i) => (
+                    <span key={i} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#cdd6f4' }}>{c}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {alternatives.length > 0 && (
+              <div>
+                {sectionLabel('Easier, harder, instead')}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {alternatives.map(a => (
+                    <span key={a.slug} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', color: '#9b8caa' }}>
+                      <span style={{ textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 }}>{a.kind}</span>{' '}{a.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             {(primaries.length > 0 || secondaries.length > 0) && (
               <div>
                 {sectionLabel(t('health.browse.muscles'))}
@@ -960,7 +1030,9 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
                 </div>
               </div>
             )}
-            {!ex.description && !ex.beginner_detail && !ex.common_mistakes && !hasRoutine && !hasMuscles && (
+            {!ex.description && !ex.beginner_detail && !ex.common_mistakes && !hasRoutine && !hasMuscles
+              && ex.contraindications.length === 0 && cardio.length === 0
+              && ex.coaching_cues.length === 0 && alternatives.length === 0 && (
               <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>{t('health.browse.nothing_here')}</p>
             )}
           </div>
@@ -1609,9 +1681,10 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
       {/* Fixed header + tabs. */}
       <div style={{ flexShrink: 0, padding: '20px 28px 0' }}>
         <div style={{ marginBottom: 14 }}>
-          {r.cuisine_name && (
+          {/* All cuisines it belongs to, not just one. */}
+          {(r.cuisines && r.cuisines.length ? r.cuisines.join(' · ') : r.cuisine_name) && (
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#fbbf24', marginBottom: 6 }}>
-              {r.cuisine_name}
+              {r.cuisines && r.cuisines.length ? r.cuisines.join(' · ') : r.cuisine_name}
             </div>
           )}
           <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{r.name}</h2>
