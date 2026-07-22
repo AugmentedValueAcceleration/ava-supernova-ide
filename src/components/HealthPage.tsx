@@ -862,189 +862,167 @@ function DetailCentered({ children }: { children: React.ReactNode }) {
 }
 
 export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
+  // Single-scroll, matching the hub's redesigned exercise view. Contraindications
+  // above the method. No operator diagnostics.
   const accent = WORKOUT_ACCENT[ex.workout_type];
-  const routine: Array<[string, string]> = [];
-  if (ex.routine.sets != null) routine.push([t('health.browse.routine.sets'), String(ex.routine.sets)]);
-  if (ex.routine.reps_target) routine.push([t('health.browse.routine.reps'), ex.routine.reps_target]);
-  if (ex.routine.rest_seconds != null) routine.push([t('health.browse.routine.rest'), `${ex.routine.rest_seconds}s`]);
-  if (ex.routine.tempo) routine.push([t('health.browse.routine.tempo'), ex.routine.tempo]);
-  if (ex.routine.rpe != null) routine.push(['RPE', String(ex.routine.rpe)]);
-  else if (ex.routine.percent_1rm) routine.push(['%1RM', ex.routine.percent_1rm]);
-  if (ex.routine.seconds_per_set != null) routine.push(['Per set', `~${ex.routine.seconds_per_set}s`]);
-  if (ex.routine.frequency_per_week) routine.push([t('health.browse.routine.freq'), ex.routine.frequency_per_week]);
   const primaries = ex.muscles.filter(m => m.role === 'primary');
   const secondaries = ex.muscles.filter(m => m.role === 'secondary');
 
+  const routine: Array<[string, string]> = [];
+  if (ex.routine.sets != null) routine.push([t('health.browse.routine.sets'), String(ex.routine.sets)]);
+  if (ex.routine.reps_target) routine.push([t('health.browse.routine.reps'), ex.routine.reps_target]);
+  if (ex.routine.rest_seconds != null) routine.push([t('health.browse.routine.rest'), ex.routine.rest_seconds + 's']);
+  if (ex.routine.tempo) routine.push([t('health.browse.routine.tempo'), ex.routine.tempo]);
+  if (ex.routine.rpe != null) routine.push(['RPE', String(ex.routine.rpe)]);
+  else if (ex.routine.percent_1rm) routine.push(['%1RM', ex.routine.percent_1rm]);
+  if (ex.routine.seconds_per_set != null) routine.push([t('health.browse.per_set'), '~' + ex.routine.seconds_per_set + 's']);
+  if (ex.routine.frequency_per_week) routine.push([t('health.browse.routine.freq'), ex.routine.frequency_per_week]);
+
   const cardio: Array<[string, string]> = [];
-  if (ex.cardio) {
-    const c = ex.cardio;
-    if (c.style) cardio.push(['Style', c.style]);
-    if (c.duration_minutes != null) cardio.push(['Duration', `${c.duration_minutes} min`]);
-    if (c.heart_rate_zone) cardio.push(['HR zone', c.heart_rate_zone]);
-    if (c.work_seconds != null) cardio.push(['Work', `${c.work_seconds}s`]);
-    if (c.rest_seconds != null) cardio.push(['Rest', `${c.rest_seconds}s`]);
-    if (c.rounds != null) cardio.push(['Rounds', String(c.rounds)]);
+  const c = ex.cardio;
+  if (c) {
+    if (c.style) cardio.push([t('health.browse.cardio.style'), c.style]);
+    if (c.duration_minutes != null) cardio.push([t('health.browse.cardio.duration'), c.duration_minutes + ' min']);
+    if (c.heart_rate_zone) cardio.push([t('health.browse.cardio.zone'), c.heart_rate_zone]);
+    if (c.work_seconds != null) cardio.push([t('health.browse.cardio.work'), c.work_seconds + 's']);
+    if (c.rest_seconds != null) cardio.push([t('health.browse.cardio.rest'), c.rest_seconds + 's']);
+    if (c.rounds != null) cardio.push([t('health.browse.cardio.rounds'), String(c.rounds)]);
   }
   const alternatives = [
-    ...(ex.regression ? [{ ...ex.regression, kind: 'Easier' }] : []),
-    ...(ex.progression ? [{ ...ex.progression, kind: 'Harder' }] : []),
-    ...(ex.substitutions ?? []).map(s => ({ ...s, kind: 'Instead' })),
+    ...(ex.regression ? [{ ...ex.regression, kind: t('health.browse.easier') }] : []),
+    ...(ex.progression ? [{ ...ex.progression, kind: t('health.browse.harder') }] : []),
+    ...((ex.substitutions ?? []).map(s => ({ ...s, kind: t('health.browse.instead') }))),
   ];
   const SEV: Record<string, string> = { avoid: '#f87171', modify: '#fbbf24', caution: '#fbbf24' };
-
-  type ExTab = 'overview' | 'howto';
-  const hasRoutine = routine.length > 0 || !!ex.routine.progression;
-  const hasMuscles = primaries.length > 0 || secondaries.length > 0 || ex.equipment.length > 0;
-  // Routine + Muscles & kit now live inside Overview (less tab clutter).
-  const tabs: { key: ExTab; label: string }[] = [
-    { key: 'overview', label: t('health.browse.overview') },
-    ...(ex.steps.length > 0 ? [{ key: 'howto' as ExTab, label: t('health.browse.howto') }] : []),
-  ];
-  const [tab, setTab] = useState<ExTab>('overview');
+  const grid = (rows: Array<[string, string]>) => (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+      {rows.map(([k, val]) => (
+        <div key={k}>
+          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{k}</div>
+          <div style={{ fontSize: 14, color: '#cdd6f4', marginTop: 2 }}>{val}</div>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* Hero image — leads the overlay, like the recipe detail. */}
       {ex.thumbnail_url && (
         <div style={{ flexShrink: 0, height: 184, overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
           <img src={ex.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         </div>
       )}
-      <div style={{ flexShrink: 0, padding: '24px 28px 0' }}>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: accent, marginBottom: 6 }}>
-            {workoutLabel(ex.workout_type)}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 28px 28px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: accent, marginBottom: 6 }}>{workoutLabel(ex.workout_type)}</div>
+            <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{ex.name}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: '#9b8caa', flexWrap: 'wrap' }}>
+              <span style={{ textTransform: 'capitalize', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
+              <Dots value={ex.difficulty} accent={accent} />
+              <span>{t('health.browse.difficulty_n', { n: ex.difficulty })}</span>
+              {ex.movement_pattern && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.movement_pattern.replace(/_/g, ' ')}</span>}
+              {ex.session_role && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.session_role}</span>}
+              {ex.laterality && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.laterality}</span>}
+            </div>
           </div>
-          <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{ex.name}</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: '#9b8caa' }}>
-            <span style={{ textTransform: 'capitalize', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
-            <Dots value={ex.difficulty} accent={accent} />
-            <span>{t('health.browse.difficulty_n', { n: ex.difficulty })}</span>
-            {ex.movement_pattern && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.movement_pattern.replace(/_/g, ' ')}</span>}
-            {ex.session_role && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.session_role}</span>}
-            {ex.laterality && <span style={{ textTransform: 'capitalize', opacity: 0.7 }}>{ex.laterality}</span>}
-          </div>
-        </div>
-        <DetailTabBar tabs={tabs} active={tab} onChange={setTab} />
-      </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 28px 26px' }}>
-        {tab === 'overview' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {/* Who should take care — the safety floor, above the method. */}
-            {(ex.contraindications?.length ?? 0) > 0 && (
-              <div style={{ borderRadius: 8, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.06)', padding: '12px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#f87171', marginBottom: 8 }}>Take care with</div>
-                {ex.contraindications!.map(c => (
-                  <div key={c.slug} style={{ fontSize: 12, lineHeight: 1.6, color: '#cdd6f4' }}>
-                    <span style={{ fontWeight: 600, textTransform: 'uppercase', color: SEV[c.severity] ?? '#fbbf24' }}>{c.severity}</span>
-                    {' · '}{c.name}{c.note ? ` — ${c.note}` : ''}
-                  </div>
+          {(ex.contraindications?.length ?? 0) > 0 && (
+            <div style={{ borderRadius: 8, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.06)', padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#f87171', marginBottom: 8 }}>{t('health.browse.take_care')}</div>
+              {ex.contraindications!.map(cc => (
+                <div key={cc.slug} style={{ fontSize: 12, lineHeight: 1.6, color: '#cdd6f4' }}>
+                  <span style={{ fontWeight: 600, textTransform: 'uppercase', color: SEV[cc.severity] ?? '#fbbf24' }}>{cc.severity}</span>
+                  {' · '}{cc.name}{cc.note ? ' — ' + cc.note : ''}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {ex.description && <p style={{ fontSize: 14, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{ex.description}</p>}
+
+          {(primaries.length > 0 || secondaries.length > 0) && (
+            <div>
+              {sectionLabel(t('health.browse.muscles'))}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {primaries.map(m => <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: accent + '26', color: accent }}>{m.name}</span>)}
+                {secondaries.map(m => <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#9b8caa' }}>{m.name}</span>)}
+              </div>
+            </div>
+          )}
+          {ex.equipment.length > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.equipment'))}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {ex.equipment.map(e => <span key={e.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#9b8caa', textTransform: 'capitalize' }}>{e.name}</span>)}
+              </div>
+            </div>
+          )}
+
+          {ex.steps.length > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.howto'))}
+              <ol style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {ex.steps.map((s, i) => (
+                  <li key={i} style={{ display: 'flex', gap: 12, fontSize: 13, lineHeight: 1.6 }}>
+                    <span style={{ flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: '1px solid ' + accent, fontSize: 11, fontWeight: 500, color: accent }}>{i + 1}</span>
+                    <span style={{ flex: 1, color: '#cdd6f4' }}>{s}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {(ex.coaching_cues?.length ?? 0) > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.cues'))}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {ex.coaching_cues!.map((cue, i) => <span key={i} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#cdd6f4' }}>{cue}</span>)}
+              </div>
+            </div>
+          )}
+
+          {(routine.length > 0 || ex.routine.progression) && (
+            <div>
+              {sectionLabel(t('health.browse.routine'))}
+              {grid(routine)}
+              {ex.routine.progression && <p style={{ fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 14, marginBottom: 0 }}>{ex.routine.progression}</p>}
+            </div>
+          )}
+
+          {cardio.length > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.cardio'))}
+              {grid(cardio)}
+            </div>
+          )}
+
+          {alternatives.length > 0 && (
+            <div>
+              {sectionLabel(t('health.browse.easier_harder_instead'))}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {alternatives.map(a => (
+                  <span key={a.slug} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', color: '#9b8caa' }}>
+                    <span style={{ textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 }}>{a.kind}</span> {a.name}
+                  </span>
                 ))}
               </div>
-            )}
-            {ex.description && <p style={{ fontSize: 13, lineHeight: 1.6, color: '#cdd6f4', margin: 0 }}>{ex.description}</p>}
-            {ex.beginner_detail && (
-              <div>
-                {sectionLabel(t('health.browse.if_youre_new'))}
-                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.beginner_detail}</p>
-              </div>
-            )}
-            {ex.common_mistakes && (
-              <div>
-                {sectionLabel(t('health.browse.common_mistakes'))}
-                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.common_mistakes}</p>
-              </div>
-            )}
-            {hasRoutine && (
-              <div>
-                {sectionLabel(t('health.browse.routine'))}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
-                  {routine.map(([k, val]) => (
-                    <div key={k}>
-                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{k}</div>
-                      <div style={{ fontSize: 14, color: '#cdd6f4', marginTop: 2 }}>{val}</div>
-                    </div>
-                  ))}
-                </div>
-                {ex.routine.progression && (
-                  <p style={{ fontSize: 12, fontStyle: 'italic', color: '#9b8caa', marginTop: 14, marginBottom: 0 }}>{ex.routine.progression}</p>
-                )}
-              </div>
-            )}
-            {cardio.length > 0 && (
-              <div>
-                {sectionLabel('Cardio')}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
-                  {cardio.map(([k, val]) => (
-                    <div key={k}>
-                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{k}</div>
-                      <div style={{ fontSize: 14, color: '#cdd6f4', marginTop: 2 }}>{val}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {(ex.coaching_cues?.length ?? 0) > 0 && (
-              <div>
-                {sectionLabel('Cues')}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {ex.coaching_cues!.map((c, i) => (
-                    <span key={i} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#cdd6f4' }}>{c}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {alternatives.length > 0 && (
-              <div>
-                {sectionLabel('Easier, harder, instead')}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {alternatives.map(a => (
-                    <span key={a.slug} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', color: '#9b8caa' }}>
-                      <span style={{ textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 }}>{a.kind}</span>{' '}{a.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {(primaries.length > 0 || secondaries.length > 0) && (
-              <div>
-                {sectionLabel(t('health.browse.muscles'))}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {primaries.map(m => (
-                    <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: `${accent}26`, color: accent }}>{m.name}</span>
-                  ))}
-                  {secondaries.map(m => (
-                    <span key={m.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#9b8caa' }}>{m.name}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {ex.equipment.length > 0 && (
-              <div>
-                {sectionLabel(t('health.browse.equipment'))}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {ex.equipment.map(e => (
-                    <span key={e.slug} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: '#9b8caa', textTransform: 'capitalize' }}>{e.name}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {!ex.description && !ex.beginner_detail && !ex.common_mistakes && !hasRoutine && !hasMuscles
-              && (ex.contraindications?.length ?? 0) === 0 && cardio.length === 0
-              && (ex.coaching_cues?.length ?? 0) === 0 && alternatives.length === 0 && (
-              <p style={{ fontSize: 13, color: '#6c7086', margin: 0 }}>{t('health.browse.nothing_here')}</p>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {tab === 'howto' && (
-          <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {ex.steps.map((s, i) => (
-              <li key={i} style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4' }}>{s}</li>
-            ))}
-          </ol>
-        )}
+          {ex.beginner_detail && (
+            <div>
+              {sectionLabel(t('health.browse.if_youre_new'))}
+              <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.beginner_detail}</p>
+            </div>
+          )}
+          {ex.common_mistakes && (
+            <div>
+              {sectionLabel(t('health.browse.common_mistakes'))}
+              <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.common_mistakes}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1579,20 +1557,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 /** Tab bar for the detail overlays — separates the sections that used to
  *  stack in one long scroll. Underline-style, matching the page's chrome. */
-function DetailTabBar<T extends string>({ tabs, active, onChange }: { tabs: { key: T; label: string }[]; active: T; onChange: (k: T) => void }) {
-  return (
-    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
-      {tabs.map(tb => (
-        <button key={tb.key} onClick={() => onChange(tb.key)} style={{
-          padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-          background: 'transparent', border: 'none', marginBottom: -1,
-          color: active === tb.key ? '#cdd6f4' : '#6c7086',
-          borderBottom: active === tb.key ? '2px solid var(--accent)' : '2px solid transparent',
-        }}>{tb.label}</button>
-      ))}
-    </div>
-  );
-}
 
 type NutritionDisplayKey = 'calories' | 'protein_g' | 'carbs_g' | 'fat_g' | 'fibre_g' | 'sugar_g' | 'sodium_mg' | 'saturated_fat_g';
 const NUTRITION_DISPLAY: Array<[NutritionDisplayKey, string]> = [
