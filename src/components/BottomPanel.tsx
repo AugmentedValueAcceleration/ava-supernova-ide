@@ -114,20 +114,42 @@ function AvaCliPanel() {
     ] satisfies (IdeModelOption & { modeId: ModeId })[])
       .filter((o) => isModeListed(o.modeId))
       .map(({ modeId: _modeId, ...rest }) => rest);
-    // Raw individual models are now BYOK-only. Plans surface only the
-    // 3 modes; raw model selection is a BYOK-side power-user path.
-    // section==='byok' means the server returned this model because
-    // the user has the relevant provider key configured.
-    const raw: IdeModelOption[] = platformModels
-      .filter((m) => m.section === 'byok')
-      .map((m) => ({
-        id: m.id,
-        name: m.name,
-        provider: m.provider,
-        available: true,
-        // The API already reports this per model; the picker just never read it.
-        supportsVision: m.supports_vision === true,
-      }));
+    // Raw individual models, two lanes now:
+    //   section==='platform' — the single fleet models, opened to the account
+    //     tier (operator 2026-07-23). They run on CREDITS, so they light up the
+    //     moment a platform account is connected. The sidecar's provider
+    //     registry resolves a `-platform` id (or a bare id with no BYOK key) to
+    //     the platform provider automatically (provider-registry.findModel
+    //     bridges the -platform suffix), so no id rewriting is needed here — a
+    //     credit pick draws credits, and the SAME model with a BYOK key present
+    //     resolves to that key instead. Nothing to special-case in routing.
+    //   section==='byok' — the full BYOK lineup, usable with the provider key.
+    const signedIn = !!getPlatformKey();
+    // ONE entry per logical model. A fleet single can arrive as BOTH a bare
+    // byok row and a `-platform` credit row (Mistral does); keep one, preferring
+    // the BARE id, because the sidecar's provider registry resolves a bare id to
+    // the right wallet on its own — the user's key if present, else platform
+    // credits. A platform-only model (e.g. DeepSeek, whose sole row is
+    // `-platform`) keeps that id and lights up on a connected account.
+    const bySlug = new Map<string, PlatformModel>();
+    for (const m of platformModels) {
+      if (m.section !== 'byok' && m.section !== 'platform') continue;
+      const slug = m.id.replace(/-platform$/, '');
+      const existing = bySlug.get(slug);
+      if (!existing || (existing.section === 'platform' && m.section === 'byok')) {
+        bySlug.set(slug, m); // prefer the bare byok row over its -platform twin
+      }
+    }
+    const raw: IdeModelOption[] = [...bySlug.values()].map((m) => ({
+      id: m.id,
+      name: m.name,
+      provider: m.provider,
+      // Bare byok id → always selectable (registry picks the wallet). A
+      // platform-only id → needs a connected account (runs on credits).
+      available: m.section === 'platform' ? signedIn : true,
+      // The API already reports this per model; the picker just never read it.
+      supportsVision: m.supports_vision === true,
+    }));
     return [...orchestrated, ...raw];
   }, [platformModels, modeAvailability]);
   // Surface modeState so the orchestrated subtitles can explain unlock
