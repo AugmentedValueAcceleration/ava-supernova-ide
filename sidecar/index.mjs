@@ -1745,18 +1745,75 @@ async function handleInit(data) {
       // the flat per-plan fee (single 5 credits/week, combined 10/week),
       // builds the whole plan from the exercise/recipe library, and returns days.
       generateHealthPlanDays: async (i) => {
-        if (!config.platformKey) throw new Error('Sign in to your Ava account to generate a plan.');
-        let profile = '';
+        // WHICH MODEL, AND WHOSE KEY.
+        //
+        // This sent neither. So a BYOK user's plan was generated on the
+        // platform's Qwen key AND charged to their credits, and worse, it
+        // refused outright without a platform key — a BYOK-only user could not
+        // generate a plan at all despite paying for every token themselves.
+        //
+        // The active model id goes with the request so the server resolves the
+        // right provider, and the user's OWN key goes with it whenever they are
+        // not on the platform provider. Their key, their bill, no credits.
+        const providerName = resolved.provider.name;
+        // config.providers is keyed by the SETTINGS name, the registry by the
+        // provider name, and they are not always the same — `glm` registers as
+        // `zhipu` (providerMap above). Looking the key up by registry name
+        // alone would find nothing for a GLM user and tell them to sign in
+        // while their key sat right there in settings.
+        const configKey = Object.keys(config.providers || {})
+          .find((k) => (providerMap[k] || k) === providerName) || providerName;
+        const byokKey = providerName === 'platform'
+          ? undefined
+          : config.providers?.[configKey]?.apiKey || undefined;
+        if (!config.platformKey && !byokKey) {
+          throw new Error('Sign in to your Ava account, or add your own provider key, to generate a plan.');
+        }
+        // Send the profile as an OBJECT. It used to be JSON.stringify'd and cut
+        // at 1500 characters, which routinely truncated mid-object — so the
+        // server received text it couldn't parse and fell back to asking the
+        // model nicely to respect injuries. Structured, it filters the exercise
+        // and recipe pools instead: an allergen or an 'avoid' contraindication
+        // removes the item before the prompt exists, and daily targets are
+        // computed from body + goal. The conditions never reach the model.
+        let profile = null;
         try {
-          profile = JSON.stringify(JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'health', 'profile.json'), 'utf-8'))).slice(0, 1500);
+          profile = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'health', 'profile.json'), 'utf-8'));
         } catch { /* no local profile — the server handles its absence */ }
+        const headers = { 'Content-Type': 'application/json' };
+        if (config.platformKey) headers.Authorization = `Bearer ${config.platformKey}`;
+        // No account at all — authenticate as BYOK instead. The header pair is
+        // what the route's door accepts; the body still carries the model so
+        // the provider is resolved from it rather than assumed.
+        if (!config.platformKey && byokKey) {
+          headers['X-BYOK-Provider'] = providerName;
+          headers['X-BYOK-Key'] = byokKey;
+        }
         const res = await fetch('https://ava-supernova.com/api/health/generate/plan', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.platformKey}` },
-          body: JSON.stringify({ type: i.type, duration_days: i.duration_days, goal: i.goal, title: i.title, profile }),
+          headers,
+          body: JSON.stringify({
+            type: i.type, duration_days: i.duration_days, goal: i.goal, title: i.title, profile,
+            model: resolved.model.id,
+            ...(byokKey ? { providerApiKey: byokKey } : {}),
+            // Which weekday each generated day lands on. A plan created from the
+            // room starts today unless the person moves it, and today is what
+            // the store stamps on an active plan without a date.
+            start_date: new Date().toISOString().slice(0, 10),
+          }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || `Plan generation failed (${res.status})`);
+        if (!res.ok) {
+          // KEEP `detail`. The route sends a friendly line in `error` and the
+          // real cause in `detail`; reading only `error` meant every failure
+          // reached Ava as "please try again" with the explanation discarded
+          // at the last possible moment. She then retried the same call seven
+          // times because nothing she could see said otherwise.
+          const parts = [data?.error || `Plan generation failed (${res.status})`, data?.detail].filter(Boolean);
+          const msg = parts.join(' — ');
+          emit({ event: 'info', message: `[health] plan generation failed (${res.status}): ${msg}` });
+          throw new Error(msg);
+        }
         return { days: data.days ?? [], credits_charged: data.credits_charged ?? 0 };
       },
       // Design Studio control — the Design Architect's tools (design_find_shape,
