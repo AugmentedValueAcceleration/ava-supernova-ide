@@ -34,6 +34,7 @@ import { fillDayMeta } from '../lib/plan-meal-meta';
 import { ShoppingListSheet } from './ShoppingListSheet';
 import { PrepSheet } from './PrepSheet';
 import { DuplicateSheet } from './DuplicateSheet';
+import { AssistSheet, askForDay, type DayProposal } from './AssistSheet';
 import { loadHealthProfile, type HealthProfile } from '../lib/health-store';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
@@ -772,6 +773,12 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   // Duplicate is per plan-day: which plan's day is being copied has to be
   // unambiguous, so it opens from the covered plan for this date.
   const [duplicating, setDuplicating] = useState<{ plan: HealthPlan; dayIndex: number } | null>(null);
+  // Ask Ava about this day. The proposal is held here, never written, until
+  // the operator accepts it — that is the whole point of the screen.
+  const [assisting, setAssisting] = useState<{ plan: HealthPlan; day: HealthPlanDay } | null>(null);
+  const [assistBusy, setAssistBusy] = useState(false);
+  const [assistError, setAssistError] = useState<string | null>(null);
+  const [assistProposal, setAssistProposal] = useState<DayProposal | null>(null);
   const dupSource = (() => {
     for (const p of plans) {
       const idx = dayIndexForDate(p, dateKey);
@@ -803,6 +810,18 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Logging a future day is a fiction, same rule as the per-item
                 recording column. */}
+            {dupSource && !editing && (
+              <button type="button"
+                onClick={() => {
+                  const day = planDayForDate(dupSource.plan, dateKey);
+                  if (!day) return;
+                  setAssistProposal(null); setAssistError(null);
+                  setAssisting({ plan: dupSource.plan, day });
+                }}
+                style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
+                {t('health.assist.title')}
+              </button>
+            )}
             {dupSource && !editing && (
               <button type="button" onClick={() => setDuplicating(dupSource)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
                 {t('health.dup.title')}
@@ -922,6 +941,33 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             );
           })}
         </div>
+
+        {assisting && (
+          <AssistSheet
+            plan={assisting.plan}
+            day={assisting.day}
+            busy={assistBusy}
+            error={assistError}
+            proposal={assistProposal}
+            onAsk={instruction => {
+              setAssistBusy(true); setAssistError(null);
+              askForDay({ plan: assisting.plan, day: assisting.day, profile, instruction })
+                .then(p => setAssistProposal(p))
+                .catch(e => setAssistError(e instanceof Error ? e.message : String(e)))
+                .finally(() => setAssistBusy(false));
+            }}
+            onApply={nextDay => {
+              const next = {
+                ...assisting.plan,
+                days: assisting.plan.days.map(d => (d.day_index === nextDay.day_index ? nextDay : d)),
+              };
+              setPlans(prev => prev.map(p => (p.id === next.id ? next : p)));
+              onSavePlan(next);
+            }}
+            onDiscard={() => setAssistProposal(null)}
+            onClose={() => { setAssisting(null); setAssistProposal(null); setAssistError(null); }}
+          />
+        )}
 
         {duplicating && (
           <DuplicateSheet
