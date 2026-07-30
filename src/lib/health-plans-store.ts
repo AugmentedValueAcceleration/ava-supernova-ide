@@ -50,6 +50,15 @@ export interface HealthPlanMeal {
   fat_g: number | null;
   cook_time_minutes: number | null;  // recipe's real cook/prep time; shown so it visibly fits the slot's ceiling
   notes: string | null;
+  /** What actually happened with this meal. Absent or null = UNRECORDED, which
+   *  is not the same fact as 'skipped' — one is silence, the other is an
+   *  answer, and every downstream reading depends on telling them apart.
+   *  Mirrors core's MealLogged and the extension's field of the same name. */
+  logged?: {
+    state: 'ate' | 'skipped' | 'other';
+    note: string | null;
+    at: string;
+  } | null;
 }
 
 export interface HealthPlanDay {

@@ -25,6 +25,10 @@ import {
 // from a plan or the day view reads identically to the library (skill levels,
 // full nutrition, diets, equipment, per-step technique), not a thin copy.
 import { ExerciseDetailBody as CatExerciseDetail, RecipeDetailBody as CatRecipeDetail } from './HealthPage';
+// session-types, NOT the ./health barrel: the barrel re-exports node-store.js
+// (node:fs / node:path / node:os) and cannot be bundled for a browser at all.
+import { freshGymSession, gymExerciseFromPlan, type GymSession, type GymExercise } from '@ava/core/health/session-types';
+import { sessionsForDate, saveSession } from '../lib/health-sessions-store';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
   HealthPlanDay, HealthPlanExercise, HealthPlanMeal,
@@ -464,7 +468,10 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   const [plans, setPlans] = useState<HealthPlan[]>([]);
   const [exerciseDetails, setExerciseDetails] = useState<Record<string, HealthExerciseDetail>>({});
   const [recipeDetails, setRecipeDetails] = useState<Record<string, HealthRecipeDetail>>({});
-  const [detail, setDetail] = useState<{ kind: 'exercise' | 'recipe'; slug: string; name: string } | null>(null);
+  const [detail, setDetail] = useState<{ kind: 'exercise' | 'recipe'; slug: string; name: string; planId?: string; itemId?: string } | null>(null);
+  // The training session for this date, if one exists. Loaded once per date
+  // rather than per tick — a tick must not wait on a directory read.
+  const [daySession, setDaySession] = useState<GymSession | null>(null);
 
   // ── Editing: the loaded full plans ARE the working model — edits mutate the
   // matching plan's day and autosave (debounced) through onSavePlan, the same
@@ -620,11 +627,99 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
     return { sections, mealTotals: totals, mealsEstimated: estimated, hasMeals: allMeals.length > 0 };
   }, [dateKey, plans, exerciseDetails, recipeDetails]);
 
+  // Load this date's session so a tick patches what is already there rather
+  // than seeding a second record for the same day.
+  useEffect(() => {
+    let cancelled = false;
+    sessionsForDate(dateKey)
+      .then(list => { if (!cancelled) setDaySession(list.find(s => s.source === 'plan') ?? list[0] ?? null); })
+      .catch(() => { if (!cancelled) setDaySession(null); });
+    return () => { cancelled = true; };
+  }, [dateKey]);
+
   const openItem = (item: DayAgendaItem) => {
     if (!item.slug) return;
     if (item.kind === 'exercise') loadExerciseDetail(item.slug).then(d => { if (d) setExerciseDetails(prev => ({ ...prev, [item.slug!]: d })); }).catch(() => {});
     else loadRecipeDetail(item.slug).then(d => { if (d) setRecipeDetails(prev => ({ ...prev, [item.slug!]: d })); }).catch(() => {});
-    setDetail({ kind: item.kind, slug: item.slug, name: item.title });
+    // Carry the plan and item ids: without them the modal can show the guide
+    // but has nothing to attach a fact to.
+    setDetail({ kind: item.kind, slug: item.slug, name: item.title, planId: item.planId, itemId: item.itemId });
+  };
+
+  // ── What actually happened ────────────────────────────────────────────────
+  //
+  // Two destinations, deliberately:
+  //
+  //   meals     → the PLAN ROW (`meal.logged`). The plan store exists on every
+  //               surface and travels with export/import.
+  //   exercises → the SESSION record, which is what the observing loop and
+  //               summariseTrainingLog already read. A tick there is the same
+  //               fact as a logged set, just without the numbers — so there is
+  //               one source of truth about whether Thursday happened.
+
+  const readItemLog = (kind: 'exercise' | 'recipe', planId: string, itemId: string): ItemLogState => {
+    if (kind === 'recipe') {
+      const plan = plans.find(p => p.id === planId);
+      const meal = plan ? planDayForDate(plan, dateKey)?.meals.find(m => m.id === itemId) : null;
+      if (meal?.logged) return { state: meal.logged.state, note: meal.logged.note ?? '' };
+      return { state: null, note: '' };
+    }
+    const ex = daySession?.exercises.find(e => e.ref?.slug === detail?.slug);
+    if (!ex) return { state: null, note: '' };
+    const st = (ex as { state?: string }).state;
+    return {
+      state: st === 'done' || st === 'skipped' ? st : null,
+      // The legacy magic string: 'skipped' used to live in notes before the
+      // typed field existed. Never show it back as if the user wrote it.
+      note: typeof ex.notes === 'string' && ex.notes !== 'skipped' ? ex.notes : '',
+    };
+  };
+
+  const saveItemLog = (kind: 'exercise' | 'recipe', planId: string, itemId: string, next: ItemLogState) => {
+    const plan = plans.find(p => p.id === planId);
+    if (!plan) return;
+    const day = planDayForDate(plan, dateKey);
+    if (!day) return;
+
+    if (kind === 'recipe') {
+      const meals = day.meals.map(m => m.id === itemId
+        ? {
+            ...m,
+            logged: next.state
+              ? { state: next.state as 'ate' | 'skipped' | 'other', note: next.note.trim() || null, at: new Date().toISOString() }
+              // Clearing writes null, not a blank record. Unrecorded and
+              // "recorded as nothing" are different, and only one is honest.
+              : null,
+          }
+        : m);
+      onSavePlan({ ...plan, days: plan.days.map(d => (d.day_index === day.day_index ? { ...day, meals } : d)) });
+      setPlans(prev => prev.map(p => (p.id === plan.id
+        ? { ...p, days: p.days.map(d => (d.day_index === day.day_index ? { ...day, meals } : d)) }
+        : p)));
+      return;
+    }
+
+    // Exercise: into the SESSION, which is what the observing loop reads. Patch
+    // the loaded session when there is one for this date, otherwise seed one
+    // from the plan day so a tick works even when nothing has been logged yet.
+    const base: GymSession = daySession ?? {
+      ...freshGymSession({ date: dateKey, source: 'plan', title: day.title, plan_id: plan.id, day_index: day.day_index }),
+      exercises: day.training.map(gymExerciseFromPlan),
+    };
+    const exercises: GymExercise[] = base.exercises.map(e =>
+      (e.ref?.slug && e.ref.slug === detail?.slug)
+        ? { ...e, state: next.state === 'done' || next.state === 'skipped' ? next.state : null, notes: next.note.trim() || null }
+        : e);
+    const anyDone = exercises.some(e => e.state === 'done' || e.sets.length > 0);
+    const anySkipped = exercises.some(e => e.state === 'skipped');
+    const saved: GymSession = {
+      ...base,
+      exercises,
+      status: anyDone ? 'completed' : anySkipped ? 'skipped' : 'in-progress',
+      updated_at: new Date().toISOString(),
+    };
+    setDaySession(saved);
+    saveSession(saved).catch(() => { /* non-fatal — the tick is still on screen */ });
   };
 
   const date = new Date(`${dateKey}T00:00:00`);
@@ -750,6 +845,15 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             detail={detail}
             exercise={detail.kind === 'exercise' ? exerciseDetails[detail.slug] : undefined}
             recipe={detail.kind === 'recipe' ? recipeDetails[detail.slug] : undefined}
+            /* Recording only on a day that has actually been. Ticking tomorrow
+               is a fiction, and an item with no plan row has nothing to attach
+               a fact to. */
+            log={detail.planId && detail.itemId && dateKey <= todayISO()
+              ? {
+                  current: readItemLog(detail.kind, detail.planId, detail.itemId),
+                  onSave: next => saveItemLog(detail.kind, detail.planId!, detail.itemId!, next),
+                }
+              : undefined}
             onClose={() => setDetail(null)}
           />
         )}
@@ -1486,22 +1590,130 @@ function DayReadView({ day, showTraining, showMeals, exerciseDetails, recipeDeta
 }
 
 
-function ItemDetailModal({ detail, exercise, recipe, onClose }: {
+export interface ItemLogState {
+  /** 'ate' | 'other' only apply to recipes; 'done' | 'skipped' to exercises. */
+  state: 'done' | 'skipped' | 'ate' | 'other' | null;
+  note: string;
+}
+
+function ItemDetailModal({ detail, exercise, recipe, log, onClose }: {
   detail: { kind: 'exercise' | 'recipe'; slug: string; name: string };
   exercise: HealthExerciseDetail | undefined;
   recipe: HealthRecipeDetail | undefined;
+  /** Present ONLY when the item was opened from a dated plan row that has
+   *  already happened. Absent in the catalogue (nothing to attach a fact to)
+   *  and absent on future days (ticking tomorrow is a fiction). */
+  log?: {
+    current: ItemLogState;
+    onSave: (next: ItemLogState) => void;
+  };
   onClose: () => void;
 }) {
   const loaded = detail.kind === 'exercise' ? !!exercise : !!recipe;
+  const [draft, setDraft] = useState<ItemLogState>(log?.current ?? { state: null, note: '' });
+  const dirty = !!log && (draft.state !== log.current.state || draft.note !== log.current.note);
+
+  // The three (or two) things that can be true, in the order they are likeliest.
+  const options: { key: NonNullable<ItemLogState['state']>; label: string; tint: string }[] =
+    detail.kind === 'recipe'
+      ? [
+          { key: 'ate', label: t('health.log.ate'), tint: '#a6e3a1' },
+          { key: 'other', label: t('health.log.ate_other'), tint: AMBER },
+          { key: 'skipped', label: t('health.log.skipped'), tint: MUTED },
+        ]
+      : [
+          { key: 'done', label: t('health.log.did_it'), tint: '#a6e3a1' },
+          { key: 'skipped', label: t('health.log.skipped'), tint: MUTED },
+        ];
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: 'min(760px, 86vh)', width: '100%', maxWidth: 820, overflow: 'hidden', borderRadius: 16, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'linear-gradient(to bottom right, #0f0f17, #1a1625)' }}>
+      {/* Wider when there is something to record — the guide keeps its column
+          and the recording sits beside it, rather than the guide shrinking to
+          make room for a checkbox. */}
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: 'min(820px, 90vh)', width: '100%', maxWidth: log ? 1140 : 820, overflow: 'hidden', borderRadius: 16, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'linear-gradient(to bottom right, #0f0f17, #1a1625)' }}>
         <button type="button" onClick={onClose} aria-label={t('health.plans.cancel')} style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32, width: 32, borderRadius: 999, border: 'none', background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: 18, cursor: 'pointer' }}>×</button>
-        {/* The rich, tabbed catalogue detail — same component the library uses. */}
-        {!loaded ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.loading')}</div>
-          : exercise ? <CatExerciseDetail ex={exercise} />
-            : recipe ? <CatRecipeDetail r={recipe} />
-              : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.no_detail')}</div>}
+        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+          <div style={{ display: 'flex', flex: 1, minWidth: 0, flexDirection: 'column' }}>
+            {/* The rich, tabbed catalogue detail — same component the library uses. */}
+            {!loaded ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.loading')}</div>
+              : exercise ? <CatExerciseDetail ex={exercise} />
+                : recipe ? <CatRecipeDetail r={recipe} />
+                  : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontStyle: 'italic', color: MUTED }}>{t('health.plans.no_detail')}</div>}
+          </div>
+
+          {/* WHAT ACTUALLY HAPPENED — recorded here, beside the thing itself.
+              Only present when this was opened from a dated plan row that has
+              already been; the catalogue has no day to attach a fact to, and a
+              future day would let you tick something you have not done. */}
+          {log && (
+            <div style={{ display: 'flex', width: 320, flexShrink: 0, flexDirection: 'column', gap: 16, overflowY: 'auto', borderLeft: `1px solid ${BORDER}`, background: 'rgba(0,0,0,0.2)', padding: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.18em', color: 'color-mix(in srgb, var(--accent) 70%, transparent)' }}>
+                  {t('health.log.what_happened')}
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, lineHeight: 1.6, color: MUTED }}>
+                  {t('health.log.what_happened_hint')}
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {options.map(o => {
+                  const active = draft.state === o.key;
+                  return (
+                    <button key={o.key} type="button"
+                      /* Tapping the active one again clears it — a mis-tap that
+                         cannot be undone is how a log stops being trusted. */
+                      onClick={() => setDraft(d => ({ ...d, state: active ? null : o.key }))}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, borderRadius: 8,
+                        padding: '10px 12px', fontSize: 12, fontWeight: 500, textAlign: 'left', cursor: 'pointer',
+                        background: active ? `color-mix(in srgb, ${o.tint} 12%, transparent)` : 'transparent',
+                        color: active ? o.tint : MUTED,
+                        border: `1px solid ${active ? o.tint : BORDER}`,
+                      }}>
+                      <span style={{
+                        display: 'flex', height: 16, width: 16, flexShrink: 0, alignItems: 'center', justifyContent: 'center',
+                        borderRadius: 4, fontSize: 10, border: `1px solid ${active ? 'currentColor' : BORDER}`,
+                      }}>{active ? '✓' : ''}</span>
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
+                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.18em', color: MUTED }}>
+                  {t('health.log.your_note')}
+                </div>
+                {/* Say she reads it. People write differently when they know,
+                    and finding out afterwards feels like being watched. */}
+                <p style={{ margin: '4px 0 6px', fontSize: 11, lineHeight: 1.6, color: MUTED }}>
+                  {t('health.log.note_seen')}
+                </p>
+                <textarea
+                  value={draft.note}
+                  onChange={e => setDraft(d => ({ ...d, note: e.target.value }))}
+                  placeholder={t('health.log.note_placeholder')}
+                  style={{ minHeight: 110, flex: 1, resize: 'none', borderRadius: 8, border: `1px solid ${BORDER}`, background: 'rgba(12, 8, 20, 0.4)', padding: '8px 12px', fontSize: 12, lineHeight: 1.6, color: TEXT, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <button type="button" disabled={!dirty}
+                onClick={() => { log.onSave(draft); onClose(); }}
+                style={{
+                  borderRadius: 8, padding: '10px 12px', fontSize: 12, fontWeight: 500,
+                  cursor: dirty ? 'pointer' : 'default',
+                  background: dirty ? ACCENT : 'transparent',
+                  color: dirty ? '#fff' : MUTED,
+                  border: dirty ? 'none' : `1px solid ${BORDER}`,
+                  opacity: dirty ? 1 : 0.5,
+                }}>
+                {t('health.log.save_record')}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
