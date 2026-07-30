@@ -31,6 +31,8 @@ import { freshGymSession, gymExerciseFromPlan, type GymSession, type GymExercise
 import { sessionsForDate, saveSession } from '../lib/health-sessions-store';
 import { LogSessionSheet } from './LogSessionSheet';
 import { fillDayMeta } from '../lib/plan-meal-meta';
+import { ShoppingListSheet } from './ShoppingListSheet';
+import { loadHealthProfile, type HealthProfile } from '../lib/health-store';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
   HealthPlanDay, HealthPlanExercise, HealthPlanMeal,
@@ -763,6 +765,12 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
     return null;
   })();
   const [logging, setLogging] = useState(false);
+  const [shopping, setShopping] = useState(false);
+  // Household size lives on the profile and is the only thing the list needs
+  // from it. Loaded once with the view rather than on open, so the sheet is
+  // instant when tapped.
+  const [profile, setProfile] = useState<HealthProfile | null>(null);
+  useEffect(() => { loadHealthProfile().then(setProfile).catch(() => setProfile(null)); }, []);
   // Hold the modal's size steady while editing (freeze height on entering Edit)
   // with a min height so it never collapses as items are added / deleted.
   const enterEdit = () => { setFrozenH(panelRef.current?.offsetHeight ?? null); setEditing(true); };
@@ -779,6 +787,11 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Logging a future day is a fiction, same rule as the per-item
                 recording column. */}
+            {hasMeals && !editing && (
+              <button type="button" onClick={() => setShopping(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
+                {t('health.shopping.title')}
+              </button>
+            )}
             {loggableDay && dateKey <= todayISO() && !editing && (
               <button type="button" onClick={() => setLogging(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
                 {t('health.log.open')}
@@ -883,6 +896,15 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             );
           })}
         </div>
+
+        {shopping && (
+          <ShoppingListSheet
+            plan={null}
+            plans={plans}
+            profile={profile}
+            onClose={() => setShopping(false)}
+          />
+        )}
 
         {logging && loggableDay && (
           <LogSessionSheet
