@@ -33,6 +33,7 @@ import { LogSessionSheet } from './LogSessionSheet';
 import { fillDayMeta } from '../lib/plan-meal-meta';
 import { ShoppingListSheet } from './ShoppingListSheet';
 import { PrepSheet } from './PrepSheet';
+import { DuplicateSheet } from './DuplicateSheet';
 import { loadHealthProfile, type HealthProfile } from '../lib/health-store';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
@@ -768,6 +769,16 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   const [logging, setLogging] = useState(false);
   const [shopping, setShopping] = useState(false);
   const [prepping, setPrepping] = useState(false);
+  // Duplicate is per plan-day: which plan's day is being copied has to be
+  // unambiguous, so it opens from the covered plan for this date.
+  const [duplicating, setDuplicating] = useState<{ plan: HealthPlan; dayIndex: number } | null>(null);
+  const dupSource = (() => {
+    for (const p of plans) {
+      const idx = dayIndexForDate(p, dateKey);
+      if (idx != null) return { plan: p, dayIndex: idx };
+    }
+    return null;
+  })();
   // Prep is per PLAN, not per day — it reasons across the week to find what to
   // cook once. The meal plan covering this date is the one it means.
   const preppablePlan = plans.find(p => (p.type === 'meal' || p.type === 'combined') && dayIndexForDate(p, dateKey) != null) ?? null;
@@ -792,6 +803,11 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Logging a future day is a fiction, same rule as the per-item
                 recording column. */}
+            {dupSource && !editing && (
+              <button type="button" onClick={() => setDuplicating(dupSource)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
+                {t('health.dup.title')}
+              </button>
+            )}
             {preppablePlan && !editing && (
               <button type="button" onClick={() => setPrepping(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
                 {t('health.prep.title')}
@@ -906,6 +922,15 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             );
           })}
         </div>
+
+        {duplicating && (
+          <DuplicateSheet
+            plan={duplicating.plan}
+            fromDay={duplicating.dayIndex}
+            onApply={next => { setPlans(prev => prev.map(p => (p.id === next.id ? next : p))); onSavePlan(next); }}
+            onClose={() => setDuplicating(null)}
+          />
+        )}
 
         {prepping && preppablePlan && (
           <PrepSheet plan={preppablePlan} profile={profile} onClose={() => setPrepping(false)} />
