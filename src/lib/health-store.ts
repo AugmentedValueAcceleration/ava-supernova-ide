@@ -63,6 +63,37 @@ export interface HealthProfile {
      *  Optional so existing profiles stay valid; absent = no constraint. */
     cooking_time?: { by_day: Record<string, { breakfast: string | null; lunch: string | null; dinner: string | null }> };
   };
+  /** Training — how often, and WHICH days. Both fields already reached the
+   *  generate routes long before either surface could edit them, so a gap here
+   *  was silently planned around instead of asked about. Mirrors the
+   *  extension's HealthProfile.training exactly; the shapes must not drift or
+   *  a profile written on one surface loses fields on the other. */
+  training?: {
+    experience: 'beginner' | 'intermediate' | 'advanced' | null;
+    days_per_week: number | null;
+    /** WHICH days, not just how many. `schedule.training_window` gives the time
+     *  of day but nothing said "Mon/Wed/Fri", and you cannot shape a week
+     *  without knowing that. */
+    training_days: ('mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun')[];
+    /** A lift they can already do, so weight prescription has somewhere to
+     *  start. No editor yet on either surface — a repeating sub-form, not a
+     *  field — but the shape round-trips so nothing is lost in sync. */
+    baseline_lifts: { ref?: { kind: 'exercise'; slug: string } | null; name: string; weight_kg: number | null; reps: number | null }[];
+  } | null;
+  kitchen?: {
+    /** Deliberately the same values as `recipe_versions.level`, so a profile
+     *  picks the right VERSION of a recipe, not just the right recipe. */
+    level: 'beginner' | 'intermediate' | 'expert' | null;
+    /** Coarse writers into `schedule.cooking_time`, which is canonical
+     *  (decision 25, 28 Jul). Weekday fills Mon–Fri, weekend fills Sat–Sun,
+     *  all three meals. They are NOT a second source of truth. */
+    minutes_weekday: number | null;
+    minutes_weekend: number | null;
+    /** Drives servings, leftovers and the shopping list — all wrong without it. */
+    household_size: number | null;
+    /** Matches `recipes.cost_tier`. No editor yet on either surface. */
+    cost_tier: string | null;
+  } | null;
 }
 
 /** General profile — identity + body basics, stored at account level

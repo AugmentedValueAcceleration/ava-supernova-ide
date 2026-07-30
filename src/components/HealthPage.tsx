@@ -1190,6 +1190,45 @@ const fieldInputStyle: React.CSSProperties = {
   colorScheme: 'dark',
 };
 
+// Mon-first for display; the slugs are what the profile stores. Note this is
+// NOT the 0–6 Sun-first keying the cooking grid uses — two different fields,
+// two different orders, and mixing them silently shifts a training week by a day.
+const WEEKDAYS: { slug: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'; labelKey: string }[] = [
+  { slug: 'mon', labelKey: 'health.plans.weekday.1' },
+  { slug: 'tue', labelKey: 'health.plans.weekday.2' },
+  { slug: 'wed', labelKey: 'health.plans.weekday.3' },
+  { slug: 'thu', labelKey: 'health.plans.weekday.4' },
+  { slug: 'fri', labelKey: 'health.plans.weekday.5' },
+  { slug: 'sat', labelKey: 'health.plans.weekday.6' },
+  { slug: 'sun', labelKey: 'health.plans.weekday.0' },
+];
+
+/**
+ * The coarse weekday/weekend pair written into the canonical grid (decision 25,
+ * 28 Jul). Two numbers fill twenty-one cells; the grid stays the single truth.
+ *
+ * Deliberately an explicit action rather than an effect on every keystroke —
+ * typing "2" on the way to "20" must not wipe cells somebody set by hand. And
+ * it only writes days the pair actually covers: an unset weekend leaves Sat/Sun
+ * exactly as they were rather than clearing them, because no answer is not the
+ * answer "no limit". Mirrors the extension's fillGridFromMinutes exactly.
+ */
+type CookGrid = NonNullable<HealthProfile['schedule']['cooking_time']>;
+function fillGridFromMinutes(current: CookGrid | undefined, weekday: number | null, weekend: number | null): CookGrid {
+  // Round UP to the tier that still honours the stated ceiling: 45 minutes is a
+  // ≤60 slot, not a ≤30 one, so the plan is never given LESS time than stated.
+  const tier = (mins: number): string => (mins <= 15 ? '15' : mins <= 30 ? '30' : mins <= 60 ? '60' : '60+');
+  const by_day: CookGrid['by_day'] = { ...(current?.by_day ?? {}) };
+  const apply = (days: number[], mins: number | null) => {
+    if (mins == null || !Number.isFinite(mins) || mins <= 0) return;
+    const v = tier(mins);
+    for (const d of days) by_day[String(d)] = { breakfast: v, lunch: v, dinner: v };
+  };
+  apply([1, 2, 3, 4, 5], weekday);
+  apply([6, 0], weekend);
+  return { by_day };
+}
+
 function parseNum(s: string): number | null {
   const t = s.trim();
   if (t === '') return null;
@@ -1310,6 +1349,17 @@ export function ProfileTab() {
   const p = profile;
   const c = p.constraints;
   const f = p.food ?? { likes: [], dislikes: [], cuisines: [] };
+  // Training and kitchen are optional on the type — core, the IDE and every
+  // legacy profile.json predate them. Read through a full default rather than
+  // `?? {}`: a profile Ava filled in has PARTIAL sections (the fill card writes
+  // one leaf and creates its parent as `{}`), so a `?? {}` fallback never fires
+  // and every sibling field reads undefined. Spread the defaults under it.
+  const tr = { experience: null, days_per_week: null, training_days: [], baseline_lifts: [], ...(p.training ?? {}) } as NonNullable<HealthProfile['training']>;
+  const kt = { level: null, minutes_weekday: null, minutes_weekend: null, household_size: null, cost_tier: null, ...(p.kitchen ?? {}) } as NonNullable<HealthProfile['kitchen']>;
+  const patchTraining = (next: Partial<NonNullable<HealthProfile['training']>>) =>
+    update({ ...p, training: { ...tr, ...next } });
+  const patchKitchen = (next: Partial<NonNullable<HealthProfile['kitchen']>>) =>
+    update({ ...p, kitchen: { ...kt, ...next } });
   const toggle = (list: string[], slug: string) => (list.includes(slug) ? list.filter(s => s !== slug) : [...list, slug]);
 
   return (
@@ -1372,6 +1422,103 @@ export function ProfileTab() {
             onChange={e => update({ ...p, constraints: { ...c, minutes_per_day_target: parseNum(e.target.value) } })}
             style={fieldInputStyle} />
         </Field>
+      </ProfileSection>
+
+      {/* Training — how often, and WHICH days. The training window said when in
+          the day; nothing said Mon/Wed/Fri, and you cannot shape a week without
+          it. Both fields already reach generation; only the editor was missing. */}
+      <ProfileSection title={t('health.profile.training')} subtitle={t('health.profile.training_subtitle')}>
+        <FieldRow>
+          <Field label={t('health.profile.experience')}>
+            <select value={tr.experience ?? ''} style={fieldInputStyle}
+              onChange={e => patchTraining({ experience: (e.target.value || null) as NonNullable<HealthProfile['training']>['experience'] })}>
+              <option value="">{t('health.profile.unset')}</option>
+              <option value="beginner">{t('health.profile.level.beginner')}</option>
+              <option value="intermediate">{t('health.profile.level.intermediate')}</option>
+              <option value="advanced">{t('health.profile.level.advanced')}</option>
+            </select>
+          </Field>
+          <Field label={t('health.profile.days_per_week')}>
+            <select value={tr.days_per_week != null ? String(tr.days_per_week) : ''} style={fieldInputStyle}
+              onChange={e => patchTraining({ days_per_week: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">{t('health.profile.unset')}</option>
+              {[1, 2, 3, 4, 5, 6, 7].map(n => <option key={n} value={String(n)}>{n}</option>)}
+            </select>
+          </Field>
+        </FieldRow>
+        <div style={{ marginTop: 12 }}>
+          <Field label={t('health.profile.training_days')}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {WEEKDAYS.map(({ slug, labelKey }) => {
+                const on = (tr.training_days ?? []).includes(slug);
+                return (
+                  <button key={slug} type="button"
+                    onClick={() => patchTraining({
+                      training_days: on ? (tr.training_days ?? []).filter(d => d !== slug) : [...(tr.training_days ?? []), slug],
+                    })}
+                    style={{
+                      flex: 1, padding: '7px 0', fontSize: 11, borderRadius: 8, cursor: 'pointer',
+                      background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
+                      color: on ? 'var(--accent)' : '#9b8caa',
+                      border: `1px solid ${on ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 18%, transparent)'}`,
+                    }}>
+                    {t(labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+        </div>
+      </ProfileSection>
+
+      {/* Kitchen — household size drives servings and therefore every quantity
+          on a shopping list; the two time budgets are a shortcut into the
+          cooking grid in Schedule, which is canonical (decision 25). */}
+      <ProfileSection title={t('health.profile.kitchen')} subtitle={t('health.profile.kitchen_subtitle')}>
+        <FieldRow>
+          <Field label={t('health.profile.household')}>
+            <select value={kt.household_size != null ? String(kt.household_size) : ''} style={fieldInputStyle}
+              onChange={e => patchKitchen({ household_size: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">{t('health.profile.unset')}</option>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>{n}</option>)}
+            </select>
+          </Field>
+          <Field label={t('health.profile.cooking_level')}>
+            <select value={kt.level ?? ''} style={fieldInputStyle}
+              onChange={e => patchKitchen({ level: (e.target.value || null) as NonNullable<HealthProfile['kitchen']>['level'] })}>
+              <option value="">{t('health.profile.unset')}</option>
+              <option value="beginner">{t('health.profile.level.beginner')}</option>
+              <option value="intermediate">{t('health.profile.level.intermediate')}</option>
+              <option value="expert">{t('health.profile.level.expert')}</option>
+            </select>
+          </Field>
+          <Field label={t('health.profile.minutes_weekday')}>
+            <input type="number" inputMode="numeric" value={kt.minutes_weekday ?? ''} placeholder="20"
+              onChange={e => patchKitchen({ minutes_weekday: parseNum(e.target.value) })} style={fieldInputStyle} />
+          </Field>
+          <Field label={t('health.profile.minutes_weekend')}>
+            <input type="number" inputMode="numeric" value={kt.minutes_weekend ?? ''} placeholder="60"
+              onChange={e => patchKitchen({ minutes_weekend: parseNum(e.target.value) })} style={fieldInputStyle} />
+          </Field>
+        </FieldRow>
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <p style={{ flex: 1, margin: 0, fontSize: 11, lineHeight: 1.6, color: '#6c7086' }}>{t('health.profile.minutes_fill_hint')}</p>
+          <button type="button"
+            disabled={kt.minutes_weekday == null && kt.minutes_weekend == null}
+            onClick={() => update({
+              ...p,
+              schedule: { ...p.schedule, cooking_time: fillGridFromMinutes(p.schedule.cooking_time, kt.minutes_weekday, kt.minutes_weekend) },
+            })}
+            style={{
+              flexShrink: 0, padding: '6px 12px', fontSize: 11, fontWeight: 500, borderRadius: 6,
+              background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)',
+              border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+              cursor: kt.minutes_weekday == null && kt.minutes_weekend == null ? 'default' : 'pointer',
+              opacity: kt.minutes_weekday == null && kt.minutes_weekend == null ? 0.4 : 1,
+            }}>
+            {t('health.profile.minutes_fill_action')}
+          </button>
+        </div>
       </ProfileSection>
 
       {/* Food & taste — steers meal plans toward what they enjoy. */}
