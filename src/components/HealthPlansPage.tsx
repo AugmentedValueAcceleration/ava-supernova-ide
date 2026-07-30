@@ -32,6 +32,7 @@ import { sessionsForDate, saveSession } from '../lib/health-sessions-store';
 import { LogSessionSheet } from './LogSessionSheet';
 import { fillDayMeta } from '../lib/plan-meal-meta';
 import { ShoppingListSheet } from './ShoppingListSheet';
+import { PrepSheet } from './PrepSheet';
 import { loadHealthProfile, type HealthProfile } from '../lib/health-store';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
@@ -766,6 +767,10 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   })();
   const [logging, setLogging] = useState(false);
   const [shopping, setShopping] = useState(false);
+  const [prepping, setPrepping] = useState(false);
+  // Prep is per PLAN, not per day — it reasons across the week to find what to
+  // cook once. The meal plan covering this date is the one it means.
+  const preppablePlan = plans.find(p => (p.type === 'meal' || p.type === 'combined') && dayIndexForDate(p, dateKey) != null) ?? null;
   // Household size lives on the profile and is the only thing the list needs
   // from it. Loaded once with the view rather than on open, so the sheet is
   // instant when tapped.
@@ -787,6 +792,11 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Logging a future day is a fiction, same rule as the per-item
                 recording column. */}
+            {preppablePlan && !editing && (
+              <button type="button" onClick={() => setPrepping(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
+                {t('health.prep.title')}
+              </button>
+            )}
             {hasMeals && !editing && (
               <button type="button" onClick={() => setShopping(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
                 {t('health.shopping.title')}
@@ -896,6 +906,10 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             );
           })}
         </div>
+
+        {prepping && preppablePlan && (
+          <PrepSheet plan={preppablePlan} profile={profile} onClose={() => setPrepping(false)} />
+        )}
 
         {shopping && (
           <ShoppingListSheet
