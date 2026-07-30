@@ -112,6 +112,7 @@ const {
   buildPersonalityPrefix,
   loadPersonality,
   getHealthRoomPrefix,
+  summariseTrainingLog,
   getDesignStudioPrefix,
   getTeachModePrefix,
   HEALTH_PROFILE_FIELDS,
@@ -1091,6 +1092,40 @@ function getHealthPlansSummary() {
       lines.push(`- "${p.title}" (${p.type}, ${p.status}${started}, ${days.length} days) — id: ${p.id}\n  ${dayBits.join('\n  ')}`);
     }
     return lines.length ? lines.join('\n') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What they ACTUALLY did, for the Health Room prefix.
+ *
+ * The room's rules tell her to read the log before planning and to report what
+ * she saw rather than what the plan asked for — this is what she reads. Without
+ * it those rules have nothing to look at, so she plans from the plan and calls
+ * it observation.
+ *
+ * Costs a directory scan of small JSON files; a year of training is a few
+ * hundred of them and only the last three weeks are summarised. Same files the
+ * IDE renderer writes through health-sessions-store.ts and the same core
+ * summariser the extension calls, so both surfaces phrase the week identically.
+ */
+function getTrainingLogSummary() {
+  try {
+    const dir = join(ACCOUNT_ROOT, 'health', 'sessions');
+    let files;
+    try { files = readdirSync(dir).filter((f) => f.endsWith('.json')); } catch { return undefined; }
+    const sessions = [];
+    for (const f of files) {
+      try {
+        const s = JSON.parse(readFileSync(join(dir, f), 'utf-8'));
+        // Version-gate on read: a file from a future schema is skipped rather
+        // than half-read into something that looks like a session and is not.
+        if (s && s.schema_version === 1) sessions.push(s);
+      } catch { /* one bad file must not take the whole log with it */ }
+    }
+    if (!sessions.length) return undefined;
+    return summariseTrainingLog(sessions, new Date().toISOString().slice(0, 10)) ?? undefined;
   } catch {
     return undefined;
   }
@@ -2712,7 +2747,7 @@ async function handleMessage(data) {
     // the [Health Room] tag the core agent reads for tool gating, so the
     // mode-tag path below stays empty for this lane.
     const effectiveContent = activeLane === 'health'
-      ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary())
+      ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary(), getTrainingLogSummary())
       : activeLane === 'design'
       ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo'].includes(data.designRoom) ? data.designRoom : 'icon')
       : activeLane === 'learning'
