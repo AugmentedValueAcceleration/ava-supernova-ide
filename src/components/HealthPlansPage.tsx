@@ -30,6 +30,7 @@ import { ExerciseDetailBody as CatExerciseDetail, RecipeDetailBody as CatRecipeD
 import { freshGymSession, gymExerciseFromPlan, type GymSession, type GymExercise } from '@ava/core/health/session-types';
 import { sessionsForDate, saveSession } from '../lib/health-sessions-store';
 import { LogSessionSheet } from './LogSessionSheet';
+import { fillDayMeta } from '../lib/plan-meal-meta';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
   HealthPlanDay, HealthPlanExercise, HealthPlanMeal,
@@ -593,6 +594,28 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plans, dateKey]);
+
+  // Capture and BACKFILL in one place. Whenever a catalogue detail lands — for
+  // an item just added, or for a plan written long before capture existed —
+  // fill in what the day is missing and persist it.
+  //
+  // Doing both here rather than at the add site means an old plan is repaired
+  // just by being opened, and the person most likely to want a shopping list is
+  // exactly the one who already has a plan. fillDayMeta only ever ADDS, and
+  // reports changed=false when there is nothing to do, so this settles rather
+  // than looping.
+  useEffect(() => {
+    for (const p of plans) {
+      const day = planDayForDate(p, dateKey);
+      if (!day) continue;
+      const { day: filled, changed } = fillDayMeta(day, recipeDetails, exerciseDetails);
+      if (!changed) continue;
+      const next = { ...p, days: p.days.map(d => (d.day_index === day.day_index ? filled : d)) };
+      setPlans(prev => prev.map(x => (x.id === p.id ? next : x)));
+      onSavePlan(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plans, dateKey, recipeDetails, exerciseDetails]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };

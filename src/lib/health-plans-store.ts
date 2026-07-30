@@ -8,6 +8,10 @@
 
 import { readTextFile, writeTextFile, mkdir, readDir, remove, BaseDirectory } from '@tauri-apps/plugin-fs';
 import type { HealthProfile } from './health-store';
+// Shared with the extension via core, deliberately: these travel inside the
+// plan file, so two surfaces describing the same field differently corrupts
+// the record rather than merely disagreeing.
+import type { PlanMealMeta, PlanExerciseMeta } from '@ava/core/health/types';
 import { accountRoot } from './account-scope';
 
 // Account-scoped plans dir — ~/.ava/users/<id>/health/plans when signed in (the
@@ -33,6 +37,11 @@ export interface HealthPlanExercise {
   rest_seconds: number | null;
   tempo: string | null;
   notes: string | null;
+  /** What the library knew about this movement when it was added.
+   *  `session_role` is the load-bearing field: it is what stops a
+   *  progression adding a set to a warm-up. Without it that guard is
+   *  decorative. Absent on rows added before capture existed. */
+  meta?: PlanExerciseMeta | null;
 }
 
 /** A planned meal within a plan day. A catalogue recipe (ref set)
@@ -59,6 +68,12 @@ export interface HealthPlanMeal {
     note: string | null;
     at: string;
   } | null;
+  /** What the library knew about this dish when it was added — ingredients
+   *  narrowed to the chosen level, times, keeping. Absent on meals added
+   *  before capture existed. Absent is NOT empty: a plan with no meta cannot
+   *  be shopped for, and the surface says so rather than producing a short
+   *  list that looks complete. */
+  meta?: PlanMealMeta | null;
 }
 
 export interface HealthPlanDay {
