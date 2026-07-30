@@ -29,6 +29,7 @@ import { ExerciseDetailBody as CatExerciseDetail, RecipeDetailBody as CatRecipeD
 // (node:fs / node:path / node:os) and cannot be bundled for a browser at all.
 import { freshGymSession, gymExerciseFromPlan, type GymSession, type GymExercise } from '@ava/core/health/session-types';
 import { sessionsForDate, saveSession } from '../lib/health-sessions-store';
+import { LogSessionSheet } from './LogSessionSheet';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
   HealthPlanDay, HealthPlanExercise, HealthPlanMeal,
@@ -726,6 +727,19 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   const dateLabel = date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
   const anything = sections.some(s => s.items.length > 0);
   const covered = plans.some(p => dayIndexForDate(p, dateKey) != null);
+
+  // The one plan day this date belongs to — what the log sheet is filled from.
+  // Training only: a meal-only plan has nothing to log a session against, and
+  // offering the sheet there would promise something it cannot deliver.
+  const loggableDay = (() => {
+    for (const p of plans) {
+      if (p.type !== 'fitness' && p.type !== 'combined') continue;
+      const day = planDayForDate(p, dateKey);
+      if (day?.training.length) return { plan: p, day };
+    }
+    return null;
+  })();
+  const [logging, setLogging] = useState(false);
   // Hold the modal's size steady while editing (freeze height on entering Edit)
   // with a min height so it never collapses as items are added / deleted.
   const enterEdit = () => { setFrozenH(panelRef.current?.offsetHeight ?? null); setEditing(true); };
@@ -740,6 +754,13 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             <h2 style={{ fontSize: 16, fontWeight: 600, color: TEXT, margin: 0 }}>{dateLabel}</h2>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Logging a future day is a fiction, same rule as the per-item
+                recording column. */}
+            {loggableDay && dateKey <= todayISO() && !editing && (
+              <button type="button" onClick={() => setLogging(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
+                {t('health.log.open')}
+              </button>
+            )}
             {covered && (
               <button type="button" onClick={() => (editing ? exitEdit() : enterEdit())} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
                 {editing ? t('health.plans.done') : t('health.plans.edit')}
@@ -839,6 +860,17 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             );
           })}
         </div>
+
+        {logging && loggableDay && (
+          <LogSessionSheet
+            day={loggableDay.day}
+            planId={loggableDay.plan.id}
+            date={dateKey}
+            existing={daySession}
+            onSave={s => { setDaySession(s); saveSession(s).catch(() => { /* non-fatal — it is still on screen */ }); }}
+            onClose={() => setLogging(false)}
+          />
+        )}
 
         {detail && (
           <ItemDetailModal
