@@ -35,6 +35,7 @@ import { ShoppingListSheet } from './ShoppingListSheet';
 import { PrepSheet } from './PrepSheet';
 import { DuplicateSheet } from './DuplicateSheet';
 import { AssistSheet, askForDay, type DayProposal } from './AssistSheet';
+import { StartersSheet } from './StartersSheet';
 import { loadHealthProfile, type HealthProfile } from '../lib/health-store';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
@@ -775,6 +776,7 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   const [duplicating, setDuplicating] = useState<{ plan: HealthPlan; dayIndex: number } | null>(null);
   // Ask Ava about this day. The proposal is held here, never written, until
   // the operator accepts it — that is the whole point of the screen.
+  const [starters, setStarters] = useState(false);
   const [assisting, setAssisting] = useState<{ plan: HealthPlan; day: HealthPlanDay } | null>(null);
   const [assistBusy, setAssistBusy] = useState(false);
   const [assistError, setAssistError] = useState<string | null>(null);
@@ -856,6 +858,9 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '48px 16px', textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.day_empty')}</div>
               <button type="button" onClick={onNewPlan} style={{ ...accentBtn(true), margin: '12px auto 0', padding: '6px 12px', fontSize: 11 }}>{t('health.plans.new_plan')}</button>
+              {/* A blank day is exactly when a ready-made week is worth
+                  something — offered beside building one, never instead. */}
+              <button type="button" onClick={() => setStarters(true)} style={{ margin: '8px auto 0', display: 'block', border: 'none', background: 'transparent', fontSize: 11, color: 'var(--accent)', cursor: 'pointer' }}>{t('health.starters.title')}</button>
             </div>
           ) : sections.map(section => {
             const sectionKey = section.key as 'training' | 'meals';
@@ -941,6 +946,17 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
             );
           })}
         </div>
+
+        {starters && (
+          <StartersSheet
+            profile={profile}
+            onStart={plan => {
+              setPlans(prev => [...prev, plan]);
+              onSavePlan(plan);
+            }}
+            onClose={() => setStarters(false)}
+          />
+        )}
 
         {assisting && (
           <AssistSheet
