@@ -60,6 +60,13 @@ async function readAll(): Promise<GymSession[]> {
   return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
 
+/** Every session, newest first. The calendar needs the whole log rather than a
+ *  range — a month view can straddle two and asking twice reads the directory
+ *  twice for no gain. */
+export async function listAllSessions(): Promise<GymSession[]> {
+  return readAll();
+}
+
 /** Sessions in a date range, newest first. Both bounds inclusive, ISO dates. */
 export async function listSessions(from: string, to: string): Promise<GymSessionSummaryRow[]> {
   const all = await readAll();

@@ -28,7 +28,7 @@ import { ExerciseDetailBody as CatExerciseDetail, RecipeDetailBody as CatRecipeD
 // session-types, NOT the ./health barrel: the barrel re-exports node-store.js
 // (node:fs / node:path / node:os) and cannot be bundled for a browser at all.
 import { freshGymSession, gymExerciseFromPlan, type GymSession, type GymExercise } from '@ava/core/health/session-types';
-import { sessionsForDate, saveSession } from '../lib/health-sessions-store';
+import { sessionsForDate, saveSession, listAllSessions } from '../lib/health-sessions-store';
 import { LogSessionSheet } from './LogSessionSheet';
 import { fillDayMeta } from '../lib/plan-meal-meta';
 import { ShoppingListSheet } from './ShoppingListSheet';
@@ -379,6 +379,28 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
 
   // Dots reflect the day's ACTUAL content (from the full dated plans), not just
   // the plan's type/range — so deleting every meal on a day clears its dot.
+  // Dates with a RECORDED session, for the calendar's tick. Same files the
+  // health room prefix summarises, so the calendar and Ava agree about the week.
+  //
+  // Only sessions with something in them count: an empty session is a form
+  // somebody opened, not evidence the day was done, and ticking it would make
+  // the calendar overstate the week.
+  const [loggedDates, setLoggedDates] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    listAllSessions()
+      .then(list => {
+        if (cancelled) return;
+        setLoggedDates(new Set(
+          list
+            .filter(s => s.exercises.some(e => e.sets.length > 0 || e.state === 'done'))
+            .map(s => s.date),
+        ));
+      })
+      .catch(() => { if (!cancelled) setLoggedDates(new Set()); });
+    return () => { cancelled = true; };
+  }, [plans]);
+
   const planMarks = useMemo(() => {
     const map = new Map<string, { training: boolean; meals: boolean }>();
     for (const p of fullPlans) {
@@ -422,7 +444,7 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
 
       {tab === 'calendar' ? (
         <div style={{ display: 'flex', minHeight: '64vh' }}>
-          <MonthCalendar month={month} onMonthChange={setMonth} marks={planMarks} content={planContent} selected={null} onSelectDate={(key) => setDayKey(key)} fill />
+          <MonthCalendar month={month} onMonthChange={setMonth} marks={planMarks} content={planContent} logged={loggedDates} selected={null} onSelectDate={(key) => setDayKey(key)} fill />
         </div>
       ) : plans.length === 0 ? (
         <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '40px 16px', textAlign: 'center' }}>
@@ -776,6 +798,17 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   const [duplicating, setDuplicating] = useState<{ plan: HealthPlan; dayIndex: number } | null>(null);
   // Ask Ava about this day. The proposal is held here, never written, until
   // the operator accepts it — that is the whole point of the screen.
+  // The plan day this date lands on when it carries no content — i.e. a
+  // SCHEDULED rest or active-recovery day, as opposed to a date no plan covers
+  // at all. Those are different facts and deserve different screens: one is the
+  // plan working as designed, the other is a gap in the calendar.
+  const restDay = (() => {
+    for (const p of plans) {
+      const d = planDayForDate(p, dateKey);
+      if (d && d.training.length === 0 && d.meals.length === 0) return d;
+    }
+    return null;
+  })();
   const [starters, setStarters] = useState(false);
   const [assisting, setAssisting] = useState<{ plan: HealthPlan; day: HealthPlanDay } | null>(null);
   const [assistBusy, setAssistBusy] = useState(false);
@@ -854,9 +887,26 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
         </div>
 
         <div style={{ minHeight: 0, flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {!editing && !anything ? (
+          {!editing && !anything && restDay ? (
+            /* A rest day is the plan WORKING, not the plan missing. It gets a
+               real card rather than the same dashed box a gap in the calendar
+               gets — being told to rest is information, and an empty screen
+               reads like something failed to load. */
+            <div style={{ borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'color-mix(in srgb, var(--accent) 4%, transparent)', padding: '40px 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: 22 }} aria-hidden>{restDay.kind === 'active_recovery' ? '🚶' : '🌙'}</div>
+              <div style={{ marginTop: 8, fontSize: 14, fontWeight: 500, color: TEXT }}>
+                {restDay.title || t(restDay.kind === 'active_recovery' ? 'health.rest.recovery_title' : 'health.rest.title')}
+              </div>
+              <p style={{ margin: '6px auto 0', maxWidth: '34ch', fontSize: 11, lineHeight: 1.6, color: MUTED }}>
+                {t(restDay.kind === 'active_recovery' ? 'health.rest.recovery_blurb' : 'health.rest.blurb')}
+              </p>
+              {restDay.notes && (
+                <p style={{ margin: '12px auto 0', maxWidth: '38ch', fontSize: 11, fontStyle: 'italic', lineHeight: 1.6, color: TEXT2 }}>{restDay.notes}</p>
+              )}
+            </div>
+          ) : !editing && !anything ? (
             <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '48px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.day_empty')}</div>
+              <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.rest.uncovered')}</div>
               <button type="button" onClick={onNewPlan} style={{ ...accentBtn(true), margin: '12px auto 0', padding: '6px 12px', fontSize: 11 }}>{t('health.plans.new_plan')}</button>
               {/* A blank day is exactly when a ready-made week is worth
                   something — offered beside building one, never instead. */}
@@ -1470,10 +1520,14 @@ function PlanBuilder(props: {
 }
 
 // ── Month calendar ────────────────────────────────────────────────────
-function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelectDate, fill }: {
+function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelectDate, fill, logged }: {
   month: Date;
   onMonthChange: (d: Date) => void;
   marks: Map<string, { training: boolean; meals: boolean }>;
+  /** Dates with a RECORDED session. A planned day and a done day should not
+   *  look the same — the whole reason for keeping a log is being able to see
+   *  what you actually did, and a calendar that only shows intent hides it. */
+  logged?: Set<string>;
   /** Per-date plan content — session title + the day's moves / meals — so cells
    *  show what's on, not just a dot. Falls back to `marks` dots where absent. */
   content?: Map<string, { title: string | null; training: string[]; meals: string[] }>;
@@ -1542,6 +1596,9 @@ function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelec
                     color: isToday ? '#fff' : isSelected ? ACCENT : TEXT2,
                     fontWeight: isToday ? 700 : isSelected ? 600 : 500,
                   }}>{date.getDate()}</span>
+                  {logged?.has(key) && (
+                    <span style={{ fontSize: 10, lineHeight: 1, color: '#a6e3a1' }} title={t('health.log.logged_count')} aria-hidden>✓</span>
+                  )}
                   {/* Dots only when there's no detailed content to show. */}
                   {!c && (mk?.training || mk?.meals) && (
                     <span style={{ display: 'flex', gap: 3 }}>
