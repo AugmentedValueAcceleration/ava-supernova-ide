@@ -100,9 +100,55 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
   // profile edited halfway round must not rewrite quantities already ticked.
   const [household] = useState<number | null>(() => profile?.kitchen?.household_size ?? null);
 
+  // Every meal the current scope covers, with whether it can actually be
+  // shopped for. A meal with no captured ingredients cannot contribute lines,
+  // and saying so HERE — greyed, with the reason — beats a warning underneath
+  // a list that silently came up short.
+  const mealsInScope = useMemo(() => {
+    const out: { key: string; name: string; shoppable: boolean }[] = [];
+    for (const { day } of sources) {
+      for (const meal of day.meals ?? []) {
+        if (!meal.name) continue;
+        out.push({
+          key: `${day.day_index}:${meal.id}`,
+          name: meal.name,
+          shoppable: !!meal.meta?.ingredients?.length,
+        });
+      }
+    }
+    return out;
+  }, [sources]);
+
+  // EXCLUSIONS, not selections. Empty means everything is on, so the default
+  // costs nothing and a meal whose ingredients land later — via the backfill —
+  // is included rather than missed because it wasn't there when the set was
+  // built.
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+
+  const selectedCount = mealsInScope.filter(m => !excluded.has(m.key)).length;
+  const allOn = excluded.size === 0;
+
+  const toggleMeal = (key: string) => {
+    setExcluded(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  // Feed core only the meals still selected. Days are rebuilt rather than
+  // mutated — the plan itself is never touched by looking at a shopping list.
+  const selectedSources = useMemo(() => {
+    if (excluded.size === 0) return sources;
+    return sources.map(s => ({
+      ...s,
+      day: { ...s.day, meals: (s.day.meals ?? []).filter(m => !excluded.has(`${s.day.day_index}:${m.id}`)) },
+    }));
+  }, [sources, excluded]);
+
   const list = useMemo(
-    () => buildShoppingListAcross(sources, { excludeOptional: hideOptional, household }),
-    [sources, hideOptional, household],
+    () => buildShoppingListAcross(selectedSources, { excludeOptional: hideOptional, household }),
+    [selectedSources, hideOptional, household],
   );
 
   const scopeId = single ? single.id : `week-${bounds.from}`;
@@ -152,8 +198,13 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
   });
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 620, maxHeight: 'min(800px, 90vh)', overflow: 'hidden', borderRadius: 16, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'linear-gradient(to bottom right, #0f0f17, #1a1625)' }}>
+    /* A right drawer, not a centred modal. A shopping list is read WHILE looking
+       at something else — the plan, a shelf — and a modal blacks out the
+       calendar you are checking it against. Full height rather than
+       max-height for the same reason: a week's shop is long, and a panel that
+       shrink-wraps its content jumps about as you fold aisles. */
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,0,0,0.6)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', width: '100%', maxWidth: 560, overflow: 'hidden', borderLeft: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'linear-gradient(to bottom, #100d1a, #150f22)', boxShadow: '-24px 0 60px rgba(0,0,0,0.5)' }}>
 
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '16px 16px 12px', borderBottom: `1px solid ${BORDER}` }}>
           <div style={{ minWidth: 0 }}>
@@ -177,6 +228,59 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
                   {t(s === 'plan' ? 'health.shopping.scope_plan' : 'health.shopping.scope_week')}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* WHAT YOU ARE SHOPPING FOR — chosen before the list, not ticked off
+              it. Everything starts on, so the whole-week case looks exactly as
+              it did. Turning a meal off is how you say "I already have that",
+              which used to get muddled with "I've bought that" because the
+              tick meant both. */}
+          {mealsInScope.length > 0 && (
+            <div style={{ marginBottom: 12, borderRadius: 8, border: `1px solid ${BORDER}`, background: 'rgba(12, 8, 20, 0.3)', padding: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: MUTED }}>
+                  {t('health.shopping.shopping_for')}
+                </span>
+                <button type="button"
+                  onClick={() => setExcluded(allOn ? new Set(mealsInScope.map(m => m.key)) : new Set())}
+                  style={{ border: 'none', background: 'transparent', padding: 0, fontSize: 10, color: ACCENT, cursor: 'pointer' }}>
+                  {allOn ? t('health.shopping.select_none') : t('health.shopping.select_all')}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {mealsInScope.map(m => {
+                  const on = !excluded.has(m.key);
+                  // Cannot contribute lines, so shown greyed WITH the reason
+                  // rather than quietly making the list short.
+                  if (!m.shoppable) {
+                    return (
+                      <span key={m.key} title={t('health.shopping.no_ingredients')}
+                        style={{ borderRadius: 6, border: `1px dashed ${BORDER}`, padding: '4px 8px', fontSize: 10, color: MUTED, textDecoration: 'line-through', opacity: 0.6, cursor: 'help' }}>
+                        {m.name}
+                      </span>
+                    );
+                  }
+                  return (
+                    <button key={m.key} type="button" onClick={() => toggleMeal(m.key)}
+                      style={{
+                        borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer',
+                        background: on ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+                        color: on ? TEXT : MUTED,
+                        border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : BORDER}`,
+                        textDecoration: on ? 'none' : 'line-through',
+                        opacity: on ? 1 : 0.6,
+                      }}>
+                      {m.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {!allOn && (
+                <p style={{ margin: '6px 0 0', fontSize: 10, color: MUTED }}>
+                  {selectedCount}/{mealsInScope.length} {t('health.shopping.meals_selected')}
+                </p>
+              )}
             </div>
           )}
 
