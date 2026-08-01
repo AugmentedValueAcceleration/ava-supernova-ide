@@ -27,7 +27,7 @@ import { writeSharedPlatformKey } from './shared-config';
 const DEVICE_ID_KEY = 'ava-ide-device-id';
 const PLATFORM_KEY_LS = 'ava-ide-platform-key';
 const PENDING_KEY = 'ava-ide-pending-signin';
-const WEB_ORIGIN = 'https://ava-supernova.com';
+const WEB_ORIGIN = 'https://avasupernova.com';
 const SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — generous for email verify
 const POLL_INTERVAL_MS = 2500;
 const CALLBACK_SCHEME = 'ava-ide://';

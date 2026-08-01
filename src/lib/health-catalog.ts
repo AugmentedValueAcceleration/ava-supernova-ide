@@ -13,7 +13,7 @@ import { getPlatformKey } from './api';
 import { getLocale } from './i18n';
 import type { HealthProfile, HealthDailyLog } from './health-store';
 
-const PLATFORM_URL = 'https://ava-supernova.com/api';
+const PLATFORM_URL = 'https://avasupernova.com/api';
 const HEALTH_TIMEOUT_MS = 8000;
 
 // ── Catalog types ─────────────────────────────────────────────────────────

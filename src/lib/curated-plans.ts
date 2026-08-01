@@ -10,7 +10,7 @@
 
 import type { CuratedPlanSummary, CuratedPlanDetail } from '@ava/core/health/starters';
 
-const ENDPOINT = 'https://ava-supernova.com/api/health/curated-plans';
+const ENDPOINT = 'https://avasupernova.com/api/health/curated-plans';
 
 /** The shelf. The route answers `{ plans: [...] }`; tolerate a bare array too,
  *  because one shape changing should not empty the shelf silently. */

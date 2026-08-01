@@ -90,7 +90,7 @@ export default function WelcomeOverlay({ onComplete }: Props) {
     localStorage.setItem('ava-ide-consent-accepted', timestamp);
     const key = localStorage.getItem('ava-ide-platform-key');
     if (key) {
-      fetch('https://ava-supernova.com/api/consent', {
+      fetch('https://avasupernova.com/api/consent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'X-Ava-Platform': 'ide' },
         body: JSON.stringify({ platform: 'ide', appVersion: '1.0.0', acceptedAt: timestamp, termsVersion: '1.0', privacyVersion: '1.0' }),

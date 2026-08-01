@@ -110,11 +110,11 @@ pnpm tauri dev
 
 ## Links
 
-- [Website](https://ava-supernova.com)
+- [Website](https://avasupernova.com)
 - [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=augmentedvalueacceleration.ava-supernova)
-- [Companion App](https://companion.ava-supernova.com)
+- [Companion App](https://companion.avasupernova.com)
 - [GitHub](https://github.com/AugmentedValueAcceleration/ava-supernova)
-- [Release Notes](https://ava-supernova.com/releases)
+- [Release Notes](https://avasupernova.com/releases)
 
 ## License
 

@@ -82,7 +82,7 @@ export async function askForDay(opts: {
   if (platformKey) headers.Authorization = `Bearer ${platformKey}`;
   if (!platformKey && byokKey) headers['X-BYOK-Key'] = byokKey;
 
-  const res = await fetch('https://ava-supernova.com/api/health/generate/day', {
+  const res = await fetch('https://avasupernova.com/api/health/generate/day', {
     method: 'POST',
     headers,
     body: JSON.stringify({

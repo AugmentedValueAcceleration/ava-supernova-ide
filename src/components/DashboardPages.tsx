@@ -695,7 +695,7 @@ function setCachedWeather(data: WeatherData): void {
 
 // ── News fetching (direct HTTP) ────────────────────────────────────────────
 
-const PUBLIC_API = 'https://ava-supernova.com/api';
+const PUBLIC_API = 'https://avasupernova.com/api';
 
 /** The platform translates news into every supported locale and serves it off
  *  `?locale=`. Resolved here rather than taken as a parameter — this call site
@@ -1217,7 +1217,7 @@ function IdeArticleReader({ article, related, onBack, onNavigateToArticle }: {
   const echoed = typeof indep === 'number' && typeof total === 'number' && total > indep;
   const articleHtml = renderMarkdown(article.content || '');
   const gradientIndex = (article.slug || '').split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0) % ARTICLE_GRADIENTS.length;
-  const articleUrl = `https://ava-supernova.com/news/${article.slug}`;
+  const articleUrl = `https://avasupernova.com/news/${article.slug}`;
 
   const handleCopy = async () => {
     try {
@@ -1530,7 +1530,7 @@ function CCReleaseStrip({ release, loading }: { release: ReleaseInfo | null; loa
   if (loading || !release) return null;
   return (
     <button
-      onClick={() => void openExternal('https://ava-supernova.com/releases')}
+      onClick={() => void openExternal('https://avasupernova.com/releases')}
       style={{
         display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
         padding: '8px 12px', marginBottom: 12, borderRadius: 8, cursor: 'pointer',
@@ -1583,7 +1583,7 @@ function CCNewsWidget({ articles, loading, onCategoryChange, selectedCategory, o
   const rest = leadPool.slice(3);
 
   const openStory = (slug: string) =>
-    onOpenArticle ? onOpenArticle(slug) : void openExternal(`https://ava-supernova.com/news/${slug}`);
+    onOpenArticle ? onOpenArticle(slug) : void openExternal(`https://avasupernova.com/news/${slug}`);
 
   return (
     <WidgetCard
@@ -10141,7 +10141,7 @@ export function LearningLibraryPage() {
   const handleSelect = async (id: string) => {
     setSelectedId(id);
     try {
-      const res = await fetch(`https://ava-supernova.com/api/learning/library/${id}`);
+      const res = await fetch(`https://avasupernova.com/api/learning/library/${id}`);
       const d = await res.json();
       if (d?.id) setDetail(d);
     } catch { /* */ }
@@ -10154,7 +10154,7 @@ export function LearningLibraryPage() {
       // locally and write it to the local store — BYOK / not-signed-in users
       // can start library courses too. Server fork (learner count) is a
       // best-effort extra when signed in. No account gate.
-      const res = await fetch(`https://ava-supernova.com/api/learning/library/${id}`);
+      const res = await fetch(`https://avasupernova.com/api/learning/library/${id}`);
       const d = await res.json();
       if (d?.title) {
         const [{ libraryPathToCurriculum }, { addLocalCourse }] = await Promise.all([
@@ -12761,7 +12761,7 @@ export function CloudSyncPage() {
         alert('Connect a platform account first to export your cloud-stored data.');
         return;
       }
-      const res = await fetch('https://ava-supernova.com/api/export-my-data', {
+      const res = await fetch('https://avasupernova.com/api/export-my-data', {
         headers: { Authorization: `Bearer ${platformKey}` },
       });
       if (!res.ok) {

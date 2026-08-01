@@ -1,6 +1,6 @@
 import { dataModeHeader } from './data-mode';
 
-const PLATFORM_URL = 'https://ava-supernova.com/api';
+const PLATFORM_URL = 'https://avasupernova.com/api';
 
 export function getPlatformKey(): string | null {
   try { return localStorage.getItem('ava-ide-platform-key') || null; } catch { return null; }

@@ -264,7 +264,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
           {t('health.room.disclaimer')}{' '}
           <button
             type="button"
-            onClick={() => { try { window.open('https://ava-supernova.com/health/safety', '_blank'); } catch { /* no window */ } }}
+            onClick={() => { try { window.open('https://avasupernova.com/health/safety', '_blank'); } catch { /* no window */ } }}
             style={{ border: 'none', background: 'transparent', padding: 0, color: '#a78bfa', textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer', fontSize: 11 }}
           >
             {t('health.browse.safety_link')}

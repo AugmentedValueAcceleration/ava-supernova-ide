@@ -107,7 +107,7 @@ export function LibraryPapersPage() {
       params.set('tab', t);
       if (d !== 'all') params.set('discipline', d);
       params.set('limit', '20');
-      const res = await fetch(`https://ava-supernova.com/api/papers/featured?${params.toString()}`, {
+      const res = await fetch(`https://avasupernova.com/api/papers/featured?${params.toString()}`, {
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) {
@@ -132,7 +132,7 @@ export function LibraryPapersPage() {
       params.set('q', q);
       if (d !== 'all') params.set('discipline', d);
       params.set('per_page', '25');
-      const res = await fetch(`https://ava-supernova.com/api/papers/search?${params.toString()}`, {
+      const res = await fetch(`https://avasupernova.com/api/papers/search?${params.toString()}`, {
         signal: AbortSignal.timeout(12000),
       });
       if (!res.ok) {
@@ -179,7 +179,7 @@ export function LibraryPapersPage() {
   const onReadWithAva = useCallback((paper: LibraryPaper) => {
     // Bump read_count on stored rows. Fire-and-forget.
     if (paper.id) {
-      void fetch(`https://ava-supernova.com/api/papers/${paper.id}`, { method: 'POST' })
+      void fetch(`https://avasupernova.com/api/papers/${paper.id}`, { method: 'POST' })
         .catch(() => { /* non-fatal */ });
     }
     // Dispatch to the chat panel — listener in DashboardPages.tsx

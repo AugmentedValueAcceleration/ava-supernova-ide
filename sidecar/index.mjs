@@ -220,7 +220,7 @@ async function handleAssetForgeGenerate(body) {
   };
   try {
     // 1) Generate — the reference image (the shape armature) guides the material.
-    const genRes = await fetch('https://ava-supernova.com/api/asset-forge/image', {
+    const genRes = await fetch('https://avasupernova.com/api/asset-forge/image', {
       method: 'POST', headers,
       body: JSON.stringify({
         engine: 'qwen', prompt: body.prompt, referenceImage: body.referenceImage,
@@ -243,7 +243,7 @@ async function handleAssetForgeGenerate(body) {
     let dataUrl = gen.url;
     if (body.matte !== false) {
       try {
-        const bgRes = await fetch('https://ava-supernova.com/api/asset-forge/remove-bg', {
+        const bgRes = await fetch('https://avasupernova.com/api/asset-forge/remove-bg', {
           method: 'POST', headers, body: JSON.stringify({ imageUrl: gen.url }),
         });
         if (bgRes.ok) {
@@ -289,7 +289,7 @@ async function handleAssetForgeVoice(body) {
     'X-Ava-Data-Mode': state.generationLocalOnly ? 'local' : 'both',
   };
   try {
-    const res = await fetch('https://ava-supernova.com/api/generate-voice', {
+    const res = await fetch('https://avasupernova.com/api/generate-voice', {
       method: 'POST', headers,
       body: JSON.stringify({ text: body.text, voice: body.voice, language_type: body.language_type, instructions: body.instructions }),
     });
@@ -355,7 +355,7 @@ async function handleAssetForgeVideo(body) {
   };
   try {
     // 1) Submit — the route accepts the job and returns a task_id.
-    const submitRes = await fetch('https://ava-supernova.com/api/generate-video', {
+    const submitRes = await fetch('https://avasupernova.com/api/generate-video', {
       method: 'POST', headers,
       body: JSON.stringify({ prompt: body.prompt, duration: body.duration, resolution: body.resolution }),
     });
@@ -383,7 +383,7 @@ async function handleAssetForgeVideo(body) {
  * ends the loop.
  */
 async function pollVideoStatus(taskId, platformKey) {
-  const statusUrl = `https://ava-supernova.com/api/generate-video/status/${encodeURIComponent(taskId)}`;
+  const statusUrl = `https://avasupernova.com/api/generate-video/status/${encodeURIComponent(taskId)}`;
   const intervalMs = 5000;
   const maxAttempts = 96; // ~8 min ceiling — well past a typical Wan clip
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -1009,7 +1009,7 @@ let ACCOUNT_ROOT = AVA_HOME;
 async function resolveAccountRoot(platformKey) {
   if (!platformKey) return;
   try {
-    const res = await fetch('https://ava-supernova.com/api/account-info', {
+    const res = await fetch('https://avasupernova.com/api/account-info', {
       headers: { Authorization: `Bearer ${platformKey}`, 'User-Agent': 'ava-ide-sidecar' },
     });
     if (!res.ok) return;
@@ -1595,7 +1595,7 @@ async function handleInit(data) {
       const projectId = projectRoot
         ? createHash('sha256').update(projectRoot).digest('hex').slice(0, 16)
         : undefined;
-      sync = new PlatformMemorySync('https://ava-supernova.com/api', config.platformKey, projectId);
+      sync = new PlatformMemorySync('https://avasupernova.com/api', config.platformKey, projectId);
     }
 
     // Load memory in background — don't block init
@@ -1824,7 +1824,7 @@ async function handleInit(data) {
           headers['X-BYOK-Provider'] = providerName;
           headers['X-BYOK-Key'] = byokKey;
         }
-        const res = await fetch('https://ava-supernova.com/api/health/generate/plan', {
+        const res = await fetch('https://avasupernova.com/api/health/generate/plan', {
           method: 'POST',
           headers,
           body: JSON.stringify({

@@ -6,11 +6,11 @@ import { t } from '../lib/i18n';
 // A subtle line of hub-set messages in the global top bar — the same feed as the
 // website banner and the extension header (GET /api/announcement, backed by the
 // hub's platform_settings). Self-fetching here: the Tauri webview reaches the API
-// directly (CSP connect-src already allows ava-supernova.com), refreshing every
+// directly (CSP connect-src already allows avasupernova.com), refreshing every
 // 10 min. Cycles every 8s, truncates so it never crowds the title/status, and is
 // dismissible. Renders nothing when there are no messages.
 
-const FEED = 'https://ava-supernova.com/api/announcement';
+const FEED = 'https://avasupernova.com/api/announcement';
 const REFRESH_MS = 10 * 60 * 1000;
 
 export function AnnouncementTicker({ fallback }: { fallback?: ReactNode }) {
