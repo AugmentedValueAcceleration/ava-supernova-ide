@@ -142,16 +142,57 @@ export interface SessionStats {
   messages: number;
   toolCalls: number;
   models: Record<string, { input: number; output: number; requests: number }>;
+  /** The calendar month these belong to, 'YYYY-MM'. Absent on stats written
+   *  before the rollover existed — treated as stale and cleared on first read. */
+  month?: string;
+  /** ISO timestamp the month's counting began — the 1st, local time. */
+  periodStart?: string;
 }
 
 const SESSION_KEY = 'ava-ide-session-stats';
 
+/**
+ * Usage accumulates per CALENDAR MONTH and clears on the 1st.
+ *
+ * It always persisted here — unlike the extension, which held it in memory and
+ * lost it on every reload — but it accumulated forever, so the figures drifted
+ * further from anything useful the longer the IDE was installed. A month is
+ * what someone actually wants to know, and it matches how billing is reckoned.
+ *
+ * The rollover is a KEY COMPARISON, not a timer: stored stats carry the month
+ * they belong to, and the moment the current month differs they are replaced.
+ * That resets correctly on the 1st even if the app was closed over the
+ * boundary, asleep, or is opened in a different timezone — none of which a
+ * scheduled reset would survive.
+ */
+function currentMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthStart(): string {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+}
+
+function emptyStats(): SessionStats {
+  return {
+    inputTokens: 0, outputTokens: 0, totalTokens: 0, messages: 0, toolCalls: 0, models: {},
+    month: currentMonth(), periodStart: monthStart(),
+  };
+}
+
 function loadStats(): SessionStats {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : { inputTokens: 0, outputTokens: 0, totalTokens: 0, messages: 0, toolCalls: 0, models: {} };
+    if (!raw) return emptyStats();
+    const parsed = JSON.parse(raw) as SessionStats;
+    // Different month, or written before the field existed. Either way the
+    // stored numbers describe a period that is over.
+    if (parsed.month !== currentMonth()) return emptyStats();
+    return parsed;
   } catch {
-    return { inputTokens: 0, outputTokens: 0, totalTokens: 0, messages: 0, toolCalls: 0, models: {} };
+    return emptyStats();
   }
 }
 
@@ -165,8 +206,7 @@ export function getSessionStats(): SessionStats {
 }
 
 export function resetSessionStats() {
-  const empty: SessionStats = { inputTokens: 0, outputTokens: 0, totalTokens: 0, messages: 0, toolCalls: 0, models: {} };
-  saveStats(empty);
+  saveStats(emptyStats());
 }
 
 export function trackTokenUsage(usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }, model?: string) {
