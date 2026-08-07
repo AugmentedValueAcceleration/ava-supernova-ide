@@ -105,6 +105,18 @@ export function t(key: string, params?: Record<string, string | number>): string
   });
 }
 
+/** Translate with a hardcoded fallback. Returns the fallback when t() returns
+ *  the raw key — i.e. the locale does not have it yet. For strings introduced
+ *  ahead of a translation run, so nobody is shown a key path.
+ *
+ *  Mirrors the extension's dashboard-ui/src/i18n.ts tt(). The extension had it
+ *  and the IDE did not, which is the kind of small divergence that ends with
+ *  the two surfaces behaving differently under the same conditions. */
+export function tt(key: string, fallback: string): string {
+  const val = t(key);
+  return val === key ? fallback : val;
+}
+
 /** React hook — forces re-render when locale changes */
 export function useLocale(): string {
   const [, setVersion] = useState(localeVersion);

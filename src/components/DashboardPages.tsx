@@ -49,7 +49,7 @@ import {
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { DesignStudio } from './DesignStudio';
-import { t, useLocale, getLocale, languageOptions } from '../lib/i18n';
+import { t, tt, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
 import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
 import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
@@ -10085,9 +10085,27 @@ const COURSE_SUBJECT_IDENTITIES: { match: string[]; identity: CourseIdentity }[]
   { match: ['math', 'algorithm', 'logic'], identity: { from: '#818cf8', to: '#4f46e5', tint: 'rgba(129,140,248,0.12)', icon: PhBrain } },
 ];
 
+// Shelf first. Every entry in COURSE_SUBJECT_IDENTITIES above is a developer
+// word — prompt, react, python, devops, shader — so a chemistry or plumbing
+// course fell through to the default and the library looked like one subject
+// wearing nine hats. That map stays for the older Technology courses and for
+// anything not yet filed.
+const COURSE_SHELF_IDENTITIES: Record<string, CourseIdentity> = {
+  'Using Ava':          { from: 'var(--accent)', to: '#7c3aed', tint: 'color-mix(in srgb, var(--accent) 12%, transparent)', icon: PhSparkle },
+  'Science & Maths':    { from: '#818cf8', to: '#4f46e5', tint: 'rgba(129,140,248,0.12)', icon: PhBrain },
+  'Technology':         { from: '#38bdf8', to: '#2563eb', tint: 'rgba(56,189,248,0.12)', icon: PhCode },
+  'Business & Finance': { from: '#34d399', to: '#059669', tint: 'rgba(52,211,153,0.12)', icon: PhChartBar },
+  'Health & Care':      { from: '#f87171', to: '#dc2626', tint: 'rgba(248,113,113,0.12)', icon: PhBook },
+  'Trades':             { from: '#fbbf24', to: '#d97706', tint: 'rgba(251,191,36,0.12)', icon: PhWrench },
+  'Creative':           { from: '#f472b6', to: '#db2777', tint: 'rgba(244,114,182,0.12)', icon: PhPalette },
+  'Languages':          { from: '#2dd4bf', to: '#0d9488', tint: 'rgba(45,212,191,0.12)', icon: PhBooks },
+  'Humanities':         { from: '#c084fc', to: '#9333ea', tint: 'rgba(192,132,252,0.12)', icon: PhBooks },
+};
+
 const COURSE_DEFAULT_IDENTITY: CourseIdentity = { from: 'var(--accent)', to: '#7c3aed', tint: 'color-mix(in srgb, var(--accent) 10%, transparent)', icon: PhBooks };
 
-function identityFor(subject?: string, title?: string): CourseIdentity {
+function identityFor(subject?: string, title?: string, industry?: string | null): CourseIdentity {
+  if (industry && COURSE_SHELF_IDENTITIES[industry]) return COURSE_SHELF_IDENTITIES[industry];
   const hay = `${subject || ''} ${title || ''}`.toLowerCase();
   for (const { match, identity } of COURSE_SUBJECT_IDENTITIES) {
     if (match.some(m => hay.includes(m))) return identity;
@@ -10114,22 +10132,53 @@ function CourseStat({ icon, label, sub }: { icon: string; label: string; sub: st
 
 export function LearningLibraryPage() {
   useLocale();
-  const { data, loading, refetch } = useApiData<{ paths: any[]; total: number }>('/learning/library?limit=30', { paths: [], total: 0 });
+  const { data, loading, refetch } = // limit=100: the shelf and subject rows are derived from what we hold, so a
+  // short page would silently drop entire shelves out of the filter.
+  useApiData<{ paths: any[]; total: number }>('/learning/library?limit=100', { paths: [], total: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [search, setSearch] = useState('');
+  const [shelfFilter, setShelfFilter] = useState('all');
   const [subjectFilter, setSubjectFilter] = useState('all');
+  const [audienceFilter, setAudienceFilter] = useState('all');
   const [levelFilter, setLevelFilter] = useState('all');
   const [sort, setSort] = useState('popular');
   const [forking, setForking] = useState(false);
 
   const paths: any[] = data?.paths || [];
-  const subjects = useMemo(() => {
-    const set = new Set(paths.map((p: any) => p.subject).filter(Boolean));
-    return ['all', ...Array.from(set).sort()];
+  // Taxonomy order, not alphabetical: Using Ava first because those courses
+  // turn an install into someone who can use the product.
+  const SHELF_ORDER = [
+    'Using Ava', 'Science & Maths', 'Technology', 'Business & Finance',
+    'Health & Care', 'Trades', 'Creative', 'Languages', 'Humanities',
+  ];
+  const shelves = useMemo(() => {
+    const present = new Set(paths.map((p: any) => p.industry).filter(Boolean) as string[]);
+    const known = SHELF_ORDER.filter(sh => present.has(sh));
+    // A shelf this build has not heard of still needs a way in — a course you
+    // cannot reach is the same as a course that is not there.
+    const extra = Array.from(present).filter(sh => !SHELF_ORDER.includes(sh)).sort();
+    return ['all', ...known, ...extra];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paths]);
+
+  // Subjects WITHIN the chosen shelf, and only once a shelf is chosen. Seeing
+  // every subject of every shelf at once is the thing being fixed.
+  const subjects = useMemo(() => {
+    if (shelfFilter === 'all') return [] as string[];
+    const set = new Set(paths.filter((p: any) => p.industry === shelfFilter).map((p: any) => p.subject).filter(Boolean) as string[]);
+    return set.size > 1 ? ['all', ...Array.from(set).sort()] : [];
+  }, [paths, shelfFilter]);
+
+  const audiences = useMemo(() => {
+    const set = new Set(paths.map((p: any) => p.audience_type).filter(Boolean) as string[]);
+    return Array.from(set).sort();
+  }, [paths]);
+
   const filtered = paths.filter(p => {
+    if (shelfFilter !== 'all' && p.industry !== shelfFilter) return false;
     if (subjectFilter !== 'all' && p.subject !== subjectFilter) return false;
+    if (audienceFilter !== 'all' && p.audience_type !== audienceFilter) return false;
     if (levelFilter !== 'all' && p.level !== levelFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -10184,7 +10233,7 @@ export function LearningLibraryPage() {
   if (selectedId && detail && detail.id === selectedId) {
     const lc = levelColors[detail.level] || levelColors.beginner;
     const modules = detail.content?.modules || [];
-    const id = identityFor(detail.subject, detail.title);
+    const id = identityFor(detail.subject, detail.title, detail.industry);
     const moduleCount = modules.length;
     const lessonCount = modules.reduce((s: number, m: any) => s + (m.lessons?.length || 0), 0);
     const avgRating = detail.rating_count > 0 ? (detail.rating_sum / detail.rating_count).toFixed(1) : null;
@@ -10372,21 +10421,75 @@ export function LearningLibraryPage() {
 
       {/* Subject filter tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' as const }}>
-        {subjects.map(sub => (
-          <button
-            key={sub}
-            onClick={() => setSubjectFilter(sub)}
-            style={{
-              padding: '4px 12px', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', cursor: 'pointer',
-              background: subjectFilter === sub ? 'linear-gradient(135deg, var(--accent), #7c3aed)' : 'transparent',
-              color: subjectFilter === sub ? '#fff' : '#a6adc8',
-              fontSize: 11, fontWeight: 500, transition: 'all 0.15s',
-            }}
-          >
-            {sub === 'all' ? t('dash.library.all') : sub}
-          </button>
-        ))}
+        {shelves.map(shelf => {
+          const active = shelfFilter === shelf;
+          const ident = shelf === 'all' ? null : COURSE_SHELF_IDENTITIES[shelf];
+          const Glyph = ident?.icon;
+          return (
+            <button
+              key={shelf}
+              onClick={() => { setShelfFilter(shelf); setSubjectFilter('all'); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px', borderRadius: 12, cursor: 'pointer',
+                border: `1px solid ${active && ident ? ident.from : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
+                background: active ? (ident ? ident.tint : 'linear-gradient(135deg, var(--accent), #7c3aed)') : 'transparent',
+                color: active ? (ident ? ident.from : '#fff') : '#a6adc8',
+                fontSize: 11, fontWeight: 500, transition: 'all 0.15s',
+              }}
+            >
+              {Glyph && <Glyph size={13} />}
+              {shelf === 'all' ? t('dash.library.all') : shelf}
+            </button>
+          );
+        })}
       </div>
+
+      {/* Subjects within the chosen shelf. Hidden until a shelf is picked, and
+          hidden when a shelf holds only one — a lone chip that filters nothing
+          is decoration. */}
+      {subjects.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', paddingLeft: 2 }}>
+          {subjects.map(sj => (
+            <button
+              key={sj}
+              onClick={() => setSubjectFilter(sj)}
+              style={{
+                padding: '3px 10px', borderRadius: 10, cursor: 'pointer', fontSize: 10.5,
+                border: '1px solid transparent',
+                background: subjectFilter === sj ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+                color: subjectFilter === sj ? '#cdd6f4' : '#6c7086',
+                fontWeight: subjectFilter === sj ? 600 : 400, transition: 'all 0.15s',
+              }}
+            >
+              {sj === 'all' ? t('dash.library.all') : sj}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Who it's for. Separate from level on purpose: an exam-prep course and
+          a career-changer's course can both be "intermediate" and want
+          completely different things from the reader. */}
+      {audiences.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', paddingLeft: 2 }}>
+          {['all', ...audiences].map(a => (
+            <button
+              key={a}
+              onClick={() => setAudienceFilter(a)}
+              style={{
+                padding: '3px 10px', borderRadius: 10, cursor: 'pointer', fontSize: 10.5,
+                border: `1px solid ${audienceFilter === a ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'transparent'}`,
+                background: 'transparent',
+                color: audienceFilter === a ? 'var(--accent)' : '#6c7086',
+                fontWeight: audienceFilter === a ? 600 : 400, transition: 'all 0.15s',
+              }}
+            >
+              {a === 'all' ? tt('dash.learning_library.all_audiences', 'Anyone') : a}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <CustomSelect
@@ -10428,7 +10531,7 @@ export function LearningLibraryPage() {
           {filtered.map((p: any) => {
             const lc = levelColors[p.level] || levelColors.beginner;
             const avgRating = p.rating_count > 0 ? (p.rating_sum / p.rating_count).toFixed(1) : null;
-            const id = identityFor(p.subject, p.title);
+            const id = identityFor(p.subject, p.title, p.industry);
             return (
               <button
                 key={p.id}
