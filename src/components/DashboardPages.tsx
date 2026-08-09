@@ -112,6 +112,7 @@ import { readAllLocalCreative, removeLocalCreative, renameLocalCreative, copyCre
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
 import { GeneralProfilePage, ProfileTab, MySubmissionsTab, ContributeModal, requestHealthRoomTab } from './HealthPage';
+import { MessageFeedback } from './MessageFeedback';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -6016,6 +6017,20 @@ export function AvaChatPage() {
                       )}
                       {copiedMsg === msg.id ? t('dash.chat.copied') : t('dash.chat.copy')}
                     </button>
+                  )}
+
+                  {/* Not on the welcome message, and not while the reply is
+                      still arriving: rating something half-written is rating
+                      something the reader has not read. */}
+                  {isAva && msg.text && !msg.welcome
+                    && !(streaming && msg.id === messages[messages.length - 1]?.id) && (
+                    <MessageFeedback
+                      messageId={msg.id}
+                      model={model}
+                      mode={mode}
+                      conversationId={currentConvId}
+                      visible={hoveredMsg === msg.id}
+                    />
                   )}
                 </div>
               </div>
