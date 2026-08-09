@@ -2648,38 +2648,35 @@ export function AvaChatPage() {
   const visibleModes = MODES.filter((m) => m.id !== 'teach');
 
   // ── Desktop-capable model IDs ─────────────────────────────────────────────
-  // Mirrors the `desktopCapable: true` flag set in @ava/core's model
-  // definitions. Models clicking, typing, and launching apps need (a)
-  // reliable native tool-call argument formatting, (b) fast enough latency
-  // for a 6-step plan to feel responsive. Flash-class models drop tool-call
-  // args under sequential pressure; media models (MiniMax) aren't agentic
-  // coordinators. Both are excluded.
+  // DERIVED from @ava/core's `desktopCapable` flag, not copied from it.
   //
-  // 'auto' (Maestro), 'supernova' and 'aurora' resolve to known coordinators
-  // server-side (Qwen 3.7 Plus / DeepSeek V4 Pro / Mistral Large 3), all
-  // desktop-capable, so they count.
-  const DESKTOP_CAPABLE_MODEL_IDS = new Set<string>([
-    'auto', 'supernova', 'aurora',
-    // Platform / Qwen direct
-    'qwen3.7-max', 'qwen3.7-plus', 'qwen3.5-plus',
-    // Platform DeepSeek (admin-gated)
-    'deepseek-v4-pro-platform', 'deepseek-v4-pro',
-    // Platform Mistral (Aurora's fleet, available on platform)
-    'mistral-large-3-platform', 'mistral-small-4-platform',
-    // Anthropic — Fable 5 re-enabled 2026-07-17 (US-gov restriction lifted)
-    'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001',
-    // Kimi
-    'kimi-k2.6', 'kimi-k2.5',
-    // Mistral
-    'mistral-large-3', 'mistral-medium-3.5', 'mistral-small-4',
-    'codestral-latest', 'devstral-latest',
-    // Zhipu / GLM
-    'glm-5.2',
-    // Xiaomi MiMo
-    'mimo-v2.5-pro', 'mimo-v2.5',
-    // Tencent Hunyuan / NVIDIA (BYOK)
-    'hy3-preview', 'nvidia/nemotron-3-ultra-550b-a55b',
-  ]);
+  // This was a hand-maintained Set whose own comment said it "mirrors" the
+  // core flag, and it had drifted in both directions: it was missing kimi-k3
+  // and kimi-k2.7-code (so Longxiang's lead model could not drive desktop mode
+  // even though core says it can), and still listed codestral-latest and
+  // devstral-latest months after both were retired. Nobody had done anything
+  // wrong; a copy of a fact in another package rots on its own.
+  //
+  // Models clicking, typing and launching apps need reliable native tool-call
+  // argument formatting and low enough latency for a six-step plan to feel
+  // responsive. Flash-class models drop tool-call args under sequential
+  // pressure and media models are not agentic coordinators — which is exactly
+  // the judgement `desktopCapable` already encodes, once, in core.
+  const DESKTOP_CAPABLE_MODEL_IDS = useMemo(() => {
+    const ids = new Set<string>([
+      // Fleet aliases. Not models: they resolve to a coordinator server-side,
+      // and every coordinator is desktop-capable by design.
+      'auto', 'supernova', 'aurora', 'longxiang',
+    ]);
+    for (const model of Object.values(ALL_MODELS).flat()) {
+      if (!model.desktopCapable) continue;
+      ids.add(model.id);
+      // Managed entries carry a `-platform` disambiguator that strips to the
+      // canonical id upstream. Same model, same capability.
+      ids.add(`${model.id}-platform`);
+    }
+    return ids;
+  }, []);
   const isDesktopCapable = (modelId: string | undefined): boolean =>
     !!modelId && DESKTOP_CAPABLE_MODEL_IDS.has(modelId);
 
@@ -4971,7 +4968,11 @@ export function AvaChatPage() {
                     const total = json.usage.prompt_tokens + json.usage.completion_tokens;
                     // Use model's actual context window for percentage
                     const MODEL_CTX: Record<string, number> = {
-                      'qwen3.7-plus': 1048576, 'qwen3.7-max': 1048576,
+                      'qwen3.7-plus': 1048576, 'qwen3.8-max': 1048576,
+                      // 3.7 Max retired 2026-08-09 and rolls forward to 3.8 Max.
+                      // Kept so a session that started before the rollforward
+                      // still reports its context rather than hitting a default.
+                      'qwen3.7-max': 1048576,
                       'kimi-k3': 1000000, 'kimi-k2.7-code': 256000, 'kimi-k2.6': 262144, 'kimi-k2.5': 262144,
                       'MiniMax-M3': 1048576, 'MiniMax-M2.7': 204800, 'MiniMax-M2.7-highspeed': 204800,
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
