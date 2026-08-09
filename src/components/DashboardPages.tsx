@@ -12945,7 +12945,6 @@ export function CloudSyncPage() {
     { key: 'learning',    label: t('dash.nav.learning'),         icon: '\uD83C\uDF93', description: t('dash.nav.learning_desc'),              endpoint: '/learning' },
     { key: 'settings',    label: t('dash.sync.settings'),         icon: '\u2699',       description: t('dash.sync.settings_desc'),           endpoint: '/settings' },
     { key: 'personality', label: t('dash.sync.personality'),      icon: '\uD83C\uDFAD', description: t('dash.sync.personality_desc'),       endpoint: '/settings' },
-    { key: 'shared',      label: t('dash.sync.shared_learnings'), icon: '\uD83D\uDCA1', description: t('dash.sync.shared_learnings_desc'),        endpoint: '/shared-learnings' },
     { key: 'health_profile', label: t('dash.sync.health_profile'), icon: '\uD83C\uDFCB\uFE0F', description: t('dash.sync.health_profile_desc'), endpoint: '/health/profile/sync' },
   ];
 
