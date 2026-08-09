@@ -10131,6 +10131,31 @@ function CourseStat({ icon, label, sub }: { icon: string; label: string; sub: st
   );
 }
 
+/**
+ * A stable per-install id, so an anonymous rating can be amended rather than
+ * stacked and one person cannot vote fifty times.
+ *
+ * Identifies an INSTALL, not a person: it is random, stored locally, and
+ * anyone who clears it simply gets a new one. Nothing is derived from the
+ * machine — a hardware fingerprint would be a tracking identifier wearing a
+ * practical excuse, which is not a trade this product makes.
+ */
+function localDeviceId(): string {
+  const KEY = 'ava.device-id';
+  try {
+    let id = localStorage.getItem(KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch {
+    // Private mode or blocked storage: a per-session id still stops a single
+    // rating being counted twice within one sitting.
+    return 'session-' + Math.random().toString(36).slice(2, 14);
+  }
+}
+
 export function LearningLibraryPage() {
   useLocale();
   const { data, loading, refetch } = // limit=100: the shelf and subject rows are derived from what we hold, so a
@@ -10197,6 +10222,56 @@ export function LearningLibraryPage() {
     } catch { /* */ }
   };
 
+  /**
+   * What the server said about this user's rating — their OWN score, the
+   * refreshed average, and any error. Rendering the crowd average instead is
+   * why the extension's stars appeared to do nothing when clicked.
+   */
+  const [myRating, setMyRating] = useState<{
+    mine: number | null; average: number | null; count: number;
+    askReason?: boolean; error?: string;
+  } | null>(null);
+
+  /**
+   * Rate a course. Anonymous is fine — the endpoint keys on a device id, which
+   * is the whole reason it exists: the old one required a platform key and
+   * silently discarded every rating from an account-less BYOK user.
+   */
+  const rateCourse = async (id: string, rating: number, reason?: string) => {
+    try {
+      const res = await fetch('https://avasupernova.com/api/feedback/content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject_type: 'course',
+          subject_id: id,
+          rating,
+          reason,
+          locale: getLocale?.() || undefined,
+          device_id: localDeviceId(),
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Visible. The version this mirrors swallowed errors, so a user could
+        // click five times and never learn that none of them landed.
+        setMyRating({ mine: rating, average: null, count: 0, error: d?.error || `Could not save your rating (${res.status}).` });
+        return;
+      }
+      setMyRating({
+        mine: d.your_rating ?? rating,
+        average: d.average_rating ?? null,
+        count: d.rating_count ?? 0,
+        askReason: !reason && rating <= 3,
+      });
+    } catch (err) {
+      setMyRating({
+        mine: rating, average: null, count: 0,
+        error: err instanceof Error ? err.message : 'Could not reach the server.',
+      });
+    }
+  };
+
   const handleFork = async (id: string) => {
     setForking(true);
     try {
@@ -10237,7 +10312,13 @@ export function LearningLibraryPage() {
     const id = identityFor(detail.subject, detail.title, detail.industry);
     const moduleCount = modules.length;
     const lessonCount = modules.reduce((s: number, m: any) => s + (m.lessons?.length || 0), 0);
-    const avgRating = detail.rating_count > 0 ? (detail.rating_sum / detail.rating_count).toFixed(1) : null;
+    // The SERVER's average, from content_feedback. This used to divide
+    // rating_sum by rating_count client-side — counters maintained by a rating
+    // endpoint that no longer exists, so the number was frozen and drifting
+    // further out with every real rating, computed with our own arithmetic
+    // rather than the one place that knows.
+    const avgRating = myRating?.average ?? detail.average_rating ?? 0;
+    const ratingCount = myRating?.count ?? detail.rating_count ?? 0;
     return (
       <div style={pageWrapper}>
         {/* Full width — the course detail was pinned to 860px and centred,
@@ -10290,7 +10371,9 @@ export function LearningLibraryPage() {
             <div style={{ display: 'flex', gap: 20, marginTop: 18, flexWrap: 'wrap' }}>
               {detail.estimated_hours ? <CourseStat icon="\u23F1" label={`${detail.estimated_hours}h`} sub="estimated" /> : null}
               <CourseStat icon="\uD83D\uDC65" label={String(detail.fork_count)} sub={`learner${detail.fork_count !== 1 ? 's' : ''}`} />
-              {avgRating ? <CourseStat icon="\u2B50" label={`${avgRating}/5`} sub="rating" /> : null}
+              {/* Shown at zero too: an unrated course is a fact, and hiding
+                  it gave those cards one fewer stat than their neighbours. */}
+              <CourseStat icon="\u2B50" label={`${avgRating}/5`} sub={ratingCount === 1 ? '1 rating' : `${ratingCount} ratings`} />
               {moduleCount > 0 ? <CourseStat icon="\uD83D\uDCE6" label={String(moduleCount)} sub={`module${moduleCount !== 1 ? 's' : ''}`} /> : null}
               {lessonCount > 0 ? <CourseStat icon="\uD83D\uDCDD" label={String(lessonCount)} sub={`lesson${lessonCount !== 1 ? 's' : ''}`} /> : null}
             </div>
@@ -10384,6 +10467,65 @@ export function LearningLibraryPage() {
               }}>
               {forking ? 'Starting...' : 'Start Learning'}
             </button>
+
+            {/* Rating. The IDE had no way to rate anything — the stars existed
+                only in the extension, and these two surfaces mirror. Fills
+                from YOUR score, not the crowd average, so clicking visibly
+                does something. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+              <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
+                {myRating?.mine ? 'Your rating' : 'Rate this course'}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onClick={() => rateCourse(detail.id, star)}
+                    title={`${star} star${star === 1 ? '' : 's'}`}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', fontSize: 18,
+                      padding: 1, lineHeight: 1,
+                      color: (myRating?.mine ?? 0) >= star ? '#fbbf24' : '#45475a',
+                    }}
+                  >{'\u2605'}</button>
+                ))}
+                <span style={{ fontSize: 10, color: '#6c7086', marginLeft: 6 }}>
+                  {avgRating}/5 ({ratingCount})
+                </span>
+              </div>
+
+              {/* Say so when it fails. */}
+              {myRating?.error && (
+                <span style={{ fontSize: 10, color: '#f87171', maxWidth: 220, textAlign: 'right' }}>
+                  {myRating.error}
+                </span>
+              )}
+
+              {/* A low score without a reason is a mood; with one it is a bug
+                  report. Only below 4 — asking someone who gave 5 what went
+                  wrong is how you teach people to stop rating things. */}
+              {myRating?.askReason && !myRating.error && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', maxWidth: 280, marginTop: 2 }}>
+                  {[
+                    ['unclear', 'Unclear'],
+                    ['too-fast', 'Too fast'],
+                    ['too-easy', 'Too easy'],
+                    ['wrong', 'Something wrong'],
+                    ['translation', 'Bad translation'],
+                  ].map(([code, label]) => (
+                    <button
+                      key={code}
+                      onClick={() => rateCourse(detail.id, myRating.mine ?? 3, code)}
+                      style={{
+                        padding: '2px 8px', borderRadius: 10, fontSize: 10, cursor: 'pointer',
+                        border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                        background: 'transparent', color: '#a6adc8',
+                      }}
+                    >{label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {detail.prerequisites && (
@@ -10531,7 +10673,8 @@ export function LearningLibraryPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
           {filtered.map((p: any) => {
             const lc = levelColors[p.level] || levelColors.beginner;
-            const avgRating = p.rating_count > 0 ? (p.rating_sum / p.rating_count).toFixed(1) : null;
+            // Server-computed, and 0 rather than hidden when nobody has rated it.
+            const avgRating = p.average_rating ?? 0;
             const id = identityFor(p.subject, p.title, p.industry);
             return (
               <button
@@ -10606,7 +10749,10 @@ export function LearningLibraryPage() {
                   <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#6c7086', borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', paddingTop: 10, marginTop: 'auto' }}>
                     {p.estimated_hours && <span>{'\u23f1'} {p.estimated_hours}h</span>}
                     <span>{'\ud83d\udc65'} {p.fork_count}</span>
-                    {avgRating && <span style={{ color: '#fbbf24' }}>{'\u2605'} {avgRating}</span>}
+                    {/* Shown at zero: hiding it left unrated cards one stat
+                        short of their neighbours, so the row read as ragged
+                        and the rated ones looked like the only real courses. */}
+                    <span style={{ color: avgRating ? '#fbbf24' : '#6c7086' }}>{'\u2605'} {avgRating}</span>
                   </div>
                 </div>
               </button>
