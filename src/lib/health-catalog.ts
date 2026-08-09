@@ -71,6 +71,13 @@ export interface HealthExerciseAlternative {
 }
 
 export interface HealthExerciseSummary {
+  /** Public average from content_feedback, one decimal, null when unrated.
+   *  Declared so the card and the detail can both read it — an undeclared
+   *  field is one no consumer can see, which is exactly how the extension's
+   *  cards ended up with nothing to render. */
+  average_rating?: number | null;
+  rating_count?: number;
+
   id: string;
   slug: string;
   name: string;
@@ -116,6 +123,13 @@ export interface HealthExerciseDetail extends HealthExerciseSummary {
 }
 
 export interface HealthRecipeSummary {
+  /** Public average from content_feedback, one decimal, null when unrated.
+   *  Declared so the card and the detail can both read it — an undeclared
+   *  field is one no consumer can see, which is exactly how the extension's
+   *  cards ended up with nothing to render. */
+  average_rating?: number | null;
+  rating_count?: number;
+
   id: string;
   slug: string;
   name: string;

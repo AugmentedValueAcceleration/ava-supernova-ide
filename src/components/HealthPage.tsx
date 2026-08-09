@@ -33,6 +33,7 @@ import {
 } from '../lib/health-store';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { CookingTimeGrid, type CookTime } from './CookingTimeGrid';
+import { ContentRating } from './ContentRating';
 
 /**
  * Health & Nutrition page for the IDE — the public exercise + recipe
@@ -563,9 +564,12 @@ function ExerciseCardItem({ ex, view, onOpen }: { ex: HealthExerciseSummary; vie
           <div style={{ fontSize: 13, color: '#fff', lineHeight: 1.25 }}>{ex.name}</div>
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 10px' }}>
         <Dots value={ex.difficulty} accent={accent} />
-        <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{exerciseTypeLabel(ex.exercise_type)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{exerciseTypeLabel(ex.exercise_type)}</span>
+          <CardRating average={ex.average_rating} />
+        </div>
       </div>
     </Card>
   );
@@ -623,10 +627,24 @@ function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: Vie
           <div style={{ fontSize: 13, color: '#fff', lineHeight: 1.25 }}>{r.name}</div>
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', padding: '7px 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 10px' }}>
         <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{footer}</span>
+        <CardRating average={r.average_rating} />
       </div>
     </Card>
+  );
+}
+
+/**
+ * The rating on a card. Always rendered, 0 when unrated — hiding it left those
+ * cards one item short of their neighbours, so the grid read as ragged and the
+ * rated ones looked like the only real entries.
+ */
+function CardRating({ average }: { average?: number | null }) {
+  return (
+    <span style={{ fontSize: 10, flexShrink: 0, color: average ? '#fbbf24' : '#6c7086' }}>
+      {'★'} {average ?? 0}
+    </span>
   );
 }
 
@@ -916,7 +934,12 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: accent, marginBottom: 6 }}>{workoutLabel(ex.workout_type)}</div>
-            <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{ex.name}</h2>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+              <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{ex.name}</h2>
+              {/* Rated after doing it — "too hard" is the signal the
+                  progression loop actually wants. */}
+              <ContentRating subjectType="exercise" subjectId={ex.id} average={ex.average_rating} count={ex.rating_count} />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: '#9b8caa', flexWrap: 'wrap' }}>
               <span style={{ textTransform: 'capitalize', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6 }}>{exerciseTypeLabel(ex.exercise_type)}</span>
               <Dots value={ex.difficulty} accent={accent} />
@@ -1740,7 +1763,11 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           <div>
             {cuisineLine && <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2.5, color: '#fbbf24', marginBottom: 6 }}>{cuisineLine}</div>}
-            <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{r.name}</h2>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+              <h2 style={{ fontSize: 21, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{r.name}</h2>
+              {/* Cooked it? The rating is public; anything typed is private. */}
+              <ContentRating subjectType="recipe" subjectId={r.id} average={r.average_rating} count={r.rating_count} />
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
               {r.course && <span style={{ fontSize: 11, textTransform: 'capitalize', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6, color: '#9b8caa' }}>{courseLabel(r.course)}</span>}
               {r.origin_country && <span style={{ fontSize: 11, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 6, color: '#9b8caa' }}>{r.origin_country}</span>}
