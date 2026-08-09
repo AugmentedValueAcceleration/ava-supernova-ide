@@ -116,6 +116,18 @@ import { GeneralProfilePage, ProfileTab, MySubmissionsTab, ContributeModal, requ
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
   flex: 1,
+  // minHeight: 0 is what makes overflowY actually work here.
+  //
+  // A flex child defaults to min-height: auto, which means it grows to fit its
+  // content — so `overflowY: 'auto'` never engages, the box simply gets taller
+  // than the window, and the app shell (height: 100vh, overflow: hidden) clips
+  // the rest. A long course detail was cut off at module 4 with nothing to
+  // scroll.
+  //
+  // The codebase already knew this — three other flex containers in this file
+  // carry it. The shared page wrapper just never did, so every page inherited
+  // the bug and it only showed on the first page long enough to overflow.
+  minHeight: 0,
   background: 'linear-gradient(135deg, #0f0a1a 0%, #1a1028 40%, #150d22 100%)',
   overflowY: 'auto',
   padding: '40px',
@@ -9342,10 +9354,19 @@ export function LearningRoomPage() {
 
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {/* Browse tabs — own scroll inside their own pages. */}
-        <div style={{ height: '100%', overflow: 'hidden', display: tab === 'courses' ? 'block' : 'none' }}>
+        {/* display: FLEX, not block. The page inside is `flex: 1` with its own
+            overflowY — meaningless in a block parent, where a child simply
+            sizes to its content, never overflows, and gets clipped by this
+            div's overflow: hidden. A course detail was cut off at module 4
+            with nothing to scroll.
+
+            The Ava tab below already used flex, which is why it behaved. Two
+            browse tabs and one chat tab, written at different times, and only
+            one of them got it right. */}
+        <div style={{ height: '100%', minHeight: 0, display: tab === 'courses' ? 'flex' : 'none' }}>
           <LearningLibraryPage />
         </div>
-        <div style={{ height: '100%', overflow: 'hidden', display: tab === 'my-learning' ? 'block' : 'none' }}>
+        <div style={{ height: '100%', minHeight: 0, display: tab === 'my-learning' ? 'flex' : 'none' }}>
           <MyLearningTab />
         </div>
         {/* Ava room — always mounted so the conversation survives tab switches.
@@ -10485,7 +10506,14 @@ export function LearningLibraryPage() {
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer', fontSize: 18,
                       padding: 1, lineHeight: 1,
-                      color: (myRating?.mine ?? 0) >= star ? '#fbbf24' : '#45475a',
+                      // Fills from the average, or from YOUR score once you
+                      // have given one. It only ever used the viewer's own
+                      // rating, so a course sitting at 4/5 rendered five grey
+                      // stars beside the number 4 — the widget contradicting
+                      // itself in the same row.
+                      color: (myRating?.mine ?? avgRating) >= star
+                        ? (myRating?.mine ? '#fbbf24' : 'rgba(251,191,36,0.55)')
+                        : '#45475a',
                     }}
                   >{'\u2605'}</button>
                 ))}
