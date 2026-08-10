@@ -111,7 +111,7 @@ import { cloudSyncEnabled } from '../lib/data-mode';
 import { readAllLocalCreative, removeLocalCreative, renameLocalCreative, copyCreativeToProject, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
-import { GeneralProfilePage, ProfileTab, MySubmissionsTab, ContributeModal, requestHealthRoomTab } from './HealthPage';
+import { GeneralProfilePage, requestHealthRoomTab } from './HealthPage';
 import { MessageFeedback } from './MessageFeedback';
 
 /* ===== Shared Styles ===== */
@@ -12235,46 +12235,6 @@ export function PersonalityPage() {
 
   // ── Avatar (user) — Ava's identity lives here now; moved from Settings.
   // Ava's own avatar stays brand-locked (packages/core/assets/ava-avatar.jpeg).
-  const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
-
-  // Resize image to max 128x128 and compress as JPEG for storage efficiency.
-  const resizeAvatar = useCallback((dataUri: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const size = 128;
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d')!;
-        const scale = Math.max(size / img.width, size / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.onerror = () => resolve(dataUri);
-      img.src = dataUri;
-    });
-  }, []);
-
-  const saveAvatar = useCallback(async (dataUri: string) => {
-    const resized = await resizeAvatar(dataUri);
-    localStorage.setItem('ava-ide-user-avatar', resized);
-    setUserAvatar(resized);
-    if (connected && cloudSyncEnabled()) {
-      apiFetch('/settings', { method: 'POST', body: JSON.stringify({ user_avatar: resized }) }).catch(() => {});
-    }
-  }, [connected, resizeAvatar]);
-
-  const removeAvatar = useCallback(() => {
-    localStorage.removeItem('ava-ide-user-avatar');
-    setUserAvatar('');
-    if (connected && cloudSyncEnabled()) {
-      apiFetch('/settings', { method: 'POST', body: JSON.stringify({ user_avatar: null }) }).catch(() => {});
-    }
-  }, [connected]);
-
   const TONES = [
     { value: 'warm', label: t('dash.personality.tone.warm'), desc: t('dash.personality.tone.warm_desc') },
     { value: 'direct', label: t('dash.personality.tone.direct'), desc: t('dash.personality.tone.direct_desc') },
@@ -12317,8 +12277,9 @@ export function PersonalityPage() {
         if (p.energy) setEnergy(p.energy);
         if (p.style || p.communication_style) setStyle(p.style || p.communication_style);
         if (p.description) setDescription(p.description);
-        // User avatar rides on the same /settings payload (overrides local).
-        if (data.user_avatar) { setUserAvatar(data.user_avatar); localStorage.setItem('ava-ide-user-avatar', data.user_avatar); }
+        // The user avatar rides on this same payload, but it is not this page's
+        // business any more — UserAvatarPanel hydrates itself from /settings so
+        // it is correct whether or not you ever open Ava's style page.
         setLoading(false);
       })
       .catch(() => { setLoading(false); });
@@ -12401,56 +12362,6 @@ export function PersonalityPage() {
         {!connected && <NotConnectedBanner />}
 
         {/* Avatar — moved here from Settings; Ava's avatar stays brand-locked. */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={sectionLabelStyle}>{t('dash.settings.section.avatars')}</div>
-          <div style={{
-            background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12,
-            padding: '18px 20px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <div style={{ fontSize: 11, color: '#6c7086', fontWeight: 500 }}>{t('dash.settings.avatar_you')}</div>
-                <div
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = () => {
-                      const file = input.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () => saveAvatar(reader.result as string);
-                      reader.readAsDataURL(file);
-                    };
-                    input.click();
-                  }}
-                  style={{
-                    width: 64, height: 64, borderRadius: '50%', cursor: 'pointer',
-                    border: '2px dashed color-mix(in srgb, var(--accent) 30%, transparent)',
-                    background: userAvatar ? 'transparent' : 'rgba(10, 6, 18, 0.8)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    overflow: 'hidden', position: 'relative',
-                  }}
-                  title={t('dash.settings.avatar_upload_hint')}
-                >
-                  {userAvatar ? (
-                    <img src={userAvatar} alt={t('dash.settings.avatar_you')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-                    </svg>
-                  )}
-                </div>
-                {userAvatar && (
-                  <button onClick={() => removeAvatar()}
-                    style={{ fontSize: 10, color: '#6c7086', background: 'transparent', border: 'none', cursor: 'pointer' }}>{t('dash.settings.remove')}</button>
-                )}
-              </div>
-              <div style={{ fontSize: 11, color: '#45475a' }}>{t('dash.settings.avatar_stored_locally')}</div>
-            </div>
-          </div>
-        </div>
-
         {/* Tone */}
         <div style={{ marginBottom: 24 }}>
           <div style={sectionLabelStyle}>{t('dash.personality.tone')}</div>
@@ -16350,8 +16261,6 @@ export function AccountPage() {
   const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality' | 'profile'>('settings');
   // "{name}'s profile" — the user's own data: identity/body, health goals, their
   // plans, and their catalogue contributions.
-  const [profileSubTab, setProfileSubTab] = useState<'general' | 'health' | 'plans' | 'submissions'>('general');
-  const [contributeOpen, setContributeOpen] = useState(false);
   const profileLabel = (() => {
     try {
       const first = (localStorage.getItem('ava-ide-user-name') || '').trim().split(/\s+/)[0];
@@ -16380,12 +16289,6 @@ export function AccountPage() {
     { key: 'profile' as const, label: profileLabel },
     // Sync tab removed — Ava is local-first; nothing syncs to the cloud.
   ];
-  const profileSubTabs = [
-    { key: 'general' as const, label: t('general.profile.tab') },
-    { key: 'health' as const, label: t('general.profile.health_tab') },
-    { key: 'plans' as const, label: t('health.browse.tab.plans') },
-    { key: 'submissions' as const, label: t('health.browse.tab.mine') },
-  ];
   return (
     <div style={pageWrapper}>
       <div style={{ marginBottom: 16 }}>
@@ -16406,35 +16309,11 @@ export function AccountPage() {
       {tab === 'billing' && <BillingPage />}
       {tab === 'connections' && <ConnectionsPage />}
       {tab === 'personality' && <PersonalityPage />}
-      {tab === 'profile' && (
-        <div>
-          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
-            {profileSubTabs.map(st => (
-              <button key={st.key} onClick={() => setProfileSubTab(st.key)} style={{
-                padding: '6px 12px', fontSize: 12, fontWeight: 500, border: 'none', cursor: 'pointer',
-                background: 'transparent', color: profileSubTab === st.key ? '#cdd6f4' : '#585b70',
-                borderBottom: profileSubTab === st.key ? '2px solid var(--accent)' : '2px solid transparent',
-                transition: 'all 0.15s',
-              }}>{st.label}</button>
-            ))}
-          </div>
-          {profileSubTab === 'general' && <GeneralProfilePage />}
-          {profileSubTab === 'health' && <ProfileTab />}
-          {profileSubTab === 'plans' && <HealthPlansPage />}
-          {profileSubTab === 'submissions' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                <button onClick={() => setContributeOpen(true)} style={{
-                  padding: '6px 14px', fontSize: 12, fontWeight: 500, borderRadius: 6,
-                  background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: '#c084fc', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', cursor: 'pointer',
-                }}>{t('health.browse.contribute')}</button>
-              </div>
-              <MySubmissionsTab />
-              {contributeOpen && <ContributeModal onClose={() => setContributeOpen(false)} />}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Your name, your picture, your body basics. The health profile and your
+          plans moved to the Nutrition & Fitness room on 2026-08-10, where the
+          extension has always kept them; My Submissions was removed the same
+          day. One thing lives here now, so there is no sub-tab strip. */}
+      {tab === 'profile' && <GeneralProfilePage />}
     </div>
   );
 }

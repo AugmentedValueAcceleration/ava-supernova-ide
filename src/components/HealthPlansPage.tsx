@@ -36,6 +36,7 @@ import { PrepSheet } from './PrepSheet';
 import { DuplicateSheet } from './DuplicateSheet';
 import { AssistSheet, askForDay, type DayProposal } from './AssistSheet';
 import { StartersSheet } from './StartersSheet';
+import { StarterShelf } from './StarterShelf';
 import { loadHealthProfile, type HealthProfile } from '../lib/health-store';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
@@ -333,6 +334,12 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
   onSavePlan: (plan: HealthPlan) => void;
 }) {
   const [tab, setTab] = useState<'calendar' | 'programs'>('calendar');
+  /** A card tapped on the shelf, opened straight onto its full week. */
+  const [shelfOpenId, setShelfOpenId] = useState<string | null>(null);
+  /** The shelf orders by your stated goal, so it needs the profile. Loaded
+   *  here rather than threaded down: this tab is where the shelf lives. */
+  const [shelfProfile, setShelfProfile] = useState<HealthProfile | null>(null);
+  useEffect(() => { loadHealthProfile().then(setShelfProfile).catch(() => { /* unordered shelf still works */ }); }, []);
   // A clicked calendar day opens the DAY view (what's on that date across every
   // plan), not a single plan's editor.
   const [dayKey, setDayKey] = useState<string | null>(null);
@@ -446,17 +453,32 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
         <div style={{ display: 'flex', minHeight: '64vh' }}>
           <MonthCalendar month={month} onMonthChange={setMonth} marks={planMarks} content={planContent} logged={loggedDates} selected={null} onSelectDate={(key) => setDayKey(key)} fill />
         </div>
-      ) : plans.length === 0 ? (
-        <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '40px 16px', textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.empty_title')}</div>
-          <div style={{ margin: '6px auto 0', maxWidth: 360, fontSize: 10, fontStyle: 'italic', lineHeight: 1.5, color: MUTED }}>
-            {t('health.plans.empty_hint')}
-          </div>
-        </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
-          {plans.map(p => <PlanCard key={p.id} plan={p} onOpen={() => onOpen(p.id)} onDelete={() => onDelete(p.id)} />)}
-        </div>
+        <>
+          <StarterShelf profile={shelfProfile} onOpen={(id) => setShelfOpenId(id)} />
+
+          {plans.length === 0 ? (
+            <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '40px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.empty_title')}</div>
+              <div style={{ margin: '6px auto 0', maxWidth: 360, fontSize: 10, fontStyle: 'italic', lineHeight: 1.5, color: MUTED }}>
+                {t('health.plans.empty_hint')}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
+              {plans.map(p => <PlanCard key={p.id} plan={p} onOpen={() => onOpen(p.id)} onDelete={() => onDelete(p.id)} />)}
+            </div>
+          )}
+
+          {shelfOpenId && (
+            <StartersSheet
+              profile={shelfProfile}
+              initialOpenId={shelfOpenId}
+              onStart={plan => { onSavePlan(plan); setShelfOpenId(null); }}
+              onClose={() => setShelfOpenId(null)}
+            />
+          )}
+        </>
       )}
 
       {dayKey && <HealthDayView dateKey={dayKey} onClose={() => setDayKey(null)} onNewPlan={() => { setDayKey(null); onNew(); }} onSavePlan={onSavePlan} />}

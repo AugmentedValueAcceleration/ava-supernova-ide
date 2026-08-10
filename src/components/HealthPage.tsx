@@ -34,6 +34,8 @@ import {
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { CookingTimeGrid, type CookTime } from './CookingTimeGrid';
 import { ContentRating } from './ContentRating';
+import { UserAvatarPanel } from './UserAvatarPanel';
+import HealthPlansPage from './HealthPlansPage';
 
 /**
  * Health & Nutrition page for the IDE — the public exercise + recipe
@@ -45,7 +47,9 @@ import { ContentRating } from './ContentRating';
  * detail modals land in 2c.
  */
 
-type HealthTab = 'exercises' | 'recipes' | 'ava';
+// Same five as the extension, in the same order. A shared room that opens on
+// a different tab depending on which app you launched is one room in name only.
+type HealthTab = 'plans' | 'exercises' | 'recipes' | 'profile' | 'ava';
 
 // Set when something elsewhere (the main-chat → Health room handoff) wants the
 // page to open on the Ava room tab. Read on mount; the live event covers the
@@ -78,7 +82,10 @@ const exerciseTypeLabel = (type: string): string => t(`health.submit.ex_type.${t
 
 export function HealthPage() {
   useLocale();
-  const [tab, setTab] = useState<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'exercises');
+  // Opens on your plans, like the extension. What you came for is what you
+  // are working towards, not the catalogue.
+  const [tab, setTab] = useState<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'plans');
+  const [contributeOpen, setContributeOpen] = useState(false);
 
   // Open the Ava room tab on the handoff request — the module flag covers a
   // fresh mount, the event covers an already-mounted page.
@@ -101,7 +108,7 @@ export function HealthPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div style={{
-        padding: '20px 32px 0', flexShrink: 0,
+        padding: '20px 32px 0', flexShrink: 0, position: 'relative',
         borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
         background: 'rgba(12, 8, 20, 0.4)',
       }}>
@@ -113,9 +120,23 @@ export function HealthPage() {
             {t('health.browse.subtitle')}
           </p>
         </div>
+        <div style={{ position: 'absolute', top: 20, right: 32 }}>
+          <button
+            onClick={() => setContributeOpen(true)}
+            style={{
+              padding: '6px 14px', fontSize: 12, fontWeight: 500, borderRadius: 6,
+              background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+              color: '#c084fc',
+              border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+              cursor: 'pointer',
+            }}
+          >{t('health.browse.contribute')}</button>
+        </div>
         <div style={{ display: 'flex', gap: 2 }}>
+          <button onClick={() => setTab('plans')} style={tabBtnStyle(tab === 'plans')}>{t('health.browse.tab.plans')}</button>
           <button onClick={() => setTab('exercises')} style={tabBtnStyle(tab === 'exercises')}>{t('health.browse.tab.exercises')}</button>
           <button onClick={() => setTab('recipes')} style={tabBtnStyle(tab === 'recipes')}>{t('health.browse.tab.recipes')}</button>
+          <button onClick={() => setTab('profile')} style={tabBtnStyle(tab === 'profile')}>{t('health.browse.tab.profile')}</button>
           <button onClick={() => setTab('ava')} style={tabBtnStyle(tab === 'ava')}>{t('health.browse.tab.ava')}</button>
         </div>
       </div>
@@ -123,8 +144,11 @@ export function HealthPage() {
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {/* Non-Ava tabs — padded scroll area. */}
         <div style={{ height: '100%', overflowY: 'auto', padding: '20px 32px', display: tab === 'ava' ? 'none' : 'block' }}>
+          {contributeOpen && <ContributeModal onClose={() => setContributeOpen(false)} />}
+          {tab === 'plans' && <HealthPlansPage />}
           {tab === 'exercises' && <ExercisesGrid />}
           {tab === 'recipes' && <RecipesGrid />}
+          {tab === 'profile' && <ProfileTab />}
         </div>
         {/* Ava room — always mounted so its conversation survives tab switches;
             full-bleed (the chat owns its own scroll). */}
@@ -1651,6 +1675,15 @@ export function GeneralProfilePage() {
         {t('general.profile.intro')}
         {savedTick > 0 && <span style={{ color: '#34d399', marginLeft: 8 }}>{t('health.profile.saved')}</span>}
       </p>
+
+      {/* Your picture. It sat on the Personality page -- Ava's style -- until
+          2026-08-10, in a section headed "Avatars" that was meant to hold hers
+          too. Hers is brand-locked, so the only editable thing in there was
+          yours, filed under her. The storage key had been saying so all along:
+          `ava-ide-user-avatar`. */}
+      <ProfileSection title={t('dash.settings.avatar')}>
+        <UserAvatarPanel fallbackName={profile?.display_name ?? null} />
+      </ProfileSection>
 
       <ProfileSection title={t('general.profile.identity')}>
         <Field label={t('general.profile.display_name')}>

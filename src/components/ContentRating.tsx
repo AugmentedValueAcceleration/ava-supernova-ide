@@ -17,7 +17,7 @@ import { t, tt } from '../lib/i18n';
  * because they are allowed to differ.
  */
 
-export type RatingSubject = 'course' | 'recipe' | 'exercise' | 'workout';
+export type RatingSubject = 'course' | 'recipe' | 'exercise' | 'workout' | 'plan';
 
 /**
  * A stable per-install id, so an anonymous rating can be amended rather than
@@ -61,6 +61,15 @@ const REASONS_BY_TYPE: Record<RatingSubject, Array<[string, string, string]>> = 
     ['too-easy', 'learning_library.reason_too_easy', 'Too easy'],
     ['form-unclear', 'feedback.reason.form_unclear', "Couldn't tell the form"],
     ['wrong-equipment', 'feedback.reason.wrong_equipment', 'Equipment was wrong'],
+  ],
+  // A plan is weeks of someone's life. "Didn't fit my week" is the complaint
+  // most likely to make them quit without ever telling us why.
+  plan: [
+    ['doesnt-fit', 'feedback.reason.doesnt_fit', "Didn't fit my week"],
+    ['too-hard', 'feedback.reason.too_hard', 'Too hard'],
+    ['too-easy', 'learning_library.reason_too_easy', 'Too easy'],
+    ['unsafe', 'feedback.reason.unsafe', 'Felt unsafe'],
+    ['unclear', 'learning_library.reason_unclear', 'Unclear'],
   ],
   workout: [
     ['unsafe', 'feedback.reason.unsafe', 'Felt unsafe'],
@@ -125,6 +134,7 @@ export function ContentRating({ subjectType, subjectId, average, count }: Props)
     ? tt('learning_library.your_rating', 'Your rating')
     : subjectType === 'recipe' ? tt('feedback.rate_recipe', 'Rate this recipe')
     : subjectType === 'exercise' ? tt('feedback.rate_exercise', 'Rate this exercise')
+    : subjectType === 'plan' ? tt('feedback.rate_plan', 'Rate this plan')
     : t('learning_library.rate_course');
 
   return (

@@ -33,18 +33,21 @@ function durationLabel(days: number): string {
   return `${days} ${t('health.starters.days')}`;
 }
 
-export function StartersSheet({ profile, onStart, onClose }: {
+export function StartersSheet({ profile, onStart, onClose, initialOpenId = null }: {
   profile: HealthProfile | null;
   /** Saves the copy. The caller owns persistence, which keeps the copy rules
    *  themselves pure. */
   onStart: (plan: HealthPlan) => void;
   onClose: () => void;
+  /** Opened straight onto this template — a card on the shelf leads to the
+   *  plan it shows, not back to a list of all of them. */
+  initialOpenId?: string | null;
 }) {
   const [plans, setPlans] = useState<CuratedPlanSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialOpenId);
   const [detail, setDetail] = useState<CuratedPlanDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [starting, setStarting] = useState(false);
