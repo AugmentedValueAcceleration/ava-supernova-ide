@@ -1,5 +1,6 @@
-// Health Plans — the multi-week plan builder, the IDE mirror of the
-// extension's Planner "Plans" tab.
+// Health Plans — the plan builder, the IDE mirror of the extension's Planner
+// "Plans" tab. Plans run 1, 3 or 7 days; the user places each session on their
+// own calendar rather than being handed a block that owns their month.
 //
 // Self-contained: owns its state and talks straight to health-catalog
 // (platform fetch) and health-plans-store (local Tauri-fs storage) —
@@ -332,7 +333,21 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
   /** Persist an edited plan from the calendar day view (refreshes the list). */
   onSavePlan: (plan: HealthPlan) => void;
 }) {
-  const [tab, setTab] = useState<'calendar' | 'programs'>('calendar');
+  const [tab, setTab] = useState<'calendar' | 'programs' | 'past'>('calendar');
+  /** What you are doing, and what you did. Archive-by-default means the second
+   *  list only grows, and mixing them buries the first. */
+  const current = useMemo(
+    () => plans.filter(p => p.status !== 'archived' && p.status !== 'completed'),
+    [plans],
+  );
+  /** Newest first: the question about an old plan is "what was I doing in
+   *  June", not "what was it called". */
+  const past = useMemo(
+    () => plans
+      .filter(p => p.status === 'archived' || p.status === 'completed')
+      .sort((a, b) => (b.start_date ?? '').localeCompare(a.start_date ?? '')),
+    [plans],
+  );
   // A clicked calendar day opens the DAY view (what's on that date across every
   // plan), not a single plan's editor.
   const [dayKey, setDayKey] = useState<string | null>(null);
@@ -433,7 +448,14 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
       </div>
 
       <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${BORDER}` }}>
-        {([['calendar', t('health.plans.tab.calendar')], ['programs', `${t('health.plans.tab.programs')}${plans.length ? ` · ${plans.length}` : ''}`]] as const).map(([key, label]) => (
+        {/* All three, always. A tab that only appears once you have archived
+            something is a tab you cannot learn — you go looking for where old
+            plans live and it is not there yet. */}
+        {([
+          ['calendar', t('health.plans.tab.calendar')],
+          ['programs', t('health.plans.tab.programs')],
+          ['past', t('health.plans.tab.past')],
+        ] as const).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setTab(key)} style={{
             padding: '6px 12px', fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer', background: 'transparent',
             color: tab === key ? TEXT : MUTED,
@@ -446,9 +468,31 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
         <div style={{ display: 'flex', minHeight: '64vh' }}>
           <MonthCalendar month={month} onMonthChange={setMonth} marks={planMarks} content={planContent} logged={loggedDates} selected={null} onSelectDate={(key) => setDayKey(key)} fill />
         </div>
+      ) : tab === 'past' ? (
+        <>
+          {past.length === 0 ? (
+            <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '40px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.past_empty')}</div>
+              <div style={{ margin: '6px auto 0', maxWidth: 360, fontSize: 10, fontStyle: 'italic', lineHeight: 1.5, color: MUTED }}>
+                {t('health.plans.past_hint')}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Not a graveyard: the status control on a card still sets an
+                  archived plan back to active, which is how somebody picks a
+                  plan up again. That is the whole reason archiving beats
+                  deleting. */}
+              <p style={{ margin: '0 0 12px', fontSize: 10, lineHeight: 1.6, color: MUTED }}>{t('health.plans.past_hint')}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
+                {past.map(p => <PlanCard key={p.id} plan={p} onOpen={() => onOpen(p.id)} onDelete={() => onDelete(p.id)} />)}
+              </div>
+            </>
+          )}
+        </>
       ) : (
         <>
-          {plans.length === 0 ? (
+          {current.length === 0 ? (
             <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '40px 16px', textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.empty_title')}</div>
               <div style={{ margin: '6px auto 0', maxWidth: 360, fontSize: 10, fontStyle: 'italic', lineHeight: 1.5, color: MUTED }}>
@@ -457,7 +501,7 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
-              {plans.map(p => <PlanCard key={p.id} plan={p} onOpen={() => onOpen(p.id)} onDelete={() => onDelete(p.id)} />)}
+              {current.map(p => <PlanCard key={p.id} plan={p} onOpen={() => onOpen(p.id)} onDelete={() => onDelete(p.id)} />)}
             </div>
           )}
 
