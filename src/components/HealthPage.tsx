@@ -36,6 +36,11 @@ import { CookingTimeGrid, type CookTime } from './CookingTimeGrid';
 import { ContentRating } from './ContentRating';
 import { UserAvatarPanel } from './UserAvatarPanel';
 import HealthPlansPage from './HealthPlansPage';
+import { StarterShelf } from './StarterShelf';
+import { StarterDetailBody } from './StartersSheet';
+import { planFromCurated, type CuratedPlanDetail } from '@ava/core/health/starters';
+import { loadCuratedPlan, reportCuratedStart } from '../lib/curated-plans';
+import { saveHealthPlan } from '../lib/health-plans-store';
 
 /**
  * Health & Nutrition page for the IDE — the public exercise + recipe
@@ -49,7 +54,7 @@ import HealthPlansPage from './HealthPlansPage';
 
 // Same five as the extension, in the same order. A shared room that opens on
 // a different tab depending on which app you launched is one room in name only.
-type HealthTab = 'plans' | 'exercises' | 'recipes' | 'profile' | 'ava';
+type HealthTab = 'plans' | 'starters' | 'exercises' | 'recipes' | 'profile' | 'ava';
 
 // Set when something elsewhere (the main-chat → Health room handoff) wants the
 // page to open on the Ava room tab. Read on mount; the live event covers the
@@ -86,6 +91,23 @@ export function HealthPage() {
   // are working towards, not the catalogue.
   const [tab, setTab] = useState<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'plans');
   const [contributeOpen, setContributeOpen] = useState(false);
+  /** A card opened from the Ready-made tab, shown as its full week. */
+  const [starterOpenId, setStarterOpenId] = useState<string | null>(null);
+  const [starterDetail, setStarterDetail] = useState<CuratedPlanDetail | null>(null);
+  const [starterLoading, setStarterLoading] = useState(false);
+  useEffect(() => {
+    if (!starterOpenId) { setStarterDetail(null); return; }
+    setStarterLoading(true);
+    let cancelled = false;
+    loadCuratedPlan(starterOpenId)
+      .then(d => { if (!cancelled) setStarterDetail(d); })
+      .catch(() => { if (!cancelled) setStarterDetail(null); })
+      .finally(() => { if (!cancelled) setStarterLoading(false); });
+    return () => { cancelled = true; };
+  }, [starterOpenId]);
+  /** The shelf orders by your stated goal, so it needs the profile. */
+  const [starterProfile, setStarterProfile] = useState<HealthProfile | null>(null);
+  useEffect(() => { loadHealthProfile().then(setStarterProfile).catch(() => { /* unordered shelf still works */ }); }, []);
 
   // Open the Ava room tab on the handoff request — the module flag covers a
   // fresh mount, the event covers an already-mounted page.
@@ -134,6 +156,7 @@ export function HealthPage() {
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
           <button onClick={() => setTab('plans')} style={tabBtnStyle(tab === 'plans')}>{t('health.browse.tab.plans')}</button>
+          <button onClick={() => setTab('starters')} style={tabBtnStyle(tab === 'starters')}>{t('health.browse.tab.starters')}</button>
           <button onClick={() => setTab('exercises')} style={tabBtnStyle(tab === 'exercises')}>{t('health.browse.tab.exercises')}</button>
           <button onClick={() => setTab('recipes')} style={tabBtnStyle(tab === 'recipes')}>{t('health.browse.tab.recipes')}</button>
           <button onClick={() => setTab('profile')} style={tabBtnStyle(tab === 'profile')}>{t('health.browse.tab.profile')}</button>
@@ -145,6 +168,42 @@ export function HealthPage() {
         {/* Non-Ava tabs — padded scroll area. */}
         <div style={{ height: '100%', overflowY: 'auto', padding: '20px 32px', display: tab === 'ava' ? 'none' : 'block' }}>
           {contributeOpen && <ContributeModal onClose={() => setContributeOpen(false)} />}
+          {/* Ready-made plans: their own tab, so they are a thing people know
+              exists rather than something found by pressing "New plan". */}
+          {tab === 'starters' && (
+            starterOpenId ? (
+              // In page, with a back button — the same shape an exercise takes
+              // in this room. It used to open as a centred modal, which made
+              // one room produce two kinds of screen.
+              <DetailPageView onBack={() => setStarterOpenId(null)} backLabel={t('health.browse.tab.starters')}>
+                <div style={{ height: '100%', overflowY: 'auto', padding: '16px 32px 32px' }}>
+                  <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <StarterDetailBody
+                      open={starterDetail}
+                      detailLoading={starterLoading}
+                      profile={starterProfile}
+                      starting={false}
+                      onStart={(placements) => {
+                        if (!starterDetail) return;
+                        const plan = planFromCurated(starterDetail, {
+                          id: `plan${Date.now()}${Math.floor(Math.random() * 1000)}`,
+                          // start_date comes from the earliest placement.
+                          startDate: placements[0]?.date ?? new Date().toISOString().slice(0, 10),
+                          placements,
+                        });
+                        void saveHealthPlan(plan as never);
+                        void reportCuratedStart(starterDetail.id);
+                        setStarterOpenId(null);
+                        setTab('plans');
+                      }}
+                    />
+                  </div>
+                </div>
+              </DetailPageView>
+            ) : (
+              <StarterShelf profile={starterProfile} onOpen={setStarterOpenId} />
+            )
+          )}
           {tab === 'plans' && <HealthPlansPage />}
           {tab === 'exercises' && <ExercisesGrid />}
           {tab === 'recipes' && <RecipesGrid />}

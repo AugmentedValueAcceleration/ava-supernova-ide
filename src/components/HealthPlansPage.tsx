@@ -36,7 +36,6 @@ import { PrepSheet } from './PrepSheet';
 import { DuplicateSheet } from './DuplicateSheet';
 import { AssistSheet, askForDay, type DayProposal } from './AssistSheet';
 import { StartersSheet } from './StartersSheet';
-import { StarterShelf } from './StarterShelf';
 import { loadHealthProfile, type HealthProfile } from '../lib/health-store';
 import type {
   HealthPlan, HealthPlanSummary, HealthPlanType, HealthPlanStatus,
@@ -334,12 +333,6 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
   onSavePlan: (plan: HealthPlan) => void;
 }) {
   const [tab, setTab] = useState<'calendar' | 'programs'>('calendar');
-  /** A card tapped on the shelf, opened straight onto its full week. */
-  const [shelfOpenId, setShelfOpenId] = useState<string | null>(null);
-  /** The shelf orders by your stated goal, so it needs the profile. Loaded
-   *  here rather than threaded down: this tab is where the shelf lives. */
-  const [shelfProfile, setShelfProfile] = useState<HealthProfile | null>(null);
-  useEffect(() => { loadHealthProfile().then(setShelfProfile).catch(() => { /* unordered shelf still works */ }); }, []);
   // A clicked calendar day opens the DAY view (what's on that date across every
   // plan), not a single plan's editor.
   const [dayKey, setDayKey] = useState<string | null>(null);
@@ -455,8 +448,6 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
         </div>
       ) : (
         <>
-          <StarterShelf profile={shelfProfile} onOpen={(id) => setShelfOpenId(id)} />
-
           {plans.length === 0 ? (
             <div style={{ borderRadius: 8, border: `1px dashed ${BORDER}`, padding: '40px 16px', textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: TEXT2 }}>{t('health.plans.empty_title')}</div>
@@ -470,14 +461,6 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
             </div>
           )}
 
-          {shelfOpenId && (
-            <StartersSheet
-              profile={shelfProfile}
-              initialOpenId={shelfOpenId}
-              onStart={plan => { onSavePlan(plan); setShelfOpenId(null); }}
-              onClose={() => setShelfOpenId(null)}
-            />
-          )}
         </>
       )}
 
@@ -532,8 +515,6 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   // Add / swap happens INLINE inside a section (no second overlay).
   const [inlineSearch, setInlineSearch] = useState<{ section: 'training' | 'meals'; kind: 'exercise' | 'recipe'; mode: 'add' | 'swap'; planId: string; dayIndex: number; itemId?: string } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const MIN_PANEL_H = 400;
-  const [frozenH, setFrozenH] = useState<number | null>(null);
   // Which item's delete is awaiting confirmation — same confirm as deleting a program.
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const plansRef = useRef<HealthPlan[]>([]);
@@ -851,14 +832,15 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan }: { dateKey: s
   // instant when tapped.
   const [profile, setProfile] = useState<HealthProfile | null>(null);
   useEffect(() => { loadHealthProfile().then(setProfile).catch(() => setProfile(null)); }, []);
-  // Hold the modal's size steady while editing (freeze height on entering Edit)
-  // with a min height so it never collapses as items are added / deleted.
-  const enterEdit = () => { setFrozenH(panelRef.current?.offsetHeight ?? null); setEditing(true); };
-  const exitEdit = () => { flushSaves(); setInlineSearch(null); setConfirmingId(null); setFrozenH(null); setEditing(false); };
+  const enterEdit = () => setEditing(true);
+  const exitEdit = () => { flushSaves(); setInlineSearch(null); setConfirmingId(null); setEditing(false); };
 
+  // A DRAWER, matching the extension. A centred box hid the calendar you had
+  // just clicked in, so the day appeared to REPLACE its context rather than
+  // arrive beside it.
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 16 }}>
-      <div ref={panelRef} onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, minHeight: MIN_PANEL_H, maxHeight: '88vh', ...(editing && frozenH ? { height: Math.max(frozenH, MIN_PANEL_H) } : {}), overflow: 'hidden', borderRadius: 14, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'linear-gradient(to bottom right, #100d1a, #181327)', boxShadow: '0 0 80px color-mix(in srgb, var(--accent) 15%, transparent)' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', animation: 'ava-fade-in 160ms ease-out' }}>
+      <div ref={panelRef} onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 560, height: '100%', overflow: 'hidden', borderLeft: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'linear-gradient(to bottom, #100d1a, #150f22)', boxShadow: '-24px 0 60px rgba(0,0,0,0.5)', animation: 'ava-slide-in-right 220ms cubic-bezier(0.32, 0.72, 0, 1)' }}>
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)', padding: '12px 24px' }}>
           <div>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.18em', color: MUTED }}>{t('health.plans.on_this_day')}</div>
