@@ -41,7 +41,7 @@ Ten focused areas in the sidebar, each with its own sub-pages:
 | **Chat** | Talk, build, create — the full agent, all 7 modes, fleet + model pickers |
 | **Planner** | Tasks, journal, learning |
 | **Library** | Courses, generated assets, documents |
-| **Health & Nutrition** | Exercises, recipes, and plans |
+| **Health & Nutrition** | Exercise and recipe catalogues, ready-made plans you place session by session, your plan calendar and past plans, your profile, and Ava herself |
 | **Creative Studio** | Images and video |
 | **Memory** | Patterns, preferences, decisions |
 | **History** | Credits, sessions, models |
