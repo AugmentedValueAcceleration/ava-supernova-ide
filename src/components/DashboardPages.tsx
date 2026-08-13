@@ -4992,7 +4992,7 @@ export function AvaChatPage() {
                       // made the context meter read ~8x fuller than reality.
                       'qwen3.5-flash': 262144, 'deepseek-v4-pro': 1000000, 'deepseek-v4-flash': 1000000,
                       'glm-5.2': 1000000, 'glm-4.5-air': 128000,
-                      'hy3-preview': 262144, 'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
+                      'hy3': 262144, 'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
                     setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
