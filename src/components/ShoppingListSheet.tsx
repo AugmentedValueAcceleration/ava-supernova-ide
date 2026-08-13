@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  buildShoppingListAcross, daysInRange, weekBounds, shiftWeek,
+  buildShoppingListAcross, buildSurplusAcross, daysInRange, weekBounds, shiftWeek,
   type PlanDaySource, type ShoppingItem,
 } from '@ava/core/health/shopping-list';
 import type { Aisle } from '@ava/core/health/aisles';
@@ -148,6 +148,14 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
 
   const list = useMemo(
     () => buildShoppingListAcross(selectedSources, { excludeOptional: hideOptional, household }),
+    [selectedSources, hideOptional, household],
+  );
+
+  // Food already bought and never cooked. Shown beside the shop rather than on
+  // a screen of its own: the moment you are deciding what to buy is the moment
+  // it matters that a bag of spinach is already in the fridge.
+  const surplus = useMemo(
+    () => buildSurplusAcross(selectedSources, { excludeOptional: hideOptional, household }),
     [selectedSources, hideOptional, household],
   );
 
@@ -346,6 +354,18 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
                       {t('health.shopping.not_in_library')}: {missingCustom.map(m => m.name).join(', ')}
                     </div>
                   )}
+                </div>
+              )}
+
+              {surplus.itemCount > 0 && (
+                <div style={{ marginBottom: 12, borderRadius: 8, border: `1px solid ${BORDER}`, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: ACCENT }}>{t('health.shopping.surplus')}</div>
+                  <div style={{ marginTop: 2, fontSize: 10, color: MUTED }}>{t('health.shopping.surplus.hint')}</div>
+                  <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.6, color: MUTED }}>
+                    {surplus.groups.flatMap(g => g.items).map(i =>
+                      `${i.name}${i.amounts.length ? ` — ${i.amounts.map(a => `${a.qty} ${a.unit}`).join(' + ')}` : ''}`,
+                    ).join(', ')}
+                  </div>
                 </div>
               )}
 
