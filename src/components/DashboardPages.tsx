@@ -2627,7 +2627,6 @@ export function AvaChatPage() {
     'kimi-k3': 'kimi:kimi-k3',
     'kimi-k2.7-code': 'kimi:kimi-k2.7-code',
     'kimi-k2.6': 'kimi:kimi-k2.6',
-    'kimi-k2.5': 'kimi:kimi-k2.5',
     'qwen3.5-omni-flash': 'platform:qwen3.5-omni-flash',
     'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
     'qwen3.5-plus': 'platform:qwen3.5-plus',
@@ -4986,7 +4985,7 @@ export function AvaChatPage() {
                       // Kept so a session that started before the rollforward
                       // still reports its context rather than hitting a default.
                       'qwen3.7-max': 1048576,
-                      'kimi-k3': 1000000, 'kimi-k2.7-code': 256000, 'kimi-k2.6': 262144, 'kimi-k2.5': 262144,
+                      'kimi-k3': 1000000, 'kimi-k2.7-code': 256000, 'kimi-k2.6': 262144,
                       'MiniMax-M3': 1048576, 'MiniMax-M2.7': 204800, 'MiniMax-M2.7-highspeed': 204800,
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
                       // DeepSeek V4 is 1M context — the 131072 here was V3-era and
@@ -13335,7 +13334,6 @@ export function UsagePage() {
     'kimi-k3': { input: 3.00, output: 15.00 },
     'kimi-k2.7-code': { input: 0.95, output: 4.00 },
     'kimi-k2.6': { input: 0.95, output: 4.00 },
-    'kimi-k2.5': { input: 0.60, output: 3.00 },
     'deepseek-v4-pro': { input: 0.435, output: 0.87 },
     'deepseek-v4-flash': { input: 0.14, output: 0.28 },
   };
