@@ -32,7 +32,7 @@ function readByokProviders(): Record<string, { apiKey: string }> {
       // particular would lowercase correctly by luck, not design.
       const nameMap: Record<string, string> = {
         DeepSeek: 'deepseek', Qwen: 'qwen', Moonshot: 'kimi', Zhipu: 'glm', Mistral: 'mistral',
-        Anthropic: 'anthropic', Xiaomi: 'xiaomi', Tencent: 'tencent', NVIDIA: 'nvidia',
+        Xiaomi: 'xiaomi', Tencent: 'tencent', NVIDIA: 'nvidia',
       };
       for (const [name, key] of Object.entries(keys)) {
         if (key?.trim()) providers[nameMap[name] || name.toLowerCase()] = { apiKey: key.trim() };

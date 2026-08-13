@@ -45,7 +45,6 @@ export interface ByokKeys {
   qwen: boolean;
   deepseek: boolean;
   mistral: boolean;
-  anthropic: boolean;
   minimax: boolean;
   moonshot: boolean;
   zhipu: boolean;
@@ -68,7 +67,6 @@ const EMPTY_BYOK: ByokKeys = {
   qwen: false,
   deepseek: false,
   mistral: false,
-  anthropic: false,
   minimax: false,
   moonshot: false,
   zhipu: false,
@@ -90,7 +88,6 @@ export function readByokKeys(): ByokKeys {
       qwen: has('Qwen'),
       deepseek: has('DeepSeek'),
       mistral: has('Mistral'),
-      anthropic: has('Anthropic'),
       minimax: has('MiniMax'),
       moonshot: has('Moonshot'),
       zhipu: has('Zhipu'),

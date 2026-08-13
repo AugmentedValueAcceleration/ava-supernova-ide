@@ -970,18 +970,17 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
     );
   }
 
-  // The nine BYOK providers Ava actually supports — mirrors the extension's
+  // The BYOK providers Ava actually supports — mirrors the extension's
   // Settings PROVIDERS list. This was stuck at five, and because
-  // buildModelCatalogue() derives `available` from the same set, Anthropic,
-  // Xiaomi, Tencent and NVIDIA could never be used with a BYOK key at all: you
-  // could hold a valid key and the models stayed greyed out. (MiniMax is
-  // deliberately absent — it's retired.)
+  // buildModelCatalogue() derives `available` from the same set, Xiaomi,
+  // Tencent and NVIDIA could never be used with a BYOK key at all: you could
+  // hold a valid key and the models stayed greyed out. (MiniMax is deliberately
+  // absent — it is retired, and Anthropic likewise.)
   //
   // `key` is the localStorage field in `ava-ide-byok` and MUST NOT change for
   // the original five, or existing saved keys are orphaned. `label` is display
   // only, and matches the extension's wording.
   const providers: Array<{ key: string; label: string }> = [
-    { key: 'Anthropic', label: 'Anthropic (Claude)' },
     { key: 'DeepSeek', label: 'DeepSeek' },
     { key: 'Moonshot', label: 'Kimi (Moonshot)' },
     { key: 'Zhipu', label: 'GLM (Zhipu AI)' },

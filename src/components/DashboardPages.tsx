@@ -3320,7 +3320,7 @@ export function AvaChatPage() {
   // providers alphabetical by label, models sorted by name, extension display
   // labels (Kimi / GLM, not Moonshot / Zhipu), availability per BYOK key.
   const MODEL_CATALOGUE = useMemo(() => {
-    const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', anthropic: 'Anthropic', minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA' };
+    const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA' };
     const STORE: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral' };
     return Object.entries(ALL_MODELS)
       .map(([id, models]) => ({
@@ -4992,8 +4992,7 @@ export function AvaChatPage() {
                       // DeepSeek V4 is 1M context — the 131072 here was V3-era and
                       // made the context meter read ~8x fuller than reality.
                       'qwen3.5-flash': 262144, 'deepseek-v4-pro': 1000000, 'deepseek-v4-flash': 1000000,
-                      'claude-fable-5': 1000000, 'claude-opus-4-8': 200000, 'claude-sonnet-5': 200000,
-                      'claude-haiku-4-5-20251001': 200000, 'glm-5.2': 1000000, 'glm-4.5-air': 128000,
+                      'glm-5.2': 1000000, 'glm-4.5-air': 128000,
                       'hy3-preview': 262144, 'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
@@ -14256,7 +14255,6 @@ export function SettingsPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const PROVIDERS = [
-    { id: 'anthropic', name: 'Anthropic (Claude)', placeholder: 'sk-ant-...', signupUrl: 'https://console.anthropic.com', description: 'Claude Opus 4.8, Sonnet 5, Haiku 4.5' },
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4 Pro and V4 Flash \u2014 1M context, MIT open-weight' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.7 Code \u2014 agentic coding leader' },
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M3 flagship, M2.7 standard' },
