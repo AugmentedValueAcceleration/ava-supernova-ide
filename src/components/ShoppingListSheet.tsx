@@ -189,6 +189,7 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
   const got = list.groups.flatMap(g => g.items).filter(i => ticks.has(i.key)).length;
   const missingRead = list.missing.filter(m => m.reason === 'lookup_failed');
   const missingCustom = list.missing.filter(m => m.reason === 'not_in_library');
+  const settledLabel = (st: 'ate' | 'skipped' | 'other'): string => t(`health.shopping.settled.${st}`);
 
   const pill = (active: boolean): React.CSSProperties => ({
     borderRadius: 999, padding: '4px 12px', fontSize: 11, cursor: 'pointer',
@@ -284,9 +285,13 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
             </div>
           )}
 
-          {list.itemCount === 0 && list.missing.length === 0 ? (
+          {list.itemCount === 0 && list.missing.length === 0 && list.settled.length === 0 ? (
             <div style={{ padding: '40px 0', textAlign: 'center', fontSize: 12, color: MUTED }}>
               {single ? t('health.shopping.no_meals') : t('health.shopping.no_meals_week')}
+            </div>
+          ) : list.itemCount === 0 && list.missing.length === 0 ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', fontSize: 12, color: MUTED }}>
+              {t('health.shopping.all_settled')}
             </div>
           ) : (
             <>
@@ -341,6 +346,18 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
                       {t('health.shopping.not_in_library')}: {missingCustom.map(m => m.name).join(', ')}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Short on purpose, and it says so. Without this the list is
+                  simply missing the meals you logged, which reads as a bug
+                  rather than as the feature it is. */}
+              {list.settled.length > 0 && (
+                <div style={{ marginBottom: 12, borderRadius: 8, border: `1px solid ${BORDER}`, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: MUTED }}>{t('health.shopping.settled')}</div>
+                  <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.6, color: MUTED }}>
+                    {list.settled.map(s => `${s.name} (${settledLabel(s.state)})`).join(', ')}
+                  </div>
                 </div>
               )}
 
