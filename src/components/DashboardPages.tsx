@@ -10403,13 +10403,13 @@ export function LearningLibraryPage() {
 
             {/* Stats row */}
             <div style={{ display: 'flex', gap: 20, marginTop: 18, flexWrap: 'wrap' }}>
-              {detail.estimated_hours ? <CourseStat icon="\u23F1" label={`${detail.estimated_hours}h`} sub="estimated" /> : null}
-              <CourseStat icon="\uD83D\uDC65" label={String(detail.fork_count)} sub={`learner${detail.fork_count !== 1 ? 's' : ''}`} />
+              {detail.estimated_hours ? <CourseStat icon="⏱" label={`${detail.estimated_hours}h`} sub="estimated" /> : null}
+              <CourseStat icon="👥" label={String(detail.fork_count)} sub={`learner${detail.fork_count !== 1 ? 's' : ''}`} />
               {/* Shown at zero too: an unrated course is a fact, and hiding
                   it gave those cards one fewer stat than their neighbours. */}
-              <CourseStat icon="\u2B50" label={`${avgRating}/5`} sub={ratingCount === 1 ? '1 rating' : `${ratingCount} ratings`} />
-              {moduleCount > 0 ? <CourseStat icon="\uD83D\uDCE6" label={String(moduleCount)} sub={`module${moduleCount !== 1 ? 's' : ''}`} /> : null}
-              {lessonCount > 0 ? <CourseStat icon="\uD83D\uDCDD" label={String(lessonCount)} sub={`lesson${lessonCount !== 1 ? 's' : ''}`} /> : null}
+              <CourseStat icon="⭐" label={`${avgRating}/5`} sub={ratingCount === 1 ? '1 rating' : `${ratingCount} ratings`} />
+              {moduleCount > 0 ? <CourseStat icon="📦" label={String(moduleCount)} sub={`module${moduleCount !== 1 ? 's' : ''}`} /> : null}
+              {lessonCount > 0 ? <CourseStat icon="📝" label={String(lessonCount)} sub={`lesson${lessonCount !== 1 ? 's' : ''}`} /> : null}
             </div>
           </div>
 
