@@ -13334,8 +13334,9 @@ export function UsagePage() {
     'kimi-k3': { input: 3.00, output: 15.00 },
     'kimi-k2.7-code': { input: 0.95, output: 4.00 },
     'kimi-k2.6': { input: 0.95, output: 4.00 },
-    'deepseek-v4-pro': { input: 0.435, output: 0.87 },
-    'deepseek-v4-flash': { input: 0.14, output: 0.28 },
+    // Off-peak (2026-08-16 tariff); peak 01:00-04:00 + 06:00-10:00 UTC is 2×.
+    'deepseek-v4-pro': { input: 0.66, output: 1.98 },
+    'deepseek-v4-flash': { input: 0.22, output: 0.66 },
   };
   const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
   const estimateCost = (inp: number, out: number, model: string) => {
