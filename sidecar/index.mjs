@@ -1891,7 +1891,9 @@ async function handleInit(data) {
       kimiApiKey: config.providers?.kimi?.apiKey || process.env.KIMI_API_KEY,
       deepseekApiKey: config.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY,
       mistralApiKey: config.providers?.mistral?.apiKey || process.env.MISTRAL_API_KEY,
-      anthropicApiKey: config.providers?.anthropic?.apiKey || process.env.ANTHROPIC_API_KEY,
+      // No anthropicApiKey. Anthropic was removed on 2026-08-13 and core's
+      // provider registry now refuses it outright — reading the key here only
+      // let a stale config advertise a provider that cannot resolve.
       activeModelId: resolved.model.id,
       // Desktop Automation — bridges to Tauri desktop commands. UIA tree
       // for element targeting, narrow app launcher (replaces bash), and
@@ -3506,7 +3508,8 @@ async function handleSetModel(data) {
       if (sharedState.kimiApiKey) availableProviders.add('kimi');
       if (sharedState.deepseekApiKey) availableProviders.add('deepseek');
       if (sharedState.mistralApiKey) availableProviders.add('mistral');
-      if (sharedState.anthropicApiKey) availableProviders.add('anthropic');
+      // Anthropic deliberately absent — removed 2026-08-13. Offering it to the
+      // orchestrator would have picked a coordinator that core then rejects.
 
       // Aurora's Mistral-only coordinator chain — Medium 3.5 first, it's the
       // lead seat (AURORA_COORDINATOR_ID). Large 3 is the heavy RESERVE and
