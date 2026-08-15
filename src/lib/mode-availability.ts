@@ -1,10 +1,10 @@
 import { t } from './i18n';
 
-// Single source of truth for the 3 orchestrated modes —
-// Aurora, Supernova, Maestro — and what unlocks them.
+// Single source of truth for the 4 orchestrated modes —
+// Aurora, Supernova, Maestro, Longxiang — and what unlocks them.
 //
-// Plans surface only these 3 modes (no raw individual models). BYOK
-// surface gets the same 3 modes plus raw models per the user's keys.
+// Plans surface only these 4 modes (no raw individual models). BYOK
+// surface gets the same 4 modes plus raw models per the user's keys.
 // Each mode is gated by the fleet of provider keys it actually needs:
 //
 //   Maestro   → Qwen-only fleet (Qwen 3.7 Plus + 3.5 Flash light tier).
@@ -14,16 +14,22 @@ import { t } from './i18n';
 //   Aurora    → Mistral-only EU stack (Medium 3.5 lead + Small 4
 //               workhorse + Large 3 reserve).
 //
-// All three modes are public (admin gate retired). Any signed-in
-// platform user gets all three; BYOK users unlock each mode the
-// moment they have the relevant keys.
+// All four modes are public (admin gate retired). Any signed-in
+// platform user gets all four; BYOK users unlock each mode the
+// moment they have the relevant keys. Orchestration is the product and
+// is universally available — BYOK does not unlock it, it adds the option
+// to bypass it and drive a single model instead.
 
 import { useEffect, useState } from 'react';
 import { getPlatformKey } from './api';
 
 //   Longxiang → open-weights Kimi/Qwen/DeepSeek stack (K3 lead + Builder,
 //               Qwen 3.7 Plus mid-tier + vision, V4 Flash volume).
-//               BYOK-ONLY — see LONGXIANG_LIVE below.
+//               Gated by LONGXIANG_LIVE below, then available exactly like
+//               the other three: platform connection OR the BYOK keys
+//               (moonshot + qwen + deepseek). It was BYOK-only before
+//               launch and the comment outlived that — the gate on line
+//               ~121 has read `platformConnected || byok` since it shipped.
 
 export type ModeId = 'maestro' | 'supernova' | 'aurora' | 'longxiang';
 
