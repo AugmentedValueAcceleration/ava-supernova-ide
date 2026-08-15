@@ -1413,7 +1413,9 @@ async function handleInit(data) {
 
     // If BYOK model not found, try platform models
     if (!resolved && config.platformKey) {
-      const platformFallbacks = ['platform:qwen3.5-flash', 'platform:qwen3.5-omni-flash', 'platform:qwen3.5-omni-plus', 'platform:qwen3.5-plus'];
+      // Omni entries dropped — no catalogue defines them, so they could only
+      // ever fall through. Real fallbacks only.
+      const platformFallbacks = ['platform:qwen3.5-flash', 'platform:qwen3.5-plus'];
       for (const fb of platformFallbacks) {
         resolved = providerRegistry.resolveModel(fb);
         if (resolved) { activeModel = fb; break; }
@@ -1953,7 +1955,6 @@ async function handleInit(data) {
 
     // Memory Agent — curates briefs instead of raw memory dumps
     const qwenFlash = providerRegistry.resolveModel('platform:qwen3.5-flash')
-      || providerRegistry.resolveModel('platform:qwen3.5-omni-flash')
       || providerRegistry.resolveModel('qwen:qwen3.5-flash');
     if (qwenFlash && memoryManager) {
       memoryAgentInstance = new MemoryAgent({
@@ -1974,10 +1975,13 @@ async function handleInit(data) {
     // Vision bridge — a vision-capable model (Qwen Omni) used to describe
     // images when the active model is text-only (Supernova/DeepSeek, Aurora/
     // Mistral). The Agent only uses it when its own model can't see images.
-    const visionResolved = providerRegistry.resolveModel('platform:qwen3.5-omni-plus')
-      || providerRegistry.resolveModel('qwen:qwen3.5-omni-plus')
-      || providerRegistry.resolveModel('platform:qwen3.5-omni-flash')
-      || providerRegistry.resolveModel('qwen:qwen3.5-omni-flash');
+    // Every option here used to be a qwen3.5-omni model. None of them exist in
+    // any provider catalogue, so this resolved to undefined every time and the
+    // vision bridge below was dead — attaching an image on a text-only model
+    // (DeepSeek, Mistral) had nothing to route to. qwen3.7-plus is what core's
+    // own VISION_REROUTE uses for exactly this, and it does see images.
+    const visionResolved = providerRegistry.resolveModel('platform:qwen3.7-plus')
+      || providerRegistry.resolveModel('qwen:qwen3.7-plus');
 
     // Build resilient provider with fallback
     const healthTracker = new ProviderHealthTracker();
@@ -3579,10 +3583,13 @@ async function handleSetModel(data) {
     globalThis._activeProvider = resolved.provider;
 
     // Vision bridge for the newly-selected model (no-op if it sees images).
-    const visionResolved = providerRegistry.resolveModel('platform:qwen3.5-omni-plus')
-      || providerRegistry.resolveModel('qwen:qwen3.5-omni-plus')
-      || providerRegistry.resolveModel('platform:qwen3.5-omni-flash')
-      || providerRegistry.resolveModel('qwen:qwen3.5-omni-flash');
+    // Every option here used to be a qwen3.5-omni model. None of them exist in
+    // any provider catalogue, so this resolved to undefined every time and the
+    // vision bridge below was dead — attaching an image on a text-only model
+    // (DeepSeek, Mistral) had nothing to route to. qwen3.7-plus is what core's
+    // own VISION_REROUTE uses for exactly this, and it does see images.
+    const visionResolved = providerRegistry.resolveModel('platform:qwen3.7-plus')
+      || providerRegistry.resolveModel('qwen:qwen3.7-plus');
 
     agent = new Agent({
       provider: resolved.provider,
