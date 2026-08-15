@@ -445,7 +445,7 @@ let activeLane = 'main';
 
 // Bracket tags the core agent's detectModeFromMessages() looks for at the
 // start of a user message to apply MODE_ALLOWED_TOOLS. Without this prefix
-// the agent ships ALL ~70 tool schemas every turn — fine for Qwen, but
+// the agent ships ALL ~125 tool schemas every turn — fine for Qwen, but
 // Mistral (Aurora) spirals on tool-stuffed prompts. Prepending the tag
 // lets the agent shrink the schema list to the per-mode allowlist.
 const MODE_PREFIX_TAG = {
