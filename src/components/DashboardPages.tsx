@@ -2696,7 +2696,20 @@ export function AvaChatPage() {
   // DeepSeek / Moonshot / Qwen / Zhipu / Mistral) so byokModels/canChat see
   // every model the user holds a key for. Single source: @ava/core/models.
   const BYOK_MODELS = useMemo<Record<string, { id: string; name: string }[]>>(() => {
-    const STORE: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral' };
+    // Core provider id → the store-field name the Sidebar saves keys under.
+    // This MUST cover every provider whose key the Sidebar accepts: anything
+    // missing is dropped by the `if (!store) continue` below, so its models
+    // never appear and a key the user saved quietly does nothing.
+    //
+    // NVIDIA, Xiaomi and Tencent were absent. sidecar-boot.ts maps all of them
+    // — its comment reads "explicit for all nine" — so keys for those three
+    // saved correctly, reached the sidecar correctly, and then had no model to
+    // select against. That is why Nemotron 3.5 Lightning was in the catalogue
+    // and invisible here.
+    const STORE: Record<string, string> = {
+      deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu',
+      mistral: 'Mistral', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA',
+    };
     const map: Record<string, { id: string; name: string }[]> = {};
     for (const [id, models] of Object.entries(ALL_MODELS)) {
       const store = STORE[id];
@@ -4992,7 +5005,13 @@ export function AvaChatPage() {
                       // made the context meter read ~8x fuller than reality.
                       'qwen3.5-flash': 262144, 'qwen3.7-flash': 1000000, 'qwen3-coder-next': 256000, 'qwen3-coder-flash': 1000000, 'deepseek-v4-pro': 1000000, 'deepseek-v4-flash': 1000000,
                       'glm-5.2': 1000000, 'glm-4.5-air': 128000,
-                      'hy3': 262144, 'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
+                      'hy3': 262144,
+                      'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
+                      // Lightning is also 1M. Missing here it fell to the
+                      // 131072 default below and the context meter would have
+                      // read ~8x fuller than reality — the same fault the
+                      // DeepSeek note above records.
+                      'nvidia/nemotron-3.5-lightning-30b-a3b': 1000000,
                     };
                     const ctxWindow = MODEL_CTX[model] || 131072;
                     setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
