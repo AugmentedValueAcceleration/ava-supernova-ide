@@ -2,7 +2,7 @@
 
 **The standalone AI-native development environment — Ava with her own home, and her own hands.**
 
-A desktop application built with **Tauri v2** (Rust), **React 19**, and a **Node.js engine** running `@ava/core` locally. The full agent — 60+ tools, 7 modes, 24 specialist personas, 5-layer memory — with no browser and no VS Code required. And because it owns its whole stack, the IDE does the one thing the extension can't: **drive your entire machine.**
+A desktop application built with **Tauri v2** (Rust), **React 19**, and a **Node.js engine** running `@ava/core` locally. The full agent — 110+ tools, 7 modes, 24 specialist personas, 5-layer memory — with no browser and no VS Code required. And because it owns its whole stack, the IDE does the one thing the extension can't: **drive your entire machine.**
 
 > **Local-first by default.** The engine runs on your machine; your data stays there unless you turn on cloud sync.
 
@@ -57,7 +57,7 @@ Same engine as the CLI and the VS Code extension — so everything you learn in 
 - **7 modes** — Code (`>>`), Plan (`::`), Chat (`..`), Teach (`??`), Security (`!!`), Brainstorm (`**`), Write (`<<`).
 - **24 specialist personas** — complex tasks activate an internal team (Scout → Architect → Verifier → Sequencer → Challenger → Builder for code); simple tasks go direct.
 - **Four fleets** — **Maestro** (Qwen ensemble), **Aurora** (EU-sovereign Mistral stack) and **Longxiang** 龙翔 (built entirely on Chinese models — Kimi K3 leads and builds, Qwen 3.7 Plus takes vision and long context, DeepSeek V4 Flash handles chat) are live; **Supernova** (polyglot — DeepSeek V4 Pro coordinator + Qwen builders) runs on your own DeepSeek + Qwen keys, with the managed version in preview.
-- **60+ tools**, plus the IDE-only desktop- and browser-automation tools described above.
+- **110+ tools**, plus the IDE-only desktop- and browser-automation tools described above.
 - **Knowledge packs** — toggle domain expertise on/off in the chat bar; the system prompt rebuilds live, no restart.
 - **20 languages, live** — the whole interface translates, not just the chat, and switches the moment you change language — no restart, and Ava's replies follow too. Pick your language right from the welcome flow. Dates format the way your language writes them.
 - **5-layer memory** — local-first, curated by a dedicated Memory Agent so context stays lean.
