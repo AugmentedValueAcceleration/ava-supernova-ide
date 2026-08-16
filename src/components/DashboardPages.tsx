@@ -5197,10 +5197,13 @@ export function AvaChatPage() {
   const denyConfirm = useCallback(async () => {
     if (!pendingConfirm) return;
     const sidecar = getSidecar();
-    await sidecar.confirm(pendingConfirm.id, false);
+    // Carry the reason if one was typed. The sidecar turns it into the
+    // reasoned-denial shape — the tool still does NOT run; Ava just learns
+    // what the objection was instead of only that there was one.
+    await sidecar.confirm(pendingConfirm.id, false, confirmInput.trim() || undefined);
     setPendingConfirm(null);
     setConfirmInput('');
-  }, [pendingConfirm]);
+  }, [pendingConfirm, confirmInput]);
 
   // Always Allow — approve this category for the session (no longer switches to autonomous permanently)
   const approveAlwaysCategory = useCallback(async () => {
@@ -6417,22 +6420,38 @@ export function AvaChatPage() {
             </pre>
           </details>
 
-          {/* Input for ask_user / present_plan */}
-          {(pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan') && (
+          {/* Input for ask_user / present_plan — and now for ANY tool asking
+              permission. Saying no used to be the whole vocabulary: Ava was
+              told "denied" and nothing else, so she would often try the same
+              thing again. Here, Enter DENIES with the reason rather than
+              approving, because on a permission card the moment you want to
+              explain is the moment you are stopping something. */}
+          {(() => {
+            const isInteractiveCard = pendingConfirm.toolName === 'ask_user' || pendingConfirm.toolName === 'present_plan';
+            return (
             <input
               type="text"
               value={confirmInput}
               onChange={(e) => setConfirmInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') approveConfirm(); }}
-              placeholder={pendingConfirm.toolName === 'ask_user' ? t('dash.chat.type_your_answer') : t('dash.chat.comment_optional')}
-              autoFocus
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                if (isInteractiveCard) { approveConfirm(); return; }
+                if (confirmInput.trim()) denyConfirm();
+              }}
+              placeholder={
+                pendingConfirm.toolName === 'ask_user' ? t('dash.chat.type_your_answer')
+                  : pendingConfirm.toolName === 'present_plan' ? t('dash.chat.comment_optional')
+                  : tt('dash.chat.deny_reason_placeholder', 'Not this? Tell Ava why, or what to do instead')
+              }
+              autoFocus={isInteractiveCard}
               style={{
                 width: '100%', padding: '6px 10px', background: 'rgba(10, 6, 18, 0.8)',
                 border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 6, color: '#cdd6f4',
                 fontSize: 12, outline: 'none',
               }}
             />
-          )}
+            );
+          })()}
         </div>
         );
       })()}

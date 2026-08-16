@@ -3317,8 +3317,21 @@ function handleConfirm(data) {
     return;
   }
 
+  // A REFUSAL is checked first, and it is checked first for a reason. The
+  // branch below resolves any string as the tool's RESULT, which core reads as
+  // approved — so a denial reason sent as a plain string would report success
+  // and audit an approval for a call the user just stopped. On bash and
+  // git_commit, the tools that actually raise these cards, that is the whole
+  // safety guarantee inverted. The object shape cannot be mistaken for it.
+  if (data.approved === false) {
+    const reason = typeof data.response === 'string' ? data.response.trim() : '';
+    pending.resolve(reason ? { approved: false, reason } : false);
+    return;
+  }
+
   if (data.response && typeof data.response === 'string') {
-    // Free-text response (e.g., ask_user, present_plan approval)
+    // Free-text response (e.g., ask_user, present_plan approval) — approved,
+    // and this string IS the result.
     pending.resolve(data.response);
   } else {
     // Boolean approve/deny
