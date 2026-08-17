@@ -5076,6 +5076,36 @@ export function AvaChatPage() {
     textareaRef.current?.focus();
   }, [mode, model, connected]); */
 
+  /**
+   * Send WHILE SHE IS WORKING. The message queues and she folds it in at the
+   * next step boundary rather than being interrupted mid-write.
+   *
+   * The whole path for this already existed and nothing called it —
+   * sidecar.inject(), cmd 'inject', and handleInject() on the other side, all
+   * built, all unused. The chat's Enter handler said `if (!streaming) send()`,
+   * so typing a correction during a run did nothing at all: no send, no error,
+   * no hint. You had to wait for her to finish before you were allowed to say
+   * "not that file".
+   *
+   * Echoed into the transcript immediately, exactly like a normal turn, so
+   * there is visible proof it landed — the alternative is typing into silence
+   * and wondering whether it took.
+   */
+  const injectWhileRunning = useCallback(async () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    setMessages(prev => [...prev, { id: mkId(), role: 'user' as const, text: trimmed, timestamp: Date.now() }]);
+    setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    try {
+      await getSidecar().inject(trimmed);
+    } catch {
+      // The run ended between the keypress and the send. Not worth an error
+      // card — the text is already in the transcript, and her next turn reads
+      // it as ordinary conversation.
+    }
+  }, [input]);
+
   // ── Send dispatcher ──────────────────────────────────────────────────────
   const send = useCallback(async () => {
     const trimmed = input.trim();
@@ -7068,7 +7098,10 @@ export function AvaChatPage() {
                   }
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    if (!streaming) send();
+                    // Enter always sends. Mid-run it queues instead of
+                    // starting a turn — it used to do nothing whatsoever.
+                    if (streaming) void injectWhileRunning();
+                    else send();
                   }
                 }}
                 onPaste={handlePaste}
@@ -7195,6 +7228,29 @@ export function AvaChatPage() {
             })()}
 
             {/* Send / Interrupt button */}
+            {/* While she works you get BOTH buttons when there is text to
+                send: add to the turn, or stop her. Different intentions —
+                there used to be only a stop here, so the way to add a note
+                looked exactly like the way to cancel everything. */}
+            {streaming && input.trim() && (
+              <button
+                onClick={() => void injectWhileRunning()}
+                title={tt('dash.chat.send_while_working', 'Send — she picks it up at the next step')}
+                aria-label={tt('dash.chat.send_while_working', 'Send — she picks it up at the next step')}
+                style={{
+                  width: 36, height: 36, borderRadius: 8, flexShrink: 0, marginRight: 6,
+                  border: '1px solid color-mix(in srgb, var(--accent) 50%, transparent)',
+                  background: 'linear-gradient(135deg, var(--accent), #7c3aed)', color: '#fff',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent)',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M8 3.5l-4.5 4.5.707.707L7.5 5.414V13h1V5.414l3.293 3.293.707-.707L8 3.5z" />
+                </svg>
+              </button>
+            )}
+
             {streaming ? (
               <button
                 onClick={cancelStream}
