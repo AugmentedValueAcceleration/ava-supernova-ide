@@ -113,6 +113,7 @@ const {
   loadPersonality,
   getHealthRoomPrefix,
   summariseTrainingLog,
+  todayLocal,
   getDesignStudioPrefix,
   getTeachModePrefix,
   HEALTH_PROFILE_FIELDS,
@@ -1125,7 +1126,7 @@ function getTrainingLogSummary() {
       } catch { /* one bad file must not take the whole log with it */ }
     }
     if (!sessions.length) return undefined;
-    return summariseTrainingLog(sessions, new Date().toISOString().slice(0, 10)) ?? undefined;
+    return summariseTrainingLog(sessions, todayLocal()) ?? undefined;
   } catch {
     return undefined;
   }
@@ -1836,7 +1837,7 @@ async function handleInit(data) {
             // Which weekday each generated day lands on. A plan created from the
             // room starts today unless the person moves it, and today is what
             // the store stamps on an active plan without a date.
-            start_date: new Date().toISOString().slice(0, 10),
+            start_date: todayLocal(),
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -3132,7 +3133,7 @@ async function handleMessage(data) {
     const userMsgCount = updated.filter(m => m.role === 'user').length;
     if (journalManager && userMsgCount > 0 && userMsgCount % 5 === 0) {
       try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayLocal();
         const lastFew = updated.slice(-10).map(m => {
           const text = typeof m.content === 'string' ? m.content : (m.content?.[0]?.text || '');
           return `[${m.role}] ${text.slice(0, 200)}`;

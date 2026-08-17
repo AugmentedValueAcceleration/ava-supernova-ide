@@ -1,3 +1,4 @@
+import { localYmd } from '@ava/core/dates';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import {
@@ -254,7 +255,10 @@ function Heatmap({ activity }: { activity: Record<string, number> }) {
   const today = new Date();
   for (let i = 118; i >= 0; i--) {
     const d = new Date(today.getTime() - i * 86_400_000);
-    const key = d.toISOString().slice(0, 10);
+    // Must match how core's progression builds the activity map — both now
+    // render the LOCAL day. They used to agree by both being UTC, which lit
+    // the wrong square for anyone whose evening is the next day in Greenwich.
+    const key = localYmd(d);
     days.push({ date: key, count: activity[key] ?? 0 });
   }
   const intensity = (n: number) => n === 0 ? 'rgba(148,163,184,0.10)' : n < 2 ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : n < 4 ? 'color-mix(in srgb, var(--accent) 55%, transparent)' : 'var(--accent)';

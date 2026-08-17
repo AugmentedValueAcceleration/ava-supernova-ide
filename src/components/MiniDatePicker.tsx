@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../lib/i18n';
+import { todayLocal } from '@ava/core/dates';
 
 /**
  * A compact, dark-themed month calendar mirroring the sidebar calendar look so
@@ -15,7 +16,7 @@ function MiniDatePicker({ value, onChange }: { value: string; onChange: (iso: st
   const base = value ? new Date(`${value}T00:00:00`) : new Date();
   const [view, setView] = useState({ y: base.getFullYear(), m: base.getMonth() });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayLocal();
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
   const firstDay = new Date(view.y, view.m, 1).getDay();
   const label = new Date(view.y, view.m, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });

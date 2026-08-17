@@ -19,6 +19,7 @@ import type { HealthPlan, HealthPlanDay, HealthPlanType } from '../lib/health-pl
 import type { HealthProfile } from '../lib/health-store';
 import { getPlatformKey } from '../lib/api';
 import { t } from '../lib/i18n';
+import { localYmd } from '@ava/core/dates';
 
 const ACCENT = 'var(--accent)';
 const TEXT = '#cdd6f4';
@@ -45,7 +46,7 @@ export function dayDate(plan: HealthPlan, day: HealthPlanDay): string | null {
   if (!plan.start_date) return null;
   const start = Date.parse(`${plan.start_date}T00:00:00Z`);
   if (Number.isNaN(start)) return null;
-  return new Date(start + (day.day_index - 1) * 86_400_000).toISOString().slice(0, 10);
+  return localYmd(new Date(start + (day.day_index - 1) * 86_400_000));
 }
 
 export interface DayProposal {

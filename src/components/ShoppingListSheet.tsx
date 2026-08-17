@@ -20,6 +20,7 @@ import type { Aisle } from '@ava/core/health/aisles';
 import type { HealthPlan } from '../lib/health-plans-store';
 import type { HealthProfile } from '../lib/health-store';
 import { t } from '../lib/i18n';
+import { todayLocal } from '@ava/core/dates';
 
 const ACCENT = 'var(--accent)';
 const TEXT = '#cdd6f4';
@@ -70,7 +71,7 @@ export function ShoppingListSheet({ plan, plans, profile, onClose }: {
   const [hideOptional, setHideOptional] = useState(false);
 
   const single = scope === 'plan' ? plan : null;
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayIso = useMemo(() => todayLocal(), []);
   const bounds = useMemo(() => shiftWeek(weekBounds(todayIso), week), [todayIso, week]);
 
   // Which days feed the list. A plan is shopped a week at a time — nobody buys

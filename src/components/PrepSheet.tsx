@@ -22,6 +22,7 @@ import { weekPrep, shortDuration, type PrepDay, type CookOnce, type PrepSource }
 import type { HealthPlan } from '../lib/health-plans-store';
 import type { HealthProfile } from '../lib/health-store';
 import { t } from '../lib/i18n';
+import { localYmd } from '@ava/core/dates';
 
 const TEXT = '#cdd6f4';
 const MUTED = '#585b70';
@@ -42,7 +43,7 @@ export function PrepSheet({ plan, profile, onClose }: {
       day,
       date: Number.isNaN(start)
         ? null
-        : new Date(start + (day.day_index - 1) * 86_400_000).toISOString().slice(0, 10),
+        : localYmd(new Date(start + (day.day_index - 1) * 86_400_000)),
     }));
   }, [plan.days, plan.start_date]);
 

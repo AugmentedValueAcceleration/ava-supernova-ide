@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { t, useLocale } from '../lib/i18n';
 import { Combobox } from './Combobox';
 import { DateField } from './MiniDatePicker';
+import { todayLocal } from '@ava/core/dates';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -187,7 +188,7 @@ function TaskItem({ task, onToggle, onToggleSubtask, onUpdateTask }: {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const isDone = task.status === 'done';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const overdue = !!task.dueDate && !isDone && task.dueDate < today;
   const dueToday = !!task.dueDate && !isDone && task.dueDate === today;
   const subs = task.subtasks ?? [];
@@ -397,7 +398,7 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
   const submit = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    const due = dueDate || (defaultDueToday ? new Date().toISOString().slice(0, 10) : undefined);
+    const due = dueDate || (defaultDueToday ? todayLocal() : undefined);
     onCreate({
       title: trimmed, priority, category, due_date: due,
       due_time: dueTime || undefined,

@@ -113,6 +113,7 @@ import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
 import { GeneralProfilePage, requestHealthRoomTab } from './HealthPage';
 import { MessageFeedback } from './MessageFeedback';
+import { todayLocal } from '@ava/core/dates';
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -1772,7 +1773,7 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
   loading: boolean;
   onRefresh: () => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const todayTasks = useMemo(() => {
     return tasks.filter(t => {
@@ -2268,7 +2269,7 @@ export function CommandCentrePage() {
   useEffect(() => {
     let cancelled = false;
     const load = () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLocal();
       readJournalDay(today).then(entries => {
         if (cancelled) return;
         const users = entries.filter(e => e.author === 'user');
@@ -3408,7 +3409,7 @@ export function AvaChatPage() {
   // additive and opt-in, handled at the platform layer — never required here.
   const fetchUserTasks = useCallback(async () => {
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLocal();
       const entries = await readLocalTasks();
       const mapped: TodayTaskUI[] = entries.map((t) => ({
         id: t.id, title: t.title, description: t.description,
@@ -7537,7 +7538,7 @@ export function ChatHistoryPage() {
   // double-rendering.
   const dailyValue = (d: any) => Number(d?.credits ?? d?.tokens ?? 0);
   const maxDaily = daily.length > 0 ? Math.max(...daily.map(dailyValue)) : 1;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const models: any[] = usage?.models || [];
   const modelValue = (m: any) => Number(m?.total_credits ?? m?.total_tokens ?? 0);
   const maxModelTokens = models.length > 0 ? Math.max(...models.map(modelValue)) : 1;
@@ -8330,12 +8331,12 @@ type TaskFilter = 'all' | 'today' | 'overdue' | 'completed';
 
 function isTaskOverdue(task: any): boolean {
   if (!task.due_date || task.done || task.status === 'done') return false;
-  return task.due_date < new Date().toISOString().slice(0, 10);
+  return task.due_date < todayLocal();
 }
 
 function isTaskDueToday(task: any): boolean {
   if (!task.due_date) return false;
-  return task.due_date === new Date().toISOString().slice(0, 10);
+  return task.due_date === todayLocal();
 }
 
 function formatTaskDate(dateStr: string | undefined): string {
@@ -8894,7 +8895,7 @@ interface JournalDraft {
 function JournalDatePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   const base = value ? new Date(`${value}T00:00:00`) : new Date();
   const [view, setView] = useState({ y: base.getFullYear(), m: base.getMonth() });
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayLocal();
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
   const firstDay = new Date(view.y, view.m, 1).getDay();
   const label = new Date(view.y, view.m, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
@@ -9073,7 +9074,7 @@ export function JournalPage() {
   }, [entries, filterKind, filterAuthor]);
 
   const openEntry = openId ? entries.find((e) => e.id === openId) ?? null : null;
-  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const todayIso = () => todayLocal();
 
   const startNew = () => { setShowCal(false); setDraft({ date: todayIso(), kind: readJournalLastKind(), title: '', content: '', mood: undefined, tags: '' }); };
   const startEdit = (e: JournalMonthEntry) => { setOpenId(null); setShowCal(false); setDraft({ id: e.id, date: e.date, kind: e.kind, title: e.title ?? '', content: e.content, mood: e.mood, tags: (e.tags ?? []).join(', ') }); };
@@ -12142,7 +12143,7 @@ function NewDocumentModal({
   };
 
   const createBlank = (fmt: typeof NEW_DOC_BLANK_FORMATS[number]) => {
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = todayLocal();
     const body = fmt.id === 'csv' ? 'column_a,column_b,column_c\n' :
                  fmt.id === 'md'  ? '# New document\n\n' : '';
     void createAt(`untitled-${stamp}.${fmt.ext}`, fmt.id, body, `Untitled — ${stamp}`);
@@ -12608,7 +12609,7 @@ export function LocalBackupCard() {
 
       if (detail.event === 'backup_ready' && detail.envelope) {
         Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
-          const datePart = new Date().toISOString().slice(0, 10);
+          const datePart = todayLocal();
           const target = await dialog.save({ defaultPath: `ava-backup-${datePart}.ava-backup`, filters: [{ name: 'Ava backup', extensions: ['ava-backup'] }] });
           setBackupBusy(false); setBackupPassModal(null); setBackupPass('');
           if (!target) return;
@@ -12619,7 +12620,7 @@ export function LocalBackupCard() {
 
       if (detail.event === 'readable_ready' && detail.json) {
         Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')]).then(async ([dialog, fs]) => {
-          const datePart = new Date().toISOString().slice(0, 10);
+          const datePart = todayLocal();
           const target = await dialog.save({ defaultPath: `ava-data-readable-${datePart}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
           if (!target) return;
           await fs.writeTextFile(target, detail.json!);
@@ -13008,7 +13009,7 @@ export function CloudSyncPage() {
         return;
       }
       const content = await res.text();
-      const datePart = new Date().toISOString().slice(0, 10);
+      const datePart = todayLocal();
       const filename = `ava-supernova-data-export-${datePart}.json`;
       const [{ save }, fs] = await Promise.all([
         import('@tauri-apps/plugin-dialog'),
@@ -13349,7 +13350,7 @@ export function UsagePage() {
   const models: any[] = activeTab === 'session' ? sessionModels : (usage?.models || []);
   const daily: any[] = usage?.daily || [];
   const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || 0)) : 1;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   // Balance — free tier shows free pool only, paid tiers show subscription pool
   const isUnlimited = usage?.isUnlimited || false;

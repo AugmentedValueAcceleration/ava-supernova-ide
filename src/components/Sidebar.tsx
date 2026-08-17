@@ -22,6 +22,7 @@ import type { ActivityItem, SidebarPosition } from '../App';
 import { getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { SignInPanel } from './SignInPanel';
+import { localYmd } from '@ava/core/dates';
 
 type PhIconType = React.ComponentType<{ size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone' }>;
 
@@ -1645,7 +1646,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
   const firstDay = new Date(year, month, 1).getDay();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const label = target.toLocaleDateString(getLocale(), { month: 'short', year: 'numeric' });
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = localYmd(now);
   // Narrow weekday initials in the user's language, Sunday-first to match the
   // grid (firstDay = getDay(), 0 = Sunday). Jan 1 2023 was a Sunday.
   const weekdayNarrow = Array.from({ length: 7 }, (_, i) =>

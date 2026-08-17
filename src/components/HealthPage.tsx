@@ -41,6 +41,7 @@ import { StarterDetailBody } from './StartersSheet';
 import { planFromCurated, type CuratedPlanDetail } from '@ava/core/health/starters';
 import { loadCuratedPlan, reportCuratedStart } from '../lib/curated-plans';
 import { saveHealthPlan } from '../lib/health-plans-store';
+import { todayLocal } from '@ava/core/dates';
 
 /**
  * Health & Nutrition page for the IDE — the public exercise + recipe
@@ -188,7 +189,7 @@ export function HealthPage() {
                         const plan = planFromCurated(starterDetail, {
                           id: `plan${Date.now()}${Math.floor(Math.random() * 1000)}`,
                           // start_date comes from the earliest placement.
-                          startDate: placements[0]?.date ?? new Date().toISOString().slice(0, 10),
+                          startDate: placements[0]?.date ?? todayLocal(),
                           placements,
                         });
                         void saveHealthPlan(plan as never);
