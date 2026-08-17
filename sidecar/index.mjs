@@ -114,6 +114,7 @@ const {
   getHealthRoomPrefix,
   summariseTrainingLog,
   todayLocal,
+  isRoutingMode,
   getDesignStudioPrefix,
   getTeachModePrefix,
   HEALTH_PROFILE_FIELDS,
@@ -3518,7 +3519,14 @@ async function handleSetModel(data) {
     // reserve, not the coordinator. Maestro uses the default coordinator
     // priority ladder. Mirrors AvaViewProvider.setActiveModel in the
     // extension.
-    if (data.model === 'auto' || data.model === 'supernova' || data.model === 'aurora') {
+    // isRoutingMode comes from core, where the runtime list and the RoutingMode
+    // type are the same thing. This used to be a hand-written
+    // `=== 'auto' || === 'supernova' || === 'aurora'` that never included
+    // 'longxiang' — so picking Longxiang skipped the fleet branch, fell
+    // through to "resolve a specific model", and died on
+    // "Model not found: platform:longxiang". The extension's equivalent list
+    // was correct, which is why it went unnoticed on this side.
+    if (isRoutingMode(data.model)) {
       const availableProviders = new Set();
       if (sharedState.platformKey) availableProviders.add('platform');
       if (sharedState.qwenApiKey) availableProviders.add('qwen');
@@ -3558,6 +3566,20 @@ async function handleSetModel(data) {
         }
       } else if (data.model === 'supernova') {
         preferredCoordinatorId = 'platform:deepseek-v4-pro-platform';
+      } else if (data.model === 'longxiang') {
+        // Kimi K3 holds both the coordinator and Builder seats. Platform id
+        // first, then BYOK — same shape as Aurora's chain above, and the same
+        // reason: first resolvable wins so a missing key degrades instead of
+        // failing. /api/chat resolves the 'longxiang' alias to the bare
+        // `kimi-k3` upstream id, so these must be the ids the registry
+        // actually holds, not the alias.
+        const tries = ['platform:kimi-k3-platform', 'kimi:kimi-k3', 'kimi-k3'];
+        for (const id of tries) {
+          if (providerRegistry.resolveModel(id)) {
+            preferredCoordinatorId = id;
+            break;
+          }
+        }
       }
 
       autoCoordinator = AutoCoordinator.create({
@@ -3575,7 +3597,9 @@ async function handleSetModel(data) {
         ? 'Supernova'
         : data.model === 'aurora'
           ? 'Aurora'
-          : 'Maestro';
+          : data.model === 'longxiang'
+            ? 'Longxiang'
+            : 'Maestro';
       if (autoCoordinator) {
         emit({ event: 'model_changed', model: data.model, provider: label });
       } else {
