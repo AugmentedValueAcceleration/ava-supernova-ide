@@ -830,7 +830,7 @@ async function handleDownloadLocalVisionModel() {
       ensureLocalVisionServer().catch(() => {});
     }
   } catch (err) {
-    emit({ event: 'local_vision_download_error', message: err?.message || String(err) });
+    emit({ event: 'local_vision_download_error', message: err?.humanMessage || err?.message || String(err) });
   }
 }
 
@@ -1313,7 +1313,7 @@ process.on('uncaughtException', (err) => {
   emitError(`Uncaught: ${err.message}`);
 });
 process.on('unhandledRejection', (err) => {
-  emitError(`Unhandled rejection: ${err?.message || String(err)}`);
+  emitError(`Unhandled rejection: ${err?.humanMessage || err?.message || String(err)}`);
 });
 
 // ─── Command Handlers ───────────────────────────────────────────────────────
@@ -2300,7 +2300,7 @@ async function runDesktopConductorTurn(task, signal, contextPrefix = '') {
       },
     });
   } catch (err) {
-    emit({ event: 'agent_error', message: err?.message || String(err) });
+    emit({ event: 'agent_error', message: err?.humanMessage || err?.message || String(err) });
   }
   // Persist any fork-point lessons this run produced (best-effort).
   void saveForkStore();
@@ -3955,7 +3955,7 @@ rl.on('line', async (line) => {
       handleInject(data);
       break;
     case 'set_language':
-      handleSetLanguage(data).catch((err) => emitError(err?.message || String(err)));
+      handleSetLanguage(data).catch((err) => emitError(err?.humanMessage || err?.message || String(err)));
       break;
     case 'set_mode':
       handleSetMode(data);
