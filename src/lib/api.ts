@@ -108,6 +108,25 @@ function getDeviceId(): string {
   return id;
 }
 
+/**
+ * This machine's IANA timezone, for surfaces that bucket by the user's day.
+ *
+ * Sent on every request rather than added to the handful of URLs that need it
+ * today, because a header cannot be forgotten by the next caller — /usage/summary
+ * alone has five call sites across three surfaces. Servers that do not read it
+ * ignore it; servers that do fall back to UTC when it is absent, so an old
+ * client keeps working unchanged.
+ *
+ * An IANA name and not an offset — an offset is wrong twice a year.
+ */
+function localTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
 export async function apiFetch(path: string, options?: RequestInit) {
   const key = getPlatformKey();
   if (!key) throw new Error('Not connected');
@@ -121,6 +140,7 @@ export async function apiFetch(path: string, options?: RequestInit) {
       'Content-Type': 'application/json',
       'X-Ava-Platform': 'ide',
       'X-Ava-Device': getDeviceId(),
+      'X-Ava-Timezone': localTimezone(),
       'X-Ava-Data-Mode': dataModeHeader(),
       ...options?.headers,
     },
