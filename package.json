@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "bundle-sidecar": "node scripts/bundle-sidecar.mjs",
     "updater-manifest": "node scripts/make-updater-manifest.mjs",
+    "prune-bundles": "node scripts/prune-bundles.mjs",
+    "release-build": "tauri build && node scripts/prune-bundles.mjs && node scripts/make-updater-manifest.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev --features devtools"
