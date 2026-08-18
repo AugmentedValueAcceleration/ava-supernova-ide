@@ -7,6 +7,7 @@
     "dev": "vite --port 1430",
     "build": "tsc && vite build",
     "bundle-sidecar": "node scripts/bundle-sidecar.mjs",
+    "updater-manifest": "node scripts/make-updater-manifest.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev --features devtools"
