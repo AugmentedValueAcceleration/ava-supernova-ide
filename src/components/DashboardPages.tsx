@@ -16115,15 +16115,28 @@ export function ReleaseNotesPage() {
 
   const releases: any[] = (connected && apiReleases && apiReleases.length > 0) ? apiReleases : fallbackReleases;
 
-  // Auto-expand latest on first load
+  // Auto-expand the latest release — and DON'T touch the month filter.
+  //
+  // This used to also set selectedMonth from the first release, which read
+  // sensibly and was quietly fatal. On first render the API has not answered
+  // yet, so `releases` is the hardcoded fallback below, whose newest entry is
+  // from April 2026. The effect seeded selectedMonth = '2026-04'; the API then
+  // returned the 50 most recent releases, spanning June to August. Nothing
+  // matched, so the page showed "No releases" with a full database behind it.
+  //
+  // The cruel part was the dropdown. '2026-04' matched none of its options, so
+  // CustomSelect fell back to rendering its placeholder — "All months" — while
+  // a filter was very much applied. The UI stated the opposite of the truth,
+  // and the effect never re-ran to correct it because of the `expanded` guard.
+  //
+  // Waiting for `loading` to clear means we expand a release that is actually
+  // in the list, rather than a fallback id that vanishes when the real data
+  // lands. Choosing a month is the user's to do; the default is all of them.
   useEffect(() => {
-    if (releases.length > 0 && expanded === null) {
-      const first = releases[0];
-      setExpanded(first.id || first.version);
-      const d = new Date(first.published_at || first.date);
-      setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    }
-  }, [releases.length]);
+    if (loading || expanded !== null || releases.length === 0) return;
+    const first = releases[0];
+    setExpanded(first.id || first.version);
+  }, [loading, releases.length]);
 
   const getMonthKey = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -16144,6 +16157,20 @@ export function ReleaseNotesPage() {
     }
     return Array.from(seen.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [releases]);
+
+  // A month that is no longer on offer must not go on filtering.
+  //
+  // Belt and braces for the bug above: any time selectedMonth survives a data
+  // change that removed it — a refetch, a locale switch, a different limit —
+  // the list silently empties while the dropdown shows its placeholder, because
+  // CustomSelect renders the placeholder for any value it cannot find. Falling
+  // back to "all months" is both the honest state and the one the UI is
+  // already claiming.
+  useEffect(() => {
+    if (!selectedMonth) return;
+    if (months.some(([key]) => key === selectedMonth)) return;
+    setSelectedMonth('');
+  }, [months, selectedMonth]);
 
   const filtered = useMemo(() => {
     let list = releases;
