@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { readHCompanyKey, writeHCompanyKey } from '../lib/shared-config';
-import { ALL_MODELS } from '@ava/core/models';
+import { ALL_MODELS, PLATFORM_MODELS } from '@ava/core/models';
 import { APP_VERSION } from '../version';
 // Phosphor icons (duotone weight) — distinctive layered fill that reads
 // as a crafted product instead of a generic SaaS dashboard. Same author
@@ -114,6 +114,22 @@ import HealthPlansPage from './HealthPlansPage';
 import { GeneralProfilePage, requestHealthRoomTab } from './HealthPage';
 import { MessageFeedback } from './MessageFeedback';
 import { todayLocal } from '@ava/core/dates';
+import { isRoutingMode } from '@ava/core/routing-modes';
+
+/**
+ * Catalogue provider id -> the name its key is stored under in localStorage.
+ *
+ * ONE map, because there were two in this file and they had drifted: the
+ * settings copy listed eight providers, the picker's copy five. Anything
+ * missing resolves to undefined and is therefore permanently "no key" — so
+ * Xiaomi, Tencent and NVIDIA models could never light up in the picker no
+ * matter what you saved, which the operator hit the same night as adding an
+ * NVIDIA key.
+ */
+const BYOK_STORE_NAMES: Record<string, string> = {
+  deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu',
+  mistral: 'Mistral', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA',
+};
 
 /* ===== Shared Styles ===== */
 const pageWrapper: React.CSSProperties = {
@@ -2707,10 +2723,7 @@ export function AvaChatPage() {
     // saved correctly, reached the sidecar correctly, and then had no model to
     // select against. That is why Nemotron 3.5 Lightning was in the catalogue
     // and invisible here.
-    const STORE: Record<string, string> = {
-      deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu',
-      mistral: 'Mistral', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA',
-    };
+    const STORE = BYOK_STORE_NAMES;
     const map: Record<string, { id: string; name: string }[]> = {};
     for (const [id, models] of Object.entries(ALL_MODELS)) {
       const store = STORE[id];
@@ -3334,17 +3347,46 @@ export function AvaChatPage() {
   // labels (Kimi / GLM, not Moonshot / Zhipu), availability per BYOK key.
   const MODEL_CATALOGUE = useMemo(() => {
     const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA' };
-    const STORE: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral' };
+    const STORE = BYOK_STORE_NAMES;
+    // A model is live if you hold that provider's key, OR your PLAN serves it.
+    //
+    // Platform models are not a section. Signing in simply makes the models
+    // your plan drives ACTIVE under their own provider heading — DeepSeek V4
+    // Pro under DEEPSEEK, Kimi K3 under KIMI — exactly as the extension does.
+    // GLM stays greyed because no plan serves it.
+    //
+    // Availability is PER MODEL, not per group. The plan serves Qwen 3.7 Plus
+    // but not Qwen3 Coder Flash, so a group-level flag would light up models
+    // the plan cannot actually drive.
+    //
+    // Ids are matched with the `-platform` disambiguator stripped: the managed
+    // entry for deepseek-v4-pro is deepseek-v4-pro-platform, while qwen3.7-plus
+    // carries no suffix at all.
+    const planServes = new Set(
+      connected
+        ? PLATFORM_MODELS
+            .filter((m) => !m.disabled && !m.hiddenFromPicker)
+            .map((m) => m.id.replace(/-platform$/, ''))
+        : [],
+    );
+
     return Object.entries(ALL_MODELS)
-      .map(([id, models]) => ({
-        id,
-        label: LABEL[id] || (id.charAt(0).toUpperCase() + id.slice(1)),
-        available: STORE[id] ? keyedProviders.has(STORE[id]) : false,
-        models: models.filter((m) => !m.disabled).map((m) => ({ id: m.id, name: m.name })).sort((a, b) => a.name.localeCompare(b.name)),
-      }))
+      .map(([id, models]) => {
+        const hasKey = STORE[id] ? keyedProviders.has(STORE[id]) : false;
+        const entries = models
+          .filter((m) => !m.disabled && !m.hiddenFromPicker)
+          .map((m) => ({ id: m.id, name: m.name, available: hasKey || planServes.has(m.id) }))
+          .sort((a, b) => (a.available === b.available ? a.name.localeCompare(b.name) : a.available ? -1 : 1));
+        return {
+          id,
+          label: LABEL[id] || (id.charAt(0).toUpperCase() + id.slice(1)),
+          available: entries.some((m) => m.available),
+          models: entries,
+        };
+      })
       .filter((g) => g.models.length > 0)
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [keyedProviders]);
+  }, [keyedProviders, connected]);
 
   // ── Derived: can the user actually chat? ────────────────────────────────
   const hasByokKeys = byokModels.length > 0;
@@ -3701,7 +3743,7 @@ export function AvaChatPage() {
           // ProviderRegistry resolver can find them. Never silently coerce
           // to `qwen:` — that produces nonsense ids like `qwen:supernova` and
           // makes the resolver fall back to qwen3.5-flash without warning.
-          activeModel: modelMap[model] || (model === 'auto' || model === 'supernova' || model === 'aurora' ? model : `platform:${model}`),
+          activeModel: modelMap[model] || (isRoutingMode(model) ? model : `platform:${model}`),
           cwd: localStorage.getItem('ava-ide-project-folder') || '.',
           mode,
           permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
@@ -3877,7 +3919,7 @@ export function AvaChatPage() {
       // 'aurora' must not get a provider prefix or the sidecar's
       // AutoCoordinator handler misses them.
       sidecar.setModel(
-        SIDECAR_MODEL_MAP[model] || (model === 'auto' || model === 'supernova' || model === 'aurora' ? model : `platform:${model}`),
+        SIDECAR_MODEL_MAP[model] || (isRoutingMode(model) ? model : `platform:${model}`),
       ).catch(() => {});
     }
     if (mode !== prevModeRef.current) {
@@ -5250,6 +5292,7 @@ export function AvaChatPage() {
   const activeModelName = useMemo(() => {
     if (model === 'aurora') return '✦ Aurora';
     if (model === 'supernova') return '✦ Supernova';
+    if (model === 'longxiang') return '✦ Longxiang';
     if (model === 'auto') return '✦ Maestro';
     if (model === 'qwen3.7-plus') return 'Qwen 3.7 Plus';
     if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
@@ -5379,31 +5422,35 @@ export function AvaChatPage() {
                     </div>
                     {group.models.map((m) => {
                       const active = model === m.id;
+                      // PER MODEL, not per group. Your plan serves Qwen 3.7 Plus
+                      // but not Qwen3 Coder Flash — a group-level flag would
+                      // offer models the plan cannot drive.
+                      const live = m.available;
                       return (
                         <button
                           key={m.id}
                           onClick={() => {
-                            if (!group.available) { window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'settings' })); setModelMenuOpen(false); return; }
+                            if (!live) { window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'settings' })); setModelMenuOpen(false); return; }
                             setModel(m.id); setModelMenuOpen(false);
                           }}
-                          title={group.available ? m.name : `Add ${group.label} API key to unlock`}
+                          title={live ? m.name : `Add ${group.label} API key to unlock`}
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
                             padding: '8px 10px',
-                            background: group.available && active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+                            background: live && active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
                             border: 'none', borderRadius: 6,
-                            color: !group.available ? '#6c7086' : active ? '#e0b0ff' : '#cdd6f4',
+                            color: !live ? '#6c7086' : active ? '#e0b0ff' : '#cdd6f4',
                             fontSize: 12, cursor: 'pointer', textAlign: 'left',
-                            opacity: group.available ? 1 : 0.45,
+                            opacity: live ? 1 : 0.45,
                           }}
                           onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}
                           onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
                         >
                           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {group.available && active && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />}
-                            <span style={{ fontWeight: group.available && active ? 600 : 400 }}>{m.name}</span>
+                            {live && active && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />}
+                            <span style={{ fontWeight: live && active ? 600 : 400 }}>{m.name}</span>
                           </span>
-                          {!group.available && <span style={{ fontSize: 10, color: '#facc15', opacity: 0.7 }}>{t('model.add_key')}</span>}
+                          {!live && <span style={{ fontSize: 10, color: '#facc15', opacity: 0.7 }}>{t('model.add_key')}</span>}
                         </button>
                       );
                     })}
