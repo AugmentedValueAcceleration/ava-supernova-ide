@@ -15,3 +15,8 @@ src-tauri/resources/sidecar-bundle.mjs
 # Updater signing key (NEVER commit the private key)
 src-tauri/.tauri-updater-key
 sidecar/.env
+
+# Updater manifest — regenerated per build by scripts/make-updater-manifest.mjs,
+# carries a per-build signature, and is uploaded to the GitHub release rather
+# than tracked. A stale committed copy would point the updater at an old build.
+latest.json
