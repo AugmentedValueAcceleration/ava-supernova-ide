@@ -117,6 +117,11 @@ const {
   isRoutingMode,
   getDesignStudioPrefix,
   getTeachModePrefix,
+  getPlanModePrefix,
+  getChatModePrefix,
+  getBrainstormModePrefix,
+  getWriteModePrefix,
+  getSecurityModePrefix,
   HEALTH_PROFILE_FIELDS,
   humaniseSlug,
   summariseCookingTime,
@@ -458,6 +463,32 @@ const MODE_PREFIX_TAG = {
   teach:      '[Teach Mode]',
   security:   '[Security Audit Mode]',
   desktop:    '[Desktop Automation Mode]',
+};
+
+/**
+ * The FULL mode prefix, not just its tag.
+ *
+ * Each of these returns a block that already opens with the same tag as
+ * MODE_PREFIX_TAG above — "[Plan Mode] You are Ava the Architect. Read-only…" —
+ * and ends with the user's own text. So they REPLACE the bare tag rather than
+ * being added to it; prepending both would announce the mode twice.
+ *
+ * Until 2026-08-19 the IDE sent only the tag. Core reads that tag and uses it
+ * to RESTRICT her tools, so picking Plan or Security here took tools away and
+ * never told her why — she had a smaller toolbox and no idea she was meant to
+ * be a different thing. The extension has always sent the full prefix; this is
+ * the parity fix, and it is wiring rather than authoring because every one of
+ * these already exists and is already used over there.
+ *
+ * Teach, Health and Design are absent on purpose: those lanes build their own
+ * room prefix further down, and their room tag drives the mode.
+ */
+const MODE_PREFIX_FN = {
+  plan:       getPlanModePrefix,
+  chat:       getChatModePrefix,
+  brainstorm: getBrainstormModePrefix,
+  write:      getWriteModePrefix,
+  security:   getSecurityModePrefix,
 };
 
 // Strip the mode tag + any leaked [Desktop state] / [What Ava knows] prefix
@@ -2713,9 +2744,21 @@ async function handleMessage(data) {
   // Prepending [Chat Mode] in front of that makes detectModeFromMessages read
   // 'chat' FIRST — which blocks the room's tools (e.g. design_generate_image).
   // So those lanes get no global mode tag; their room tag drives the mode.
-  const modeTag = (activeLane === 'design' || activeLane === 'health' || activeLane === 'learning')
-    ? ''
-    : (MODE_PREFIX_TAG[currentMode] || '');
+  const inRoom = activeLane === 'design' || activeLane === 'health' || activeLane === 'learning';
+  const modeTag = inRoom ? '' : (MODE_PREFIX_TAG[currentMode] || '');
+
+  /**
+   * The full mode prefix for this turn, when there is one.
+   *
+   * Applied INSTEAD of modeTag — see MODE_PREFIX_FN. When set, the mode's own
+   * builder wraps the user's text and already carries the tag, so the bare-tag
+   * path below is skipped for that turn.
+   *
+   * Desktop is excluded: it runs the five-persona conductor rather than the
+   * regular loop, and already has its own rules block. Work has none by design
+   * — it is the default, and the system prompt covers it.
+   */
+  const modePrefixFn = inRoom ? null : MODE_PREFIX_FN[currentMode];
 
   try {
     // ── Desktop Automation Mode → the five-persona conductor ──────────────
@@ -2778,7 +2821,9 @@ async function handleMessage(data) {
       const baseContent = combinedDesktopPrefix && effectiveContent
         ? `${combinedDesktopPrefix}\n\n${effectiveContent}`
         : effectiveContent;
-      const prefixedContent = modeTag && baseContent
+      const prefixedContent = modePrefixFn && baseContent
+        ? modePrefixFn(baseContent)
+        : modeTag && baseContent
         ? `${modeTag} ${baseContent}`
         : baseContent;
       if (prefixedContent) parts.push({ type: 'text', text: prefixedContent });
@@ -2812,7 +2857,9 @@ async function handleMessage(data) {
       const baseContent = combinedDesktopPrefix && effectiveContent
         ? `${combinedDesktopPrefix}\n\n${effectiveContent}`
         : effectiveContent;
-      const userContent = modeTag && baseContent
+      const userContent = modePrefixFn && baseContent
+        ? modePrefixFn(baseContent)
+        : modeTag && baseContent
         ? `${modeTag} ${baseContent}`
         : baseContent;
       conversation.addUserMessage(userContent);
