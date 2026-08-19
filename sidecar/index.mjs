@@ -117,6 +117,7 @@ const {
   isRoutingMode,
   getDesignStudioPrefix,
   getTeachModePrefix,
+  loadDecisionsState,
   getPlanModePrefix,
   getChatModePrefix,
   getBrainstormModePrefix,
@@ -1666,6 +1667,19 @@ async function handleInit(data) {
       historyManager = null;
     }
 
+    // Decisions folder — the project's own record of what was decided and what
+    // was rejected. The extension has always loaded this; the IDE never did, so
+    // on this surface Ava could not read the folder, was not told to treat it
+    // as law, and never offered to create one on a new project.
+    //
+    // It is the difference between planning against the project's history and
+    // planning from scratch every time — which is how a settled decision gets
+    // re-proposed.
+    let decisionsState = null;
+    try {
+      decisionsState = projectRoot ? await loadDecisionsState(projectRoot) : null;
+    } catch { /* no folder, or unreadable — the prompt handles both */ }
+
     // Personality
     let personalityPrefix = '';
     try {
@@ -1702,6 +1716,9 @@ async function handleInit(data) {
       personality: personalityPrefix || undefined,
       language,
       knowledgeContext,
+      decisionsContext: decisionsState?.context ?? undefined,
+      decisionsFolderExists: decisionsState?.hasFolder ?? false,
+      decisionsOptInStatus: decisionsState?.optInStatus ?? undefined,
       desktopMode: currentMode === 'desktop',
       // desktopPermissionLevel intentionally omitted at init — currentMode
       // at init is always 'work' so the desktop block isn't rendered yet,
