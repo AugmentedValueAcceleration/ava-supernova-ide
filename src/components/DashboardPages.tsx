@@ -5667,7 +5667,13 @@ export function AvaChatPage() {
             the input rather than auto-sending so the user can edit
             before firing. Per-mode colour tokens, gradient bg, animated
             entrance — aim is "warm partner" not "onboarding tooltip". */}
-        {!messages.some(m => m.role === 'user') && !streaming && !dataLoading && (
+        {/* Shown on a NEW chat only. The old test was "no message has role
+            'user'", which asks the wrong question — a live conversation whose
+            user turns were compressed away or restored differently reads as
+            untouched, and the card reappears underneath the work in progress.
+            Here the welcome IS a message, flagged `welcome: true`, so "nothing
+            but welcomes" is exactly the new-chat state. */}
+        {messages.every(m => m.welcome) && !streaming && !dataLoading && (
           <div
             className="ava-ide-starter-card"
             style={{
