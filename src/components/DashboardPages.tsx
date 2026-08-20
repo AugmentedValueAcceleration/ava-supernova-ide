@@ -11114,7 +11114,6 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // source tabs below. It is NOT derived from any global toggle: cloud
   // sync governs whether data is backed up, never what the Library
   // shows. Defaults to "All" — the merged local + cloud view.
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'cloud' | 'local'>('all');
   // Filter axis is the real media kind, not the coalesced LibraryFileType,
   // so the user can isolate just music / video / voice within the Assets
   // tab — previously they all collapsed under Images.
@@ -11262,19 +11261,19 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // type-specific filter tabs below are scoped to the kinds that
   // actually appear in the current view — no empty "0" pills.
   const kindFiles = useMemo(() => {
-    // Assets are local-first (no source split) — always show everything, never
-    // a stale cloud/local filter carried over from the Documents tab.
-    const src: LibraryFile[] =
-      kind === 'assets' ? [...cloudFiles, ...localFiles] :
-      sourceFilter === 'cloud' ? cloudFiles :
-      sourceFilter === 'local' ? localFiles :
-      [...cloudFiles, ...localFiles];
+    // Local-first, both tabs. The source split was dropped from Assets first
+    // and kept on Documents, which was backwards: the cloud store holds
+    // content, video, image and two UI kinds, and has never held a single row
+    // of type 'document' or 'spreadsheet'. So Documents offered a "cloud"
+    // filter over an empty set while Assets, where the data actually is, had
+    // none. Merge and stop asking.
+    const src: LibraryFile[] = [...cloudFiles, ...localFiles];
     return src.filter((f) =>
       kind === 'assets'
         ? (f.type === 'image' || f.type === 'presentation')
         : (f.type === 'document' || f.type === 'spreadsheet')
     );
-  }, [cloudFiles, localFiles, sourceFilter, kind]);
+  }, [cloudFiles, localFiles, kind]);
   const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => libraryBucket(f) === filter);
 
   const typeCounts = useMemo(() => {
@@ -11293,23 +11292,10 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     };
   }, [kindFiles]);
 
-  // Source filter counts use the kind-filtered, NOT source-filtered view
-  // so the numbers stay honest when the user is on one source and wants
-  // to see how many the other one has. Derived independently to avoid
-  // circular filter state.
-  const kindAll = useMemo(() => {
-    const all = [...cloudFiles, ...localFiles];
-    return all.filter((f) =>
-      kind === 'assets'
-        ? (f.type === 'image' || f.type === 'presentation')
-        : (f.type === 'document' || f.type === 'spreadsheet')
-    );
-  }, [cloudFiles, localFiles, kind]);
-  const sourceCounts = useMemo(() => ({
-    all: kindAll.length,
-    cloud: kindAll.filter((f) => f.source === 'cloud').length,
-    local: kindAll.filter((f) => f.source === 'local').length,
-  }), [kindAll]);
+  // `kindAll` lived here to count how many files each SOURCE held, so the
+  // cloud/local pills could show honest numbers. With the source split gone
+  // there is nothing to count — `kindFiles` above already merges both and is
+  // what the view renders.
 
   // Kind-scoped filter tabs. Assets shows every media kind we actually
   // store (image / music / voice / video / slides). Documents shows the
@@ -11364,42 +11350,11 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', gap: 0, padding: 0, height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '16px 32px 0', flexShrink: 0 }}>
-        {/* Source filter — Documents only. Assets are local-first now (no cloud
-            source), so the cloud/local split is dropped there. */}
-        {kind !== 'assets' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', fontWeight: 500 }}>{localised('dash.library.source', 'Source')}</span>
-          {([
-            { id: 'all', label: t('dash.chat.all'), count: sourceCounts.all },
-            { id: 'cloud', label: t('dash.chat.cloud'), count: sourceCounts.cloud },
-            { id: 'local', label: t('dash.chat.local'), count: sourceCounts.local },
-          ] as const).map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setSourceFilter(s.id)}
-              style={{
-                padding: '4px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                fontSize: 11, fontWeight: sourceFilter === s.id ? 600 : 400,
-                background: sourceFilter === s.id ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'transparent',
-                color: sourceFilter === s.id ? '#e0b0ff' : '#6c7086',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              {s.label}
-              <span style={{
-                fontSize: 9, padding: '1px 5px', borderRadius: 8,
-                background: sourceFilter === s.id ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'rgba(49, 34, 68, 0.5)',
-                color: sourceFilter === s.id ? '#fff' : '#6c7086',
-              }}>{s.count}</span>
-            </button>
-          ))}
-          {!projectFolder && (
-            <span style={{ fontSize: 10, color: '#6c7086', fontStyle: 'italic' }}>
-              Open a folder to see local files
-            </span>
-          )}
-        </div>
-        )}
+        {/* Source filter removed 2026-08-20. It offered all / cloud / local
+            for Documents, and the cloud store has never held a row of type
+            'document' or 'spreadsheet' — so it was a control over an empty
+            set. Assets had already dropped it, which left the split on the
+            one tab with no cloud data and off the one that has it. */}
 
         {/* Type filter + view toggle */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
