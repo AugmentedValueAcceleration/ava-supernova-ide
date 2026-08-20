@@ -19,6 +19,20 @@ export interface AvaCompletedTaskUI {
 }
 
 export interface TaskSubtaskUI { id: string; title: string; done: boolean }
+/** A decision record, as the Plans tab shows it. Mirrors core's PlanRecordSummary. */
+export interface PlanRecordUI {
+  number: number;
+  title: string;
+  path: string;
+  relPath: string;
+  date?: string;
+  status?: string;
+  chosen?: string;
+  stepCount: number;
+  /** The plan's steps, so a row can show the work without opening the file. */
+  steps: string[];
+}
+
 export interface TaskContextUI { kind: 'chat' | 'file' | 'plan' | 'lesson' | 'other'; ref: string; label?: string }
 
 export interface TodayTaskUI {
@@ -93,6 +107,13 @@ interface Props {
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onUpdateTask: (taskId: string, updates: UpdateTaskInput) => void;
   onOpenFolder: () => void;
+  /** The project's decision records, newest first. Empty when the project has
+   *  no Decisions folder — which is a normal state, not an error. */
+  planRecords: PlanRecordUI[];
+  /** Open one record on disk. */
+  onOpenPlan: (rec: PlanRecordUI) => void;
+  /** Re-read the folder — it is the user's to edit by hand. */
+  onRefreshPlans: () => void;
   width: number;
   onWidthChange: (w: number) => void;
 }
@@ -581,11 +602,14 @@ function AvaBand({ sessionTasks }: { sessionTasks: SessionTaskUI[] }) {
 
 /* ── Your tasks ──────────────────────────────────────────────────────────── */
 
-function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onToggleSubtask, onUpdateTask }: {
+export type TaskFilter = 'today' | 'all' | 'plans';
+
+function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onToggleSubtask, onUpdateTask, planRecords, onOpenPlan }: {
   todayTasks: TodayTaskUI[]; allTasks: TodayTaskUI[];
-  filter: 'today' | 'all'; onFilterChange: (f: 'today' | 'all') => void; onToggle: (id: string) => void;
+  filter: TaskFilter; onFilterChange: (f: TaskFilter) => void; onToggle: (id: string) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onUpdateTask: (taskId: string, updates: UpdateTaskInput) => void;
+  planRecords: PlanRecordUI[]; onOpenPlan: (rec: PlanRecordUI) => void;
 }) {
   useLocale();
   const tasks = filter === 'today' ? todayTasks : allTasks;
@@ -596,7 +620,7 @@ function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onT
     <div style={{ padding: '8px 12px' }}>
       {/* Filter toggle */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 10 }}>
-        {(['today', 'all'] as const).map(f => (
+        {(['today', 'all', 'plans'] as const).map(f => (
           <button
             key={f}
             onClick={() => onFilterChange(f)}
@@ -607,24 +631,30 @@ function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onT
               color: filter === f ? '#cdd6f4' : '#585b70',
             }}
           >
-            {f === 'today' ? t('tasks.filter_today') : t('tasks.filter_all')}
+            {f === 'today' ? t('tasks.filter_today')
+              : f === 'all' ? t('tasks.filter_all')
+              : t('tasks.filter_plans')}
           </button>
         ))}
       </div>
 
-      {active.length > 0 && (
+      {/* Plans — the project's decision records, which live in git and so come
+          back with the project rather than with the session. */}
+      {filter === 'plans' && <PlansList records={planRecords} onOpen={onOpenPlan} />}
+
+      {filter !== 'plans' && active.length > 0 && (
         <CollapsibleSection title={t('tasks.section_active')} count={active.length} defaultOpen>
           {active.map(t => <TaskItem key={t.id} task={t} onToggle={onToggle} onToggleSubtask={onToggleSubtask} onUpdateTask={onUpdateTask} />)}
         </CollapsibleSection>
       )}
 
-      {done.length > 0 && (
+      {filter !== 'plans' && done.length > 0 && (
         <CollapsibleSection title={t('tasks.section_done')} count={done.length} defaultOpen={false}>
           {done.map(t => <TaskItem key={t.id} task={t} onToggle={onToggle} onToggleSubtask={onToggleSubtask} onUpdateTask={onUpdateTask} />)}
         </CollapsibleSection>
       )}
 
-      {tasks.length === 0 && (
+      {filter !== 'plans' && tasks.length === 0 && (
         <div style={{ textAlign: 'center', padding: '32px 16px' }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>🎯</div>
           <div style={{ fontSize: 12, color: '#6c7086' }}>
@@ -728,10 +758,17 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
 
 export default function IdeTasksPanel({
   sessionTasks, avaCompletedTasks, todayTasks, allTasks,
-  onClose, onToggleTask, onCreateTask, onToggleSubtask, onUpdateTask, onOpenFolder, width, onWidthChange,
+  onClose, onToggleTask, onCreateTask, onToggleSubtask, onUpdateTask, onOpenFolder,
+  planRecords, onOpenPlan, onRefreshPlans, width, onWidthChange,
 }: Props) {
   useLocale();
-  const [filter, setFilter] = useState<'today' | 'all'>('today');
+  const [filter, setFilter] = useState<TaskFilter>('today');
+
+  // The folder is the user's to edit by hand, so the list is re-read each time
+  // the tab is opened rather than cached from the last time it was written.
+  useEffect(() => {
+    if (filter === 'plans') onRefreshPlans();
+  }, [filter, onRefreshPlans]);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
 
   // Escape key closes
@@ -828,17 +865,144 @@ export default function IdeTasksPanel({
       </div>
 
       {/* Quick add — pinned under the header. */}
-      <div style={{ padding: '10px 12px 0', flexShrink: 0 }}>
-        <QuickAdd onCreate={onCreateTask} defaultDueToday={filter === 'today'} />
-      </div>
+      {/* Quick-add belongs to your task list, not to the plan history. */}
+      {filter !== 'plans' && (
+        <div style={{ padding: '10px 12px 0', flexShrink: 0 }}>
+          <QuickAdd onCreate={onCreateTask} defaultDueToday={filter === 'today'} />
+        </div>
+      )}
 
       {/* Body — your tasks fill it; Ava's live work pins to the top when she's
           working; her recent work tucks away at the bottom. */}
       <div style={{ flex: 1, overflowY: 'auto', marginTop: 8 }}>
         {sessionTasks.length > 0 && <AvaBand sessionTasks={sessionTasks} />}
-        <YourTasks todayTasks={todayTasks} allTasks={allTasks} filter={filter} onFilterChange={setFilter} onToggle={onToggleTask} onToggleSubtask={onToggleSubtask} onUpdateTask={onUpdateTask} />
+        <YourTasks todayTasks={todayTasks} allTasks={allTasks} filter={filter} onFilterChange={setFilter} onToggle={onToggleTask} onToggleSubtask={onToggleSubtask} onUpdateTask={onUpdateTask} planRecords={planRecords} onOpenPlan={onOpenPlan} />
         {avaCompletedTasks.length > 0 && <AvaRecentWork avaCompletedTasks={avaCompletedTasks} />}
       </div>
+    </div>
+  );
+}
+
+/* ── Plans ───────────────────────────────────────────────────────────────── */
+
+/**
+ * The project's decision records.
+ *
+ * These are files in `Decisions/records/`, committed to git, so unlike the task
+ * list they belong to the PROJECT rather than to the session — they come back
+ * when the project is reopened, on any machine, and they survive a restart.
+ * That was the operator's point on 2026-08-19: "the plans would be connected to
+ * a project and should load in the right sidebar when we reopen".
+ *
+ * Read-only on purpose. A record is what was decided; changing it is a decision
+ * of its own, made by editing the file or by accepting a new plan — which
+ * writes a NEW record rather than rewriting the old one, so the folder shows
+ * how the thinking moved.
+ */
+function PlansList({ records, onOpen }: { records: PlanRecordUI[]; onOpen: (rec: PlanRecordUI) => void }) {
+  useLocale();
+
+  if (records.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '32px 16px' }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>📐</div>
+        <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>{t('tasks.empty_plans')}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {records.map((rec) => <PlanRow key={rec.path} rec={rec} onOpen={onOpen} />)}
+    </div>
+  );
+}
+
+/**
+ * One record. Collapsed it is a title and a shape; open it is the actual work.
+ *
+ * The first version showed "5 Steps" and nothing else, which told you a plan
+ * existed without telling you what was in it — you had to leave the app and
+ * open a markdown file to find out. The steps are the plan, so they belong on
+ * the row: "in the sidebar we want to show the steps" (19 Aug 2026).
+ *
+ * The newest record opens by default. It is almost always the one being worked
+ * on, and a list of collapsed titles asks you to click before it tells you
+ * anything.
+ */
+function PlanRow({ rec, onOpen }: { rec: PlanRecordUI; onOpen: (rec: PlanRecordUI) => void }) {
+  useLocale();
+  const [open, setOpen] = useState(rec.number > 0 && rec.steps.length > 0);
+
+  return (
+    <div style={{
+      borderRadius: 8, background: 'rgba(49, 34, 68, 0.28)',
+      border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+    }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title={rec.relPath}
+        aria-expanded={open}
+        style={{
+          width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 8,
+          background: 'transparent', color: '#cdd6f4', cursor: 'pointer', border: 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ fontSize: 9.5, fontFamily: 'monospace', color: 'var(--accent)', flexShrink: 0 }}>
+            {String(rec.number).padStart(4, '0')}
+          </span>
+          <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, flex: 1 }}>{rec.title}</span>
+          {rec.steps.length > 0 && (
+            <span style={{ fontSize: 9, color: '#585b70', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+          )}
+        </div>
+        {/* The approach that was taken is the whole point of the record, so
+            it reads on the row rather than only inside the file. */}
+        {rec.chosen && (
+          <div style={{ fontSize: 10, color: '#a6adc8', marginTop: 3 }}>
+            {t('tasks.plan_chose')} <span style={{ color: '#f5c2e7' }}>{rec.chosen}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 4, fontSize: 9.5, color: '#585b70' }}>
+          {rec.date && <span>{rec.date}</span>}
+          {rec.stepCount > 0 && <span>{rec.stepCount} {t('plan.steps')}</span>}
+          {rec.status && <span>{rec.status}</span>}
+        </div>
+      </button>
+
+      {open && rec.steps.length > 0 && (
+        <div style={{ padding: '0 10px 8px' }}>
+          <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+            {rec.steps.map((step, i) => (
+              <li key={i} style={{ display: 'flex', gap: 7, marginBottom: 5 }}>
+                <span style={{
+                  flexShrink: 0, width: 15, height: 15, borderRadius: '50%', marginTop: 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 8.5, fontWeight: 700,
+                  background: 'color-mix(in srgb, var(--accent) 14%, transparent)',
+                  color: 'var(--accent)',
+                }}>
+                  {i + 1}
+                </span>
+                <span style={{ fontSize: 10.5, color: '#a6adc8', lineHeight: 1.5 }}>{step}</span>
+              </li>
+            ))}
+          </ol>
+          {/* The record holds more than the steps — each step's files and
+              notes — so the way into the file stays one click away. */}
+          <button
+            onClick={() => onOpen(rec)}
+            style={{
+              marginTop: 4, padding: '3px 8px', borderRadius: 5, fontSize: 9.5,
+              background: 'transparent', color: '#6c7086', cursor: 'pointer',
+              border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+            }}
+          >
+            {t('tasks.plan_open')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

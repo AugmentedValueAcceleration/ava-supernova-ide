@@ -1590,7 +1590,9 @@ async function handleInit(data) {
       const extra = toolName === 'health_profile_ask' ? { profileField: buildProfileFieldPayload(args) } : {};
       emit({ event: 'confirm_required', id, toolCallId, toolName, toolCategory, args, ...extra });
       return new Promise((resolve) => {
-        pendingConfirmations.set(id, { resolve, toolName });
+        // args are kept so the confirmation handler can act on the CALL,
+        // not just the answer — writePlanRecord needs the plan itself.
+        pendingConfirmations.set(id, { resolve, toolName, args });
       });
     });
 
@@ -1987,7 +1989,9 @@ async function handleInit(data) {
           },
         });
         return new Promise((resolve) => {
-          pendingConfirmations.set(id, { resolve, toolName });
+          // args are kept so the confirmation handler can act on the CALL,
+        // not just the answer — writePlanRecord needs the plan itself.
+        pendingConfirmations.set(id, { resolve, toolName, args });
         });
       },
       desktopAutomationSettings: config.desktopAutomationSettings || undefined,
@@ -3383,6 +3387,33 @@ function handleConfirm(data) {
     return;
   }
 
+  // present_plan — the answer is a DECISION, not a comment. The card sends
+  // { selection, note }; core's formatPlanDecision turns that into the sentence
+  // Ava reads, so this surface and the extension say the same thing. Before
+  // this, the IDE passed the user's free text through verbatim and had no way
+  // to send a chosen approach at all — which is why a plan offering eleven
+  // tasks or a four-task subset was approved without either being picked.
+  //
+  // A rejection still falls through to the reasoned-denial branch below, so
+  // "no, because…" keeps working.
+  if (pending.toolName === 'present_plan' && data.approved !== false) {
+    const decision = data.planDecision && typeof data.planDecision === 'object' ? data.planDecision : {};
+    const note = decision.note ?? (typeof data.response === 'string' ? data.response : undefined);
+    pending.resolve(core.formatPlanDecision({ selection: decision.selection, note }));
+
+    // Record the decision in Decisions/records/. Only on approval, and only
+    // where the folder already exists — writePlanRecord never creates one.
+    // Best-effort: a project without the folder, or a read-only checkout,
+    // must not turn an approved plan into an error.
+    const projectRoot = globalThis.__avaProjectRoot;
+    core.writePlanRecord(projectRoot, pending.args || {}, { selection: decision.selection, note })
+      .then((written) => {
+        if (written) emit({ event: 'decision_recorded', path: written });
+      })
+      .catch((err) => emitError(`Could not record the decision: ${err?.message || err}`));
+    return;
+  }
+
   // A REFUSAL is checked first, and it is checked first for a reason. The
   // branch below resolves any string as the tool's RESULT, which core reads as
   // approved — so a denial reason sent as a plain string would report success
@@ -3826,6 +3857,19 @@ rl.on('line', async (line) => {
       break;
     case 'confirm':
       handleConfirm(data);
+      break;
+    // The project's decision records, for the Plans tab. Read on demand rather
+    // than pushed, because they change when a plan is approved or when the
+    // user edits a file by hand — and the folder is theirs to edit.
+    case 'list_decisions':
+      core.listPlanRecords(globalThis.__avaProjectRoot)
+        .then((records) => emit({ event: 'decisions_list', records }))
+        .catch(() => emit({ event: 'decisions_list', records: [] }));
+      break;
+    case 'read_decision':
+      core.readPlanRecord(data.path)
+        .then((body) => emit({ event: 'decision_body', path: data.path, body }))
+        .catch(() => emit({ event: 'decision_body', path: data.path, body: null }));
       break;
     case 'detect_local_models':
       detectLocalModels(data).catch((err) => emit({ event: 'local_models_detected', models: [], error: err?.message || 'detect failed' }));

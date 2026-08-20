@@ -426,8 +426,37 @@ export class SidecarManager {
   /**
    * Respond to a tool confirmation request.
    */
-  async confirm(id: string, approved: boolean, response?: string, alwaysAllowCategory?: boolean): Promise<void> {
-    await this.send({ cmd: 'confirm', id, approved, response, alwaysAllowCategory });
+  /**
+   * Answer a pending tool confirmation.
+   *
+   * `planDecision` carries a present_plan answer — the approach the user chose
+   * and anything they typed alongside it. It is a structured field rather than
+   * a pre-built sentence so the wording lives in core's `formatPlanDecision`,
+   * shared with the extension, instead of being written twice.
+   */
+  async confirm(
+    id: string,
+    approved: boolean,
+    response?: string,
+    alwaysAllowCategory?: boolean,
+    planDecision?: { selection?: string; note?: string },
+  ): Promise<void> {
+    await this.send({ cmd: 'confirm', id, approved, response, alwaysAllowCategory, planDecision });
+  }
+
+  /**
+   * List the project's decision records. Answers with a `decisions_list` event.
+   *
+   * On demand rather than pushed: the folder is the user's to edit by hand, so
+   * a cached list would go stale the moment they did.
+   */
+  async listDecisions(): Promise<void> {
+    await this.send({ cmd: 'list_decisions' });
+  }
+
+  /** Read one record in full. Answers with a `decision_body` event. */
+  async readDecision(path: string): Promise<void> {
+    await this.send({ cmd: 'read_decision', path });
   }
 
   /**

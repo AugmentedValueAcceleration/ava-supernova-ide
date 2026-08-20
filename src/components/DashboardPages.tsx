@@ -64,10 +64,11 @@ import { seedHealthRoom } from './HealthRoomChat';
 import { CoursePath } from './CoursePath';
 import { Progression } from './Progression';
 import { readLocalLearning, setActiveCourse, deleteCourse } from '../lib/learning-store';
-import IdeTasksPanel, { IdeTasksSpine, type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI, type CreateTaskInput as TaskCreateInput, type UpdateTaskInput as TaskUpdateInput } from './IdeTasksPanel';
+import IdeTasksPanel, { IdeTasksSpine, type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI, type PlanRecordUI, type CreateTaskInput as TaskCreateInput, type UpdateTaskInput as TaskUpdateInput } from './IdeTasksPanel';
 import { readLocalTasks, createLocalTask, toggleLocalTask, toggleLocalSubtask, updateLocalTask, tasksFolderPath } from '../lib/task-store';
 import { startTaskReminderScheduler } from '../lib/task-reminders';
 import { IdeTaskSuggestCard } from './IdeTaskSuggestCard';
+import { PlanApprovalCard } from './PlanApprovalCard';
 import {
   readDay as readJournalDay,
   readMonth as readJournalMonth, addEntry as addJournalEntry, updateEntry as updateJournalEntry,
@@ -3271,6 +3272,17 @@ export function AvaChatPage() {
   const chatAiAvatar = '/ava-avatar.jpeg';
 
   // ── Tasks panel state ──────────────────────────────────────────────────
+  // The project's decision records — Decisions/records/, read from disk. They
+  // belong to the project rather than the session, so they come back on reopen.
+  const [planRecords, setPlanRecords] = useState<PlanRecordUI[]>([]);
+  const refreshPlans = useCallback(() => { void getSidecar().listDecisions(); }, []);
+  const openPlanRecord = useCallback(async (rec: PlanRecordUI) => {
+    try {
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(rec.path);
+    } catch { /* no handler for .md on this machine — nothing useful to say */ }
+  }, []);
+
   const [tasksPanelOpen, setTasksPanelOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('ava-ide-tasks-open') === 'true'; } catch { return false; }
   });
@@ -4047,6 +4059,28 @@ export function AvaChatPage() {
       case 'auto_agent_end':
         setStatusText('');
         break;
+
+      // An accepted plan was written to Decisions/records/. Said out loud on
+      // purpose — the folder's README promises a recorded decision "shows up
+      // in the timeline as a normal file edit so you see it happen".
+      // The list is re-read rather than appended to, so a record the user
+      // wrote or deleted by hand shows up the same as one Ava wrote.
+      case 'decisions_list':
+        setPlanRecords(((event as any).records ?? []) as PlanRecordUI[]);
+        break;
+
+      case 'decision_recorded': {
+        refreshPlans();
+        const path = String((event as any).path ?? '');
+        const name = path.replace(/\\/g, '/').split('/').slice(-2).join('/');
+        setMessages(prev => [...prev, {
+          id: mkId(),
+          role: 'system' as const,
+          text: `Decision recorded — Decisions/${name}`,
+          timestamp: Date.now(),
+        }]);
+        break;
+      }
 
       case 'execution_start': {
         const total = (event as any).total ?? 0;
@@ -6261,6 +6295,26 @@ export function AvaChatPage() {
             />
           );
         }
+        // present_plan — the real plan card. Until now this fell through to
+        // the generic permission banner, so a plan offering alternatives never
+        // showed them and the choice could not be made on this surface.
+        if (pendingConfirm.toolName === 'present_plan') {
+          return (
+            <PlanApprovalCard
+              args={pendingConfirm.args || {}}
+              onApprove={(decision) => {
+                void getSidecar().confirm(pendingConfirm.id, true, undefined, undefined, decision);
+                setPendingConfirm(null);
+                setConfirmInput('');
+              }}
+              onReject={(note) => {
+                void getSidecar().confirm(pendingConfirm.id, false, note);
+                setPendingConfirm(null);
+                setConfirmInput('');
+              }}
+            />
+          );
+        }
         // Per-card data derived once — cheaper than inline ternaries, and
         // puts the "what is this?" decision in one place.
         const isPlanCard = pendingConfirm.toolName === 'desktop_plan_approve';
@@ -7356,6 +7410,9 @@ export function AvaChatPage() {
         onToggleSubtask={handleToggleSubtask}
         onUpdateTask={handleUpdateTask}
         onOpenFolder={handleOpenTasksFolder}
+        planRecords={planRecords}
+        onOpenPlan={openPlanRecord}
+        onRefreshPlans={refreshPlans}
         width={tasksPanelWidth}
         onWidthChange={setTasksPanelWidth}
       />
