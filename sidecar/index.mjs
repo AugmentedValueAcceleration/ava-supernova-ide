@@ -433,6 +433,18 @@ let taskManager = null;
 let memoryAgentInstance = null;
 let currentAbort = null;
 let currentMode = 'work';
+
+/**
+ * The document open in the workspace pane, if any.
+ *
+ * Two jobs. It makes "tighten the second paragraph" work without the user
+ * pasting a path — the surface knows what is open, so Ava should too. And
+ * `editedByUser` carries the fact that the file moved under her, which is the
+ * difference between re-reading and confidently describing a version that no
+ * longer exists. Cleared once she has been told, so the warning appears on the
+ * turn after the edit and not on every turn thereafter.
+ */
+let openDocument = null;
 let isRunning = false;
 // Second conversation thread — the focused "Ava Health & Fitness" room. Same
 // agent + memory + tools as the main chat, but its own message history so
@@ -2781,6 +2793,32 @@ async function handleMessage(data) {
    */
   const modePrefixFn = inRoom ? null : MODE_PREFIX_FN[currentMode];
 
+  /**
+   * What is open in the document workspace, if anything.
+   *
+   * Two jobs, both about not making the user do work the app has already done.
+   * "Tighten the second paragraph" must work without them pasting a path — the
+   * pane knows what is open, so Ava should too. And when they have typed in it
+   * she must be told, because she carries whatever she last read: without this
+   * she keeps describing a version that no longer matches the screen, then
+   * overwrites a paragraph they just fixed. The file is correct throughout,
+   * which is exactly why it reads as unreliability rather than as a bug.
+   *
+   * The edited flag is one-shot. It belongs on the turn AFTER the edit, not on
+   * every turn for the rest of the session.
+   */
+  const openDocPrefix = (() => {
+    if (!openDocument) return '';
+    const wasEdited = openDocument.editedByUser === true;
+    openDocument.editedByUser = false;
+    const lines = [`[Open document] ${openDocument.path}`];
+    lines.push('This is what the user is looking at. When they say "this document", "the intro", or name a section, they mean this file — read it rather than asking which one.');
+    if (wasEdited) {
+      lines.push('They have EDITED it since you last read it. Re-read before proposing changes, and say what moved rather than silently replacing their version.');
+    }
+    return lines.join('\n');
+  })();
+
   try {
     // ── Desktop Automation Mode → the five-persona conductor ──────────────
     // Desktop turns run the Scout→Planner→Actor→Verifier→Narrator wave
@@ -2839,9 +2877,12 @@ async function handleMessage(data) {
       // role:'error' — and it claimed "Images will be ignored", which was false
       // whenever the vision bridge relayed them through a describer model.
       const parts = [];
-      const baseContent = combinedDesktopPrefix && effectiveContent
-        ? `${combinedDesktopPrefix}\n\n${effectiveContent}`
+      const withDoc = openDocPrefix && effectiveContent
+        ? `${openDocPrefix}\n\n${effectiveContent}`
         : effectiveContent;
+      const baseContent = combinedDesktopPrefix && withDoc
+        ? `${combinedDesktopPrefix}\n\n${withDoc}`
+        : withDoc;
       const prefixedContent = modePrefixFn && baseContent
         ? modePrefixFn(baseContent)
         : modeTag && baseContent
@@ -2875,9 +2916,12 @@ async function handleMessage(data) {
       }
       conversation.addUserMessage(parts.length > 0 ? parts : (prefixedContent ?? effectiveContent));
     } else {
-      const baseContent = combinedDesktopPrefix && effectiveContent
-        ? `${combinedDesktopPrefix}\n\n${effectiveContent}`
+      const withDoc = openDocPrefix && effectiveContent
+        ? `${openDocPrefix}\n\n${effectiveContent}`
         : effectiveContent;
+      const baseContent = combinedDesktopPrefix && withDoc
+        ? `${combinedDesktopPrefix}\n\n${withDoc}`
+        : withDoc;
       const userContent = modePrefixFn && baseContent
         ? modePrefixFn(baseContent)
         : modeTag && baseContent
@@ -3870,6 +3914,15 @@ rl.on('line', async (line) => {
       core.readPlanRecord(data.path)
         .then((body) => emit({ event: 'decision_body', path: data.path, body }))
         .catch(() => emit({ event: 'decision_body', path: data.path, body: null }));
+      break;
+    // The user typed in the open document. Recorded, not acted on: the next
+    // turn tells Ava the file moved under her, so she re-reads instead of
+    // working from the copy she was carrying. Without it she keeps discussing
+    // a version that no longer matches the screen and eventually overwrites a
+    // paragraph the user just fixed — with the file correct throughout, so she
+    // simply looks unreliable.
+    case 'document_edited':
+      openDocument = { path: data.path, editedByUser: true };
       break;
     case 'detect_local_models':
       detectLocalModels(data).catch((err) => emit({ event: 'local_models_detected', models: [], error: err?.message || 'detect failed' }));

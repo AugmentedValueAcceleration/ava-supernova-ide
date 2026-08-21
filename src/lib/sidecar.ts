@@ -460,6 +460,18 @@ export class SidecarManager {
   }
 
   /**
+   * The user edited the open document by hand.
+   *
+   * Ava carries whatever she last read. Without this she keeps discussing a
+   * version that no longer matches the screen, then overwrites a paragraph the
+   * user just fixed — and the file is fine throughout, so she simply looks
+   * unreliable. Sent AFTER the bytes are on disk so a re-read finds the change.
+   */
+  async documentEdited(path: string): Promise<void> {
+    await this.send({ cmd: 'document_edited', path });
+  }
+
+  /**
    * Ask the sidecar to list the models an OpenAI-compatible endpoint serves
    * (GET /models). The result comes back as a `local_models_detected` event
    * ({ models, error }) — subscribe via `on('local_models_detected', …)`.

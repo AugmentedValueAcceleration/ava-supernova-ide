@@ -69,6 +69,8 @@ import { readLocalTasks, createLocalTask, toggleLocalTask, toggleLocalSubtask, u
 import { startTaskReminderScheduler } from '../lib/task-reminders';
 import { IdeTaskSuggestCard } from './IdeTaskSuggestCard';
 import { PlanApprovalCard } from './PlanApprovalCard';
+import { DocumentWorkspace, type OpenDocument } from './DocumentWorkspace';
+import { DocumentPicker, type DocumentCandidate } from './DocumentPicker';
 import {
   readDay as readJournalDay,
   readMonth as readJournalMonth, addEntry as addJournalEntry, updateEntry as updateJournalEntry,
@@ -3272,9 +3274,88 @@ export function AvaChatPage() {
   const chatAiAvatar = '/ava-avatar.jpeg';
 
   // ── Tasks panel state ──────────────────────────────────────────────────
+  // ── The document workspace ──────────────────────────────────────────────
+  //
+  // A document open beside the conversation about it. The pane takes the Tasks
+  // rail's place while it is open — document + chat + tasks is three columns
+  // and too tight on a laptop — and the rail returns when it closes.
+  //
+  // Remembered PER CHAT, not globally: the document belongs to the
+  // conversation, so a single "last document" would drop yesterday's report
+  // into a brand-new chat about something else. An explicit close is respected
+  // — closing says "done with this", and reopening must not drag it back.
+  const [openDoc, setOpenDoc] = useState<OpenDocument | null>(null);
+  const [docPickerOpen, setDocPickerOpen] = useState(false);
+  const [docCandidates, setDocCandidates] = useState<DocumentCandidate[]>([]);
+  const [recentDocPaths, setRecentDocPaths] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('ava-ide-recent-docs') || '[]'); } catch { return []; }
+  });
+  const [docPaneWidth, setDocPaneWidth] = useState<number>(() => {
+    const v = Number(localStorage.getItem('ava-ide-doc-width'));
+    return Number.isFinite(v) && v >= 320 ? v : 460;
+  });
+  useEffect(() => {
+    try { localStorage.setItem('ava-ide-doc-width', String(docPaneWidth)); } catch { /* quota */ }
+  }, [docPaneWidth]);
+
   // The project's decision records — Decisions/records/, read from disk. They
   // belong to the project rather than the session, so they come back on reopen.
   const [planRecords, setPlanRecords] = useState<PlanRecordUI[]>([]);
+  // Candidates come from the SAME scan the Library uses. A second index would
+  // eventually disagree with the first, which is the fault this codebase keeps
+  // repeating — one fact, two lists, and the quiet one is wrong.
+  const loadDocCandidates = useCallback(async () => {
+    // Read at call time rather than holding it in state: the chat page has no
+    // project-folder prop, and Sidebar reads the same key. One source.
+    const projectFolder = localStorage.getItem('ava-ide-project-folder');
+    if (!projectFolder) { setDocCandidates([]); return; }
+    try {
+      const { join } = await import('@tauri-apps/api/path');
+      const files = await scanLocalLibrary(projectFolder);
+      const docs = files.filter((f) => f.type === 'document' || f.type === 'spreadsheet');
+      const out: DocumentCandidate[] = [];
+      for (const f of docs) {
+        out.push({
+          path: await join(projectFolder, f.path),
+          name: f.name,
+          relPath: f.path,
+          modifiedAt: f.modified ? Date.parse(f.modified) : undefined,
+        });
+      }
+      setDocCandidates(out);
+    } catch {
+      setDocCandidates([]);
+    }
+  }, []);
+
+  const openDocument = useCallback((doc: OpenDocument) => {
+    setOpenDoc(doc);
+    setDocPickerOpen(false);
+    setRecentDocPaths((prev) => {
+      const next = [doc.path, ...prev.filter((p) => p !== doc.path)].slice(0, 12);
+      try { localStorage.setItem('ava-ide-recent-docs', JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+  }, []);
+
+  // Anything outside the scanned roots. Rare, but a picker with no way out is
+  // a picker people stop trusting.
+  const browseForDocument = useCallback(async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const picked = await open({
+        multiple: false,
+        filters: [{ name: 'Documents', extensions: ['md', 'txt', 'csv', 'rtf'] }],
+      });
+      if (typeof picked === 'string') {
+        // Split on both separators rather than normalising with a regex —
+        // Windows paths arrive with backslashes and this runs on all three.
+        const base = picked.split(/[\\/]/).pop() || picked;
+        openDocument({ path: picked, name: base });
+      }
+    } catch { /* dialog unavailable or cancelled */ }
+  }, [openDocument]);
+
   const refreshPlans = useCallback(() => { void getSidecar().listDecisions(); }, []);
   const openPlanRecord = useCallback(async (rec: PlanRecordUI) => {
     try {
@@ -5564,6 +5645,32 @@ export function AvaChatPage() {
           {/* Tasks toggle removed — the always-visible Tasks spine on the right
               edge is the single control now (its grip expands/collapses). */}
 
+          {/* Open a document — sits beside New Chat because it is the other
+              "start something" action, and because the picker cannot live in
+              the workspace pane's header: the pane does not exist until a
+              document is open, so there would be nowhere to click.
+              Every mode, this page only. */}
+          <Tooltip content={t('doc.open_title')} placement="bottom">
+          <button
+            onClick={() => { void loadDocCandidates(); setDocPickerOpen(true); }}
+            aria-label={t('doc.open_title')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+              background: openDoc ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
+              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+              borderRadius: 8, color: openDoc ? 'var(--accent)' : '#9399b2',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer', maxWidth: 190,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+            </svg>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {openDoc ? openDoc.name : t('doc.open_title')}
+            </span>
+          </button>
+          </Tooltip>
+
           {/* New Chat button */}
           <Tooltip content={t('dash.chat.new_chat')} placement="bottom">
           <button
@@ -7402,6 +7509,21 @@ export function AvaChatPage() {
         </div>
       </div>
     </div>
+    {/* ── The document workspace, when one is open ────────────────────────
+           It takes the Tasks rail's place rather than sitting beside it:
+           document + chat + tasks is three columns and too tight on a laptop.
+           Closing the pane brings the rail back exactly as it was. */}
+    {openDoc ? (
+      <DocumentWorkspace
+        doc={openDoc}
+        onClose={() => setOpenDoc(null)}
+        onSwitch={() => { void loadDocCandidates(); setDocPickerOpen(true); }}
+        onUserEdited={(path) => { void getSidecar().documentEdited(path); }}
+        width={docPaneWidth}
+        onWidthChange={setDocPaneWidth}
+      />
+    ) : (
+    <>
     {/* ── Tasks — always present: full panel when open, self-advertising
            spine when collapsed. ─────────────────────────────────────────── */}
     {tasksPanelOpen ? (
@@ -7427,6 +7549,20 @@ export function AvaChatPage() {
         activeCount={allTasks.filter(t => t.status !== 'done').length}
         sessionTasks={sessionTasks}
         onExpand={() => setTasksPanelOpen(true)}
+      />
+    )}
+    </>
+    )}
+
+    {/* The picker. Search, not a file dialog — recents first, because someone
+        who opens this without typing almost always wants what they had last. */}
+    {docPickerOpen && (
+      <DocumentPicker
+        candidates={docCandidates}
+        recentPaths={recentDocPaths}
+        onPick={(c) => openDocument({ path: c.path, name: c.name })}
+        onBrowse={() => { setDocPickerOpen(false); void browseForDocument(); }}
+        onClose={() => setDocPickerOpen(false)}
       />
     )}
 
