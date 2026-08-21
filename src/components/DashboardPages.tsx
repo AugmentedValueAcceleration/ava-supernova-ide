@@ -60,6 +60,7 @@ import { canExport, targetsFor, TARGET_LABELS, type ExportFormat } from '@ava/co
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
 import { Tooltip } from './Tooltip';
+import { Drawer } from './Drawer';
 import { DateField } from './MiniDatePicker';
 import { LessonPlayer, type PlayableLesson, type LessonStep } from './LessonPlayer';
 import { LearningRoomChat, seedLearningRoom } from './LearningRoomChat';
@@ -10325,6 +10326,22 @@ const MEDIA_KIND_COLORS: Record<LibraryMediaKind, { bg: string; text: string; bo
   presentation: { bg: 'rgba(249,115,22,0.10)', text: '#fb923c', border: 'rgba(249,115,22,0.25)' }, // orange
 };
 
+/**
+ * What the tile's corner badge says.
+ *
+ * For media the kind is the useful fact. For office files it is not: a folder
+ * of documents renders three identical "DOCUMENT" badges, and the one thing
+ * that actually separates them — the format — sits buried in the filename.
+ * Mirrors the extension's Library, which shows the format as the tile art.
+ */
+function libraryBadgeLabel(name: string, kind: LibraryMediaKind): string {
+  if (kind !== 'document' && kind !== 'spreadsheet' && kind !== 'presentation') return kind;
+  const dot = name.lastIndexOf('.');
+  const slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+  const ext = dot > slash && dot > 0 ? name.slice(dot + 1) : '';
+  return ext || kind;
+}
+
 function formatFileSize(bytes: number): string {
   // Cloud-only assets carry size: 0 because creative_assets doesn't store
   // file size. Render that as a dash rather than a literal "0 B" — every
@@ -11673,7 +11690,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                       position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 600,
                       padding: '2px 8px', borderRadius: 6, background: 'rgba(0,0,0,0.6)',
                       color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5,
-                    }}>{kind}</span>
+                    }}>{libraryBadgeLabel(file.name, kind)}</span>
                   </div>
                   {/* File info */}
                   <div style={{ padding: '10px 12px' }}>
@@ -12028,42 +12045,24 @@ function LibraryPreviewModal({
   );
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)', padding: 24,
-      }}
+    // A DRAWER, matching Health & Nutrition and the extension's Library. A
+    // centred box hid the grid you had just picked from and read as a
+    // different product one page across.
+    <Drawer
+      onClose={onClose}
+      title={file.name}
+      maxWidth={620}
+      closeLabel={t('dash.library.close_preview')}
     >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          position: 'relative', width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto',
-          borderRadius: 16, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-          background: '#1a1028', boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
-        }}
-      >
-        <button
-          onClick={onClose}
-          aria-label={t('dash.library.close_preview')}
-          style={{
-            position: 'absolute', top: 12, right: 12, zIndex: 10,
-            width: 32, height: 32, borderRadius: 16,
-            background: 'rgba(0,0,0,0.35)', color: '#fff', border: 'none', cursor: 'pointer',
-            fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >×</button>
+      <div style={{ minHeight: 0, flex: 1, overflowY: 'auto' }}>
 
         {/* Preview area — real image / video player / audio waveform, local or cloud. */}
         <AssetModalPreview file={file} />
 
         {/* Meta + actions */}
         <div style={{ padding: 20 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {file.name}
-          </h3>
-          <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 11 }}>
+          {/* No filename here — the drawer header carries it. */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 11 }}>
             <span style={{
               padding: '2px 8px', borderRadius: 4, fontWeight: 500,
               background: isCloud ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'rgba(108,112,134,0.15)',
@@ -12180,7 +12179,7 @@ function LibraryPreviewModal({
           </div>
         )}
       </div>
-    </div>
+    </Drawer>
   );
 }
 
