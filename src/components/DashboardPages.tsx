@@ -6297,7 +6297,7 @@ export function AvaChatPage() {
                 }} />
               ))}
             </div>
-            <span style={{ fontSize: 11, color: '#a6adc8', transition: 'opacity 0.3s' }}>{statusText || t('thinking.0')}</span>
+            <ThinkingStatus text={statusText || t('thinking.generic')} />
           </div>
         )}
 
@@ -11235,6 +11235,40 @@ function collapseLogoGroups(items: GalleryItem[]): GalleryItem[] {
     const m = LOGO_VARIANT_RE.exec(it.id);
     return m ? repByGroup.get(m[1]) === it.id : true;
   });
+}
+
+/**
+ * The line under the pulsing dots while Ava works.
+ *
+ * `text` is always something the code actually knows — the sidecar's mapped
+ * status, or a coordinator progress label. Where nothing more specific is
+ * known it says "Working…" rather than inventing a specific; the extension
+ * used to rotate four canned strings here ("Analyzing your code…") that were
+ * simply false whenever she was drafting a document.
+ *
+ * The counter resets whenever the text changes, so it measures THIS step
+ * rather than the whole turn. That is what makes a stuck step legible, and it
+ * means a stale label degrades honestly instead of freezing on a lie.
+ */
+function ThinkingStatus({ text }: { text: string }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    setElapsed(0);
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [text]);
+
+  return (
+    <span style={{ fontSize: 11, color: '#a6adc8', transition: 'opacity 0.3s' }}>
+      {text}
+      {/* Only past a couple of seconds: on a fast turn it would flash and
+          vanish, which reads as a glitch rather than information. */}
+      {elapsed >= 2 && (
+        <span style={{ opacity: 0.55, fontVariantNumeric: 'tabular-nums' }}> · {elapsed}s</span>
+      )}
+    </span>
+  );
 }
 
 function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
