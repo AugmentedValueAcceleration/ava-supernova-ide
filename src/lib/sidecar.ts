@@ -472,6 +472,41 @@ export class SidecarManager {
   }
 
   /**
+   * Re-render a stored document into another format.
+   *
+   * The work is the sidecar's because it reads a file and writes a zip, and it
+   * is the SAME exportDocument the VS Code host calls — the two surfaces mount
+   * one implementation rather than two that drift.
+   *
+   * A generous timeout: a long document going to PDF is real work, and a
+   * spurious "timed out" while the file is being written is worse than a wait.
+   */
+  async exportDocument(path: string, format: string): Promise<{ ok: boolean; path?: string; error?: string }> {
+    return new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout>;
+      const handler = (event: SidecarEvent) => {
+        // Guard on the source: two exports in flight must not answer for
+        // each other.
+        if ((event as { sourcePath?: string }).sourcePath !== path) return;
+        clearTimeout(timer);
+        this.off('document_exported', handler);
+        const e = event as { ok?: boolean; path?: string; error?: string };
+        resolve({ ok: !!e.ok, path: e.path, error: e.error });
+      };
+      timer = setTimeout(() => {
+        this.off('document_exported', handler);
+        resolve({ ok: false, error: 'Export timed out.' });
+      }, 60_000);
+      this.on('document_exported', handler);
+      this.send({ cmd: 'export_document', path, format }).catch((err) => {
+        clearTimeout(timer);
+        this.off('document_exported', handler);
+        resolve({ ok: false, error: err instanceof Error ? err.message : String(err) });
+      });
+    });
+  }
+
+  /**
    * Ask the sidecar to list the models an OpenAI-compatible endpoint serves
    * (GET /models). The result comes back as a `local_models_detected` event
    * ({ models, error }) — subscribe via `on('local_models_detected', …)`.

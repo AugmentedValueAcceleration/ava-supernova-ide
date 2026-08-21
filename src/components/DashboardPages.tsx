@@ -54,6 +54,9 @@ import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type Pal
 import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
 import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
+// The dependency-free leaf, so this renderer and the sidecar agree on what
+// is exportable and what it is called without either keeping its own list.
+import { canExport, targetsFor, TARGET_LABELS, type ExportFormat } from '@ava/core/authoring/formats';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
 import { Tooltip } from './Tooltip';
@@ -11784,7 +11787,12 @@ function LibraryPreviewModal({
   useLocale();
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [busy, setBusy] = useState<null | 'download' | 'delete' | 'open' | 'reveal' | 'useInProject'>(null);
+  const [busy, setBusy] = useState<null | 'download' | 'delete' | 'open' | 'reveal' | 'useInProject' | 'export'>(null);
+  // Which format is being written, so the right button says so.
+  const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
+  // Set when the OS refused to open the file, so the modal can offer a
+  // download link. A suggestion, never an install.
+  const [offerOffice, setOfferOffice] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(file.name ?? '');
@@ -11829,8 +11837,27 @@ function LibraryPreviewModal({
       await openPath(abs);
       onClose();
     } catch (err) {
-      showToast(`Open failed: ${err instanceof Error ? err.message : String(err)}`);
+      // Asking the OS and handling the refusal beats enumerating installed
+      // software: detection is three platform guesses that can each be wrong.
+      // Nothing is installed on the user's behalf — a link is as far as this
+      // goes, because an installer means elevation prompts and mirrors on
+      // behalf of a decision that is theirs.
+      showToast(`Nothing on this machine opened it. ${err instanceof Error ? err.message : String(err)}`);
+      setOfferOffice(true);
     } finally { setBusy(null); }
+  };
+
+  const handleExport = async (format: ExportFormat) => {
+    const abs = await resolveLocalAbsPath();
+    if (!abs) return;
+    setBusy('export');
+    setExportingFormat(format);
+    try {
+      const result = await getSidecar().exportDocument(abs, format);
+      showToast(result.ok
+        ? `Saved ${String(result.path ?? '').split(/[\\/]/).pop()}`
+        : `Export failed: ${result.error ?? 'unknown error'}`);
+    } finally { setBusy(null); setExportingFormat(null); }
   };
 
   const handleReveal = async () => {
@@ -12065,6 +12092,19 @@ function LibraryPreviewModal({
               handleOpen,
               { disabled: !projectFolder },
             )}
+            {/* Export — only for sources we can genuinely re-render. An
+                already-built .docx or .pdf gets Open and Reveal instead,
+                because "converting" one into the other is fidelity loss
+                wearing an export's clothes. */}
+            {!isCloud && file.name && canExport(file.name) && targetsFor(file.name).map((format) => (
+              <span key={format}>
+                {actionBtn(
+                  exportingFormat === format ? 'Exporting…' : `Export ${TARGET_LABELS[format]}`,
+                  () => void handleExport(format),
+                  { disabled: busy !== null || !projectFolder },
+                )}
+              </span>
+            ))}
             {!isCloud && actionBtn(busy === 'reveal' ? 'Revealing…' : 'Reveal', handleReveal, { disabled: !projectFolder })}
             {actionBtn(
               busy === 'download' ? 'Downloading…' : 'Download',
@@ -12080,6 +12120,19 @@ function LibraryPreviewModal({
             )}
           </div>
         </div>
+
+        {offerOffice && (
+          <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.25)', fontSize: 12, lineHeight: 1.6 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Nothing on this machine opened it</div>
+            <div style={{ opacity: 0.85 }}>
+              You will need something that reads office documents.{' '}
+              <a href="https://www.libreoffice.org/download/download-libreoffice/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent, #7c3aed)' }}>LibreOffice</a>
+              {' '}is the usual desktop answer, and{' '}
+              <a href="https://office.eu/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent, #7c3aed)' }}>Office EU</a>
+              {' '}is a European hosted suite. Your machine, your choice — nothing is installed for you.
+            </div>
+          </div>
+        )}
 
         {toast && (
           <div style={{

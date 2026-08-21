@@ -94,6 +94,19 @@ try {
 }
 const { deriveProgression, formatLearnerContext } = learningCore;
 
+// Authoring subpath — the Library's export button. The renderer cannot do
+// this itself: rendering reads the file and writes a zip, which is Node work,
+// and the extension host calls the very same exportDocument so the two
+// surfaces cannot drift into producing different files.
+let authoringCore;
+try {
+  authoringCore = await import('@ava/core/authoring');
+} catch {
+  const authoringPath = join(__dirname, '..', '..', 'core', 'dist', 'tools', 'authoring', 'index.js');
+  authoringCore = await import(`file://${authoringPath.replace(/\\/g, '/')}`);
+}
+const { exportDocument } = authoringCore;
+
 const {
   Agent,
   Conversation,
@@ -3364,6 +3377,30 @@ async function handleInterrupt() {
 /** Detect the models an OpenAI-compatible endpoint is serving (GET /models).
  *  Runs in the sidecar (Node) so localhost is reachable without the webview's
  *  CSP/CORS limits. Mirrors the extension host's detect path. */
+// ─── Document export ────────────────────────────────────────────────────────
+//
+// Optional peers are loaded the same way the extension host loads them, so a
+// missing pdfkit produces the same sentence in both places rather than a stack
+// trace in one and silence in the other. odt/ods need neither.
+async function handleExportDocument(data) {
+  const sourcePath = data?.path;
+  if (!sourcePath) {
+    emit({ event: 'document_exported', sourcePath: null, ok: false, error: 'No document given.' });
+    return;
+  }
+
+  const result = await exportDocument({
+    sourcePath,
+    format: data.format,
+    loadDocx: () => import('docx'),
+    loadPdf: () => import('pdfkit'),
+  });
+
+  emit(result.ok
+    ? { event: 'document_exported', sourcePath, ok: true, path: result.path, bytes: result.bytes }
+    : { event: 'document_exported', sourcePath, ok: false, error: result.error });
+}
+
 async function detectLocalModels({ baseUrl, apiKey }) {
   if (!baseUrl) {
     emit({ event: 'local_models_detected', models: [], error: 'Enter a base URL first.' });
@@ -3923,6 +3960,13 @@ rl.on('line', async (line) => {
     // simply looks unreliable.
     case 'document_edited':
       openDocument = { path: data.path, editedByUser: true };
+      break;
+    // Library → Documents: re-render a source document into another format.
+    case 'export_document':
+      handleExportDocument(data).catch((err) => emit({
+        event: 'document_exported', sourcePath: data?.path ?? null, ok: false,
+        error: err?.message || 'export failed',
+      }));
       break;
     case 'detect_local_models':
       detectLocalModels(data).catch((err) => emit({ event: 'local_models_detected', models: [], error: err?.message || 'detect failed' }));

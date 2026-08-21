@@ -25,6 +25,7 @@
     "@tauri-apps/plugin-shell": "^2",
     "@tauri-apps/plugin-updater": "^2.10.0",
     "docx": "^9.5.0",
+    "pdfkit": "^0.15.0",
     "exceljs": "^4.4.0",
     "lucide": "^1.23.0",
     "opentype.js": "^2.0.0",
