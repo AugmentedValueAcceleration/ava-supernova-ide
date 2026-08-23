@@ -10360,7 +10360,9 @@ const LIBRARY_FILE_EXT: Record<string, LibraryFileType> = {
   png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', bmp: 'image',
   // Office docs
   doc: 'document', docx: 'document', txt: 'document', md: 'document', rtf: 'document', pdf: 'document',
-  xls: 'spreadsheet', xlsx: 'spreadsheet', csv: 'spreadsheet',
+  odt: 'document',
+  xls: 'spreadsheet', xlsx: 'spreadsheet', csv: 'spreadsheet', ods: 'spreadsheet',
+  odp: 'presentation',
   ppt: 'presentation', pptx: 'presentation', key: 'presentation',
   // Media — coalesced to 'image' for the single filter axis; the
   // tab split (Assets vs Documents) handles the important distinction.
@@ -11329,10 +11331,17 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   };
 
   // Watch projectFolder — re-scan when the user opens a different project.
-  // App.tsx persists the folder in localStorage['projectFolder'] and emits
-  // 'ava-folder-changed' on change.
+  //
+  // The key is 'ava-ide-project-folder'. This read used to say 'projectFolder',
+  // which NOTHING writes: App.tsx's save() prefixes every key with 'ava-ide-'
+  // and JSON-encodes it, and keeps the plain-string 'ava-ide-project-folder'
+  // in sync alongside — the spelling every other reader in the app uses. So
+  // this was always null, the scan below returned before it started, and the
+  // Library was permanently empty. The 'ava-folder-changed' listener hid it
+  // whenever a folder was opened mid-session; a folder restored at startup
+  // fires no event, so the tab just stayed blank.
   const [projectFolder, setProjectFolder] = useState<string | null>(() => {
-    try { return (localStorage.getItem('projectFolder') as string | null) || null; } catch { return null; }
+    try { return localStorage.getItem('ava-ide-project-folder'); } catch { return null; }
   });
   useEffect(() => {
     const handler = (e: Event) => setProjectFolder(((e as CustomEvent).detail as string) || null);
@@ -11633,7 +11642,13 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>
             <div style={{ fontSize: 13 }}>{t('dash.library.scanning')}</div>
           </div>
-        ) : !connected ? (
+        ) : filtered.length === 0 && !connected ? (
+          /* Signed out AND nothing on disk. The order matters: this used to
+             sit in FRONT of the file list, so a signed-out window scanned the
+             project, found the documents, and then showed "connect your
+             account" instead of them. The scan was already deliberately
+             connection-independent — "local files exist whether or not the
+             user is signed in" — and the render quietly disagreed. */
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDDBC\uFE0F'}</div>
             <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>{t('dash.library.connect')}</div>
@@ -11643,10 +11658,12 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
             <div style={{ marginBottom: 12, color: 'var(--accent)', display: 'flex', justifyContent: 'center' }}>{filter === 'all' ? <PhFolder size={48} weight="duotone" /> : <MediaKindIcon kind={filter === 'icon' || filter === 'logo' ? 'image' : filter} size={48} weight="duotone" />}</div>
             <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
-              {t('dash.library.no_files')}
+              {projectFolder ? t('dash.library.no_files') : t('dash.library.no_project')}
             </div>
             <div style={{ fontSize: 12, color: '#6c7086' }}>
-              {t('dash.library.ask_ava')}
+              {/* "No files" is not actionable when the real answer is that
+                  nothing is open to scan. */}
+              {projectFolder ? t('dash.library.ask_ava') : t('dash.library.no_project_hint')}
             </div>
           </div>
         ) : viewMode === 'grid' ? (
