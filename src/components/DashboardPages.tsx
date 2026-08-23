@@ -3623,9 +3623,57 @@ export function AvaChatPage() {
   }, [messages]);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
+  //
+  // Two problems with the old one-liner. It smooth-scrolled on every message
+  // change, including the first render of a loaded conversation — a smooth
+  // scroll across a long transcript races the markdown and code blocks still
+  // laying out beneath it, so the browser lands somewhere short and the chat
+  // opens near the TOP. And it fired unconditionally, so reading back through
+  // history got yanked to the bottom the moment a token arrived.
+  //
+  // So: jump instantly on arrival, follow smoothly afterwards, and only
+  // follow while the user is actually at the bottom.
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  // Distinguishes "the conversation just appeared" from "a message arrived".
+  const hasLandedRef = useRef(false);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    // A threshold, not equality: sub-pixel rounding and a growing last message
+    // both mean scrollTop never exactly equals the maximum.
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setAtBottom(distance < 80);
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length === 0) { hasLandedRef.current = false; return; }
+    if (!hasLandedRef.current) {
+      // First paint of this conversation. Instant, and after layout — a
+      // smooth scroll here is the thing that leaves you at the top.
+      hasLandedRef.current = true;
+      requestAnimationFrame(() => {
+        scrollToBottom('auto');
+        // Again on the next frame: code blocks and images resolve their
+        // height after the first, moving the bottom down under us.
+        requestAnimationFrame(() => scrollToBottom('auto'));
+      });
+      setAtBottom(true);
+      return;
+    }
+    // Following along — but only if they have not scrolled up to read.
+    if (atBottom) scrollToBottom('smooth');
+  }, [messages, atBottom, scrollToBottom]);
+
+  // Switching conversation is a fresh landing, not a new message.
+  useEffect(() => { hasLandedRef.current = false; }, [currentConvId]);
 
   // ── Usage warning check (on mount + after messages change while not streaming) ──
   useEffect(() => {
@@ -5767,12 +5815,17 @@ export function AvaChatPage() {
            Hidden while dataLoading so the spinner above takes the full
            area instead of competing with an empty messages list for
            flex space. Flips back the moment data resolves. */}
-      <div style={{
-        flex: dataLoading ? 0 : 1,
-        display: dataLoading ? 'none' : 'flex',
-        overflowY: 'auto', padding: '20px 24px',
-        flexDirection: 'column', gap: 4,
-      }}>
+      <div
+        ref={messagesScrollRef}
+        onScroll={handleMessagesScroll}
+        style={{
+          flex: dataLoading ? 0 : 1,
+          display: dataLoading ? 'none' : 'flex',
+          overflowY: 'auto', padding: '20px 24px',
+          flexDirection: 'column', gap: 4,
+          position: 'relative',
+        }}
+      >
         {/* Empty-state helper — six starter chips covering each mode,
             shown until the user sends their first message. Click prefills
             the input rather than auto-sending so the user can edit
@@ -6304,6 +6357,35 @@ export function AvaChatPage() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Jump to the latest. Shown only when scrolled away from the bottom,
+          because a button offering to take you where you already are is just
+          furniture. Deliberately outside the scroll container: inside, it
+          would scroll along with the transcript it is meant to escape. */}
+      {!atBottom && messages.length > 0 && (
+        <div style={{ position: 'relative', height: 0 }}>
+          <button
+            onClick={() => scrollToBottom('smooth')}
+            title={t('chat.jump_to_latest')}
+            aria-label={t('chat.jump_to_latest')}
+            style={{
+              position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+              background: 'rgba(26, 16, 40, 0.94)',
+              border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+              color: '#cdd6f4', fontSize: 11, fontWeight: 500,
+              boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
+              zIndex: 5,
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />
+            </svg>
+            {t('chat.jump_to_latest')}
+          </button>
+        </div>
+      )}
 
       {/* ── Secret Grant — inline banner above input ────────────────────── */}
       {pendingSecretGrant && (
@@ -10327,6 +10409,70 @@ const MEDIA_KIND_COLORS: Record<LibraryMediaKind, { bg: string; text: string; bo
 };
 
 /**
+ * One document, however many files it was rendered into.
+ *
+ * `Sacred-Crossing-Overview.md`, `.docx` and `.pdf` are one document and two
+ * copies of it. Three tiles for one thing is what made a single request look
+ * like clutter. Grouping happens in the VIEW — nothing moves on disk, no
+ * folders are created — and mirrors the extension's Library, which does the
+ * same thing the same way.
+ *
+ * Keyed on directory + stem, so same-named documents in different folders
+ * stay apart.
+ */
+interface LibraryDocGroup {
+  key: string;
+  /** Filename stem — what the document is called. */
+  title: string;
+  /** The source (.md) when there is one, otherwise the first file found. */
+  primary: LibraryFile;
+  members: LibraryFile[];
+  /** Lowercase extensions present. */
+  formats: string[];
+}
+
+/** Sources a document is authored in; everything else is an export of one. */
+const DOC_SOURCE_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'csv']);
+
+function splitLibraryPath(path: string): { dir: string; stem: string; ext: string } {
+  const slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  const dir = slash >= 0 ? path.slice(0, slash) : '';
+  const base = slash >= 0 ? path.slice(slash + 1) : path;
+  const dot = base.lastIndexOf('.');
+  return dot > 0
+    ? { dir, stem: base.slice(0, dot), ext: base.slice(dot + 1).toLowerCase() }
+    : { dir, stem: base, ext: '' };
+}
+
+function fileExt(file: LibraryFile): string {
+  return splitLibraryPath(file.path || file.name || '').ext;
+}
+
+function groupLibraryDocuments(files: LibraryFile[]): LibraryDocGroup[] {
+  const groups = new Map<string, LibraryDocGroup>();
+  for (const file of files) {
+    const { dir, stem, ext } = splitLibraryPath(file.path || file.name || '');
+    const key = `${dir}/${stem}`.toLowerCase();
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, title: stem, primary: file, members: [], formats: [] };
+      groups.set(key, group);
+    }
+    group.members.push(file);
+    // The source leads: it is the document, the rest are copies of it.
+    if (DOC_SOURCE_EXTENSIONS.has(ext)) {
+      group.primary = file;
+      group.members.sort((a, b) =>
+        Number(DOC_SOURCE_EXTENSIONS.has(fileExt(b))) - Number(DOC_SOURCE_EXTENSIONS.has(fileExt(a))));
+    }
+  }
+  for (const group of groups.values()) {
+    group.formats = group.members.map(fileExt).filter(Boolean);
+  }
+  return [...groups.values()];
+}
+
+/**
  * What the tile's corner badge says.
  *
  * For media the kind is the useful fact. For office files it is not: a folder
@@ -11290,6 +11436,86 @@ function ThinkingStatus({ text }: { text: string }) {
   );
 }
 
+/**
+ * A document tile: one card, however many files the document exists as.
+ *
+ * The art headlines the FIRST VISIBLE format and the chips carry the rest, so
+ * nothing is both hidden by the "Show .md" checkbox and shouted from the
+ * artwork, and no format is stated twice. Mirrors the extension's DocumentCard.
+ */
+function DocumentGroupCard({
+  group,
+  showSource,
+  selected,
+  onSelect,
+}: {
+  group: LibraryDocGroup;
+  showSource: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const visible = showSource
+    ? group.formats
+    : group.formats.filter((f) => !DOC_SOURCE_EXTENSIONS.has(f));
+  // A source-only document has nothing else to show, so it shows its source
+  // rather than an empty square — and says as much where the chips go.
+  const sourceOnly = visible.length === 0;
+  const headline = sourceOnly ? fileExt(group.primary) : visible[0];
+  const chips = sourceOnly ? [] : visible.slice(1);
+
+  const kind = classifyMediaKind(group.primary);
+  const colors = MEDIA_KIND_COLORS[kind];
+  const totalSize = group.members.reduce((n, m) => n + (m.size || 0), 0);
+
+  return (
+    <div
+      onClick={onSelect}
+      style={{
+        background: 'rgba(26, 16, 40, 0.6)',
+        border: `1px solid ${selected ? colors.border : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
+        borderRadius: 10, overflow: 'hidden', cursor: 'pointer',
+        transition: 'border-color 0.2s, transform 0.15s',
+      }}
+    >
+      <div style={{
+        height: 120, display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', gap: 4, background: colors.bg, position: 'relative',
+      }}>
+        <span style={{
+          fontFamily: 'var(--font-mono, monospace)', fontSize: 20, fontWeight: 600,
+          letterSpacing: 2, color: colors.text,
+        }}>{headline.toUpperCase()}</span>
+        <span style={{ fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase', color: '#6c7086' }}>
+          {kind}
+        </span>
+        {chips.length > 0 && (
+          <span style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
+            {chips.map((ext) => (
+              <span key={ext} style={{
+                fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 6,
+                background: 'rgba(0,0,0,0.6)', color: colors.text,
+                textTransform: 'uppercase', letterSpacing: 0.5,
+              }}>{ext}</span>
+            ))}
+          </span>
+        )}
+      </div>
+      <div style={{ padding: '10px 12px' }}>
+        <div style={{
+          fontSize: 12, fontWeight: 500, color: '#cdd6f4',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4,
+        }}>{group.title}</div>
+        <div style={{ fontSize: 10, color: '#6c7086', display: 'flex', justifyContent: 'space-between' }}>
+          <span>{sourceOnly ? t('library.source_only') : formatFileSize(totalSize)}</span>
+          {group.primary.modified && (
+            <span>{new Date(group.primary.modified).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   useLocale();
   const [, setAuthKey] = useState(0);
@@ -11311,6 +11537,20 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // tab — previously they all collapsed under Images.
   const [filter, setFilter] = useState<'icon' | 'logo' | LibraryMediaKind | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // Show the Markdown source alongside a document's exports. Off by default:
+  // the source is on every document and says nothing by being listed. It never
+  // hides a DOCUMENT — only whether the .md is named among its formats — so a
+  // source-only document still has a card.
+  const [showSource, setShowSource] = useState<boolean>(() => {
+    try { return localStorage.getItem('ava-library-show-source') === '1'; } catch { return false; }
+  });
+  const toggleShowSource = () => {
+    setShowSource((on) => {
+      const next = !on;
+      try { localStorage.setItem('ava-library-show-source', next ? '1' : '0'); } catch { /* quota */ }
+      return next;
+    });
+  };
   const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
 
   // Open the account-scoped local creative folder in the OS file explorer.
@@ -11475,6 +11715,22 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   }, [cloudFiles, localFiles, kind]);
   const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => libraryBucket(f) === filter);
 
+  // Documents group into one card each; assets stay one card per file, since
+  // an image and a video of the same name are not two views of one thing.
+  const docGroups = useMemo(
+    () => (kind === 'documents' ? groupLibraryDocuments(filtered) : []),
+    [kind, filtered],
+  );
+  // What the list view shows: every file, minus the sources unless asked for,
+  // but never dropping a document that has nothing else.
+  const listFiles = useMemo(() => {
+    if (kind !== 'documents' || showSource) return filtered;
+    return docGroups.flatMap((g) => {
+      const exports = g.members.filter((m) => !DOC_SOURCE_EXTENSIONS.has(fileExt(m)));
+      return exports.length > 0 ? exports : [g.primary];
+    });
+  }, [kind, showSource, filtered, docGroups]);
+
   const typeCounts = useMemo(() => {
     const byBucket = (k: 'icon' | 'logo' | LibraryMediaKind) => kindFiles.filter((f) => libraryBucket(f) === k).length;
     return {
@@ -11607,6 +11863,31 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
             ))}
           </div>
 
+          {/* The right-hand cluster. The checkbox was a third child of a
+              space-between row, which parked it in the middle of the toolbar
+              rather than next to the control it belongs with. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Show the Markdown source. Documents only — an image has no source
+              to hide, so the control would be inert on the Assets tab. */}
+          {kind === 'documents' && (
+            <label
+              title={t('library.show_source_title')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                padding: '5px 10px', borderRadius: 8, fontSize: 11, color: '#a6adc8',
+                border: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showSource}
+                onChange={toggleShowSource}
+                style={{ width: 12, height: 12, accentColor: 'var(--accent)' }}
+              />
+              {t('library.show_source')}
+            </label>
+          )}
+
           {/* View toggle */}
           <div style={{ display: 'flex', gap: 4, background: 'rgba(26, 16, 40, 0.6)', borderRadius: 8, padding: 3 }}>
             {(['grid', 'list'] as const).map((v) => (
@@ -11632,6 +11913,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                 )}
               </button>
             ))}
+          </div>
           </div>
         </div>
       </div>
@@ -11669,7 +11951,18 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         ) : viewMode === 'grid' ? (
           /* Grid view */
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-            {filtered.map((file, i) => {
+            {/* Documents are one card per DOCUMENT; everything else stays one
+                card per file. */}
+            {docGroups.length > 0 && docGroups.map((group) => (
+              <DocumentGroupCard
+                key={group.key}
+                group={group}
+                showSource={showSource}
+                selected={selectedFile?.path === group.primary.path}
+                onSelect={() => setSelectedFile(selectedFile?.path === group.primary.path ? null : group.primary)}
+              />
+            ))}
+            {docGroups.length === 0 && filtered.map((file, i) => {
               const kind = classifyMediaKind(file);
               const colors = MEDIA_KIND_COLORS[kind];
               const isSelected = selectedFile?.path === file.path;
@@ -11727,7 +12020,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         ) : (
           /* List view */
           <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10, overflow: 'hidden' }}>
-            {filtered.map((file, i) => {
+            {listFiles.map((file, i) => {
               const kind = classifyMediaKind(file);
               const colors = MEDIA_KIND_COLORS[kind];
               const isSelected = selectedFile?.path === file.path;
@@ -11794,6 +12087,8 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       {selectedFile && (
         <LibraryPreviewModal
           file={selectedFile}
+          siblings={docGroups.find(g => g.members.some(m => m.path === selectedFile.path))?.members}
+          showSource={showSource}
           projectFolder={projectFolder}
           onClose={() => setSelectedFile(null)}
           onDeleted={(id) => {
@@ -11840,12 +12135,20 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
 
 function LibraryPreviewModal({
   file,
+  siblings,
+  showSource,
   projectFolder,
   onClose,
   onDeleted,
   onRenamed,
 }: {
   file: LibraryFile;
+  /** Every file this document exists as, when it came from a grouped card.
+   *  Without it the drawer could only act on the source, so a grouped card
+   *  gave no way to open the PDF it was advertising. */
+  siblings?: LibraryFile[];
+  /** The Library's "Show .md" setting, honoured here too. */
+  showSource?: boolean;
   projectFolder: string | null;
   onClose: () => void;
   onDeleted: (id: string, source: 'cloud' | 'local') => void;
@@ -11928,18 +12231,8 @@ function LibraryPreviewModal({
     } finally { setBusy(null); setExportingFormat(null); }
   };
 
-  const handleReveal = async () => {
-    const abs = await resolveLocalAbsPath();
-    if (!abs) return;
-    setBusy('reveal');
-    try {
-      const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
-      await revealItemInDir(abs);
-      onClose();
-    } catch (err) {
-      showToast(`Reveal failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally { setBusy(null); }
-  };
+  // handleReveal removed with the top-level button: each row under Formats
+  // opens its own file's folder, which is the one the user pointed at.
 
   const handleDownload = async () => {
     setBusy('download');
@@ -11981,6 +12274,31 @@ function LibraryPreviewModal({
         if (!file.id) { showToast('Cloud asset has no id.'); return; }
         await apiFetch(`/creative-assets/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
         onDeleted(file.id, 'cloud');
+      } else if (pendingDelete) {
+        // A single format the user picked out of the Formats list.
+        const abs = await siblingAbsPath(pendingDelete);
+        if (abs) {
+          const { remove } = await import('@tauri-apps/plugin-fs');
+          await remove(abs).catch(() => { /* may already be gone */ });
+          if (pendingDelete.id) await removeLocalCreative(pendingDelete.id).catch(() => {});
+          onDeleted(pendingDelete.path, 'local');
+        }
+        setPendingDelete(null);
+        setConfirmDelete(false);
+        setBusy(null);
+        return;
+      } else if (siblings && siblings.length > 1) {
+        // Every file of a grouped document, not only the source. The card says
+        // "Sacred-Crossing-Overview"; deleting just the .md would leave the
+        // .pdf and .docx behind and the document would reappear as an orphan.
+        const { remove } = await import('@tauri-apps/plugin-fs');
+        for (const sib of siblings) {
+          const abs = await siblingAbsPath(sib);
+          if (!abs) continue;
+          await remove(abs).catch(() => { /* may already be gone */ });
+          if (sib.id) await removeLocalCreative(sib.id).catch(() => {});
+          onDeleted(sib.path, 'local');
+        }
       } else {
         const abs = await resolveLocalAbsPath();
         if (!abs) { showToast('Could not resolve local path.'); return; }
@@ -12032,16 +12350,67 @@ function LibraryPreviewModal({
     } finally { setRenaming(false); }
   };
 
+  // Set when a single format is being removed rather than the whole
+  // document, so one confirmation panel serves both scopes.
+  const [pendingDelete, setPendingDelete] = useState<LibraryFile | null>(null);
+
+  // What the delete prompt names, and how many files it is really about.
+  const deleteCount = pendingDelete ? 1 : (siblings && siblings.length > 1 ? siblings.length : 1);
+  const deleteName = pendingDelete
+    ? pendingDelete.name
+    : (siblings && siblings.length > 1
+      ? splitLibraryPath(file.path || file.name).stem
+      : file.name);
+
+  // The files to list under Formats. Falls back to nothing when this was not
+  // a grouped card, which is what keeps the section out of the Assets tab.
+  const visibleSiblings = (siblings ?? []).filter(
+    (sib) => showSource || !DOC_SOURCE_EXTENSIONS.has(fileExt(sib)),
+  );
+
+  /** Absolute path of any file in the group, not just the selected one. */
+  const siblingAbsPath = async (sib: LibraryFile): Promise<string | null> => {
+    if (!projectFolder) return null;
+    try {
+      const { join } = await import('@tauri-apps/api/path');
+      return await join(projectFolder, sib.path);
+    } catch { return null; }
+  };
+
+  const openSibling = async (sib: LibraryFile) => {
+    const abs = await siblingAbsPath(sib);
+    if (!abs) return;
+    try {
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(abs);
+    } catch (err) {
+      showToast(`Nothing on this machine opened it. ${err instanceof Error ? err.message : String(err)}`);
+      setOfferOffice(true);
+    }
+  };
+
+  const revealSibling = async (sib: LibraryFile) => {
+    const abs = await siblingAbsPath(sib);
+    if (!abs) return;
+    try {
+      const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+      await revealItemInDir(abs);
+    } catch (err) {
+      showToast(`Could not open the folder: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const actionBtn = (
     label: string,
     onClick: () => void,
-    opts: { primary?: boolean; danger?: boolean; disabled?: boolean } = {},
+    opts: { primary?: boolean; danger?: boolean; disabled?: boolean; small?: boolean } = {},
   ): React.ReactElement => (
     <button
       onClick={onClick}
       disabled={opts.disabled || busy !== null}
       style={{
-        padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: opts.primary ? 600 : 500,
+        padding: opts.small ? '3px 8px' : '8px 16px', borderRadius: opts.small ? 6 : 8,
+        fontSize: opts.small ? 10 : 12, fontWeight: opts.primary ? 600 : 500,
         cursor: (opts.disabled || busy) ? 'default' : 'pointer', flexShrink: 0,
         background: opts.primary
           ? 'linear-gradient(135deg, var(--accent), #7c3aed)'
@@ -12067,7 +12436,9 @@ function LibraryPreviewModal({
     // different product one page across.
     <Drawer
       onClose={onClose}
-      title={file.name}
+      // The document's name, not the source file's. With .md hidden in the
+      // grid, a drawer headed "…-Overview.md" contradicts it.
+      title={siblings && siblings.length > 1 ? splitLibraryPath(file.path || file.name).stem : file.name}
       maxWidth={620}
       closeLabel={t('dash.library.close_preview')}
     >
@@ -12155,20 +12526,51 @@ function LibraryPreviewModal({
                 )}
               </span>
             ))}
-            {!isCloud && actionBtn(busy === 'reveal' ? 'Revealing…' : 'Reveal', handleReveal, { disabled: !projectFolder })}
-            {actionBtn(
-              busy === 'download' ? 'Downloading…' : 'Download',
-              handleDownload,
-              { primary: isCloud, disabled: isCloud && !file.url },
-            )}
+            {/* Open in folder is not here any more: every row under Formats
+                has its own, and a top-level one acted on whichever file
+                happened to be selected rather than one the user pointed at. */}
             {isCloud && file.url && actionBtn(copied ? 'Copied ✓' : 'Copy URL', handleCopy)}
-            <div style={{ flex: 1 }} />
-            {actionBtn(
-              busy === 'delete' ? 'Deleting…' : (confirmDelete ? 'Confirm delete' : 'Delete'),
-              handleDelete,
-              { danger: true, disabled: isCloud && !file.id },
-            )}
           </div>
+
+          {/* Every file this document exists as. A grouped card says "also a
+              PDF"; this is where you open it. Honours "Show .md" for the same
+              reason the grid does — a source hidden in the grid and listed
+              here is the checkbox lying. */}
+          {visibleSiblings.length > 0 && (
+            <div style={{ marginTop: 16, borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', paddingTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase', color: '#6c7086', marginBottom: 8 }}>
+                {t('library.formats')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {visibleSiblings.map((sib) => (
+                  <div
+                    key={sib.path}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8,
+                      background: sib.path === file.path ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent',
+                    }}
+                  >
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 6,
+                      textTransform: 'uppercase', letterSpacing: 0.5,
+                      background: MEDIA_KIND_COLORS[classifyMediaKind(sib)].bg,
+                      color: MEDIA_KIND_COLORS[classifyMediaKind(sib)].text,
+                    }}>{fileExt(sib)}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: '#a6adc8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {sib.name}
+                    </span>
+                    {actionBtn(t('dash.library.open'), () => void openSibling(sib), { small: true })}
+                    {actionBtn(t('library.reveal'), () => void revealSibling(sib), { small: true })}
+                    {/* Exports only. The source IS the document, so removing
+                        it here would orphan the copies — the whole-document
+                        delete lives in the footer. */}
+                    {!DOC_SOURCE_EXTENSIONS.has(fileExt(sib)) &&
+                      actionBtn(t('library.delete'), () => { setPendingDelete(sib); setConfirmDelete(true); }, { small: true, danger: true })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {offerOffice && (
@@ -12196,6 +12598,48 @@ function LibraryPreviewModal({
           </div>
         )}
       </div>
+      {/* Download and Delete sit at the foot, apart from the rest. Neither is
+          about reading or producing the document — one takes a copy out of the
+          app, the other destroys it — and a Delete sharing a row with Export is
+          one mis-click from a very different outcome. Pinned below the scroll
+          so a long document cannot push them out of reach. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+        padding: '12px 20px',
+        borderTop: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)',
+      }}>
+        {confirmDelete ? (
+          /* An actual question. The old confirmation relabelled the same
+             button to "Confirm delete", which is easy to miss on a button you
+             have already decided to press — and it never said how many files
+             were going, which matters now a card can stand for three. */
+          <div style={{ width: '100%' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>
+              {t('library.delete_confirm_title', { name: deleteName })}
+            </div>
+            <div style={{ marginTop: 2, fontSize: 11, color: '#a6adc8' }}>
+              {deleteCount > 1
+                ? t('library.delete_confirm_many', { count: String(deleteCount) })
+                : t('library.delete_confirm_one')}
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+              {actionBtn(t('library.cancel'), () => { setConfirmDelete(false); setPendingDelete(null); })}
+              {actionBtn(busy === 'delete' ? 'Deleting…' : t('library.delete'), handleDelete, { danger: true })}
+            </div>
+          </div>
+        ) : (
+          <>
+            {actionBtn(
+              busy === 'download' ? 'Downloading…' : 'Download',
+              handleDownload,
+              { primary: isCloud, disabled: isCloud && !file.url },
+            )}
+            <div style={{ flex: 1 }} />
+            {actionBtn(t('library.delete'), () => setConfirmDelete(true), { danger: true, disabled: isCloud && !file.id })}
+          </>
+        )}
+      </div>
+
     </Drawer>
   );
 }
