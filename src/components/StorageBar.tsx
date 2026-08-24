@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { t } from '../lib/i18n';
-import { scanStorage, reclaimStorage, openStorageFolder, type StorageScan } from '../lib/storage-scan';
+import { homeDir } from '@tauri-apps/api/path';
+import { measuredAgo, isUsageStale, type ProjectsUsage } from '@ava/core/projects/storage';
+import { projectsHomeFrom } from '@ava/core/projects/home';
+import { readProjectsHomeSetting } from '../lib/shared-config';
+import { scanStorage, reclaimStorage, measureProjects, readProjectsUsage, openStorageFolder, type StorageScan } from '../lib/storage-scan';
 
 // ─── Storage bar + detail card ───────────────────────────────────────────────
 //
@@ -22,6 +26,8 @@ const CAT_COLOR: Record<string, string> = {
   journal: '#f0a24b', datasets: '#22d3ee', backups: '#f87171', other: '#9ca3af',
 };
 const colorOf = (key: string) => CAT_COLOR[key] ?? CAT_COLOR.other;
+/** Your code, kept visually apart from Ava's own footprint. */
+const PROJECTS_COLOR = '#facc15';
 
 function formatBytes(n: number): string {
   if (!n || n < 0) return '0 B';
@@ -35,6 +41,11 @@ function formatBytes(n: number): string {
  *  scan has landed (and nothing at all if ~/.ava is empty). */
 export function StorageBar({ label = 'Storage' }: { label?: string }) {
   const [scan, setScan] = useState<StorageScan | null>(null);
+  // What the user's projects folder costs. Read from cache — never measured on
+  // render, because a source tree can run to tens of gigabytes and walking it
+  // would stall the page every time.
+  const [projects, setProjects] = useState<ProjectsUsage | null>(null);
+  const [measuring, setMeasuring] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [armed, setArmed] = useState(false);
@@ -54,6 +65,23 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
     return () => window.removeEventListener('ava-storage-changed', refresh);
   }, [refresh]);
 
+  // The cached projects figure, if one exists. Reading a small JSON file is
+  // cheap; measuring the folder it describes is not, and only happens when
+  // asked for.
+  useEffect(() => { readProjectsUsage().then(setProjects).catch(() => setProjects(null)); }, []);
+
+  const doMeasure = useCallback(async () => {
+    setMeasuring(true);
+    try {
+      const home = await homeDir();
+      // The same ~/.ava/config.json the sidecar reads, so the folder measured
+      // here is the folder Ava scaffolds into.
+      const configured = await readProjectsHomeSetting();
+      setProjects(await measureProjects(projectsHomeFrom(home, configured)));
+    } catch { /* leave the previous figure showing rather than blanking it */ }
+    finally { setMeasuring(false); }
+  }, []);
+
   // Pinned card closes on Esc (and the ✕); a stray click never dismisses it.
   useEffect(() => {
     if (!pinned) return;
@@ -64,6 +92,14 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
 
   if (!scan || scan.totalBytes <= 0) return null;
   const { totalBytes, categories, reclaim } = scan;
+
+  // Two families, one total. Ava's footprint is what she put on the disk; the
+  // projects figure is the user's own work, shown because "how much is this
+  // costing me" cannot be answered by half of it.
+  const projectBytes = projects?.bytes ?? 0;
+  const grandTotal = Math.max(1, totalBytes + projectBytes);
+  const projectsAge = measuredAgo(projects);
+  const projectsStale = isUsageStale(projects);
 
   const reclaimPaths = reclaim.flatMap(r => r.paths);
   const reclaimBytes = reclaim.reduce((a, r) => a + r.bytes, 0);
@@ -125,7 +161,7 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
           fontSize: 11, color: '#6c7086',
         }}>
           <span>{label}</span>
-          <span style={{ color: '#a6adc8' }}>{formatBytes(totalBytes)}</span>
+          <span style={{ color: '#a6adc8' }}>{formatBytes(grandTotal)}</span>
         </div>
         <div style={{
           display: 'flex', height: 8, width: '100%', overflow: 'hidden',
@@ -135,7 +171,7 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
             <div
               key={c.key}
               style={{
-                width: `${Math.max(0.5, (c.bytes / totalBytes) * 100)}%`,
+                width: `${Math.max(0.5, (c.bytes / grandTotal) * 100)}%`,
                 background: colorOf(c.key),
                 height: '100%',
                 opacity: cardOpen ? 0.9 : 1,
@@ -143,6 +179,20 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
               }}
             />
           ))}
+          {/* Your projects — one segment, its own colour, last. The total
+              answers "what is this costing me on my machine", which is only
+              honest if the user's own work is in it. */}
+          {projectBytes > 0 && (
+            <div
+              style={{
+                width: `${Math.max(0.5, (projectBytes / grandTotal) * 100)}%`,
+                background: PROJECTS_COLOR,
+                height: '100%',
+                opacity: cardOpen ? 0.9 : 1,
+                transition: 'opacity 0.15s',
+              }}
+            />
+          )}
         </div>
       </button>
 
@@ -156,7 +206,7 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
           <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, fontWeight: 500, color: '#a6adc8' }}>{label}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 11, color: '#6c7086' }}>{formatBytes(totalBytes)}</span>
+              <span style={{ fontSize: 11, color: '#6c7086' }}>{formatBytes(grandTotal)}</span>
               {pinned && (
                 <button
                   onClick={close}
@@ -180,6 +230,51 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
                 <span style={{ flexShrink: 0, color: '#6c7086' }}>{formatBytes(c.bytes)}</span>
               </div>
             ))}
+
+            {/* Below Ava's own rows and visually separate — the one line that
+                is not her footprint. Never carries a Reclaim action: this is
+                the user's work. */}
+            <div style={{
+              marginTop: 6, paddingTop: 6,
+              borderTop: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+                <span style={{
+                  display: 'inline-block', height: 8, width: 8, flexShrink: 0,
+                  borderRadius: 9999, background: PROJECTS_COLOR,
+                }} />
+                <span style={{ flex: 1, color: '#a6adc8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {t('storage.your_projects')}
+                </span>
+                <span style={{ flexShrink: 0, color: '#6c7086' }}>
+                  {projects ? formatBytes(projectBytes) : '\u2014'}
+                </span>
+              </div>
+              <div style={{ marginTop: 2, paddingLeft: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: '#6c7086' }}>
+                {/* A cached figure that does not say how old it is reads as live. */}
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {measuring
+                    ? t('storage.measuring')
+                    : projects
+                      ? `${projects.projectCount ?? 0} ${t('storage.folders')} \u00b7 ${projectsAge}`
+                      : t('storage.not_measured')}
+                </span>
+                {pinned && (
+                  <button
+                    onClick={() => void doMeasure()}
+                    disabled={measuring}
+                    style={{
+                      flexShrink: 0, borderRadius: 6, padding: '2px 6px', fontSize: 10,
+                      background: 'transparent', color: '#a6adc8',
+                      border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
+                      cursor: measuring ? 'default' : 'pointer', opacity: measuring ? 0.6 : 1,
+                    }}
+                  >
+                    {projects && !projectsStale ? t('storage.remeasure') : t('storage.measure')}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {pinned ? (

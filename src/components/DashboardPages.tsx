@@ -61,6 +61,9 @@ import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
 import { Tooltip } from './Tooltip';
 import { Drawer } from './Drawer';
+import { homeDir } from '@tauri-apps/api/path';
+import { projectsHomeFrom } from '@ava/core/projects/home';
+import { readProjectsHomeSetting, writeProjectsHomeSetting } from '../lib/shared-config';
 import { DateField } from './MiniDatePicker';
 import { LessonPlayer, type PlayableLesson, type LessonStep } from './LessonPlayer';
 import { LearningRoomChat, seedLearningRoom } from './LearningRoomChat';
@@ -15006,6 +15009,34 @@ export function SettingsPage() {
     maxTokens: 8192,
   };
   const [authKey, setAuthKey] = useState(0);
+  // ── Where new projects go ────────────────────────────────────────────
+  // Stored locally, read by the storage bar and (once wired) by the scaffold
+  // step. Empty means the default, which projectsHomeFrom resolves — the input
+  // shows that default as its placeholder so "empty" never looks like "unset
+  // and broken".
+  const [projectsHomeInput, setProjectsHomeInput] = useState<string>('');
+  useEffect(() => { readProjectsHomeSetting().then(v => setProjectsHomeInput(v ?? '')).catch(() => {}); }, []);
+  const [projectsHomeDefault, setProjectsHomeDefault] = useState('');
+  useEffect(() => {
+    homeDir().then(h => setProjectsHomeDefault(projectsHomeFrom(h))).catch(() => {});
+  }, []);
+
+  const saveProjectsHome = useCallback(async (value: string) => {
+    // ~/.ava/config.json, not localStorage: the sidecar reads this to know
+    // where to scaffold, and it cannot see the renderer's storage.
+    await writeProjectsHomeSetting(value).catch(() => { /* left unset */ });
+    // The bar's cached figure describes the OLD folder, so it is now wrong.
+    try { window.dispatchEvent(new CustomEvent('ava-storage-changed')); } catch { /* no window */ }
+  }, []);
+
+  const pickProjectsHome = useCallback(async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const picked = await open({ directory: true, multiple: false, title: t('dash.settings.projects_home') });
+      if (typeof picked === 'string') { setProjectsHomeInput(picked); void saveProjectsHome(picked); }
+    } catch { /* dialog unavailable — the text field still works */ }
+  }, [saveProjectsHome]);
+
   useEffect(() => {
     const handler = () => {
       if (!checkConnected()) {
@@ -15332,6 +15363,55 @@ export function SettingsPage() {
         {/* "Your AI" summary + Avatars moved to the Ava's Style (Personality)
             page — identity now lives in one place. The General tab keeps the
             Language section below. */}
+
+        {/* ── Group: Projects ───────────────────────────────────────────
+            Where Ava puts new projects. A DEFAULT, not a prison — developers
+            have settled habits about ~/dev or D:\work, and the point is to
+            remove a decision from someone who does not yet have one, not to
+            overrule someone who does. */}
+        <div style={sLabel}>{t('dash.settings.section.projects')}</div>
+        <div style={{
+          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+          borderRadius: 10, padding: '18px 20px', marginBottom: 16,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.projects_home')}</div>
+          <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2, lineHeight: 1.5 }}>
+            {t('dash.settings.projects_home_hint')}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+            <input
+              type="text"
+              value={projectsHomeInput}
+              placeholder={projectsHomeDefault}
+              onChange={(e) => setProjectsHomeInput(e.target.value)}
+              onBlur={() => void saveProjectsHome(projectsHomeInput)}
+              style={{
+                flex: 1, minWidth: 0, padding: '7px 10px', borderRadius: 8, fontSize: 12,
+                background: 'rgba(10, 6, 18, 0.7)', color: '#cdd6f4',
+                border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
+              }}
+            />
+            <button
+              onClick={() => void pickProjectsHome()}
+              style={{
+                flexShrink: 0, padding: '7px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                background: 'transparent', color: '#cdd6f4',
+                border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+              }}
+            >{t('dash.settings.browse')}</button>
+            {projectsHomeInput && (
+              <button
+                onClick={() => { setProjectsHomeInput(''); void saveProjectsHome(''); }}
+                title={t('dash.settings.projects_home_reset')}
+                style={{
+                  flexShrink: 0, padding: '7px 10px', borderRadius: 8, fontSize: 11, cursor: 'pointer',
+                  background: 'transparent', color: '#6c7086',
+                  border: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)',
+                }}
+              >{t('dash.settings.projects_home_reset')}</button>
+            )}
+          </div>
+        </div>
 
         {/* ── Group: Privacy (sec 3+4) ──────────────────────────── */}
         <div style={{ display: settingsTab === 'privacy' ? 'contents' : 'none' }}>
@@ -17145,9 +17225,17 @@ export function PlannerPage() {
   ];
   return (
     <div style={pageWrapper}>
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={pageTitle}>Planner</h2>
-        <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Tasks, reflections, and health plans</p>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24 }}>
+        <div>
+          <h2 style={pageTitle}>Planner</h2>
+          <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Tasks, reflections, and health plans</p>
+        </div>
+        {/* Also on Command Centre and Library. Here because the Planner is
+            where people sit day to day, and a local-first product should not
+            make you go looking to find out what it is costing you. */}
+        <div style={{ width: 220, flexShrink: 0 }}>
+          <StorageBar label={t('dash.cc.storage')} />
+        </div>
       </div>
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
         {tabs.map(t => (

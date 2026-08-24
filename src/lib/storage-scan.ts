@@ -21,7 +21,8 @@
 // a couple of large model files) scans in well under a second. Everything is
 // best-effort: unreadable entries are skipped, never fatal.
 
-import { readDir, stat, remove, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { readDir, stat, remove, readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import type { ProjectsUsage } from '@ava/core/projects/storage';
 
 export interface StorageCategory { key: string; label: string; bytes: number }
 export interface StorageReclaim { label: string; bytes: number; paths: string[] }
@@ -31,25 +32,10 @@ export interface StorageScan { totalBytes: number; categories: StorageCategory[]
  *  every fs call rides the same BaseDirectory.Home the rest of the IDE uses. */
 export const AVA_HOME_REL = '.ava';
 
-const CATEGORY_LABEL: Record<string, string> = {
-  models: 'Models', runtime: 'Runtime', creative: 'Creative', memory: 'Memory',
-  journal: 'Journal', datasets: 'Datasets', backups: 'Old backups', other: 'Other',
-};
-// Stable display order (largest-first is applied after, but this breaks ties).
-const CATEGORY_ORDER = ['models', 'runtime', 'creative', 'memory', 'journal', 'datasets', 'backups', 'other'];
+// The category rules — labels, order, and which folder counts as what — live
+// in core so this surface and the other cannot disagree about the user's disk.
+import { CATEGORY_LABEL, CATEGORY_ORDER, categoryOf } from '@ava/core/projects/storage';
 
-/** Map a top-level entry name to a storage category. */
-function categoryOf(name: string): string {
-  const n = name.toLowerCase();
-  if (/backup/.test(n)) return 'backups';
-  if (n === 'models') return 'models';
-  if (n === 'bin') return 'runtime';
-  if (n === 'creative') return 'creative';
-  if (n === 'memory' || n === 'memory.json' || n === 'memory.md' || n === 'embeddings' || n === 'graph.json') return 'memory';
-  if (n === 'journal') return 'journal';
-  if (n === 'datasets') return 'datasets';
-  return 'other';
-}
 
 /** Recursive on-disk size of a directory (bytes). Best-effort — children are
  *  sized concurrently, which matters here because every stat is an IPC hop. */
@@ -78,6 +64,88 @@ async function sizeOf(rel: string, isDir: boolean): Promise<number> {
  * `users/<id>/` so account-scoped data (creative, memory, journal…) rolls up
  * into the same categories as the shared root.
  */
+// ─── The user's projects ─────────────────────────────────────────────────────
+//
+// Measured separately from ~/.ava, and never on render.
+//
+// A source tree is not a config folder. An Unreal project's Intermediate,
+// Binaries and DerivedDataCache run to tens of gigabytes; walking that on every
+// page load would stall the UI every single time. So the figure is cached,
+// shown with its age, and re-measured only on request or once stale.
+//
+// The cache is ~/.ava/projects-usage.json — the SAME file the extension host
+// writes, so a measurement taken on either surface is visible on both. One
+// disk, one answer.
+
+const USAGE_CACHE_REL = `${AVA_HOME_REL}/projects-usage.json`;
+
+export async function readProjectsUsage(): Promise<ProjectsUsage | null> {
+  try {
+    const raw = await readTextFile(USAGE_CACHE_REL, { baseDir: BaseDirectory.Home });
+    const parsed = JSON.parse(raw) as ProjectsUsage;
+    return parsed?.measuredAt ? parsed : null;
+  } catch { return null; }
+}
+
+/**
+ * Walk the projects home and total it.
+ *
+ * Counts EVERY immediate subfolder, not only projects Ava created — the number
+ * should match what the file manager says about that folder. Counting only
+ * hers would under-report the moment someone clones a repo into it, with no
+ * way for them to tell why.
+ *
+ * `projectsHome` is absolute; the Tauri fs plugin takes absolute paths when no
+ * baseDir is given, which is why this one call does not ride BaseDirectory.Home
+ * like the rest of the file.
+ */
+export async function measureProjects(projectsHome: string): Promise<ProjectsUsage> {
+  let projectCount = 0;
+  let bytes = 0;
+
+  let entries: { name: string; isDirectory?: boolean; isFile?: boolean }[] = [];
+  try { entries = await readDir(projectsHome); } catch { entries = []; }
+
+  for (const e of entries) {
+    const full = `${projectsHome}/${e.name}`;
+    if (e.isDirectory) {
+      projectCount++;
+      bytes += await absDirSize(full);
+    } else if (e.isFile) {
+      // Loose files still occupy the disk the user is being shown.
+      try { const st = await stat(full); bytes += st.size != null ? Number(st.size) : 0; } catch { /* skip */ }
+    }
+  }
+
+  const usage: ProjectsUsage = {
+    path: projectsHome,
+    bytes,
+    projectCount,
+    measuredAt: new Date().toISOString(),
+  };
+  // Best-effort: a measurement that cannot be cached is still worth showing.
+  try {
+    await writeTextFile(USAGE_CACHE_REL, JSON.stringify(usage, null, 2), { baseDir: BaseDirectory.Home });
+  } catch { /* ignore */ }
+  return usage;
+}
+
+/** Recursive size of an ABSOLUTE directory. The rest of this file works
+ *  Home-relative; the projects home may be anywhere the user pointed it. */
+async function absDirSize(dir: string): Promise<number> {
+  let entries;
+  try { entries = await readDir(dir); } catch { return 0; }
+  const sizes = await Promise.all(entries.map(async (e) => {
+    const full = `${dir}/${e.name}`;
+    try {
+      if (e.isDirectory) return await absDirSize(full);
+      const st = await stat(full);
+      return st.size != null ? Number(st.size) : 0;
+    } catch { return 0; }
+  }));
+  return sizes.reduce((a, b) => a + b, 0);
+}
+
 export async function scanStorage(): Promise<StorageScan> {
   const bytesByCat = new Map<string, number>();
   const reclaimPaths: string[] = [];

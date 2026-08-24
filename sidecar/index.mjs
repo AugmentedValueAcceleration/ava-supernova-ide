@@ -12,7 +12,7 @@
  */
 
 import { createInterface } from 'node:readline';
-import { platform } from 'node:os';
+import { platform, homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,6 +93,17 @@ try {
   learningCore = await import(`file://${learningPath.replace(/\\/g, '/')}`);
 }
 const { deriveProgression, formatLearnerContext } = learningCore;
+// Projects-home subpath — a dependency-free leaf, so the sidecar, the renderer
+// and the extension host all resolve "where do projects go" identically.
+let projectsHomeCore;
+try {
+  projectsHomeCore = await import('@ava/core/projects/home');
+} catch {
+  const p = join(__dirname, '..', '..', 'core', 'dist', 'projects', 'projects-home.js');
+  projectsHomeCore = await import(`file://${p.replace(/\\/g, '/')}`);
+}
+const { projectsHomeFrom } = projectsHomeCore;
+
 
 // Authoring subpath — the Library's export button. The renderer cannot do
 // this itself: rendering reads the file and writes a zip, which is Node work,
@@ -509,10 +520,30 @@ const MODE_PREFIX_TAG = {
  * Teach, Health and Design are absent on purpose: those lanes build their own
  * room prefix further down, and their room tag drives the mode.
  */
+/**
+ * Where new projects go, as the user set it in ~/.ava/config.json.
+ *
+ * Read fresh each turn rather than cached at boot: someone who changes the
+ * folder mid-session should not have to restart the app for Ava to notice.
+ * Falls back to the default if the file is missing or unreadable.
+ */
+function resolveProjectsHome() {
+  let configured;
+  try {
+    const raw = readFileSync(join(homedir(), '.ava', 'config.json'), 'utf-8');
+    const value = JSON.parse(raw)?.preferences?.projectsHome;
+    if (typeof value === 'string' && value.trim()) configured = value.trim();
+  } catch { /* no config, or unreadable — the default applies */ }
+  return projectsHomeFrom(homedir(), configured);
+}
+
 const MODE_PREFIX_FN = {
   plan:       getPlanModePrefix,
   chat:       getChatModePrefix,
-  brainstorm: getBrainstormModePrefix,
+  // Brainstorm needs to know where projects go, so "scaffold it" has an
+  // address. Read from ~/.ava/config.json, which is where the IDE's
+  // settings picker writes it — the renderer's storage is invisible here.
+  brainstorm: (text) => getBrainstormModePrefix(text, resolveProjectsHome()),
   write:      getWriteModePrefix,
   security:   getSecurityModePrefix,
 };

@@ -125,6 +125,33 @@ export async function writeHCompanyKey(key: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Where new projects go, as the user set it. Empty/unset means the default.
+ *
+ * Deliberately in ~/.ava/config.json rather than localStorage: the SIDECAR
+ * needs this too — it is what tells Ava where to scaffold — and a renderer-only
+ * setting is invisible to it. One fact, one place, both halves of the app.
+ */
+export async function readProjectsHomeSetting(): Promise<string | null> {
+  const outcome = await readConfig();
+  if (outcome.status !== 'ok') return null;
+  const prefs = outcome.config.preferences as Record<string, unknown> | undefined;
+  const value = prefs?.projectsHome;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/** Write (or clear, with '') the projects folder, preserving sibling config. */
+export async function writeProjectsHomeSetting(path: string): Promise<boolean> {
+  const outcome = await readConfig();
+  if (outcome.status === 'unreadable') return false;
+  const base = outcome.status === 'ok' ? outcome.config : {};
+  const preferences = { ...(base.preferences as Record<string, unknown> | undefined) };
+  if (path.trim()) preferences.projectsHome = path.trim();
+  else delete preferences.projectsHome;
+  await writeConfig({ ...base, preferences });
+  return true;
+}
+
 /** Clear the platform key from ~/.ava/config.json on sign-out. */
 export async function clearSharedPlatformKey(): Promise<void> {
   const outcome = await readConfig();
