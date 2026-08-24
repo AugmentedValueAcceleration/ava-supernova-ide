@@ -97,8 +97,6 @@ function reminderLabel(lead?: number): string | null {
 }
 
 interface Props {
-  sessionTasks: SessionTaskUI[];
-  avaCompletedTasks: AvaCompletedTaskUI[];
   todayTasks: TodayTaskUI[];
   allTasks: TodayTaskUI[];
   onClose: () => void;
@@ -120,22 +118,7 @@ interface Props {
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t('tasks.just_now');
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
 
-const STATUS_ICONS: Record<string, { icon: string; color: string }> = {
-  pending: { icon: '○', color: '#6c7086' },
-  in_progress: { icon: '◉', color: 'var(--accent)' },
-  completed: { icon: '✓', color: '#a6e3a1' },
-};
 
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: '#ef4444',
@@ -163,41 +146,7 @@ function formatDueShort(iso: string): string {
 
 /* ── Item rows ───────────────────────────────────────────────────────────── */
 
-function SessionItem({ task }: { task: SessionTaskUI }) {
-  const s = STATUS_ICONS[task.status] || STATUS_ICONS.pending;
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0',
-      opacity: task.status === 'completed' ? 0.6 : 1,
-    }}>
-      <span style={{
-        fontSize: 12, color: s.color, fontWeight: 600, width: 16, textAlign: 'center',
-        animation: task.status === 'in_progress' ? 'avaSpin 1.5s linear infinite' : 'none',
-      }}>
-        {s.icon}
-      </span>
-      <span style={{
-        fontSize: 12, color: '#cdd6f4', flex: 1,
-        textDecoration: task.status === 'completed' ? 'line-through' : 'none',
-      }}>
-        {task.title}
-      </span>
-    </div>
-  );
-}
 
-function CompletedItem({ task }: { task: AvaCompletedTaskUI }) {
-  useLocale();
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', opacity: 0.5 }}>
-      <span style={{ fontSize: 12, color: '#a6e3a1', width: 16, textAlign: 'center' }}>✓</span>
-      <span style={{ fontSize: 11, color: '#a6adc8', flex: 1, textDecoration: 'line-through' }}>
-        {task.title}
-      </span>
-      <span style={{ fontSize: 9, color: '#585b70', whiteSpace: 'nowrap' }}>{timeAgo(task.completedAt)}</span>
-    </div>
-  );
-}
 
 function TaskItem({ task, onToggle, onToggleSubtask, onUpdateTask }: {
   task: TodayTaskUI;
@@ -558,47 +507,6 @@ function QuickAdd({ onCreate, defaultDueToday }: { onCreate: (t: CreateTaskInput
 
 /* ── Ava band — sticky live-work indicator ───────────────────────────────── */
 
-function AvaBand({ sessionTasks }: { sessionTasks: SessionTaskUI[] }) {
-  useLocale();
-  const [expanded, setExpanded] = useState(false);
-  const total = sessionTasks.length;
-  const done = sessionTasks.filter(t => t.status === 'completed').length;
-  const allDone = done === total;
-  const current = sessionTasks.find(t => t.status === 'in_progress') ?? sessionTasks.find(t => t.status !== 'completed');
-
-  return (
-    <div style={{
-      position: 'sticky', top: 0, zIndex: 10,
-      background: 'linear-gradient(180deg, rgba(40,22,58,0.97) 0%, rgba(26,16,40,0.97) 100%)',
-      backdropFilter: 'blur(6px)', borderBottom: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
-    }}>
-      <button
-        onClick={() => setExpanded(e => !e)}
-        style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: allDone ? '#a6e3a1' : 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {!allDone && <span style={{ display: 'inline-block', animation: 'avaSpin 1.5s linear infinite' }}>⟳</span>}
-            {t('tasks.ava')}
-          </span>
-          <span style={{ fontSize: 10, color: '#6c7086', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {allDone ? t('tasks.all_complete') : current?.title}
-          </span>
-          <span style={{ fontSize: 10, fontWeight: 600, color: allDone ? '#a6e3a1' : 'var(--accent)', flexShrink: 0 }}>{done}/{total}</span>
-          <span style={{ fontSize: 8, color: '#585b70', transition: 'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-        </div>
-        <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'color-mix(in srgb, var(--accent) 12%, transparent)' }}>
-          <div style={{ height: '100%', borderRadius: 2, width: `${total > 0 ? (done / total) * 100 : 0}%`, background: allDone ? '#a6e3a1' : 'linear-gradient(90deg, var(--accent), #6366f1)', transition: 'width 0.4s ease' }} />
-        </div>
-      </button>
-      {expanded && (
-        <div style={{ padding: '0 12px 8px' }}>
-          {sessionTasks.map(t => <SessionItem key={t.id} task={t} />)}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ── Your tasks ──────────────────────────────────────────────────────────── */
 
@@ -668,44 +576,17 @@ function YourTasks({ todayTasks, allTasks, filter, onFilterChange, onToggle, onT
 
 /* ── Ava recent work — collapsible history at the bottom ──────────────────── */
 
-function AvaRecentWork({ avaCompletedTasks }: { avaCompletedTasks: AvaCompletedTaskUI[] }) {
-  useLocale();
-  return (
-    <div style={{ padding: '4px 12px 12px', borderTop: '1px solid color-mix(in srgb, var(--accent) 8%, transparent)' }}>
-      <CollapsibleSection title={t('tasks.ava_recent_work')} count={avaCompletedTasks.length} defaultOpen={false}>
-        {avaCompletedTasks.slice(0, 20).map(t => <CompletedItem key={t.id} task={t} />)}
-      </CollapsibleSection>
-    </div>
-  );
-}
 
 /* ── Collapsed spine ─────────────────────────────────────────────────────── */
 
-function SpineRing({ done, total }: { done: number; total: number }) {
-  const r = 9;
-  const circ = 2 * Math.PI * r;
-  const pct = total > 0 ? done / total : 0;
-  const allDone = total > 0 && done === total;
-  const color = allDone ? '#a6e3a1' : 'var(--accent)';
-  return (
-    <span style={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width="24" height="24" viewBox="0 0 24 24" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="12" cy="12" r={r} fill="none" stroke="color-mix(in srgb, var(--accent) 18%, transparent)" strokeWidth="2.5" />
-        <circle cx="12" cy="12" r={r} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${pct * circ} ${circ}`} style={{ transition: 'stroke-dasharray 0.4s ease' }} />
-      </svg>
-      <span style={{ position: 'absolute', fontSize: 8, fontWeight: 600, color }}>{allDone ? '✓' : `${done}/${total}`}</span>
-    </span>
-  );
-}
 
 /** The always-visible Tasks rail shown when the panel is collapsed. */
-export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
-  activeCount: number; sessionTasks: SessionTaskUI[]; onExpand: () => void;
+export function IdeTasksSpine({ activeCount, onExpand }: {
+  activeCount: number; onExpand: () => void;
 }) {
   useLocale();
-  const total = sessionTasks.length;
-  const done = sessionTasks.filter(t => t.status === 'completed').length;
-  const avaWorking = total > 0 && done < total;
+  // Her session ring lived here. Gone with the band it mirrored: the rail
+  // counts what YOU still have to do, and nothing else.
 
   return (
     <div style={{
@@ -737,9 +618,7 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
         title={t('tasks.open_tasks')}
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%', height: '100%', paddingTop: 12, background: 'transparent', border: 'none', cursor: 'pointer' }}
       >
-        {avaWorking ? (
-          <SpineRing done={done} total={total} />
-        ) : activeCount > 0 ? (
+        {activeCount > 0 ? (
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 600, background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)' }}>
             {activeCount > 99 ? '99+' : activeCount}
           </span>
@@ -757,7 +636,7 @@ export function IdeTasksSpine({ activeCount, sessionTasks, onExpand }: {
 /* ── Main Panel ──────────────────────────────────────────────────────────── */
 
 export default function IdeTasksPanel({
-  sessionTasks, avaCompletedTasks, todayTasks, allTasks,
+  todayTasks, allTasks,
   onClose, onToggleTask, onCreateTask, onToggleSubtask, onUpdateTask, onOpenFolder,
   planRecords, onOpenPlan, onRefreshPlans, width, onWidthChange,
 }: Props) {
@@ -766,6 +645,17 @@ export default function IdeTasksPanel({
 
   // The folder is the user's to edit by hand, so the list is re-read each time
   // the tab is opened rather than cached from the last time it was written.
+  // Load as soon as the panel opens. This used to fire ONLY when the filter
+  // was already 'plans' — and the panel opens on 'today', so the tab sat empty
+  // until you clicked it, which reads as "there are no plans" rather than
+  // "nothing has been fetched yet".
+  useEffect(() => {
+    onRefreshPlans();
+  }, [onRefreshPlans]);
+
+  // And again on entering the tab: the Decisions folder is the user's to edit
+  // by hand, so a list cached at open goes stale the moment they touch it
+  // outside the app.
   useEffect(() => {
     if (filter === 'plans') onRefreshPlans();
   }, [filter, onRefreshPlans]);
@@ -872,12 +762,14 @@ export default function IdeTasksPanel({
         </div>
       )}
 
-      {/* Body — your tasks fill it; Ava's live work pins to the top when she's
-          working; her recent work tucks away at the bottom. */}
+      {/* Body — your tasks, and only your tasks.
+          Her live band pinned to the top and her recent-work history sat at the
+          bottom, bracketing this list. Both are gone: her internal to-dos are
+          working notes for one turn, not commitments you made, and mixing them
+          in meant the panel could never be read as "what I have to do". Her
+          progress lives on the chat card, where the work is happening. */}
       <div style={{ flex: 1, overflowY: 'auto', marginTop: 8 }}>
-        {sessionTasks.length > 0 && <AvaBand sessionTasks={sessionTasks} />}
         <YourTasks todayTasks={todayTasks} allTasks={allTasks} filter={filter} onFilterChange={setFilter} onToggle={onToggleTask} onToggleSubtask={onToggleSubtask} onUpdateTask={onUpdateTask} planRecords={planRecords} onOpenPlan={onOpenPlan} />
-        {avaCompletedTasks.length > 0 && <AvaRecentWork avaCompletedTasks={avaCompletedTasks} />}
       </div>
     </div>
   );

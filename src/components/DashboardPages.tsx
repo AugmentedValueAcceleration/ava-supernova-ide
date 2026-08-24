@@ -6128,37 +6128,86 @@ export function AvaChatPage() {
                     </div>
                   )}
 
-                  {/* Inline TodoCard for todo_write */}
+                  {/* The to-do list Ava keeps for a turn. A SNAPSHOT of one
+                      todo_write call — it tracks nothing, so it must not imply
+                      that it does: an item left in_progress when the turn ended
+                      is unfinished, not running, and says so. */}
                   {msg.toolCalls?.filter(tc => tc.name === 'todo_write' && tc.args?.todos).map((tc, idx) => {
                     const todos: any[] = tc.args?.todos || [];
                     const done = todos.filter((t: any) => t.status === 'completed').length;
+                    const pct = todos.length > 0 ? (done / todos.length) * 100 : 0;
+                    const allDone = todos.length > 0 && done === todos.length;
+                    const isLatestTodo = idx === (msg.toolCalls?.filter(x => x.name === 'todo_write' && x.args?.todos).length ?? 1) - 1;
+                    const live = streaming && isLatestTodo;
+                    const stalled = !live && todos.some((t: any) => t.status === 'in_progress');
+                    const accent = allDone ? '#a6e3a1' : stalled ? '#f9e2af' : 'var(--accent)';
+                    const current = todos.find((t: any) => t.status === 'in_progress')
+                      ?? todos.find((t: any) => t.status === 'pending');
                     return (
                       <div key={`todo-${idx}`} style={{
-                        marginTop: 8, background: 'rgba(10, 6, 18, 0.8)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-                        borderRadius: 8, padding: '8px 12px', fontSize: 12,
+                        marginTop: 8, background: 'rgba(10, 6, 18, 0.8)',
+                        border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`,
+                        borderRadius: 10, padding: '10px 12px', fontSize: 12,
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <span style={{ fontWeight: 600, color: '#cba6f7', fontSize: 11 }}>{t('dash.chat.tasks_progress').replace('{done}', String(done)).replace('{total}', String(todos.length))}</span>
-                          <div style={{ height: 3, flex: 1, marginLeft: 10, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 2, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${todos.length > 0 ? (done / todos.length) * 100 : 0}%`, background: 'var(--accent)', borderRadius: 2 }} />
-                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                          {/* A ring, the same shape the tasks rail uses, so the
+                              two read as one idea at two sizes. */}
+                          <span style={{ position: 'relative', width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" style={{ transform: 'rotate(-90deg)' }}>
+                              <circle cx="12" cy="12" r="10" fill="none" strokeWidth="2.5" stroke="rgba(49, 34, 68, 0.7)" />
+                              <circle cx="12" cy="12" r="10" fill="none" strokeWidth="2.5" strokeLinecap="round"
+                                stroke={accent} strokeDasharray={`${(pct / 100) * 62.8} 62.8`}
+                                style={{ transition: 'stroke-dasharray 0.4s ease' }} />
+                            </svg>
+                            {allDone && <span style={{ position: 'absolute', fontSize: 10, fontWeight: 600, color: accent }}>✓</span>}
+                          </span>
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ fontWeight: 600, color: '#cdd6f4', fontSize: 11 }}>
+                              {t('dash.chat.tasks_progress').replace('{done}', String(done)).replace('{total}', String(todos.length))}
+                            </span>
+                            {current && !allDone && (
+                              <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {current.activeForm || current.content || ''}
+                              </span>
+                            )}
+                          </span>
+                          {stalled && (
+                            <span style={{
+                              flexShrink: 0, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
+                              padding: '2px 7px', borderRadius: 999,
+                              background: `color-mix(in srgb, ${accent} 18%, transparent)`, color: accent,
+                            }}>{t('todo.unfinished')}</span>
+                          )}
                         </div>
-                        {todos.map((t: any, ti: number) => (
-                          <div key={ti} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', fontSize: 11 }}>
-                            <span style={{
-                              color: t.status === 'completed' ? '#a6e3a1' : t.status === 'in_progress' ? 'var(--accent)' : '#585b70',
-                              fontSize: 10, width: 14, textAlign: 'center',
-                            }}>
-                              {t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '◉' : '○'}
-                            </span>
-                            <span style={{
-                              color: t.status === 'completed' ? '#6c7086' : '#cdd6f4',
-                              textDecoration: t.status === 'completed' ? 'line-through' : 'none',
-                            }}>
-                              {t.content || t.title || ''}
-                            </span>
-                          </div>
-                        ))}
+                        {todos.map((td: any, ti: number) => {
+                          const running = td.status === 'in_progress' && live;
+                          return (
+                            <div key={ti} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '3px 0', fontSize: 11 }}>
+                              {running ? (
+                                <span className="ava-todo-spin" style={{
+                                  marginTop: 3, width: 11, height: 11, flexShrink: 0, borderRadius: '50%',
+                                  border: `2px solid ${accent}`, borderTopColor: 'transparent',
+                                }} />
+                              ) : (
+                                <span style={{
+                                  marginTop: 1, width: 13, flexShrink: 0, textAlign: 'center', fontSize: 11, lineHeight: 1,
+                                  color: td.status === 'completed' ? '#a6e3a1' : td.status === 'in_progress' ? accent : '#585b70',
+                                }}>
+                                  {/* A half-filled mark for an item abandoned
+                                      mid-flight: neither done nor untouched. */}
+                                  {td.status === 'completed' ? '✓' : td.status === 'in_progress' ? '◐' : '○'}
+                                </span>
+                              )}
+                              <span style={{
+                                lineHeight: 1.5,
+                                color: td.status === 'completed' ? '#6c7086' : td.status === 'in_progress' ? accent : '#cdd6f4',
+                                textDecoration: td.status === 'completed' ? 'line-through' : 'none',
+                              }}>
+                                {td.status === 'in_progress' ? (td.activeForm || td.content) : (td.content || td.title || '')}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}
@@ -7614,8 +7663,6 @@ export function AvaChatPage() {
            spine when collapsed. ─────────────────────────────────────────── */}
     {tasksPanelOpen ? (
       <IdeTasksPanel
-        sessionTasks={sessionTasks}
-        avaCompletedTasks={avaCompletedTasks}
         todayTasks={todayTasks}
         allTasks={allTasks}
         onClose={() => setTasksPanelOpen(false)}
@@ -7633,7 +7680,6 @@ export function AvaChatPage() {
     ) : (
       <IdeTasksSpine
         activeCount={allTasks.filter(t => t.status !== 'done').length}
-        sessionTasks={sessionTasks}
         onExpand={() => setTasksPanelOpen(true)}
       />
     )}

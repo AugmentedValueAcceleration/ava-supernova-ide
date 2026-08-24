@@ -44,6 +44,11 @@ body {
    Mirrors the extension exactly. Short and decelerating: a panel opened
    dozens of times must never feel like it is performing. It arrives rather
    than bounces. */
+/* The to-do card's in-flight step. Only ever rendered while the turn is
+   genuinely running — a spinner on finished work is a lie with an animation. */
+@keyframes ava-todo-spin { to { transform: rotate(360deg); } }
+.ava-todo-spin { animation: ava-todo-spin 0.8s linear infinite; }
+
 @keyframes ava-slide-in-right {
   from { transform: translateX(24px); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
