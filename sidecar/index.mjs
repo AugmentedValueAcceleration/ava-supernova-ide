@@ -146,6 +146,7 @@ const {
   getChatModePrefix,
   getBrainstormModePrefix,
   getWriteModePrefix,
+  getWorkModePrefix,
   getSecurityModePrefix,
   HEALTH_PROFILE_FIELDS,
   humaniseSlug,
@@ -493,6 +494,7 @@ let activeLane = 'main';
 // Mistral (Aurora) spirals on tool-stuffed prompts. Prepending the tag
 // lets the agent shrink the schema list to the per-mode allowlist.
 const MODE_PREFIX_TAG = {
+  work:       '[Work Mode]',
   write:      '[Write Mode]',
   plan:       '[Plan Mode]',
   chat:       '[Chat Mode]',
@@ -538,6 +540,7 @@ function resolveProjectsHome() {
 }
 
 const MODE_PREFIX_FN = {
+  work:       getWorkModePrefix,
   plan:       getPlanModePrefix,
   chat:       getChatModePrefix,
   // Brainstorm needs to know where projects go, so "scaffold it" has an
@@ -2811,8 +2814,10 @@ async function handleMessage(data) {
   // live screen state, then the task.
   const combinedDesktopPrefix = [desktopRulesPrefix, desktopMemoryPrefix, desktopStatePrefix].filter(Boolean).join('\n\n');
 
-  // Mode-prefix tag — see MODE_PREFIX_TAG comment above. Empty for work
-  // (no tag → agent defaults to work). When a desktop snapshot is also
+  // Mode-prefix tag — see MODE_PREFIX_TAG comment above. This is the
+  // FALLBACK: when the mode has an entry in MODE_PREFIX_FN, that wins and
+  // this is never read (the two are a ternary below, not a concatenation).
+  // When a desktop snapshot is also
   // being prepended, the mode tag goes FIRST so detectModeFromMessages
   // sees it on its `text.startsWith(...)` check.
   //
@@ -2832,8 +2837,9 @@ async function handleMessage(data) {
    * path below is skipped for that turn.
    *
    * Desktop is excluded: it runs the five-persona conductor rather than the
-   * regular loop, and already has its own rules block. Work has none by design
-   * — it is the default, and the system prompt covers it.
+   * regular loop, and already has its own rules block. Work gained one on
+   * 2026-08-25 — it had run on the bare base prompt until then, being the
+   * untagged default that nothing ever wrapped.
    */
   const modePrefixFn = inRoom ? null : MODE_PREFIX_FN[currentMode];
 
