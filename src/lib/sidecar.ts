@@ -167,8 +167,14 @@ export interface SidecarEvent {
   dataUrl?: string;
   rawUrl?: string;
   // Design Studio video lane — `asset_forge_video_result` carries the finished
-  // Wan 2.5 clip URL back from the sidecar's submit+poll pipeline.
+  // clip URL back from the sidecar's submit+poll pipeline, PLUS the prompt and
+  // title it was made from. Those two ride along so the canvas can save to the
+  // gallery from the event itself: a clip takes minutes, and the resolver ref
+  // that used to hold them does not survive a remount — when it went, the clip
+  // played on the stage and was never saved.
   url?: string;
+  // `title` is already declared above for the approval card and is reused here.
+  prompt?: string;
   ok?: boolean;
   error?: string;
 }
@@ -570,8 +576,15 @@ export class SidecarManager {
    * sidecar (which has no serverless timeout), getting an `asset_forge_video_result`
    * event back ({ success, url, error }) with the finished clip URL.
    */
-  async assetForgeVideo(body: { prompt: string; duration?: number | string; resolution?: string }): Promise<void> {
-    await this.send({ cmd: 'asset_forge_video', body });
+  async assetForgeVideo(
+    body: { prompt: string; duration?: number | string; resolution?: string; designRequestId?: string; title?: string },
+  ): Promise<void> {
+    // designRequestId + title travel WITH the job, not alongside it in the
+    // canvas: the sidecar answers the waiting design tool itself when the clip
+    // lands, and echoes the title back so the gallery save can happen from the
+    // result event rather than from a ref parked minutes earlier.
+    const { designRequestId, title, ...rest } = body;
+    await this.send({ cmd: 'asset_forge_video', body: rest, designRequestId, title });
   }
 
   /**

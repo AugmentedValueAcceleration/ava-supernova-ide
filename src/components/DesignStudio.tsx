@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type CSSProperties } from 'react';
 import { PenNib, Paperclip as PhPaperclip } from '@phosphor-icons/react';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
+// The credit table itself, not a copy of it. A price quoted in the inspector
+// that disagrees with the price charged is worse than quoting nothing.
+import { videoCreditCost } from '@ava/core/billing/credits';
 import { logDiag } from '../lib/sidecar-log';
 import { RoomModelPicker } from './RoomModelPicker';
 import { Select } from './Select';
@@ -514,7 +517,16 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
   );
 }
 
+/** '1080p' | '720p' | '480p' -> the SR number the credit table is keyed on. */
+const wanSr = (r: string): number => (r === '1080p' ? 1080 : r === '480p' ? 480 : 720);
+
 type ViewId = 'icon' | 'iconset' | 'appicon' | 'logo' | 'badge' | 'avatar' | 'banner' | 'hero' | 'ogimage' | 'illustration' | 'pattern' | 'gamekit' | 'gamepiece' | 'canvas' | 'image' | 'video' | 'voice' | 'brandkit';
+/** The same ids at runtime, so a restored tab can be validated. Keep in step
+ *  with ViewId above — an id missing here silently reopens on Icon. */
+const VIEW_IDS = [
+  'icon', 'iconset', 'appicon', 'logo', 'badge', 'avatar', 'banner', 'hero', 'ogimage',
+  'illustration', 'pattern', 'gamekit', 'gamepiece', 'canvas', 'image', 'video', 'voice', 'brandkit',
+] as const;
 
 // Keys, not text. This is a module-level const — resolved strings would evaluate
 // once at import (before initLocale) and freeze in English. Labels resolve at
@@ -557,7 +569,20 @@ export function DesignStudio() {
     window.addEventListener('ava-kit-changed', h);
     return () => window.removeEventListener('ava-kit-changed', h);
   }, []);
-  const [view, setView] = useState<ViewId>('icon');
+  // Reopens where you left it. This was hardcoded to 'icon', so a reload always
+  // dropped you into Icon — worst for Video, which is the lane you deliberately
+  // walk away from because it takes minutes to render.
+  const [view, setView] = useState<ViewId>(() => {
+    try {
+      const saved = localStorage.getItem('ava-design-studio-view');
+      return saved && (VIEW_IDS as readonly string[]).includes(saved) ? (saved as ViewId) : 'icon';
+    } catch {
+      return 'icon';  // storage disabled — not worth failing the page over
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('ava-design-studio-view', view); } catch { /* not important enough to throw */ }
+  }, [view]);
   // Which room the Design Architect chat should reflect. The Open-Canvas Video
   // and Voiceover views map to their own rooms; everything else is the icon
   // studio (greeting / chips / heading / persona all follow this).
@@ -578,7 +603,9 @@ export function DesignStudio() {
   const lastImageTitleRef = useRef('Image');
 
   // ── Video lane (Wan 2.5 via sidecar: submit → poll → clip) ──
-  const [videoDuration, setVideoDuration] = useState('5'); // Wan: '5' | '10' seconds only
+  // 2-30s. The old '5 | 10' was wan2.5's ceiling, which outlived the model by
+  // two generations because it had been written down in several places.
+  const [videoDuration, setVideoDuration] = useState('5');
   const [videoAspect, setVideoAspect] = useState('16:9');
   const [videoResolution, setVideoResolution] = useState('1080p');
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
@@ -719,23 +746,34 @@ export function DesignStudio() {
   type VideoOutcome = { ok: boolean; url?: string; error?: string };
   const videoResolverRef = useRef<((r: VideoOutcome) => void) | null>(null);
   // `resolution` is the exact route value ('720P' | '1080P'); duration is 5 | 10.
-  const runVideoGeneration = useCallback((prompt: string, duration: string, resolution: string): Promise<VideoOutcome> => {
+  const runVideoGeneration = useCallback((
+    prompt: string, duration: string, resolution: string,
+    // The design tool call this render answers, when there is one. The SIDECAR
+    // resolves it directly the moment the clip lands — see the note below on
+    // why nothing here may wait on a ref.
+    designRequestId?: string,
+  ): Promise<VideoOutcome> => {
     return new Promise<VideoOutcome>((resolve) => {
       const title = (prompt.trim().split(/\s+/).slice(0, 6).join(' ') || 'Video').slice(0, 60);
-      // Auto-save on success (no Save button) — lands in creative/video/.
-      videoResolverRef.current = (r) => {
-        if (r.ok && r.url) videoGallery.saveGenerated({ url: r.url, title, prompt, ext: 'mp4' }).catch(() => {});
-        resolve(r);
-      };
+      // NO gallery save in here any more.
+      //
+      // The save and the tool reply both used to hang off this ref, which is
+      // asked to survive MINUTES of rendering inside a page the operator can
+      // navigate and resize. A ref does not survive a remount — and when it
+      // went (measured in the extension, 28 August) the clip played on the
+      // stage, was never saved, and the tool sat until its timeout claiming the
+      // canvas had not responded. The save now happens in the result handler
+      // from the event's own fields, and the sidecar answers the tool itself.
+      videoResolverRef.current = resolve;
       setVideoSrc(null);
       setVideoGenerating(true);
-      getSidecar().assetForgeVideo({ prompt, duration: Number(duration), resolution }).catch((e) => {
+      getSidecar().assetForgeVideo({ prompt, duration: Number(duration), resolution, designRequestId, title }).catch((e) => {
         videoResolverRef.current = null;
         setVideoGenerating(false);
         resolve({ ok: false, error: e instanceof Error ? e.message : 'Video generation failed' });
       });
     });
-  }, [videoGallery]);
+  }, []);
 
   // Save a matted PNG to the local creative gallery (transparent icon).
   const saveToLibrary = useCallback((dataUrl: string, title: string, designType?: string) => {
@@ -982,8 +1020,9 @@ export function DesignStudio() {
         const prompt = typeof args.prompt === 'string' ? args.prompt.trim() : '';
         if (!prompt) { reply(false, undefined, 'A prompt is required to generate a video.'); return; }
         setView('video');
-        // Wan duration is 5 or 10 seconds only.
-        const dur = (args.duration === 10 || args.duration === '10') ? '10' : '5';
+        // 2-30s, clamped to the model's own range rather than a tier list.
+        const askedSecs = Number(args.duration);
+        const dur = String(Number.isFinite(askedSecs) ? Math.max(2, Math.min(30, Math.round(askedSecs))) : 5);
         setVideoDuration(dur);
         // Aspect is synced to the inspector; the Wan route carries orientation via
         // the prompt (no aspect parameter), so only the resolution tier is sent.
@@ -994,8 +1033,10 @@ export function DesignStudio() {
           : videoResolution;
         setVideoResolution(resArg);
         const wanRes = resArg === '1080p' ? '1080P' : '720P'; // route: '480P' | '720P' | '1080P'
-        const out = await runVideoGeneration(prompt, dur, wanRes);
-        if (out.ok) reply(true, { duration: Number(dur), credits: wanRes === '1080P' ? 300 : 150 });
+        const out = await runVideoGeneration(prompt, dur, wanRes, m.requestId);
+        // The sidecar has already answered this request; a second reply is a
+        // harmless no-op there, and it covers the paths that never reach it.
+        if (out.ok) reply(true, { duration: Number(dur), credits: videoCreditCost(wanSr(resArg), Number(dur)) });
         else reply(false, undefined, out.error || 'Video generation failed.');
         return;
       }
@@ -1164,6 +1205,17 @@ export function DesignStudio() {
         setVideoGenerating(false);
         const ok = !!event.success && !!event.url;
         if (ok) { setVideoSrc(event.url!); setDockOpen(false); } // clip ready → slide the chat down, reveal it
+        // Save HERE, from the event's own fields. This used to live in the
+        // resolver ref below, which does not survive a remount — so a clip that
+        // rendered while the page re-rendered was watched and then lost.
+        if (ok && event.url) {
+          const savedTitle = (event.title as string | undefined)
+            || ((event.prompt as string | undefined)?.trim().split(/\s+/).slice(0, 6).join(' ') || 'Video').slice(0, 60);
+          videoGallery.saveGenerated({
+            url: event.url, title: savedTitle,
+            prompt: (event.prompt as string | undefined) || savedTitle, ext: 'mp4',
+          }).catch(() => { /* the clip is on the stage either way */ });
+        }
         const resolve = videoResolverRef.current;
         if (resolve) {
           videoResolverRef.current = null;
@@ -1620,7 +1672,12 @@ export function DesignStudio() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
                 <span>{t('dash.studio.video.duration')}</span>
                 <Select size="sm" style={{ width: 118 }} value={videoDuration} onChange={setVideoDuration}
-                  options={[{ value: '5', label: '5s' }, { value: '10', label: '10s' }]} />
+                  options={[5, 10, 15, 30].map(secs => ({
+                    value: String(secs),
+                    // The price belongs ON the choice — video is charged by the
+                    // second, so picking 30 over 5 is a six-fold decision.
+                    label: `${secs}s · ${videoCreditCost(wanSr(videoResolution), secs)} cr`,
+                  }))} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
                 <span>{t('dash.studio.video.aspect')}</span>

@@ -374,11 +374,25 @@ async function proxyMediaToDataUrl(url, fallbackMime) {
 // task_id), then poll /status until the clip is ready. The host has no
 // serverless timeout so polling here is fine. Result comes back as an
 // `asset_forge_video_result` event carrying the finished clip URL.
-async function handleAssetForgeVideo(body) {
+async function handleAssetForgeVideo(body, designRequestId, title) {
   const state = globalThis._sharedState || {};
+  // Answer the waiting design tool from HERE. It used to travel back through
+  // the canvas, and in the extension that cost a real clip: the canvas parks a
+  // resolver in a ref, a ref does not survive a remount, and a video takes
+  // minutes. When it went, the tool sat until its timeout and told the operator
+  // the canvas had not responded - about a video playing in front of them.
+  const answer = (r) => {
+    if (!designRequestId) return;
+    const pending = pendingDesignTools.get(designRequestId);
+    if (!pending) return;   // already resolved, or timed out - nothing to do
+    clearTimeout(pending.timer);
+    pendingDesignTools.delete(designRequestId);
+    pending.resolve(r);
+  };
   const platformKey = state.platformKey;
   if (!platformKey) {
     emit({ event: 'asset_forge_video_result', success: false, error: 'Not connected. Add your account in Settings.' });
+    answer({ ok: false, error: 'Not connected. Add your account in Settings.' });
     return;
   }
   const headers = {
@@ -394,18 +408,39 @@ async function handleAssetForgeVideo(body) {
     });
     if (!submitRes.ok) {
       const e = await submitRes.json().catch(() => ({}));
-      emit({ event: 'asset_forge_video_result', success: false, error: e.error || `Video generation failed (${submitRes.status})` });
+      const msg = e.error || `Video generation failed (${submitRes.status})`;
+      emit({ event: 'asset_forge_video_result', success: false, error: msg });
+      answer({ ok: false, error: msg });
       return;
     }
     const data = await submitRes.json();
-    if (data.url) { emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(data.url, 'video/mp4') }); return; }
-    if (!data.task_id) { emit({ event: 'asset_forge_video_result', success: false, error: 'No task_id returned' }); return; }
+    if (data.url) {
+      emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(data.url, 'video/mp4'), prompt: body.prompt, title });
+      answer({ ok: true, data: { duration: Number(body.duration) || undefined } });
+      return;
+    }
+    if (!data.task_id) {
+      emit({ event: 'asset_forge_video_result', success: false, error: 'No task_id returned' });
+      answer({ ok: false, error: 'No task_id returned' });
+      return;
+    }
     // 2) Poll until terminal, then hand back the finished clip URL.
     const final = await pollVideoStatus(String(data.task_id), platformKey);
-    if (final.success) emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(final.url, 'video/mp4') });
-    else emit({ event: 'asset_forge_video_result', success: false, error: final.error || 'Video generation failed' });
+    if (final.success) {
+      // prompt + title ride along so the canvas can save to the gallery from
+      // the EVENT. The IDE's gallery write is front-end (Tauri fs) so it cannot
+      // move down here, but it must not depend on a ref set before the wait.
+      emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(final.url, 'video/mp4'), prompt: body.prompt, title });
+      answer({ ok: true, data: { duration: Number(body.duration) || undefined } });
+    } else {
+      const msg = final.error || 'Video generation failed';
+      emit({ event: 'asset_forge_video_result', success: false, error: msg });
+      answer({ ok: false, error: msg });
+    }
   } catch (err) {
-    emit({ event: 'asset_forge_video_result', success: false, error: err instanceof Error ? err.message : 'Video generation failed' });
+    const msg = err instanceof Error ? err.message : 'Video generation failed';
+    emit({ event: 'asset_forge_video_result', success: false, error: msg });
+    answer({ ok: false, error: msg });
   }
 }
 
@@ -417,10 +452,13 @@ async function handleAssetForgeVideo(body) {
  */
 async function pollVideoStatus(taskId, platformKey) {
   const statusUrl = `https://avasupernova.com/api/generate-video/status/${encodeURIComponent(taskId)}`;
-  const intervalMs = 5000;
-  const maxAttempts = 96; // ~8 min ceiling — well past a typical Wan clip
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await new Promise((r) => setTimeout(r, intervalMs));
+  // Generous ceiling, backing-off cadence: 5s while the clip might genuinely be
+  // about to land, 15s once we are plainly waiting. That is FEWER requests
+  // across a 25-minute render than the old loop made across an 8-minute one.
+  const started = Date.now();
+  while (Date.now() - started < VIDEO_POLL_CEILING_MS) {
+    await new Promise((r) => setTimeout(
+      r, Date.now() - started < VIDEO_POLL_FAST_WINDOW_MS ? 5000 : 15000));
     try {
       const res = await fetch(statusUrl, { headers: { 'Authorization': `Bearer ${platformKey}` } });
       if (!res.ok) continue; // transient — keep polling
@@ -579,6 +617,21 @@ let desktopRequestId = 0;
  *  keyed by requestId; the webview's `design_tool_result` cmd fulfils it. Mirror
  *  of the extension's DashboardPanel.requestFromDesign / handleDesignToolResult. */
 const pendingDesignTools = new Map();
+
+/**
+ * How long we keep asking Wan for a clip.
+ *
+ * Named once because TWO things wait on it - the poll loop and the design
+ * tool's own timeout - and when they were separate numbers in the extension the
+ * tool started giving up long before the poll did.
+ *
+ * Measured 28 August on wan3.0: two 30-second renders of the same shape took 8
+ * minutes and 25. The spread is queue contention rather than clip length, so a
+ * short clip is not reliably quick either. The old ceiling was 8 minutes, set
+ * when wan2.5 made 5 and 10 second clips and nothing else.
+ */
+const VIDEO_POLL_CEILING_MS = 45 * 60 * 1000;
+const VIDEO_POLL_FAST_WINDOW_MS = 2 * 60 * 1000;
 let designReqSeq = 0;
 
 // ─── Secret working set ─────────────────────────────────────────────────────
@@ -1977,12 +2030,16 @@ async function handleInit(data) {
         // Model-side generation is slow — a 12s default made generate_image time
         // out, so Ava saw "failed" and RETRIED while the first image was still
         // rendering (two generations). Give each lane a realistic ceiling.
-        //   video  — async Wan, 1–6 min per clip (~8-min poll ceiling)
+        //   video  — async Wan; derived from the poll ceiling, never guessed
+        //            alongside it. The tool has to OUTLAST the poll, or it
+        //            reports "the canvas didn't respond" while the clip is
+        //            still coming - and then the clip arrives anyway,
+        //            contradicting what it just said.
         //   image  — Qwen-Image, tens of seconds
         //   logo / explore — constructed vector (fast) but loads fonts + renders
         //                    several candidates, so keep generous headroom
         const timeoutMs =
-          command === 'generate_video' ? 600_000
+          command === 'generate_video' ? VIDEO_POLL_CEILING_MS + 60_000
           : command === 'generate_image' ? 300_000
           : (command === 'generate_logo' || command === 'explore_logos') ? 180_000
           : slow ? Math.min(600_000, 90_000 * Math.max(1, setCount))
@@ -4047,7 +4104,7 @@ rl.on('line', async (line) => {
     case 'asset_forge_video':
       // Design Studio → platform: submit a Wan 2.5 job + poll status, then emit
       // an `asset_forge_video_result` with the finished clip URL back to the canvas.
-      handleAssetForgeVideo(data.body || {}).catch((err) =>
+      handleAssetForgeVideo(data.body || {}, data.designRequestId, data.title).catch((err) =>
         emit({ event: 'asset_forge_video_result', success: false, error: err && err.message ? err.message : 'Video generation failed' }));
       break;
     case 'asset_forge_voice':
