@@ -1647,9 +1647,11 @@ function GenerationRail({ collapsed }: { collapsed?: boolean }) {
 
   return (
     <div style={{ padding: '0 12px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontSize: 9.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6c7086' }}>Studio</div>
+      <div style={{ fontSize: 9.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6c7086' }}>
+        {t('dash.nav.studio_jobs')}
+      </div>
       {jobs.length === 0 ? (
-        <div style={{ fontSize: 11, color: '#6c7086', opacity: 0.6 }}>Nothing rendering</div>
+        <div style={{ fontSize: 11, color: '#6c7086', opacity: 0.6 }}>{t('dash.nav.studio_idle')}</div>
       ) : jobs.map(job => {
         const done = job.status === 'complete';
         const failed = job.status === 'failed';

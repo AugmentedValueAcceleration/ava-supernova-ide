@@ -1747,9 +1747,9 @@ export function DesignStudio() {
               <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 8 }}>Qwen3-TTS built-in voices. Placeholder names — the real roster lands with wiring.</p>
             </Section>
 
-            <Section title="Language">
+            <Section title={t('dash.studio.voice.language')}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>Spoken in</span>
+                <span>{t('dash.studio.voice.spoken_in')}</span>
                 {/* Qwen's ten. Ava translates the script herself and sets this,
                     so the read is the SAME voice speaking another language. */}
                 <Select size="sm" style={{ width: 130 }} value={voiceLanguage} onChange={setVoiceLanguage}
@@ -1758,7 +1758,7 @@ export function DesignStudio() {
               </div>
             </Section>
 
-            <Section title="Script">
+            <Section title={t('dash.studio.voice.script')}>
               {/* Read-only: a transcript of what she is voicing. It cannot be
                   wired without a Generate button, and both surfaces removed
                   theirs on purpose — "No Generate button — Ava generates now."
@@ -1769,19 +1769,19 @@ export function DesignStudio() {
                 style={{ width: '100%', resize: 'vertical', minHeight: 80, padding: '9px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5, outline: 'none', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box', fontFamily: 'inherit' }} />
             </Section>
 
-            <Section title="Delivery">
+            <Section title={t('dash.studio.voice.delivery')}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>Emotion</span>
+                <span>{t('dash.studio.voice.emotion')}</span>
                 <Select size="sm" style={{ width: 130 }} value={voiceEmotion} onChange={setVoiceEmotion}
-                  options={TTS_VOICE_EMOTIONS.map(e => ({ value: e, label: e[0].toUpperCase() + e.slice(1) }))} />
+                  options={TTS_VOICE_EMOTIONS.map(e => ({ value: e, label: t(`dash.studio.voice.emotion_${e}`) }))} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>Speed</span>
+                <span>{t('dash.studio.voice.pace')}</span>
                 {/* Words, not numbers: the API takes `instructions` in plain
                     language and has no numeric speed parameter, so "1.25×" could
                     never have been sent as one. */}
                 <Select size="sm" style={{ width: 130 }} value={voiceSpeed} onChange={setVoiceSpeed}
-                  options={TTS_VOICE_SPEEDS.map(v => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))} />
+                  options={TTS_VOICE_SPEEDS.map(v => ({ value: v, label: t(`dash.studio.voice.pace_${v}`) }))} />
               </div>
             </Section>
 
