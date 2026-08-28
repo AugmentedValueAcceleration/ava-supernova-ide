@@ -10398,7 +10398,10 @@ function AssetModalPreview({ file }: { file: LibraryFile }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '40px 20px', background: 'rgba(0,0,0,0.25)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
         <div style={{ width: 'min(92%, 480px)' }}>
-          <LibraryMediaPlayer src={src} kind="audio" />
+          {/* Waveform rather than the plain bar: a voiceover should read as
+              AUDIO at a glance. Same envelope as the extension's Library and
+              both Creative Studios, so one read looks the same everywhere. */}
+          <LibraryWaveform src={src} />
         </div>
       </div>
     );
@@ -12690,6 +12693,141 @@ function LibraryPreviewModal({
       </div>
 
     </Drawer>
+  );
+}
+
+
+/* -- Library waveform ------------------------------------------------------ */
+/* The voiceover preview, matching the extension's Library and Creative Studio.
+ *
+ * The envelope is DETERMINISTIC and shared with both other surfaces, so the same
+ * read looks the same wherever it is opened. We deliberately do not decode the
+ * audio to draw it: that would mean loading and analysing the whole file to
+ * render a preview nobody asked to analyse. The bars are a stable visual; the
+ * PLAYHEAD is real, and the bars behind it fill as it plays.
+ */
+function waveAmp(i: number): number {
+  const cl = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+  const a = Math.sin(i * 0.45) * 0.5 + 0.5;
+  const b = Math.sin(i * 0.13 + 1.7) * 0.5 + 0.5;
+  const c = Math.sin(i * 0.9 + 0.3) * 0.25 + 0.25;
+  return cl(0.12 + (a * 0.55 + b * 0.3 + c * 0.15) * 0.88, 0.06, 1);
+}
+
+const WAVE_PANEL_BG = 'radial-gradient(120% 140% at 50% 0%, #171021, #0c0814)';
+
+function LibraryWaveform({ src }: { src: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0); // 0..1
+  const [duration, setDuration] = useState(0);
+  const progressRef = useRef(0);
+  useEffect(() => { progressRef.current = progress; }, [progress]);
+  useEffect(() => { setPlaying(false); setProgress(0); setDuration(0); }, [src]);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+    if (!cssW || !cssH) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+    const ctx = canvas.getContext('2d'); if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    const accent = getComputedStyle(canvas).getPropertyValue('--accent').trim() || '#a855f7';
+    const barW = 3, gap = 2, step = barW + gap;
+    const count = Math.max(1, Math.floor(cssW / step));
+    const mid = cssH / 2;
+    const p = progressRef.current;
+    for (let i = 0; i < count; i++) {
+      const h = Math.max(2, waveAmp(i) * (cssH * 0.86));
+      const x = i * step;
+      const played = (i + 0.5) / count <= p;
+      ctx.globalAlpha = played ? 1 : 0.26;
+      ctx.fillStyle = accent;
+      const y = mid - h / 2;
+      const r = Math.min(1.5, barW / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + barW, y, x + barW, y + h, r);
+      ctx.arcTo(x + barW, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + barW, y, r);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(Math.max(0, Math.min(1, p)) * cssW - 0.75, 0, 1.5, cssH);
+  }, []);
+
+  useEffect(() => { draw(); }, [progress, draw]);
+  useEffect(() => {
+    draw();
+    const el = wrapRef.current; if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => draw());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [draw]);
+
+  const toggle = () => {
+    const a = audioRef.current; if (!a) return;
+    if (playing) a.pause();
+    else { if (progressRef.current >= 1) a.currentTime = 0; void a.play().catch(() => {}); }
+  };
+  const seek = (clientX: number) => {
+    const r = canvasRef.current?.getBoundingClientRect(); if (!r) return;
+    const frac = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    setProgress(frac);
+    const a = audioRef.current;
+    if (a && Number.isFinite(a.duration)) a.currentTime = frac * a.duration;
+  };
+
+  return (
+    <div style={{
+      width: '100%', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 16,
+      background: WAVE_PANEL_BG, border: '1px solid rgba(148,110,220,0.18)',
+    }}>
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onLoadedMetadata={e => setDuration(e.currentTarget.duration || 0)}
+        onTimeUpdate={e => { const a = e.currentTarget; if (a.duration > 0) setProgress(a.currentTime / a.duration); }}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        style={{ display: 'none' }}
+      />
+      <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: 110 }}>
+        <canvas
+          ref={canvasRef}
+          onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); seek(e.clientX); }}
+          onPointerMove={e => { if (e.buttons) seek(e.clientX); }}
+          style={{ width: '100%', height: '100%', display: 'block', cursor: 'pointer', touchAction: 'none' }}
+        />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={toggle}
+          aria-label={playing ? 'Pause' : 'Play'}
+          style={{
+            flexShrink: 0, width: 36, height: 36, borderRadius: 999, background: 'var(--accent)',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: 'none', cursor: 'pointer',
+          }}
+        >
+          {playing
+            ? <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+            : <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>}
+        </button>
+        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#6c7086' }}>
+          {formatClockTime(progress * duration)} / {formatClockTime(duration)}
+        </span>
+      </div>
+    </div>
   );
 }
 
