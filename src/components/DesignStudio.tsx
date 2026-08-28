@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type CSSProperties } from 'react';
 import { PenNib, Paperclip as PhPaperclip } from '@phosphor-icons/react';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
+import { TTS_VOICES, TTS_VOICE_EMOTIONS, TTS_VOICE_SPEEDS, voiceDeliveryInstruction } from '@ava/core/creative';
 // The credit table itself, not a copy of it. A price quoted in the inspector
 // that disagrees with the price charged is worse than quoting nothing.
 import { videoCreditCost } from '@ava/core/billing/credits';
@@ -556,7 +557,11 @@ const GROUPS: { labelKey: string; accent: string; items: { id: ViewId; soon?: bo
 ];
 
 // Qwen3-TTS built-in voice roster — PLACEHOLDER names for the shell (no wiring).
-const VOICES = ['Aria', 'Ovis', 'Nofish', 'Cherry', 'Ember', 'Sunny', 'Marcus', 'Willow', 'Koda'];
+// Imported, not listed here. Seven of the nine names this used to hold did
+// not exist — Aria, Ovis, Ember, Sunny, Marcus, Willow, Koda all answer
+// "Voice 'X' is not supported" — and Aria was the DEFAULT, so almost any
+// selection failed. Verified name by name against the API on 2026-08-28.
+const VOICES: string[] = [...TTS_VOICES];
 
 export function DesignStudio() {
   // Reactive active kit — re-read whenever the brand kit changes anywhere (the
@@ -615,7 +620,12 @@ export function DesignStudio() {
   const [voiceName, setVoiceName] = useState(VOICES[0]);
   const [voiceScript, setVoiceScript] = useState('');
   const [voiceEmotion, setVoiceEmotion] = useState('neutral');
-  const [voiceSpeed, setVoiceSpeed] = useState('1.0');
+  // The API takes language_type and Ava can translate a read into any of
+  // Qwen's ten languages. The extension had this control; the IDE did not.
+  const [voiceLanguage, setVoiceLanguage] = useState('English');
+  // 'normal' is the no-op default — voiceDeliveryInstruction returns undefined
+  // for it, so we do not spend the model's attention telling it to do nothing.
+  const [voiceSpeed, setVoiceSpeed] = useState('normal');
   const [voiceSrc, setVoiceSrc] = useState<string | null>(null);
   const [voiceGenerating, setVoiceGenerating] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -1063,8 +1073,15 @@ export function DesignStudio() {
         setView('voice');
         const voice = typeof args.voice === 'string' && args.voice.trim() ? args.voice.trim() : voiceName;
         setVoiceName(voice); setVoiceScript(script);
-        const language = typeof args.language === 'string' ? args.language : 'auto';
-        const instructions = typeof args.instructions === 'string' ? args.instructions : undefined;
+        const language = typeof args.language === 'string' && args.language.trim()
+          ? args.language.trim() : voiceLanguage;
+        setVoiceLanguage(language);
+        // Ava's own direction WINS. The dials are the fallback, so a read she
+        // has not directed still follows the panel instead of ignoring it —
+        // and two things never steer one dial at once.
+        const instructions = (typeof args.instructions === 'string' && args.instructions.trim())
+          ? args.instructions.trim()
+          : voiceDeliveryInstruction(voiceEmotion, voiceSpeed);
         const out = await runVoiceGeneration(script, voice, language, instructions, m.requestId);
         if (out.ok) reply(true, { voice });
         else reply(false, undefined, out.error || 'Voice generation failed.');
@@ -1730,8 +1747,23 @@ export function DesignStudio() {
               <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 8 }}>Qwen3-TTS built-in voices. Placeholder names — the real roster lands with wiring.</p>
             </Section>
 
+            <Section title="Language">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>Spoken in</span>
+                {/* Qwen's ten. Ava translates the script herself and sets this,
+                    so the read is the SAME voice speaking another language. */}
+                <Select size="sm" style={{ width: 130 }} value={voiceLanguage} onChange={setVoiceLanguage}
+                  options={['English', 'French', 'Spanish', 'German', 'Japanese', 'Korean', 'Italian', 'Portuguese', 'Chinese', 'Russian']
+                    .map(l => ({ value: l, label: l }))} />
+              </div>
+            </Section>
+
             <Section title="Script">
-              <textarea value={voiceScript} onChange={e => setVoiceScript(e.target.value)}
+              {/* Read-only: a transcript of what she is voicing. It cannot be
+                  wired without a Generate button, and both surfaces removed
+                  theirs on purpose — "No Generate button — Ava generates now."
+                  An editable box that can never submit is worse than none. */}
+              <textarea value={voiceScript} readOnly
                 placeholder="Type the line for Ava to speak…"
                 rows={4}
                 style={{ width: '100%', resize: 'vertical', minHeight: 80, padding: '9px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5, outline: 'none', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box', fontFamily: 'inherit' }} />
@@ -1741,12 +1773,15 @@ export function DesignStudio() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
                 <span>Emotion</span>
                 <Select size="sm" style={{ width: 130 }} value={voiceEmotion} onChange={setVoiceEmotion}
-                  options={[{ value: 'neutral', label: 'Neutral' }, { value: 'warm', label: 'Warm' }, { value: 'bright', label: 'Bright' }, { value: 'calm', label: 'Calm' }, { value: 'excited', label: 'Excited' }]} />
+                  options={TTS_VOICE_EMOTIONS.map(e => ({ value: e, label: e[0].toUpperCase() + e.slice(1) }))} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
                 <span>Speed</span>
+                {/* Words, not numbers: the API takes `instructions` in plain
+                    language and has no numeric speed parameter, so "1.25×" could
+                    never have been sent as one. */}
                 <Select size="sm" style={{ width: 130 }} value={voiceSpeed} onChange={setVoiceSpeed}
-                  options={[{ value: '0.75', label: '0.75×' }, { value: '1.0', label: '1.0×' }, { value: '1.25', label: '1.25×' }]} />
+                  options={TTS_VOICE_SPEEDS.map(v => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))} />
               </div>
             </Section>
 
