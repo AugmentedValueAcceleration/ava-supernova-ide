@@ -175,6 +175,19 @@ export interface SidecarEvent {
   url?: string;
   // `title` is already declared above for the approval card and is reused here.
   prompt?: string;
+  // `generation_progress` — creative jobs in flight, plus anything finished in
+  // the last 30s so the rail can show a result before clearing itself. Emitted
+  // by the sidecar's GenerationManager, which holds them OUTSIDE the canvas so
+  // they survive the operator navigating away mid-render.
+  jobs?: Array<{
+    id: string;
+    type: string;
+    status: 'queued' | 'generating' | 'downloading' | 'complete' | 'failed';
+    prompt: string;
+    startedAt: string;
+    completedAt?: string;
+    error?: string;
+  }>;
   ok?: boolean;
   error?: string;
 }

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { readDir } from '@tauri-apps/plugin-fs';
 import { loadHealthPlanIndex } from '../lib/health-plans-store';
+// The generation rail listens for `generation_progress` from the sidecar, which
+// holds creative jobs outside the canvas so they survive navigating away.
+import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { Tooltip } from './Tooltip';
 import {
   Lightning as PhCommand,
@@ -1562,6 +1565,9 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
         <Panel />
       </div>
 
+      {/* What is rendering right now — above the calendar, on every panel. */}
+      <GenerationRail collapsed={collapsed} />
+
       {/* Mini Calendar — always visible */}
       <SidebarCalendar onDashboardSelect={onDashboardSelect} />
 
@@ -1570,6 +1576,107 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
           active surface; the file-tree / search / git panels don't need
           the account footer. */}
       {activePanel === 'dashboard' && <AuthSection />}
+    </div>
+  );
+}
+
+
+/* ── Generation rail ──────────────────────────────────────────── */
+/* What is rendering right now, on every panel.
+ *
+ * A clip takes minutes, so people go and do something else — and the sidecar
+ * has always kept polling, because the job lives there rather than in the
+ * canvas. What was missing was anywhere to SEE it: the page that started the
+ * render was unmounted, and its result arrived with nobody listening.
+ *
+ * Rendered even when EMPTY, deliberately. A status area that appears only while
+ * it is busy is one nobody can learn the location of — the first time you need
+ * it is the first time you have ever seen it.
+ */
+
+type RailJob = NonNullable<SidecarEvent['jobs']>[number];
+
+/** Real stops, not a guessed percentage — Wan reports a state and no number. */
+const STAGE_FILL: Record<RailJob['status'], number> = {
+  queued: 8, generating: 55, downloading: 88, complete: 100, failed: 100,
+};
+
+function elapsedLabel(fromIso: string, toIso: string | undefined, now: number): string {
+  const start = Date.parse(fromIso);
+  if (!Number.isFinite(start)) return '';
+  const secs = Math.max(0, Math.floor(((toIso ? Date.parse(toIso) : now) - start) / 1000));
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+}
+
+function GenerationRail({ collapsed }: { collapsed?: boolean }) {
+  const [jobs, setJobs] = useState<RailJob[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const handler = (event: SidecarEvent) => {
+      if (event.event === 'generation_progress') setJobs(event.jobs ?? []);
+    };
+    getSidecar().onAny(handler);
+    return () => { getSidecar().offAny(handler); };
+  }, []);
+
+  const running = jobs.some(j => j.status !== 'complete' && j.status !== 'failed');
+  useEffect(() => {
+    // Ticks only while something is actually running — a finished job's clock is
+    // frozen at its final time, so there is nothing to re-render for.
+    if (!running) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [running]);
+
+  // Collapsed: the calendar is not rendered either, so this becomes a count dot
+  // — which is exactly the state someone is in when they have gone off to work
+  // on something else and most need to know a render is still going.
+  if (collapsed) {
+    const n = jobs.filter(j => j.status !== 'complete' && j.status !== 'failed').length;
+    if (n === 0) return null;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0' }} title={`${n} generating`}>
+        <span style={{
+          minWidth: 16, height: 16, borderRadius: 999, background: '#a855f7', color: '#fff', fontSize: 9,
+          fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+        }}>{n}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '0 12px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ fontSize: 9.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6c7086' }}>Studio</div>
+      {jobs.length === 0 ? (
+        <div style={{ fontSize: 11, color: '#6c7086', opacity: 0.6 }}>Nothing rendering</div>
+      ) : jobs.map(job => {
+        const done = job.status === 'complete';
+        const failed = job.status === 'failed';
+        return (
+          <div key={job.id} title={job.error || job.prompt} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{
+                fontSize: 11, color: '#a6adc8', textTransform: 'capitalize',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{failed ? `${job.type} failed` : job.type}</span>
+              <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#6c7086', flexShrink: 0 }}>
+                {elapsedLabel(job.startedAt, job.completedAt, now)}
+              </span>
+            </div>
+            <div style={{ height: 3, width: '100%', borderRadius: 999, overflow: 'hidden', background: '#313244' }}>
+              <div style={{
+                height: '100%', borderRadius: 999,
+                width: `${STAGE_FILL[job.status] ?? 8}%`,
+                background: failed ? '#f38ba8' : done ? '#a6e3a1' : '#a855f7',
+                transition: 'width 500ms ease',
+                animation: done || failed ? undefined : 'ava-rail-pulse 1.6s ease-in-out infinite',
+              }} />
+            </div>
+          </div>
+        );
+      })}
+      <style>{'@keyframes ava-rail-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }'}</style>
     </div>
   );
 }

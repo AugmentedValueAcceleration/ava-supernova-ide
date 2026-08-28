@@ -48,6 +48,42 @@ try {
   core = await import(`file://${corePath.replace(/\\/g, '/')}`);
 }
 
+/**
+ * Creative generations in flight, for the rail in the sidebar.
+ *
+ * Jobs live HERE rather than in the canvas, which is the whole point: a clip
+ * takes minutes, the operator navigates away, and the component that asked for
+ * it unmounts. core's GenerationManager also persists them to
+ * ~/.ava/generation-jobs.json, so one still rendering when the app closes can
+ * be picked up next launch.
+ *
+ * Lazy, and null-tolerant: an older core without GenerationManager must not
+ * take the sidecar down at startup over a progress indicator.
+ */
+let _generationManager = null;
+function generationJobs() {
+  if (_generationManager) return _generationManager;
+  if (!core?.GenerationManager) return null;
+  try {
+    _generationManager = new core.GenerationManager();
+    _generationManager.load().catch(() => {});
+    _generationManager.onUpdate((jobs) => {
+      // Running jobs PLUS anything finished in the last 30 seconds. Sending only
+      // the running ones means a finished job vanishes from the list, so the
+      // rail could show "working" but never "done" — and "done" is the whole
+      // reason someone who walked away is watching it.
+      const cutoff = Date.now() - 30_000;
+      const visible = jobs.filter((j) =>
+        (j.status !== 'complete' && j.status !== 'failed')
+        || (j.completedAt ? Date.parse(j.completedAt) > cutoff : false));
+      emit({ event: 'generation_progress', jobs: visible });
+    });
+  } catch {
+    _generationManager = null;   // never worth failing a generation over
+  }
+  return _generationManager;
+}
+
 // Health subpath — gives the sidecar a Node-fs HealthPlanStore for the
 // agent's health_plan_* tools. Same files the renderer reads/writes via
 // the Tauri-fs store, so Ava-driven and UI-driven plans share storage.
@@ -381,6 +417,17 @@ async function handleAssetForgeVideo(body, designRequestId, title) {
   // resolver in a ref, a ref does not survive a remount, and a video takes
   // minutes. When it went, the tool sat until its timeout and told the operator
   // the canvas had not responded - about a video playing in front of them.
+  // The rail reads these. Registered before the submit so a job appears the
+  // moment the operator asks for it, not when Wan gets round to it.
+  const gm = generationJobs();
+  const jobId = `ds-video-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  gm?.create({
+    id: jobId,
+    type: 'video',
+    prompt: body.prompt || '',
+    filename: 'video.mp4',
+    targetPath: '',
+  });
   const answer = (r) => {
     if (!designRequestId) return;
     const pending = pendingDesignTools.get(designRequestId);
@@ -392,6 +439,7 @@ async function handleAssetForgeVideo(body, designRequestId, title) {
   const platformKey = state.platformKey;
   if (!platformKey) {
     emit({ event: 'asset_forge_video_result', success: false, error: 'Not connected. Add your account in Settings.' });
+    gm?.fail(jobId, 'Not connected. Add your account in Settings.');
     answer({ ok: false, error: 'Not connected. Add your account in Settings.' });
     return;
   }
@@ -410,36 +458,46 @@ async function handleAssetForgeVideo(body, designRequestId, title) {
       const e = await submitRes.json().catch(() => ({}));
       const msg = e.error || `Video generation failed (${submitRes.status})`;
       emit({ event: 'asset_forge_video_result', success: false, error: msg });
+      gm?.fail(jobId, msg);
       answer({ ok: false, error: msg });
       return;
     }
     const data = await submitRes.json();
     if (data.url) {
       emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(data.url, 'video/mp4'), prompt: body.prompt, title });
+      gm?.complete(jobId, { url: data.url });
       answer({ ok: true, data: { duration: Number(body.duration) || undefined } });
       return;
     }
     if (!data.task_id) {
       emit({ event: 'asset_forge_video_result', success: false, error: 'No task_id returned' });
+      gm?.fail(jobId, 'No task_id returned');
       answer({ ok: false, error: 'No task_id returned' });
       return;
     }
+    // Accepted and queued at Wan. The bar advances on STAGE, never on a guessed
+    // percentage — the status endpoint reports a state and no number.
+    gm?.update(jobId, { status: 'generating', progress: 35 });
     // 2) Poll until terminal, then hand back the finished clip URL.
     const final = await pollVideoStatus(String(data.task_id), platformKey);
     if (final.success) {
       // prompt + title ride along so the canvas can save to the gallery from
       // the EVENT. The IDE's gallery write is front-end (Tauri fs) so it cannot
       // move down here, but it must not depend on a ref set before the wait.
+      gm?.update(jobId, { status: 'downloading', progress: 88 });
       emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(final.url, 'video/mp4'), prompt: body.prompt, title });
+      gm?.complete(jobId, { url: final.url });
       answer({ ok: true, data: { duration: Number(body.duration) || undefined } });
     } else {
       const msg = final.error || 'Video generation failed';
       emit({ event: 'asset_forge_video_result', success: false, error: msg });
+      gm?.fail(jobId, msg);
       answer({ ok: false, error: msg });
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Video generation failed';
     emit({ event: 'asset_forge_video_result', success: false, error: msg });
+    gm?.fail(jobId, msg);
     answer({ ok: false, error: msg });
   }
 }
