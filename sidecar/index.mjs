@@ -345,11 +345,28 @@ async function handleAssetForgeGenerate(body) {
 // a data: URL — the DashScope url is cross-origin with no CORS, which breaks the
 // webview's Web Audio decode (the waveform) and can block playback. Result comes
 // back as an `asset_forge_voice_result` event carrying the audio URL.
-async function handleAssetForgeVoice(body) {
+async function handleAssetForgeVoice(body, designRequestId, title) {
   const state = globalThis._sharedState || {};
   const platformKey = state.platformKey;
+  // Answer the waiting design tool from HERE, and register the read so it shows
+  // in the sidebar rail. Voice is synchronous, so the window in which the canvas
+  // could unmount is seconds rather than minutes \u2014 but it is the identical
+  // shape that lost a clip in the extension, and small is not none.
+  const gm = generationJobs();
+  const jobId = `ds-voice-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  gm?.create({ id: jobId, type: 'voice', prompt: body.text || '', filename: 'voiceover.mp3', targetPath: '' });
+  const answer = (r) => {
+    if (!designRequestId) return;
+    const pending = pendingDesignTools.get(designRequestId);
+    if (!pending) return;   // already resolved, or timed out - nothing to do
+    clearTimeout(pending.timer);
+    pendingDesignTools.delete(designRequestId);
+    pending.resolve(r);
+  };
   if (!platformKey) {
     emit({ event: 'asset_forge_voice_result', success: false, error: 'Not connected. Add your account in Settings.' });
+    gm?.fail(jobId, 'Not connected. Add your account in Settings.');
+    answer({ ok: false, error: 'Not connected. Add your account in Settings.' });
     return;
   }
   const headers = {
@@ -364,14 +381,20 @@ async function handleAssetForgeVoice(body) {
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
-      emit({ event: 'asset_forge_voice_result', success: false, error: e.error || `Voice generation failed (${res.status})` });
+      const msg = e.error || `Voice generation failed (${res.status})`;
+      emit({ event: 'asset_forge_voice_result', success: false, error: msg });
+      gm?.fail(jobId, msg);
+      answer({ ok: false, error: msg });
       return;
     }
     const data = await res.json();
     if (!data.url) {
       emit({ event: 'asset_forge_voice_result', success: false, error: 'No audio returned' });
+      gm?.fail(jobId, 'No audio returned');
+      answer({ ok: false, error: 'No audio returned' });
       return;
     }
+    gm?.update(jobId, { status: 'downloading', progress: 88 });
     // Proxy cross-origin audio to a same-origin data: URL so the waveform decodes.
     let audioUrl = data.url;
     if (/^https?:/i.test(audioUrl)) {
@@ -2098,6 +2121,12 @@ async function handleInit(data) {
         //                    several candidates, so keep generous headroom
         const timeoutMs =
           command === 'generate_video' ? VIDEO_POLL_CEILING_MS + 60_000
+          // A 13s read plus proxying the audio to a data: URL passes 12s, and
+          // when it did the tool reported failure, Ava RETRIED, and the read
+          // was generated and saved twice. Measured on disk 28 August: two
+          // cards thirteen seconds apart. Same failure the image lane already
+          // has a comment about; voice was simply never added to the list.
+          : command === 'generate_voice' ? 90_000
           : command === 'generate_image' ? 300_000
           : (command === 'generate_logo' || command === 'explore_logos') ? 180_000
           : slow ? Math.min(600_000, 90_000 * Math.max(1, setCount))
@@ -4168,7 +4197,7 @@ rl.on('line', async (line) => {
     case 'asset_forge_voice':
       // Design Studio → platform: Qwen3-TTS synthesis, then emit an
       // `asset_forge_voice_result` with the finished audio back to the canvas.
-      handleAssetForgeVoice(data.body || {}).catch((err) =>
+      handleAssetForgeVoice(data.body || {}, data.designRequestId, data.title).catch((err) =>
         emit({ event: 'asset_forge_voice_result', success: false, error: err && err.message ? err.message : 'Voice generation failed' }));
       break;
     case 'design_tool_result': {

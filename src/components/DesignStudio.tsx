@@ -811,16 +811,22 @@ export function DesignStudio() {
   // ── Voice lane wiring (Qwen3-TTS via sidecar) — park a resolver, ask the
   // sidecar to synthesise, and the asset_forge_voice_result listener fulfils it.
   // Auto-saves the finished audio into creative/voice/ on success.
-  const runVoiceGeneration = (script: string, voice: string, language: string, instructions?: string): Promise<{ ok: boolean; url?: string; error?: string }> => {
+  const runVoiceGeneration = (
+    script: string, voice: string, language: string, instructions?: string,
+    // The design tool call this read answers, when there is one. The sidecar
+    // resolves it directly — see the note below.
+    designRequestId?: string,
+  ): Promise<{ ok: boolean; url?: string; error?: string }> => {
     return new Promise((resolve) => {
       const title = (script.trim().split(/\s+/).slice(0, 6).join(' ') || 'Voiceover').slice(0, 60);
-      voiceResolverRef.current = (r) => {
-        if (r.ok && r.url) voiceGallery.saveGenerated({ url: r.url, title, prompt: script, ext: 'mp3' }).catch(() => {});
-        resolve(r);
-      };
+      // NO Library save here. This ref is read AFTER the stage has updated, so
+      // when it is gone the read plays and is silently never saved — the same
+      // shape that lost a clip in the extension. The save now happens in the
+      // result handler from the event's own fields.
+      voiceResolverRef.current = resolve;
       setVoiceSrc(null); setVoiceError(null);
       setVoiceGenerating(true);
-      getSidecar().assetForgeVoice({ text: script, voice, language_type: language, instructions }).catch((e) => {
+      getSidecar().assetForgeVoice({ text: script, voice, language_type: language, instructions, designRequestId, title }).catch((e) => {
         voiceResolverRef.current = null;
         setVoiceGenerating(false);
         const err = e instanceof Error ? e.message : 'Voice generation failed';
@@ -1059,7 +1065,7 @@ export function DesignStudio() {
         setVoiceName(voice); setVoiceScript(script);
         const language = typeof args.language === 'string' ? args.language : 'auto';
         const instructions = typeof args.instructions === 'string' ? args.instructions : undefined;
-        const out = await runVoiceGeneration(script, voice, language, instructions);
+        const out = await runVoiceGeneration(script, voice, language, instructions, m.requestId);
         if (out.ok) reply(true, { voice });
         else reply(false, undefined, out.error || 'Voice generation failed.');
         return;
@@ -1225,6 +1231,17 @@ export function DesignStudio() {
       }
       if (event.event === 'asset_forge_voice_result') {
         setVoiceGenerating(false);
+        // Save HERE, from the event's own fields, and keep the WHOLE script as
+        // the prompt. The extension stored the truncated title in both places,
+        // so the script a read was made from was never kept at all.
+        if (event.success && event.url) {
+          const spoken = (event.prompt as string | undefined) || '';
+          const savedTitle = (event.title as string | undefined)
+            || ((spoken.trim().split(/\s+/).slice(0, 6).join(' ') || 'Voiceover').slice(0, 60));
+          voiceGallery.saveGenerated({
+            url: event.url, title: savedTitle, prompt: spoken || savedTitle, ext: 'mp3',
+          }).catch(() => { /* the read plays either way */ });
+        }
         const ok = !!event.success && !!event.url;
         if (ok) { setVoiceSrc(event.url!); setDockOpen(false); } // audio ready → reveal it
         else setVoiceError(event.error || 'Voice generation failed');

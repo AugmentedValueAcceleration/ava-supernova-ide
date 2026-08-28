@@ -605,8 +605,14 @@ export class SidecarManager {
    * (which proxies the cross-origin audio to a data: URL), getting an
    * `asset_forge_voice_result` event back ({ success, url, error }).
    */
-  async assetForgeVoice(body: { text: string; voice?: string; language_type?: string; instructions?: string }): Promise<void> {
-    await this.send({ cmd: 'asset_forge_voice', body });
+  async assetForgeVoice(
+    body: { text: string; voice?: string; language_type?: string; instructions?: string; designRequestId?: string; title?: string },
+  ): Promise<void> {
+    // designRequestId + title travel WITH the job: the sidecar answers the
+    // waiting design tool itself and echoes the title back, so neither the reply
+    // nor the Library save depends on the canvas still holding a resolver ref.
+    const { designRequestId, title, ...rest } = body;
+    await this.send({ cmd: 'asset_forge_voice', body: rest, designRequestId, title });
   }
 
   /**
