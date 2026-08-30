@@ -3,6 +3,7 @@ import { initLocale, useLocale } from './lib/i18n';
 import { TickEngine } from './lib/tick-engine';
 import { refreshTier } from './lib/api';
 import TitleBar from './components/TitleBar';
+import { DashboardTopBar } from './components/DashboardTopBar';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
 import EditorArea from './components/EditorArea';
@@ -265,6 +266,7 @@ export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <TitleBar onOpenFolder={handleOpenFolder} currentFolder={projectFolder} />
+      <DashboardTopBar />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {sidebarPosition === 'left' && activityBar}
         {sidebarPosition === 'left' && sidebar}

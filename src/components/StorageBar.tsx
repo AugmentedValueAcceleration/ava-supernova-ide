@@ -39,7 +39,11 @@ function formatBytes(n: number): string {
 
 /** The compact bar + its hover/pinned detail card. Renders nothing until the
  *  scan has landed (and nothing at all if ~/.ava is empty). */
-export function StorageBar({ label = 'Storage' }: { label?: string }) {
+export function StorageBar({ label = 'Storage', compact = false }: {
+  label?: string;
+  /** One-line density for the dashboard status strip: bar + total, no label. */
+  compact?: boolean;
+}) {
   const [scan, setScan] = useState<StorageScan | null>(null);
   // What the user's projects folder costs. Read from cache — never measured on
   // render, because a source tree can run to tens of gigabytes and walking it
@@ -90,7 +94,42 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [pinned]);
 
-  if (!scan || scan.totalBytes <= 0) return null;
+  // Still scanning: hold the space with a skeleton rather than popping the
+  // whole row in when the numbers land. A null scan means "still looking";
+  // zero bytes means "looked, and there is nothing" — which stays invisible,
+  // because a permanently empty bar is noise, not information.
+  if (!scan) {
+    if (compact) {
+      return (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }} aria-busy="true">
+          <span style={{
+            width: 180, height: 6, borderRadius: 9999,
+            background: 'rgba(108, 112, 134, 0.18)', animation: 'avaPulse 1.5s infinite',
+          }} />
+          <span style={{
+            width: 38, height: 9, borderRadius: 3,
+            background: 'rgba(108, 112, 134, 0.25)', animation: 'avaPulse 1.5s infinite',
+          }} />
+        </span>
+      );
+    }
+    return (
+      <div style={{ width: '100%' }} aria-busy="true">
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: '#6c7086' }}>{label}</span>
+          <span style={{
+            width: 44, height: 10, borderRadius: 3,
+            background: 'rgba(108, 112, 134, 0.25)', animation: 'avaPulse 1.5s infinite',
+          }} />
+        </div>
+        <div style={{
+          height: 8, borderRadius: 4, width: '100%',
+          background: 'rgba(108, 112, 134, 0.18)', animation: 'avaPulse 1.5s infinite',
+        }} />
+      </div>
+    );
+  }
+  if (scan.totalBytes <= 0) return null;
   const { totalBytes, categories, reclaim } = scan;
 
   // Two families, one total. Ava's footprint is what she put on the disk; the
@@ -156,16 +195,22 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
           background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
         }}
       >
+        {/* Full density keeps the label above the bar; compact drops it and
+            puts the total inline, because a 40px strip has no room for a
+            second row and "Storage" beside a byte count says nothing. */}
+        {!compact && (
+          <div style={{
+            marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            fontSize: 11, color: '#6c7086',
+          }}>
+            <span>{label}</span>
+            <span style={{ color: '#a6adc8' }}>{formatBytes(grandTotal)}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <div style={{
-          marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          fontSize: 11, color: '#6c7086',
-        }}>
-          <span>{label}</span>
-          <span style={{ color: '#a6adc8' }}>{formatBytes(grandTotal)}</span>
-        </div>
-        <div style={{
-          display: 'flex', height: 8, width: '100%', overflow: 'hidden',
-          borderRadius: 9999, background: 'rgba(255,255,255,0.05)',
+          display: 'flex', height: compact ? 6 : 8, width: compact ? 180 : '100%', overflow: 'hidden',
+          borderRadius: 9999, background: 'rgba(255,255,255,0.05)', flexShrink: 0,
         }}>
           {displayCats.map(c => (
             <div
@@ -193,6 +238,10 @@ export function StorageBar({ label = 'Storage' }: { label?: string }) {
               }}
             />
           )}
+        </div>
+        {compact && (
+          <span style={{ fontSize: 11, color: '#a6adc8', whiteSpace: 'nowrap' }}>{formatBytes(grandTotal)}</span>
+        )}
         </div>
       </button>
 

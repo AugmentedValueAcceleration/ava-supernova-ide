@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { t, useLocale } from '../lib/i18n';
-import { AnnouncementTicker } from './AnnouncementTicker';
 
 interface TitleBarProps {
   onOpenFolder?: (path: string) => void;
@@ -135,8 +134,10 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
         </div>
       </div>
 
-      {/* Centre: hub announcement ticker when there's one, otherwise the current
-          folder / welcome. No-drag so the ticker's dismiss button is clickable. */}
+      {/* Centre: the current folder. The hub announcement moved to the
+          dashboard status strip below — app news is not window chrome, and the
+          extension has always shown it there, so this is what makes the two
+          surfaces the same shape. */}
       <div
         style={{
           position: 'absolute',
@@ -151,13 +152,9 @@ export default function TitleBar({ onOpenFolder, currentFolder }: TitleBarProps)
           WebkitAppRegion: 'no-drag',
         }}
       >
-        <AnnouncementTicker
-          fallback={
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {folderName || t('dash.titlebar.welcome')}
-            </span>
-          }
-        />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {folderName || t('dash.titlebar.welcome')}
+        </span>
       </div>
 
       {/* Right: Window controls */}

@@ -90,7 +90,6 @@ import {
 } from '../lib/journal-store';
 import { DocumentationPage } from './DocumentationPage';
 import { LibraryPapersPage } from './LibraryPapersPage';
-import { StorageBar } from './StorageBar';
 import { ContextBar } from './ContextBar';
 import { getToolHeader } from './tool-header';
 import {
@@ -2474,15 +2473,6 @@ export function CommandCentrePage() {
           </div>
         </div>
 
-        {/* Storage — colour-coded bar of Ava's whole local footprint, click to
-            manage/prune. Sits under the hero; mirrors the Library bar and the
-            extension's Command Center placement. Renders nothing until the
-            scan lands. */}
-        <div style={{ display: 'flex', marginBottom: 16 }}>
-          <div style={{ marginLeft: 'auto', width: '100%', maxWidth: 320 }}>
-            <StorageBar label={t('dash.cc.storage')} />
-          </div>
-        </div>
 
         {!connected && (
           <div style={{
@@ -11632,11 +11622,6 @@ export function LibraryPage() {
               {t('dash.library.hub_subtitle')}
             </p>
           </div>
-          {/* Storage — same bar as the Command Centre. In the header rather than
-              above the asset grid so it stays visible on every Library tab. */}
-          <div style={{ width: '100%', maxWidth: 320, marginBottom: 16 }}>
-            <StorageBar label={t('dash.cc.storage')} />
-          </div>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
           <button onClick={() => setTab('papers')} style={tabBtnStyle(tab === 'papers')}>{t('dash.library.tab.papers')}</button>
@@ -17144,12 +17129,6 @@ export function PlannerPage() {
         <div>
           <h2 style={pageTitle}>Planner</h2>
           <p style={{ fontSize: 12, color: '#585b70', marginTop: 2 }}>Tasks, reflections, and health plans</p>
-        </div>
-        {/* Also on Command Centre and Library. Here because the Planner is
-            where people sit day to day, and a local-first product should not
-            make you go looking to find out what it is costing you. */}
-        <div style={{ width: 220, flexShrink: 0 }}>
-          <StorageBar label={t('dash.cc.storage')} />
         </div>
       </div>
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
