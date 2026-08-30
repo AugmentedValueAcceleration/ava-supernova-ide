@@ -5,6 +5,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { readHCompanyKey, writeHCompanyKey } from '../lib/shared-config';
 import { ALL_MODELS, PLATFORM_MODELS } from '@ava/core/models';
+import { providerLabel } from '../lib/chat-models';
 import { APP_VERSION } from '../version';
 // Phosphor icons (duotone weight) — distinctive layered fill that reads
 // as a crafted product instead of a generic SaaS dashboard. Same author
@@ -52,7 +53,8 @@ import { DesignStudio } from './DesignStudio';
 import { t, tt, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
 import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
-import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
+import { useModeAvailability, modeSubtitle, isModeListed, activeProviderSource } from '../lib/mode-availability';
+import type { MonthUsage } from '../lib/usage-history';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 // The dependency-free leaf, so this renderer and the sidecar agree on what
 // is exportable and what it is called without either keeping its own list.
@@ -197,15 +199,6 @@ const card: React.CSSProperties = {
   borderRadius: 10,
   padding: '20px',
   marginBottom: 16,
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  color: '#a6adc8',
-  textTransform: 'uppercase' as const,
-  letterSpacing: 0.8,
-  marginBottom: 12,
 };
 
 const inputStyle: React.CSSProperties = {
@@ -2037,16 +2030,6 @@ function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loadin
   );
 }
 
-// ── Not Connected Widget Placeholder ────────────────────────────────────────
-
-function CCNotConnectedPlaceholder({ widgetName }: { widgetName: string }) {
-  return (
-    <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086', textAlign: 'center' }}>
-      {t('dash.cc.connect_to_see', { widget: widgetName })}
-    </div>
-  );
-}
-
 // ── Command Centre trust nudges ─────────────────────────────────────────────
 // Surfaces the audit engine's findings at the top of the daily lens so the
 // user sees what's worth a second look without opening the audit tab. The
@@ -2537,23 +2520,15 @@ export function CommandCentrePage() {
           <>
             <CCTrustNudges
               findings={ccFindings}
-              onReview={() => { try { sessionStorage.setItem('ava-ide-usage-tab', 'audit'); } catch { /* storage off */ } window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'usage' })); }}
+              onReview={() => { try { sessionStorage.setItem('ava-ide-usage-tab', 'audit'); } catch { /* storage off */ } window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'chat-history' })); }}
             />
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
-              {connected ? (
-                <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
-              ) : (
-                <WidgetCard title={t('dash.cc.todays_tasks')} icon={'✅'}>
-                  <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_tasks')} />
-                </WidgetCard>
-              )}
-              {connected ? (
-                <CCJournalWidget journalDay={journalDay} loading={journalLoading} />
-              ) : (
-                <WidgetCard title={t('dash.cc.todays_journal')} icon={'📓'}>
-                  <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_journal')} />
-                </WidgetCard>
-              )}
+              {/* No connection gate: both of these read ~/.ava (readLocalTasks,
+                  readJournalDay) and the account has nothing to do with it.
+                  Gating them told a signed-out user to connect in order to see
+                  files already on their own disk. */}
+              <CCTasksWidget tasks={tasks} loading={tasksLoading} onRefresh={refetchTasks} />
+              <CCJournalWidget journalDay={journalDay} loading={journalLoading} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <WorkingHoursClock />
@@ -2586,20 +2561,11 @@ export function CommandCentrePage() {
         {/* ── Reflect tab ───────────────────────────────────────────── */}
         {tab === 'reflect' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {connected ? (
-              <CCMemoryWidget memories={memories} loading={memoriesLoading} />
-            ) : (
-              <WidgetCard title={t('dash.cc.memory')} icon={'🧠'}>
-                <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_memories')} />
-              </WidgetCard>
-            )}
-            {connected ? (
-              <CCLearningWidget curriculums={curriculums} loading={learningLoading} />
-            ) : (
-              <WidgetCard title={t('dash.cc.learning')} icon={'🎓'}>
-                <CCNotConnectedPlaceholder widgetName={t('dash.cc.widget_learning')} />
-              </WidgetCard>
-            )}
+            {/* Same as the daily lens: the memory graph is ~/.ava/memory/
+                graph.json and learning is ~/.ava/learning.json. Local-first
+                means the local copy IS the copy — no account required. */}
+            <CCMemoryWidget memories={memories} loading={memoriesLoading} />
+            <CCLearningWidget curriculums={curriculums} loading={learningLoading} />
           </div>
         )}
 
@@ -3363,7 +3329,29 @@ export function AvaChatPage() {
     } catch { /* dialog unavailable or cancelled */ }
   }, [openDocument]);
 
-  const refreshPlans = useCallback(() => { void getSidecar().listDecisions(); }, []);
+  // Read the records off disk rather than asking the sidecar. Plans are files
+  // in the project — no account, no model key, no agent — but listDecisions()
+  // needed the sidecar running, which needs canChat, which needs a chat key or
+  // an account. Same move the audit log already made for the same reason.
+  const refreshPlans = useCallback(() => {
+    const folder = (() => {
+      try { return localStorage.getItem('ava-ide-project-folder'); } catch { return null; }
+    })();
+    void import('../lib/plans-store')
+      .then((m) => m.readPlanRecords(folder))
+      .then((records) => setPlanRecords(records as PlanRecordUI[]))
+      .catch(() => { /* local-first: leave the list as it is */ });
+  }, []);
+
+  // Load on mount and whenever the project changes, not only when the Plans
+  // tab is clicked — the panel opens on Today, so the count beside the tab was
+  // 0 until you went looking, which reads as "no plans".
+  useEffect(() => {
+    refreshPlans();
+    const onFolder = () => refreshPlans();
+    window.addEventListener('ava-folder-changed', onFolder);
+    return () => window.removeEventListener('ava-folder-changed', onFolder);
+  }, [refreshPlans]);
   const openPlanRecord = useCallback(async (rec: PlanRecordUI) => {
     try {
       const { openPath } = await import('@tauri-apps/plugin-opener');
@@ -3394,6 +3382,19 @@ export function AvaChatPage() {
   // ── Derived: available BYOK models ────────────────────────────────────────
   // ── BYOK models (reactive — updates when sidebar keys change) ────────────
   const [byokRefresh, setByokRefresh] = useState(0);
+
+  // Which wallet the picker draws from — see activeProviderSource. Signing in
+  // or out changes the answer as much as the toggle does, so both events count.
+  const [providerSource, setProviderSource] = useState<'platform' | 'byok'>(activeProviderSource);
+  useEffect(() => {
+    const refresh = () => setProviderSource(activeProviderSource());
+    window.addEventListener('ava-ide-source-changed', refresh);
+    window.addEventListener('ava-auth-changed', refresh);
+    return () => {
+      window.removeEventListener('ava-ide-source-changed', refresh);
+      window.removeEventListener('ava-auth-changed', refresh);
+    };
+  }, []);
   useEffect(() => {
     const handler = () => setByokRefresh(n => n + 1);
     window.addEventListener('storage', handler);
@@ -3446,7 +3447,6 @@ export function AvaChatPage() {
   // providers alphabetical by label, models sorted by name, extension display
   // labels (Kimi / GLM, not Moonshot / Zhipu), availability per BYOK key.
   const MODEL_CATALOGUE = useMemo(() => {
-    const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA' };
     const STORE = BYOK_STORE_NAMES;
     // A model is live if you hold that provider's key, OR your PLAN serves it.
     //
@@ -3470,23 +3470,45 @@ export function AvaChatPage() {
         : [],
     );
 
+    // THE SOURCE TOGGLE DECIDES WHAT IS ON OFFER.
+    //
+    // On Platform a plan reaches the fleets and the singles the platform also
+    // serves — DeepSeek, Qwen, Kimi, Mistral. It cannot reach GLM, Xiaomi,
+    // Tencent or NVIDIA, so listing those was offering rows you could only
+    // fail at. They are one toggle away, which is where they belong.
+    //
+    // On API Key the whole catalogue shows, and availability stops being a
+    // plan question: without the key there is nothing behind the row.
     return Object.entries(ALL_MODELS)
       .map(([id, models]) => {
         const hasKey = STORE[id] ? keyedProviders.has(STORE[id]) : false;
         const entries = models
           .filter((m) => !m.disabled && !m.hiddenFromPicker)
-          .map((m) => ({ id: m.id, name: m.name, available: hasKey || planServes.has(m.id) }))
+          .filter((m) => providerSource !== 'platform' || planServes.has(m.id))
+          .map((m) => ({ id: m.id, name: m.name, available: providerSource === 'platform' ? planServes.has(m.id) : hasKey }))
           .sort((a, b) => (a.available === b.available ? a.name.localeCompare(b.name) : a.available ? -1 : 1));
         return {
           id,
-          label: LABEL[id] || (id.charAt(0).toUpperCase() + id.slice(1)),
+          label: providerLabel(id),
           available: entries.some((m) => m.available),
           models: entries,
         };
       })
       .filter((g) => g.models.length > 0)
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [keyedProviders, connected]);
+  }, [keyedProviders, connected, providerSource]);
+
+  // The chosen model has no key for its provider. Derived from the SAME
+  // catalogue the picker renders, so the notice and the row can never disagree
+  // about what is available. Fleets (auto/supernova/aurora/longxiang) are not
+  // in the catalogue and never match — they have their own gating.
+  const missingKeyProvider = useMemo(() => {
+    for (const group of MODEL_CATALOGUE) {
+      const hit = group.models.find((m) => m.id === model);
+      if (hit) return hit.available ? null : group.label;
+    }
+    return null;
+  }, [MODEL_CATALOGUE, model]);
 
   // ── Derived: can the user actually chat? ────────────────────────────────
   const hasByokKeys = byokModels.length > 0;
@@ -4655,7 +4677,8 @@ export function AvaChatPage() {
 
       case 'audit_log':
       case 'audit_entry':
-        // Forward audit events to window so UsagePage can pick them up.
+        // Forward audit events to window so the History page's Audit tab
+        // can pick them up.
         window.dispatchEvent(new CustomEvent('ava-audit-event', { detail: event }));
         break;
 
@@ -5322,6 +5345,11 @@ export function AvaChatPage() {
   const send = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed && pendingAttachments.length === 0) return;
+    // No key for the chosen model — the banner above the composer already says
+    // which one and how to fix it. The input stays live on purpose: asking Ava
+    // how to add the key is exactly what someone does next, and a dead box
+    // cannot be asked.
+    if (missingKeyProvider) return;
 
     // Desktop Automation mode: `@@` prefix switches the chat to desktop mode
     // so Ava uses the sidecar's agent loop with the restricted desktop tool
@@ -5389,7 +5417,7 @@ export function AvaChatPage() {
     // Always use sidecar — both Local and Cloud modes run the full agent
     // Send the prefixed, secret-injected text to the sidecar
     sendLocal(outgoingText, userMsg.attachments);
-  }, [input, messages, sendLocal, pendingAttachments, model, injectSecrets, secrets, mode]);
+  }, [input, messages, sendLocal, pendingAttachments, model, injectSecrets, secrets, mode, missingKeyProvider]);
 
   // ── Command palette — fire a pre-classified intent ──────────────────────
   // Click and Enter both land here. Clear the textarea (in case it held a
@@ -5600,10 +5628,14 @@ export function AvaChatPage() {
                         <button
                           key={m.id}
                           onClick={() => {
-                            if (!live) { window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'settings' })); setModelMenuOpen(false); return; }
+                            // Selectable without a key. It used to open Settings
+                            // instead of choosing, which decides for the user and
+                            // leaves the picker as the only place the requirement
+                            // is ever stated. Choose it; the composer says what it
+                            // needs before anything is typed.
                             setModel(m.id); setModelMenuOpen(false);
                           }}
-                          title={live ? m.name : `Add ${group.label} API key to unlock`}
+                          title={live ? m.name : `${group.label} needs your own API key`}
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
                             padding: '8px 10px',
@@ -5611,7 +5643,9 @@ export function AvaChatPage() {
                             border: 'none', borderRadius: 6,
                             color: !live ? '#6c7086' : active ? '#e0b0ff' : '#cdd6f4',
                             fontSize: 12, cursor: 'pointer', textAlign: 'left',
-                            opacity: live ? 1 : 0.45,
+                            // Dimmed enough to read as "needs something", not so
+                            // dim it reads as disabled — it is selectable now.
+                            opacity: live ? 1 : 0.7,
                           }}
                           onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}
                           onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
@@ -5644,28 +5678,44 @@ export function AvaChatPage() {
               backend is the local sidecar (set in Settings), so the
               operator can see at a glance whether the local model is
               ready. Not a control — the Cloud sync toggle beside it is. */}
-          {chatBackend === 'local' && (
-            <span
-              title={`Local model — ${sidecarStatus}`}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                background: 'rgba(166,227,161,0.1)',
-                border: '1px solid rgba(166,227,161,0.3)',
-                borderRadius: 6, fontSize: 10, fontWeight: 600, color: '#a6e3a1',
-              }}
-            >
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: sidecarStatus === 'ready' ? '#a6e3a1'
-                  : sidecarStatus === 'starting' ? '#eab308'
-                  : sidecarStatus === 'error' ? '#ef4444' : '#6c7086',
-                ...(sidecarStatus === 'starting' ? { animation: 'avaPulse 1.5s infinite' } : {}),
-              }} />
-              {sidecarStatus === 'ready' ? 'Local model'
-                : sidecarStatus === 'starting' ? 'Starting…'
-                : sidecarStatus === 'error' ? 'Model error' : 'Local model off'}
-            </span>
-          )}
+          {chatBackend === 'local' && (() => {
+            // "off" has two very different causes. Nothing to run on (no chat
+            // key, no account) is the one worth naming — it is fixable, and
+            // the old label made it look like a switch you had turned down.
+            const noKey = sidecarStatus === 'off' && !hasByokKeys && !connected;
+            const tone = sidecarStatus === 'ready' ? '#a6e3a1'
+              : sidecarStatus === 'starting' ? '#eab308'
+              : sidecarStatus === 'error' ? '#ef4444'
+              : noKey ? '#facc15' : '#6c7086';
+            const label = sidecarStatus === 'ready' ? t('dash.chat.model_ready')
+              : sidecarStatus === 'starting' ? t('dash.chat.model_starting')
+              : sidecarStatus === 'error' ? t('dash.chat.model_error')
+              : noKey ? t('dash.chat.model_no_key') : t('dash.chat.model_idle');
+            const hint = noKey ? t('dash.chat.model_no_key_hint') : label;
+            return (
+              <Tooltip content={hint} placement="bottom">
+              <span
+                onClick={noKey ? () => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'settings' })) : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
+                  // The pill takes the colour of its state. It used to be green
+                  // in every state, so "Model error" arrived in the same green
+                  // as "ready" with only a 6px dot disagreeing.
+                  background: `color-mix(in srgb, ${tone} 10%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${tone} 30%, transparent)`,
+                  borderRadius: 6, fontSize: 10, fontWeight: 600, color: tone,
+                  cursor: noKey ? 'pointer' : 'default',
+                }}
+              >
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%', background: tone,
+                  ...(sidecarStatus === 'starting' ? { animation: 'avaPulse 1.5s infinite' } : {}),
+                }} />
+                {label}
+              </span>
+              </Tooltip>
+            );
+          })()}
           {/* Cloud-sync toggle removed — Ava is local-first; nothing syncs
               to the cloud (storage sunsets 1 Jul 2026). */}
 
@@ -7374,6 +7424,28 @@ export function AvaChatPage() {
               onDragOver={(e) => e.preventDefault()}
             >
               {/* Usage warning banner moved to the top of the composer (below the header). */}
+              {/* The chosen model has no key for its provider. Above the input
+                  on purpose: the point of letting a keyless model be picked is
+                  that you find out here, not after writing a message. */}
+              {missingKeyProvider && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6,
+                  padding: '6px 10px', borderRadius: 8, fontSize: 11,
+                  background: 'rgba(250, 204, 21, 0.10)', color: '#facc15',
+                  border: '1px solid rgba(250, 204, 21, 0.20)',
+                }}>
+                  <span>{'⚠'}</span>
+                  <span style={{ flex: 1 }}>{t('chat.key_needed').replace('{provider}', missingKeyProvider)}</span>
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'settings' }))}
+                    style={{
+                      flexShrink: 0, padding: '2px 8px', borderRadius: 6, fontSize: 10,
+                      background: 'transparent', color: '#facc15', cursor: 'pointer',
+                      border: '1px solid rgba(250, 204, 21, 0.30)',
+                    }}
+                  >{t('chat.key_needed_action')}</button>
+                </div>
+              )}
               {/* Pending attachments preview */}
               {pendingAttachments.length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -7818,7 +7890,20 @@ export function ChatHistoryPage() {
   const connected = checkConnected();
   const [conversations, setConversations] = useState<any[]>([]);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'conversations' | 'usage' | 'audit'>('conversations');
+  // Opens on Conversations, unless something handed us a tab on the way in —
+  // the Command Centre's trust-nudge Review button sets this before it
+  // navigates, so a finding lands on the audit view rather than dropping you
+  // on the conversation list to go hunting.
+  const [activeTab, setActiveTab] = useState<'conversations' | 'usage' | 'audit'>(() => {
+    try {
+      const handoff = sessionStorage.getItem('ava-ide-usage-tab');
+      if (handoff === 'audit' || handoff === 'usage') {
+        sessionStorage.removeItem('ava-ide-usage-tab');
+        return handoff;
+      }
+    } catch { /* storage off */ }
+    return 'conversations';
+  });
   const [surfaceTab, setSurfaceTab] = useState<'all' | 'main' | 'design' | 'health' | 'learning' | 'social'>('all');
   // Inline rename of a conversation card. Writes the new title into the shared
   // history file so the rename shows up in the extension + CLI too.
@@ -7834,11 +7919,64 @@ export function ChatHistoryPage() {
   };
   const { data: usage } = useApiData<any>('/usage/summary', null);
 
+  // ── Local usage — the live month plus every completed one ──────────────
+  //
+  // No account involved. getSessionStats() counts the current calendar month
+  // (api.ts), usage-history keeps the months that have closed. This is the
+  // only usage figure that means anything to someone running on their own
+  // keys: the credit blocks below describe a plan they do not have.
+  const [localSession, setLocalSession] = useState<SessionStats>(getSessionStats);
+  const [localHistory, setLocalHistory] = useState<MonthUsage[]>([]);
+  useEffect(() => {
+    void import('../lib/usage-history').then((m) => setLocalHistory(m.readUsageHistory()));
+    const onStats = (e: Event) => setLocalSession({ ...(e as CustomEvent).detail });
+    const onHistory = (e: Event) => setLocalHistory([...((e as CustomEvent).detail ?? [])]);
+    window.addEventListener('ava-session-stats', onStats);
+    window.addEventListener('ava-usage-history', onHistory);
+    return () => {
+      window.removeEventListener('ava-session-stats', onStats);
+      window.removeEventListener('ava-usage-history', onHistory);
+    };
+  }, []);
+
+  /** This month, and every month, as one shape each. */
+  const localUsage = useMemo(() => {
+    const month = {
+      inputTokens: localSession.inputTokens, outputTokens: localSession.outputTokens,
+      totalTokens: localSession.totalTokens, messages: localSession.messages,
+      toolCalls: localSession.toolCalls, models: localSession.models || {},
+    };
+    const models: Record<string, { input: number; output: number; requests: number }> = {};
+    let inputTokens = 0, outputTokens = 0, totalTokens = 0, messages = 0, toolCalls = 0;
+    for (const m of [...localHistory, month]) {
+      inputTokens += m.inputTokens || 0;
+      outputTokens += m.outputTokens || 0;
+      totalTokens += m.totalTokens || 0;
+      messages += m.messages || 0;
+      toolCalls += m.toolCalls || 0;
+      for (const [name, v] of Object.entries(m.models || {})) {
+        if (!models[name]) models[name] = { input: 0, output: 0, requests: 0 };
+        models[name].input += v.input || 0;
+        models[name].output += v.output || 0;
+        models[name].requests += v.requests || 0;
+      }
+    }
+    return { month, allTime: { inputTokens, outputTokens, totalTokens, messages, toolCalls, models } };
+  }, [localSession, localHistory]);
+
+  const [localScope, setLocalScope] = useState<'month' | 'all'>('month');
+  const localView = localScope === 'month' ? localUsage.month : localUsage.allTime;
+  const localModels = Object.entries(localView.models)
+    .map(([model, m]) => ({ model, input: m.input, output: m.output, requests: m.requests }))
+    .sort((a, b) => (b.input + b.output) - (a.input + a.output));
+  const localCost = localModels.length > 0
+    ? localModels.reduce((sum, m) => sum + estimateModelCost(m.input, m.output, m.model), 0)
+    : estimateModelCost(localView.inputTokens, localView.outputTokens, '');
+
   // ── Audit tab state — hoisted to History page so the Audit tab is
-  // a top-level entry alongside Conversations + Usage instead of being
-  // buried inside the Usage page's own sub-tabs. Owns its own search /
-  // filter / expand state because UsagePage's audit state lives in a
-  // different component tree.
+  // a top-level entry alongside Conversations + Usage. It owns its own
+  // search / filter / expand state — the separate usage page that used to
+  // hold a second copy of this is gone.
   const [historyAuditEntries, setHistoryAuditEntries] = useState<any[]>([]);
   const [historyAuditFindings, setHistoryAuditFindings] = useState<any[]>([]);
   const [historyAuditExpanded, setHistoryAuditExpanded] = useState<number | null>(null);
@@ -8026,6 +8164,94 @@ export function ChatHistoryPage() {
         {/* ── Usage Tab ──────────────────────────────────────────────── */}
         {activeTab === 'usage' && (
           <>
+            {/* ── Your own usage ─────────────────────────────────────────
+                Always shown, account or not. Tokens and estimated cost from
+                the local counters; the credit blocks below are about a plan
+                and only render when there is one. */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086' }}>
+                  {t('dash.usage.your_usage')}
+                </div>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  {([['month', t('dash.usage.this_month')], ['all', t('dash.usage.all_time')]] as const).map(([k, label]) => (
+                    <button
+                      key={k}
+                      onClick={() => setLocalScope(k as 'month' | 'all')}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                        background: localScope === k ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
+                        border: localScope === k
+                          ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)'
+                          : '1px solid var(--border, #2a2440)',
+                        color: localScope === k ? 'var(--accent)' : '#6c7086',
+                      }}
+                    >{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
+                {[
+                  { label: t('dash.usage.input_tokens'), value: formatTokens(localView.inputTokens) },
+                  { label: t('dash.usage.output_tokens'), value: formatTokens(localView.outputTokens) },
+                  { label: t('dash.usage.total_tokens'), value: formatTokens(localView.totalTokens), accent: true },
+                  { label: t('dash.usage.messages'), value: String(localView.messages) },
+                  { label: t('dash.usage.tool_calls'), value: String(localView.toolCalls) },
+                  { label: t('dash.usage.est_cost'), value: `$${localCost.toFixed(4)}`, cost: true },
+                ].map((s) => (
+                  <div key={s.label} style={{
+                    background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+                    borderRadius: 12, padding: 16,
+                  }}>
+                    <div style={{ fontSize: 10, color: '#6c7086' }}>{s.label}</div>
+                    <div style={{
+                      fontSize: 18, fontWeight: 600, marginTop: 4,
+                      color: s.cost ? costColourFor(localCost) : s.accent ? 'var(--accent)' : '#cdd6f4',
+                    }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Where the tokens went. The point of the tab for a BYOK user:
+                  which model is costing the money. */}
+              {localModels.length > 0 ? (
+                <div style={{
+                  background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+                  borderRadius: 12, padding: '16px 20px',
+                }}>
+                  {localModels.map((m) => {
+                    const tokens = m.input + m.output;
+                    const top = localModels[0].input + localModels[0].output;
+                    return (
+                      <div key={m.model} style={{ marginBottom: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                          <span style={{ color: '#cdd6f4', fontWeight: 500 }}>{m.model}</span>
+                          <span style={{ color: '#6c7086' }}>
+                            {formatTokens(tokens)} · ${estimateModelCost(m.input, m.output, m.model).toFixed(4)}
+                          </span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
+                          <div style={{
+                            width: `${top > 0 ? (tokens / top) * 100 : 0}%`, height: '100%', borderRadius: 3,
+                            background: 'linear-gradient(90deg, var(--accent), #6366f1)',
+                          }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: 10, color: '#585b70', marginTop: 4 }}>{t('dash.usage.est_note')}</div>
+                </div>
+              ) : (
+                <div style={{
+                  background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+                  borderRadius: 12, padding: '24px 20px', textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.usage.no_usage_period')}</div>
+                </div>
+              )}
+            </div>
+
             {/* Credit Balance */}
             {connected && usage && (
               <div style={{ marginBottom: 24 }}>
@@ -8147,18 +8373,15 @@ export function ChatHistoryPage() {
               </div>
             )}
 
-            {!connected && (
-              <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '48px 20px', textAlign: 'center' }}>
-                <div style={{ fontSize: 13, color: '#6c7086' }}>{t('dash.usage.connect_analytics')}</div>
-              </div>
-            )}
+            {/* No "connect to see analytics" dead end. The tab now shows your
+                own tokens and spend without an account; the credit blocks above
+                are simply absent when there is no plan to report on. */}
           </>
         )}
 
         {/* ── Conversations Tab ──────────────────────────────────────── */}
         {activeTab === 'conversations' && (
           <>
-
 
         {/* Room filter. Reuses the page's own tabStyle — the underline treatment
             every other tab strip in the app uses — rather than inventing a second
@@ -8489,7 +8712,6 @@ export function MemoryPage() {
             </div>
           </div>
         )}
-
 
         {/* Stats row */}
         {memories.length > 0 && (
@@ -11579,6 +11801,10 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   const connected = checkConnected();
   const [cloudFiles, setCloudFiles] = useState<LibraryFile[]>([]);
   const [localFiles, setLocalFiles] = useState<LibraryFile[]>([]);
+  // Manual reload trigger. The two sources below each listen to their own
+  // inputs (connected/kind, projectFolder), so neither notices a new asset
+  // written by Creative Studio or a file dropped into the project.
+  const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   // Source filter — an independent control on this page, driven by the
   // source tabs below. It is NOT derived from any global toggle: cloud
@@ -11726,7 +11952,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       })
       .catch(() => setCloudFiles([]))
       .finally(() => setLoading(false));
-  }, [connected, kind]);
+  }, [connected, kind, reloadKey]);
 
   // Local scan — independent of connection state (local files exist
   // whether or not the user is signed in). Re-runs whenever the
@@ -11893,6 +12119,20 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                 Open save folder
               </button>
             )}
+            <button
+              onClick={() => { setReloadKey((n) => n + 1); refreshLocalFiles(); }}
+              title={t('dash.common.refresh')}
+              style={{
+                padding: '6px 10px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                background: 'transparent', color: '#a6adc8',
+                display: 'flex', alignItems: 'center', gap: 6, marginRight: 6,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#a6adc8'; }}
+            >
+              <PhArrowsClockwise size={14} weight="bold" />
+            </button>
             {filterOptions.map((tab) => (
               <button
                 key={tab.id}
@@ -12695,7 +12935,6 @@ function LibraryPreviewModal({
     </Drawer>
   );
 }
-
 
 /* -- Library waveform ------------------------------------------------------ */
 /* The voiceover preview, matching the extension's Library and Creative Studio.
@@ -13872,7 +14111,6 @@ export function CloudSyncPage() {
 
 
 
-
   // Categories that default OFF — opt-in only. The user must explicitly
   // enable cloud sync for these: shared learnings leave the device, and
   // the health profile is sensitive body data.
@@ -14016,7 +14254,6 @@ export function CloudSyncPage() {
       alert(`Export failed: ${err instanceof Error ? err.message : err}`);
     }
   };
-
 
   return (
     <div style={pageWrapper}>
@@ -14229,502 +14466,47 @@ export function CloudSyncPage() {
 }
 
 /* ===== 9. Usage ===== */
-export function UsagePage() {
-  useLocale();
-  const connected = checkConnected();
-  const [activeTab, setActiveTab] = useState<'session' | 'alltime' | 'audit'>(() => {
-    // Deep-link from the Command Centre's "Review in audit" nudge.
-    try {
-      if (sessionStorage.getItem('ava-ide-usage-tab') === 'audit') {
-        sessionStorage.removeItem('ava-ide-usage-tab');
-        return 'audit';
-      }
-    } catch { /* storage off */ }
-    return 'session';
-  });
-  const { data: usage, loading, error } = useApiData<any>('/usage/summary', null);
 
-  // Audit log state
-  const [auditEntries, setAuditEntries] = useState<any[]>([]);
-  // Nudge findings computed by the shared @ava/core/audit engine in the
-  // sidecar and forwarded with the entries (kept in sync with the extension).
-  const [auditFindings, setAuditFindings] = useState<any[]>([]);
-  const [auditExpanded, setAuditExpanded] = useState<number | null>(null);
+// ── Token pricing ───────────────────────────────────────────────────────────
+//
+// USD per 1M tokens. Module scope on purpose: the Usage page and the History
+// page both answer "what did this cost", and two copies of a price list is two
+// answers to the same question the moment one is edited.
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'qwen3.5-omni-flash': { input: 0.065, output: 0.26 },
+  'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
+  'qwen3.5-plus': { input: 0.20, output: 1.20 },
+  'qwen3.5-flash': { input: 0.05, output: 0.40 },
+  'MiniMax-M3': { input: 0.60, output: 2.40 },
+  'MiniMax-M2.7': { input: 0.30, output: 1.20 },
+  'MiniMax-M2.7-highspeed': { input: 0.60, output: 2.40 },
+  // Kimi + DeepSeek verified against the providers' own pricing pages 2026-07-17.
+  'kimi-k3': { input: 3.00, output: 15.00 },
+  'kimi-k2.7-code': { input: 0.95, output: 4.00 },
+  'kimi-k2.6': { input: 0.95, output: 4.00 },
+  // Off-peak (2026-08-16 tariff); peak 01:00-04:00 + 06:00-10:00 UTC is 2×.
+  'deepseek-v4-pro': { input: 0.66, output: 1.98 },
+  'deepseek-v4-flash': { input: 0.22, output: 0.66 },
+};
 
-  // Audit-tab UI state — search + filter live next to the entries
-  // they apply to. Same axes the extension uses so muscle memory ports.
-  const [auditSearch, setAuditSearch] = useState('');
-  const [auditRiskFilter, setAuditRiskFilter] = useState<string>('all');
-  const [auditStatusFilter, setAuditStatusFilter] = useState<string>('all');
+const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
 
-  // Listen for audit events forwarded from sidecar event handler.
-  // Also handles `audit_export_ready` — sidecar formats the bundle and
-  // we open the Tauri save dialog from here so the user gets a native
-  // file picker.
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.event === 'audit_log' && Array.isArray(detail.entries)) {
-        setAuditEntries(detail.entries);
-        setAuditFindings(Array.isArray(detail.findings) ? detail.findings : []);
-      }
-      if (detail?.event === 'audit_entry' && detail.entry) {
-        setAuditEntries(prev => [...prev, detail.entry].slice(-500));
-      }
-      if (detail?.event === 'audit_export_ready' && detail.bundle) {
-        const b = detail.bundle as { filename: string; content: string; format: 'markdown' | 'json' };
-        // Lazy-import the Tauri dialog + fs plugins so they don't
-        // bloat the audit-tab first-paint when the export button
-        // is never used.
-        Promise.all([
-          import('@tauri-apps/plugin-dialog'),
-          import('@tauri-apps/plugin-fs'),
-        ]).then(async ([dialog, fs]) => {
-          const target = await dialog.save({
-            defaultPath: b.filename,
-            filters: [{ name: b.format === 'json' ? 'JSON' : 'Markdown', extensions: [b.format === 'json' ? 'json' : 'md'] }],
-          });
-          if (!target) return;
-          await fs.writeTextFile(target, b.content);
-        }).catch(() => { /* user cancelled or fs error — non-fatal */ });
-      }
-    };
-    window.addEventListener('ava-audit-event', handler);
-    return () => window.removeEventListener('ava-audit-event', handler);
-  }, []);
-
-  // Read the persistent audit log DIRECTLY via Tauri fs when the audit tab
-  // opens — the sidecar isn't running on this page, so getAuditLog() throws.
-  // Local reader annotates integrity + security + findings. (Same fix as the
-  // History-page audit view / Command Centre nudges.)
-  const loadUsageAudit = useCallback(() => {
-    import('../lib/audit-store')
-      .then(m => m.readAuditEntries(localStorage.getItem('ava-ide-project-folder') || undefined))
-      .then(({ entries, findings }) => { setAuditEntries(entries); setAuditFindings(findings); })
-      .catch(() => { /* local-first: leave empty on read failure */ });
-  }, []);
-  useEffect(() => { if (activeTab === 'audit') loadUsageAudit(); }, [activeTab, loadUsageAudit]);
-
-  // Live session stats from shared store
-  const [session, setSession] = useState<SessionStats>(getSessionStats);
-  useEffect(() => {
-    const handler = (e: Event) => setSession({ ...(e as CustomEvent).detail });
-    window.addEventListener('ava-session-stats', handler);
-    return () => window.removeEventListener('ava-session-stats', handler);
-  }, []);
-
-  // Map from unified /usage/summary response (for All-Time tab)
-  const period = usage?.period || {};
-  const totals = usage?.totals || {};
-
-  // Session tab uses live local data; All-Time uses API
-  const totalTokens = activeTab === 'session' ? session.totalTokens : (period.free_credits_used || 0) + (period.credits_used || 0);
-  const inputTokens = activeTab === 'session' ? session.inputTokens : Math.round(totalTokens * 0.6);
-  const outputTokens = activeTab === 'session' ? session.outputTokens : totalTokens - inputTokens;
-  const messages = activeTab === 'session' ? session.messages : (period.requests_count || totals.requests || 0);
-  const toolCalls = activeTab === 'session' ? session.toolCalls : 0;
-
-  // All-time from totals
-  const freeUsed = period.free_credits_used || 0;
-  const freeLimit = period.free_credits_limit || 300;
-  const subUsed = period.credits_used || 0;
-  const subLimit = period.credits_limit || 0;
-  const tokensMonth = totals.tokens || 0;
-  const tokensLastMonth = 0; // not in API yet
-  const avgPerSession = messages > 0 ? Math.round(tokensMonth / Math.max(messages, 1)) : 0;
-  const totalSessions = totals.requests || 0;
-
-  // Session tab: model breakdown from local tracking; All-Time: from API
-  const sessionModels = Object.entries(session.models).map(([name, m]) => ({
-    model: name, input_tokens: m.input, output_tokens: m.output, requests: m.requests,
-  }));
-  const models: any[] = activeTab === 'session' ? sessionModels : (usage?.models || []);
-  const daily: any[] = usage?.daily || [];
-  const maxDaily = daily.length > 0 ? Math.max(...daily.map((d: any) => d.tokens || 0)) : 1;
-  const today = todayLocal();
-
-  // Balance — free tier shows free pool only, paid tiers show subscription pool
-  const isUnlimited = usage?.isUnlimited || false;
-  const hasSub = subLimit > 0 && (usage?.tier || 'free') !== 'free';
-  const balanceUsed = hasSub ? subUsed : freeUsed;
-  const balanceLimit = hasSub ? subLimit : freeLimit;
-  const balanceRemaining = Math.max(0, balanceLimit - balanceUsed);
-  const remainPct = isUnlimited ? 100 : (balanceLimit > 0 ? Math.min((balanceRemaining / balanceLimit) * 100, 100) : 0);
-
-  // Cost estimate
-  const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-    'qwen3.5-omni-flash': { input: 0.065, output: 0.26 },
-    'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
-    'qwen3.5-plus': { input: 0.20, output: 1.20 },
-    'qwen3.5-flash': { input: 0.05, output: 0.40 },
-    'MiniMax-M3': { input: 0.60, output: 2.40 },
-    'MiniMax-M2.7': { input: 0.30, output: 1.20 },
-    'MiniMax-M2.7-highspeed': { input: 0.60, output: 2.40 },
-    // Kimi + DeepSeek verified against the providers' own pricing pages 2026-07-17.
-    'kimi-k3': { input: 3.00, output: 15.00 },
-    'kimi-k2.7-code': { input: 0.95, output: 4.00 },
-    'kimi-k2.6': { input: 0.95, output: 4.00 },
-    // Off-peak (2026-08-16 tariff); peak 01:00-04:00 + 06:00-10:00 UTC is 2×.
-    'deepseek-v4-pro': { input: 0.66, output: 1.98 },
-    'deepseek-v4-flash': { input: 0.22, output: 0.66 },
-  };
-  const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
-  const estimateCost = (inp: number, out: number, model: string) => {
-    const p = MODEL_PRICING[model] || DEFAULT_PRICING;
-    return (inp / 1_000_000) * p.input + (out / 1_000_000) * p.output;
-  };
-
-  const totalCost = useMemo(() => {
-    return models.reduce((sum: number, m: any) => {
-      return sum + estimateCost(m.input_tokens || 0, m.output_tokens || 0, m.model || m.name || '');
-    }, estimateCost(inputTokens, outputTokens, ''));
-  }, [models, inputTokens, outputTokens]);
-
-  const costColour = (cost: number) => {
-    if (cost < 0.10) return '#34d399';
-    if (cost < 0.50) return '#fbbf24';
-    if (cost < 1.00) return '#f59e0b';
-    return '#f87171';
-  };
-
-  const monthChange = tokensLastMonth > 0
-    ? ((tokensMonth - tokensLastMonth) / tokensLastMonth * 100).toFixed(0)
-    : null;
-
-  return (
-    <div style={pageWrapper}>
-      <div style={{ width: '100%' }}>
-        <div style={{ marginBottom: 8 }}>
-          <div style={pageTitle}>{t('dash.usage.title')}</div>
-          <div style={pageSubtitle}>{t('dash.usage.subtitle')}</div>
-        </div>
-
-        {!connected && <NotConnectedBanner />}
-
-        {/* Tab Toggle */}
-        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
-          {(['session', 'alltime', 'audit'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => {
-                setActiveTab(tab);
-                if (tab === 'audit') {
-                  try { getSidecar().getAuditLog(); } catch { /* */ }
-                }
-              }}
-              style={{
-                padding: '6px 12px', fontSize: 12, fontWeight: 500,
-                border: 'none', cursor: 'pointer', background: 'transparent',
-                color: activeTab === tab ? '#cdd6f4' : '#585b70',
-                borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
-                transition: 'all 0.15s',
-              }}
-            >
-              {tab === 'session' ? t('dash.usage.session') : tab === 'alltime' ? t('dash.usage.all_time') : t('dash.history.tab_audit')}
-            </button>
-          ))}
-        </div>
-
-        {loading ? <LoadingSpinner /> : error ? <ErrorBanner message={error} /> : (
-          <>
-            {activeTab === 'session' ? (
-              <>
-                {/* Session Summary */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
-                  {[
-                    { label: t('dash.usage.input_tokens'), value: formatTokens(inputTokens), color: '' },
-                    { label: t('dash.usage.output_tokens'), value: formatTokens(outputTokens), color: '' },
-                    { label: t('dash.usage.total_tokens'), value: formatTokens(totalTokens), color: 'var(--accent)', highlight: true },
-                    { label: t('dash.usage.messages'), value: String(messages), color: '' },
-                    { label: t('dash.usage.tool_calls'), value: String(toolCalls), color: '' },
-                    { label: t('dash.usage.est_cost'), value: `$${totalCost.toFixed(4)}`, color: costColour(totalCost) },
-                  ].map(s => (
-                    <div key={s.label} style={{
-                      background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '16px',
-                    }}>
-                      <div style={{ fontSize: 10, color: '#6c7086' }}>{s.label}</div>
-                      <div style={{
-                        fontSize: 18, fontWeight: 600, marginTop: 4,
-                        color: s.color || '#cdd6f4',
-                        ...(s.highlight ? {
-                          background: 'linear-gradient(90deg, var(--accent), #6366f1)',
-                          WebkitBackgroundClip: 'text',
-                          WebkitTextFillColor: 'transparent',
-                        } as any : {}),
-                      }}>
-                        {s.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Active orchestration mode header — surfaces "you are
-                    in Aurora" so the breakdown below makes sense. Used
-                    to be confusing: Aurora session showed only Mistral
-                    Large 3 in the list (because chat-only sessions only
-                    invoke the coordinator), making it look like Aurora
-                    was a one-model mode. The header now names the mode
-                    + lists the fleet roles so the operator can see the
-                    full topology even if specialists haven't fired. */}
-                {(() => {
-                  const activeId = (typeof localStorage !== 'undefined' ? localStorage.getItem('ava-ide-active-model') : null) || '';
-                  const modeInfo = activeId === 'aurora'
-                    ? { label: 'Aurora', flavour: 'Mistral three-tier · sovereign EU stack', roles: [
-                        { name: 'Mistral Large 3', role: 'Coordinator + heavy specialists' },
-                        { name: 'Mistral Medium 3.5', role: 'Builder · mid-tier · vision · long-form' },
-                        { name: 'Mistral Small 4', role: 'Intent gate' },
-                      ] }
-                    : activeId === 'supernova'
-                      ? { label: 'Supernova', flavour: 'DeepSeek + Qwen ensemble', roles: [
-                          { name: 'DeepSeek V4 Pro', role: 'Coordinator' },
-                          { name: 'DeepSeek V4 Flash', role: 'Mid-tier specialists' },
-                          { name: 'Qwen 3.7 Plus', role: 'Builder' },
-                          { name: 'Qwen 3.5 Flash', role: 'Light tier / intent gate' },
-                          { name: 'Qwen 3.7 Plus', role: 'Vision' },
-                          { name: 'Qwen 3.5 Plus', role: 'Long-form writing' },
-                        ] }
-                      : activeId === 'auto'
-                        ? { label: 'Maestro', flavour: 'Qwen-only · daily work, predictable cost', roles: [
-                            { name: 'Qwen 3.7 Plus', role: 'Coordinator + Builder' },
-                            { name: 'Qwen 3.5 Flash', role: 'Light tier / intent gate' },
-                          ] }
-                        : null;
-                  if (!modeInfo) return null;
-                  return (
-                    <div style={{ ...card, borderColor: 'color-mix(in srgb, var(--accent) 25%, transparent)' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{t('dash.usage.active_mode')}</span>
-                        <span style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4' }}>{modeInfo.label}</span>
-                        <span style={{ fontSize: 11, color: '#6c7086' }}>{modeInfo.flavour}</span>
-                      </div>
-                      <div style={{ fontSize: 11, color: '#6c7086', marginBottom: 10 }}>
-                        {t('dash.usage.active_mode_explainer')}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 4 }}>
-                        {modeInfo.roles.map((r) => (
-                          <div key={r.name} style={{ display: 'flex', gap: 8, fontSize: 11 }}>
-                            <span style={{ color: '#cdd6f4', minWidth: 160, fontWeight: 500 }}>{r.name}</span>
-                            <span style={{ color: '#6c7086' }}>{r.role}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Model Breakdown */}
-                {models.length > 0 && (
-                  <div style={{ ...card }}>
-                    <div style={sectionTitle}>{t('dash.usage.models_used')}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {models.map((m: any, i: number) => {
-                        const mTotal = (m.input_tokens || 0) + (m.output_tokens || 0);
-                        const mTokens = m.tokens || m.total_tokens || mTotal;
-                        const maxModel = Math.max(...models.map((mm: any) => (mm.input_tokens || 0) + (mm.output_tokens || 0) || mm.tokens || mm.total_tokens || 0));
-                        const pct = maxModel > 0 ? (mTokens / maxModel) * 100 : 0;
-                        const cost = estimateCost(m.input_tokens || 0, m.output_tokens || 0, m.model || m.name || '');
-                        return (
-                          <div key={m.model || m.name || i} style={{
-                            background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '16px',
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                              <span style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>{m.model || m.name}</span>
-                              <div style={{ display: 'flex', gap: 12 }}>
-                                <span style={{ fontSize: 10, fontWeight: 500, color: costColour(cost) }}>${cost.toFixed(4)}</span>
-                                <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.usage.n_reqs', { n: m.requests || 0 })}</span>
-                              </div>
-                            </div>
-                            <div style={{ height: 8, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
-                              <div style={{
-                                width: `${pct}%`, height: '100%', borderRadius: 4,
-                                background: 'linear-gradient(90deg, var(--accent), #6366f1)',
-                              }} />
-                            </div>
-                            <div style={{ display: 'flex', gap: 12, fontSize: 10, color: '#6c7086' }}>
-                              <span>{t('dash.usage.in_label', { n: formatTokens(m.input_tokens || 0) })}</span>
-                              <span>{t('dash.usage.out_label', { n: formatTokens(m.output_tokens || 0) })}</span>
-                              <span>{t('dash.usage.total_label', { n: formatTokens(mTokens) })}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {!models.length && connected && (
-                  <div style={{
-                    background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12,
-                    padding: '32px 20px', textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: 13, color: '#6c7086' }}>{t('dash.usage.no_usage_session')}</div>
-                  </div>
-                )}
-              </>
-            ) : activeTab === 'audit' ? (
-              <IdeAuditView
-                entries={auditEntries}
-                findings={auditFindings}
-                expandedIdx={auditExpanded}
-                onToggleExpand={(i) => setAuditExpanded(auditExpanded === i ? null : i)}
-                search={auditSearch}
-                onSearchChange={setAuditSearch}
-                riskFilter={auditRiskFilter}
-                onRiskFilterChange={setAuditRiskFilter}
-                statusFilter={auditStatusFilter}
-                onStatusFilterChange={setAuditStatusFilter}
-                onExport={(format) => { void exportAuditLocal(auditEntries, format); }}
-                onRefresh={loadUsageAudit}
-              />
-            ) : (
-              <>
-                {/* Credit Balance */}
-                {usage && (
-                  <div style={{ ...card }}>
-                    <div style={sectionTitle}>{t('dash.usage.credit_balance')}</div>
-                    {isUnlimited ? (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
-                          <span style={{ color: '#a6adc8' }}>{t('dash.usage.admin_tier')}</span>
-                          <span style={{ fontWeight: 500, color: 'var(--accent)' }}>{t('dash.usage.unlimited')}</span>
-                        </div>
-                        <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
-                          <div style={{ width: '100%', height: '100%', borderRadius: 6, background: 'linear-gradient(90deg, var(--accent), #6366f1)' }} />
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                          <span style={{ color: '#a6adc8' }}>{t('dash.usage.credits_remaining')}</span>
-                          <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{balanceRemaining.toLocaleString()}</span>
-                        </div>
-                        <div style={{ height: 12, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 6, overflow: 'hidden' }}>
-                          <div style={{
-                            width: `${remainPct}%`, height: '100%', borderRadius: 6,
-                            background: remainPct < 10 ? '#f87171' : remainPct < 30 ? '#f59e0b' : 'linear-gradient(90deg, var(--accent), #6366f1)',
-                            transition: 'width 0.5s',
-                          }} />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#585b70', marginTop: 4 }}>
-                          <span>{t('dash.usage.n_used', { n: balanceUsed.toLocaleString() })}</span>
-                          <span>{t('dash.usage.n_limit', { n: balanceLimit.toLocaleString() })}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Overview Stats */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
-                  {[
-                    { label: t('dash.usage.this_month'), value: formatTokens(tokensMonth), sub: monthChange !== null ? `${Number(monthChange) >= 0 ? '+' : ''}${monthChange}% ${t('dash.usage.vs_last')}` : t('dash.usage.first_month') },
-                    { label: t('dash.usage.last_month'), value: formatTokens(tokensLastMonth) },
-                    { label: t('dash.usage.avg_session'), value: formatTokens(avgPerSession) },
-                    { label: t('dash.usage.total_sessions'), value: String(totalSessions) },
-                  ].map(s => (
-                    <div key={s.label} style={{
-                      background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '16px',
-                    }}>
-                      <div style={{ fontSize: 10, color: '#6c7086' }}>{s.label}</div>
-                      <div style={{ fontSize: 18, fontWeight: 600, color: '#cdd6f4', marginTop: 4 }}>{s.value}</div>
-                      {s.sub && <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{s.sub}</div>}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Daily Usage Chart */}
-                {daily.length > 0 && (
-                  <div style={{ ...card }}>
-                    <div style={sectionTitle}>{t('dash.usage.daily_usage')}</div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120 }}>
-                      {daily.map((d: any, i: number) => {
-                        const tokens = d.tokens || d.total_tokens || 0;
-                        const heightPct = maxDaily > 0 ? (tokens / maxDaily) * 100 : 0;
-                        const isToday = (d.date || '') === today;
-                        const dayLabel = d.date ? new Date(d.date + 'T00:00:00').toLocaleDateString(getLocale(), { day: 'numeric' }) : (d.day || '');
-                        return (
-                          <div key={d.date || d.day || i} style={{
-                            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                          }} title={t('dash.usage.daily_tooltip_tokens', { date: d.date || d.day, tokens: formatTokens(tokens) })}>
-                            <div style={{ width: '100%', display: 'flex', alignItems: 'flex-end', height: 90 }}>
-                              <div style={{
-                                width: '100%', borderRadius: '3px 3px 0 0', transition: 'all 0.2s',
-                                height: `${Math.max(heightPct, tokens > 0 ? 4 : 2)}%`, minHeight: 2,
-                                background: isToday ? 'var(--accent)'
-                                  : tokens > 0 ? 'linear-gradient(180deg, var(--accent), #6366f1)' : 'rgba(49, 34, 68, 0.5)',
-                                opacity: isToday ? 1 : tokens > 0 ? 0.7 : 1,
-                              }} />
-                            </div>
-                            <span style={{
-                              fontSize: 8,
-                              color: isToday ? 'var(--accent)' : '#6c7086',
-                              fontWeight: isToday ? 700 : 400,
-                            }}>
-                              {dayLabel}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Most Used Models */}
-                {models.length > 0 && (
-                  <div style={{ ...card }}>
-                    <div style={sectionTitle}>{t('dash.usage.most_used_models')}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {models.map((m: any, i: number) => {
-                        const mTokens = m.tokens || m.total_tokens || ((m.input_tokens || 0) + (m.output_tokens || 0));
-                        const topTokens = models[0]?.tokens || models[0]?.total_tokens || ((models[0]?.input_tokens || 0) + (models[0]?.output_tokens || 0));
-                        const pct = topTokens > 0 ? (mTokens / topTokens) * 100 : 0;
-                        return (
-                          <div key={m.model || m.name || i}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <span style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>{m.model || m.name}</span>
-                              <span style={{ fontSize: 10, color: '#6c7086' }}>{formatTokens(mTokens)}</span>
-                            </div>
-                            <div style={{ height: 8, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 4, overflow: 'hidden' }}>
-                              <div style={{
-                                width: `${pct}%`, height: '100%', borderRadius: 4,
-                                background: 'linear-gradient(90deg, var(--accent), #6366f1)',
-                              }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {!daily.length && !models.length && connected && (
-                  <div style={{
-                    background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12,
-                    padding: '32px 20px', textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: 13, color: '#6c7086' }}>
-                      {t('dash.usage.no_data_yet')}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
+/** Estimated USD for a token split. An unknown model falls back to
+ *  DEFAULT_PRICING — a rough number beats no number when someone is deciding
+ *  what to spend, provided it is labelled an estimate. */
+export function estimateModelCost(inputTokens: number, outputTokens: number, model: string): number {
+  const p = MODEL_PRICING[model] || DEFAULT_PRICING;
+  return (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output;
 }
 
-/* ===== Local Model card — Ollama / LM Studio / vLLM =====
- *
- * Lets the operator point Ava at any locally-hosted model that speaks
- * the OpenAI Chat Completions API. Stores config in localStorage; the
- * IDE init path reads it and forwards to the sidecar's GenericProvider
- * registration. Restart of the sidecar (close + reopen the chat panel
- * or the window) is required for changes to take effect — the sidecar
- * registers providers at init only.
- */
+/** Green through red as the bill grows. */
+export function costColourFor(cost: number): string {
+  if (cost < 0.10) return '#34d399';
+  if (cost < 0.50) return '#fbbf24';
+  if (cost < 1.00) return '#f59e0b';
+  return '#f87171';
+}
+
 function LocalModelSettings() {
   const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('ava-ide-local-baseurl') || '');
   const [modelName, setModelName] = useState(() => localStorage.getItem('ava-ide-local-model') || '');
@@ -15330,7 +15112,6 @@ export function SettingsPage() {
   // Shared with the onboarding overlay so the two lists never drift.
   const LANGUAGES = languageOptions();
 
-
   useEffect(() => {
     if (!connected) return;
     apiFetch('/settings')
@@ -15684,7 +15465,6 @@ export function SettingsPage() {
             </>
           )}
         </div>
-
 
         {/* Export & Import — your data leaving the machine is a privacy
             question, so it lives here rather than on a data-management page. */}
@@ -16686,7 +16466,6 @@ const SUPPORT_CATEGORIES = [
   { slug: 'other', icon: '💭' },
 ] as const;
 
-
 /** Category + its label/placeholder resolved at CALL time, so they follow the locale. */
 function supportCategoryMeta(slug?: string | null) {
   const c = SUPPORT_CATEGORIES.find(x => x.slug === slug);
@@ -17014,7 +16793,6 @@ export function SupportPage() {
     </div>
   );
 }
-
 
 /* ===== 12. Release Notes ===== */
 const PLATFORM_COLOURS: Record<string, string> = {
@@ -17345,7 +17123,6 @@ interface IdeRoadmapTheme {
   items: IdeRoadmapItem[];
 }
 
-
 /* ═══════════════════════════════════════════════════════════════════
  * CONSOLIDATED PAGES — match extension sidebar layout
  * ═══════════════════════════════════════════════════════════════════ */
@@ -17675,7 +17452,6 @@ export function CreativeStudioPage() {
   );
 }
 
-
 /* ── Creative Studio — Library Tab ──────────────────────────────────────── */
 
 type CreativeLibFilter = 'all' | 'images' | 'music' | 'video' | 'voice' | 'sfx' | 'documents' | 'spreadsheets' | 'presentations';
@@ -17986,14 +17762,12 @@ export function _CreativeLibraryTab() {
 
 
 
-
-
 /* ===== IDE Audit View ===================================================
    Inline-style component for the IDE History → Audit tab. Mirrors the
    extension's AuditView feature-for-feature: pattern findings strip,
    search, risk + status filters, cost column, export buttons. Lives
    here as a small component (rather than a separate file) so it's
-   colocated with UsagePage that owns the audit state.
+   colocated with the History page that owns the audit state.
    ====================================================================== */
 // Build + save an audit export in the renderer — the sidecar's export path
 // isn't available on the History/Usage pages (sidecar not running). Uses the

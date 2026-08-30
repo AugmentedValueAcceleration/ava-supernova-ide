@@ -11,7 +11,6 @@ import {
   LibraryPage,
   PersonalityPage,
   CloudSyncPage,
-  UsagePage,
   BillingPage,
   SettingsPage,
   ConnectionsPage,
@@ -135,7 +134,11 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'health': HealthPage,
   'personality': PersonalityPage,
   'cloud-sync': CloudSyncPage,
-  'usage': UsagePage,
+  // 'usage' kept as a route so saved page state and any stray navigate
+  // still open something real — it resolves to the History page, which
+  // owns the Usage and Audit tabs now. UsagePage was a second component
+  // answering the same question and is gone.
+  'usage': ChatHistoryPage,
   'billing': BillingPage,
   'settings': SettingsPage,
   'connections': ConnectionsPage,

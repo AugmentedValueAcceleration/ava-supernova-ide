@@ -1622,7 +1622,12 @@ async function handleInit(data) {
       }
     }
 
-    // Register platform provider when user has a platform key
+    // Register platform provider when user has a platform key.
+    //
+    // No source check here on purpose: buildSidecarConfig already withholds the
+    // key entirely on API Key mode (`platformKey: usePlatform ? ... : undefined`),
+    // so an absent key IS the source decision arriving. A second gate reading
+    // the same fact from a different place is how the two drift.
     if (config.platformKey) {
       try {
         const platformProvider = new PlatformProvider({ apiKey: config.platformKey });

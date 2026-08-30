@@ -23,6 +23,28 @@ import { t } from './i18n';
 import { useEffect, useState } from 'react';
 import { getPlatformKey } from './api';
 
+/**
+ * Which wallet is actually live right now.
+ *
+ * TWO conditions, and both matter:
+ *
+ *  - The toggle. On API Key, sidecar-boot withholds the platform key outright,
+ *    so a fleet genuinely cannot run on credits; a picker offering one was
+ *    promising something the runtime would refuse.
+ *  - Being signed in. The stored flag DEFAULTS to Platform, and the toggle
+ *    that would change it only renders for a connected account — so a
+ *    signed-out user is stuck on a setting they cannot see or reach. Without
+ *    this second condition they'd be shown a platform-only list with nothing
+ *    on it and no way out. No account means API Key, whatever the flag says.
+ *
+ * Everything that asks "platform or BYOK?" asks it here.
+ */
+export function activeProviderSource(): 'platform' | 'byok' {
+  if (!getPlatformKey()) return 'byok';
+  try { return localStorage.getItem('ava-ide-use-platform') !== '0' ? 'platform' : 'byok'; }
+  catch { return 'platform'; }
+}
+
 //   Longxiang → open-weights Kimi/Qwen/DeepSeek stack (K3 lead + Builder,
 //               Qwen 3.7 Plus mid-tier + vision, V4 Flash volume).
 //               Gated by LONGXIANG_LIVE below, then available exactly like
@@ -54,6 +76,13 @@ export interface ByokKeys {
   minimax: boolean;
   moonshot: boolean;
   zhipu: boolean;
+  // No fleet needs these three, which is why they were missing — but the
+  // per-model check below reads the same shape, and a provider absent from it
+  // is treated as needing no key at all. Xiaomi, Tencent and NVIDIA models
+  // therefore showed as usable with nothing behind them.
+  xiaomi: boolean;
+  tencent: boolean;
+  nvidia: boolean;
 }
 
 export interface ModeAvailabilityState {
@@ -76,6 +105,9 @@ const EMPTY_BYOK: ByokKeys = {
   minimax: false,
   moonshot: false,
   zhipu: false,
+  xiaomi: false,
+  tencent: false,
+  nvidia: false,
 };
 
 // BYOK key store uses PascalCase provider names (matches BYOK_MODELS
@@ -97,10 +129,31 @@ export function readByokKeys(): ByokKeys {
       minimax: has('MiniMax'),
       moonshot: has('Moonshot'),
       zhipu: has('Zhipu'),
+      xiaomi: has('Xiaomi'),
+      tencent: has('Tencent'),
+      nvidia: has('NVIDIA'),
     };
   } catch {
     return EMPTY_BYOK;
   }
+}
+
+/**
+ * Does a key exist for the provider this model belongs to?
+ *
+ * The picker needs this per MODEL; getModeAvailability answers it per FLEET.
+ * Providers with no BYOK entry (the platform pseudo-provider, a local endpoint)
+ * are not key-gated and pass through.
+ */
+export function hasKeyFor(provider: string, keys: ByokKeys): boolean {
+  const map: Record<string, keyof ByokKeys> = {
+    qwen: 'qwen', deepseek: 'deepseek', mistral: 'mistral',
+    minimax: 'minimax', kimi: 'moonshot', moonshot: 'moonshot',
+    zhipu: 'zhipu', glm: 'zhipu',
+    xiaomi: 'xiaomi', tencent: 'tencent', nvidia: 'nvidia',
+  };
+  const k = map[provider.toLowerCase()];
+  return k ? keys[k] : true;
 }
 
 export function readTier(): string {
@@ -145,9 +198,11 @@ export function isModeListed(mode: ModeId): boolean {
 }
 
 // Reactive hook — recomputes when the user signs in/out, switches
-// tier, or adds/removes a BYOK key. The events it listens to are
-// already dispatched elsewhere (sign-in.ts emits ava-auth-changed,
-// Sidebar emits ava-byok-changed, lib/api.ts emits ava-tier-changed).
+// tier, flips the source toggle, or adds/removes a BYOK key. The events it
+// listens to are already dispatched elsewhere (sign-in.ts emits
+// ava-auth-changed, Sidebar emits ava-byok-changed and
+// ava-ide-source-changed, lib/api.ts emits ava-tier-changed). Sidebar writes
+// every keystroke, so CLEARING a key field lands here like any other change.
 export function useModeAvailability(): {
   state: ModeAvailabilityState;
   availability: ModeAvailability;
@@ -159,11 +214,13 @@ export function useModeAvailability(): {
     window.addEventListener('ava-auth-changed', refresh);
     window.addEventListener('ava-tier-changed', refresh);
     window.addEventListener('ava-byok-changed', refresh);
+    window.addEventListener('ava-ide-source-changed', refresh);
     window.addEventListener('storage', refresh);
     return () => {
       window.removeEventListener('ava-auth-changed', refresh);
       window.removeEventListener('ava-tier-changed', refresh);
       window.removeEventListener('ava-byok-changed', refresh);
+      window.removeEventListener('ava-ide-source-changed', refresh);
       window.removeEventListener('storage', refresh);
     };
   }, []);
@@ -173,7 +230,7 @@ export function useModeAvailability(): {
   void tick;
 
   const state: ModeAvailabilityState = {
-    platformConnected: !!getPlatformKey(),
+    platformConnected: activeProviderSource() === 'platform',
     isAdmin: readTier() === 'admin',
     byok: readByokKeys(),
   };

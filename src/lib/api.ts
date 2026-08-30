@@ -25,6 +25,11 @@ export function isConnected(): boolean {
 // same files on one machine). Cached in localStorage so it survives reloads;
 // an in-flight promise dedupes concurrent callers. null for BYOK / no-account.
 const ACCOUNT_ID_KEY = 'ava-ide-account-id';
+/** The last account this machine was signed into. Deliberately NOT cleared by
+ *  disconnectAccount — it is how account-scope.ts keeps finding your local
+ *  data after you sign out. Identity lives in ACCOUNT_ID_KEY; this is only a
+ *  pointer at a folder you already own. */
+export const LAST_ACCOUNT_ID_KEY = 'ava-ide-last-account-id';
 let accountIdPromise: Promise<string | null> | null = null;
 
 export function resetAccountIdCache(): void {
@@ -32,7 +37,16 @@ export function resetAccountIdCache(): void {
 }
 
 export async function getAccountId(): Promise<string | null> {
-  try { const cached = localStorage.getItem(ACCOUNT_ID_KEY); if (cached) return cached; } catch { /* ignore */ }
+  try {
+    const cached = localStorage.getItem(ACCOUNT_ID_KEY);
+    // A cached id means we have been signed in as this account; keep the
+    // last-account pointer in step even on the cache-hit path, or a user who
+    // never re-fetches (offline, or already cached) never records one.
+    if (cached) {
+      try { localStorage.setItem(LAST_ACCOUNT_ID_KEY, cached); } catch { /* ignore */ }
+      return cached;
+    }
+  } catch { /* ignore */ }
   const key = getPlatformKey();
   if (!key) return null;
   if (accountIdPromise) return accountIdPromise;
@@ -44,7 +58,12 @@ export async function getAccountId(): Promise<string | null> {
       if (!res.ok) return null;
       const data = await res.json();
       const id: string | null = data?.id ?? null;
-      if (id) { try { localStorage.setItem(ACCOUNT_ID_KEY, id); } catch { /* ignore */ } }
+      if (id) {
+        try {
+          localStorage.setItem(ACCOUNT_ID_KEY, id);
+          localStorage.setItem(LAST_ACCOUNT_ID_KEY, id);
+        } catch { /* ignore */ }
+      }
       return id;
     } catch {
       return null;
@@ -208,8 +227,13 @@ function loadStats(): SessionStats {
     if (!raw) return emptyStats();
     const parsed = JSON.parse(raw) as SessionStats;
     // Different month, or written before the field existed. Either way the
-    // stored numbers describe a period that is over.
-    if (parsed.month !== currentMonth()) return emptyStats();
+    // stored numbers describe a period that is over — so archive them before
+    // the counters reset. They used to be dropped, which left a BYOK user with
+    // no record of anything but the month they are standing in.
+    if (parsed.month !== currentMonth()) {
+      void import('./usage-history').then((m) => m.archiveMonth(parsed)).catch(() => { /* nicety, not a gate */ });
+      return emptyStats();
+    }
     return parsed;
   } catch {
     return emptyStats();

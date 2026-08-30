@@ -3,8 +3,9 @@ import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { ensureSidecarLog, getSidecarLog, subscribeSidecarLog, clearSidecarLog, type SidecarLogEntry, type SidecarLogLevel } from '../lib/sidecar-log';
 import { getPlatformKey, apiStreamUrl, fetchPlatformModels, getCachedModels, type PlatformModel } from '../lib/api';
-import { useModeAvailability, isModeListed, type ModeId } from '../lib/mode-availability';
+import { useModeAvailability, isModeListed, hasKeyFor, activeProviderSource, type ModeId } from '../lib/mode-availability';
 import { t, useLocale } from '../lib/i18n';
+import { providerLabel } from '../lib/chat-models';
 import ModelDropdown, { type IdeModelOption } from './ModelDropdown';
 
 // Tier + auth state are now sourced via useModeAvailability — see
@@ -76,6 +77,20 @@ function AvaCliPanel() {
   // chat picker. Hook handles ava-auth-changed / ava-byok-changed /
   // ava-tier-changed internally.
   const { state: modeState, availability: modeAvailability } = useModeAvailability();
+  const byokKeys = modeState.byok;
+
+  // Which wallet the list is drawn from — see activeProviderSource. Signing in
+  // or out changes the answer as much as the toggle does, so both events count.
+  const [providerSource, setProviderSource] = useState<'platform' | 'byok'>(activeProviderSource);
+  useEffect(() => {
+    const refresh = () => setProviderSource(activeProviderSource());
+    window.addEventListener('ava-ide-source-changed', refresh);
+    window.addEventListener('ava-auth-changed', refresh);
+    return () => {
+      window.removeEventListener('ava-ide-source-changed', refresh);
+      window.removeEventListener('ava-auth-changed', refresh);
+    };
+  }, []);
 
   // Lazy-load the platform model list (1-hour cache inside fetchPlatformModels).
   // Falls back silently when offline / unauthenticated — orchestrated modes
@@ -140,18 +155,32 @@ function AvaCliPanel() {
         bySlug.set(slug, m); // prefer the bare byok row over its -platform twin
       }
     }
-    const raw: IdeModelOption[] = [...bySlug.values()].map((m) => ({
-      id: m.id,
-      name: m.name,
-      provider: m.provider,
-      // Bare byok id → always selectable (registry picks the wallet). A
-      // platform-only id → needs a connected account (runs on credits).
-      available: m.section === 'platform' ? signedIn : true,
-      // The API already reports this per model; the picker just never read it.
-      supportsVision: m.supports_vision === true,
-    }));
+    // Which slugs the PLATFORM actually serves. On Platform these are the only
+    // singles a plan can run; everything else needs a key the plan does not
+    // supply, so offering it here is offering a row you can only fail at.
+    const platformServed = new Set(
+      platformModels.filter((m) => m.section === 'platform').map((m) => m.id.replace(/-platform$/, '')),
+    );
+
+    const raw: IdeModelOption[] = [...bySlug.values()]
+      .filter((m) => providerSource !== 'platform' || platformServed.has(m.id.replace(/-platform$/, '')))
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        provider: m.provider,
+        // On Platform a served single runs on credits, so a connected account
+        // is the whole test. On API Key there is no plan behind it: the row is
+        // only real if the key is. This used to be a flat `true` for every BYOK
+        // row — correct while platform credits were always the fallback, and
+        // wrong the moment the platform is not in play.
+        available: providerSource === 'platform'
+          ? signedIn
+          : hasKeyFor(m.provider, byokKeys),
+        // The API already reports this per model; the picker just never read it.
+        supportsVision: m.supports_vision === true,
+      }));
     return [...orchestrated, ...raw];
-  }, [platformModels, modeAvailability]);
+  }, [platformModels, modeAvailability, providerSource, byokKeys]);
   // Surface modeState so the orchestrated subtitles can explain unlock
   // paths (e.g. "Add Mistral key" / "Connect or add DeepSeek + Qwen").
   // Read here so eslint sees it as used; ModelDropdown is the consumer.
@@ -193,9 +222,22 @@ function AvaCliPanel() {
     });
   }, []);
 
+  // The chosen model has no key for its provider. Read off the SAME list the
+  // dropdown renders, so the notice and the row cannot disagree. Fleets carry
+  // provider 'platform' and have their own gating — never this notice.
+  const missingKeyProvider = (() => {
+    const hit = dropdownModels.find((m) => m.id === activeModel);
+    if (!hit || hit.available || hit.provider === 'platform') return null;
+    return providerLabel(hit.provider);
+  })();
+
   const send = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || busy) return;
+    // No key for this model — the line above the input says which and how to
+    // fix it. The input stays live: asking Ava how to add the key is exactly
+    // what someone does next, and a dead box cannot be asked.
+    if (missingKeyProvider) return;
     setInput('');
     setBusy(true);
 
@@ -335,7 +377,7 @@ function AvaCliPanel() {
       setBusy(false);
       inputRef.current?.focus();
     }
-  }, [input, busy, appendLine, updateLastAva]);
+  }, [input, busy, appendLine, updateLastAva, missingKeyProvider]);
 
   const lineColors: Record<CliLine['type'], string> = {
     user: '#89b4fa',
@@ -385,6 +427,14 @@ function AvaCliPanel() {
           activeModel={activeModel}
           onSwitch={handleSwitchModel}
         />
+        {missingKeyProvider && (
+          <span style={{
+            marginLeft: 10, fontSize: 10, color: '#facc15',
+            fontFamily: "'Cascadia Code', 'Fira Code', monospace",
+          }}>
+            {'⚠'} {t('chat.key_needed').replace('{provider}', missingKeyProvider)}
+          </span>
+        )}
       </div>
 
       {/* Input */}

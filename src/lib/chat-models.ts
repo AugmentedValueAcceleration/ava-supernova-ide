@@ -65,10 +65,22 @@ export interface ModelCatalogueGroup {
   models: { id: string; name: string }[];
 }
 
+/** Vendor display names. Exported because THREE pickers and the composer
+ *  notice all name the same vendor, and two spellings of one vendor is the
+ *  drift this codebase keeps paying for. */
+export const PROVIDER_LABEL: Record<string, string> = {
+  deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral',
+  minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA',
+};
+
+/** A vendor id as a person would read it — falls back to Capitalised. */
+export function providerLabel(id: string): string {
+  return PROVIDER_LABEL[id] || (id.charAt(0).toUpperCase() + id.slice(1));
+}
+
 /** Build the per-provider catalogue — alphabetical providers, models sorted by
  *  name, availability per BYOK key. Identical logic to AvaChatPage.MODEL_CATALOGUE. */
 export function buildModelCatalogue(keyedProviders: Set<string>): ModelCatalogueGroup[] {
-  const LABEL: Record<string, string> = { deepseek: 'DeepSeek', kimi: 'Kimi', qwen: 'Qwen', zhipu: 'GLM', mistral: 'Mistral', minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA' };
   // provider id → the field name its key is stored under in `ava-ide-byok`.
   // `available` is derived from this, so a provider MISSING here is permanently
   // unavailable no matter what key the user holds. It was stuck at five, which
@@ -82,7 +94,7 @@ export function buildModelCatalogue(keyedProviders: Set<string>): ModelCatalogue
   return Object.entries(ALL_MODELS)
     .map(([id, models]) => ({
       id,
-      label: LABEL[id] || (id.charAt(0).toUpperCase() + id.slice(1)),
+      label: providerLabel(id),
       available: STORE[id] ? keyedProviders.has(STORE[id]) : false,
       models: models.filter((m) => !m.disabled).map((m) => ({ id: m.id, name: m.name })).sort((a, b) => a.name.localeCompare(b.name)),
     }))

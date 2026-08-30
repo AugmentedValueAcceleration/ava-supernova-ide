@@ -19,6 +19,7 @@ import { useState, useRef, useEffect, useId } from 'react';
 import { t, useLocale } from '../lib/i18n';
 import { Tooltip } from './Tooltip';
 import { useModeAvailability, modeSubtitle, isModeListed, type ModeId } from '../lib/mode-availability';
+import { providerLabel } from '../lib/chat-models';
 
 /**
  * Paperclip = "this model takes image attachments" — deliberately the SAME
@@ -272,7 +273,7 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
               <Tooltip
                 key={m.id}
                 content={!m.available
-                  ? `Add ${m.provider} API key to use ${m.name}`
+                  ? `${providerLabel(m.provider)} needs your own API key`
                   : m.supportsVision === false
                     ? `${m.name} — ${t('model.no_vision_title')}`
                     : m.name}
@@ -280,9 +281,9 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
               >
                 <button
                   type="button"
-                  disabled={!m.available}
                   onClick={() => {
-                    if (!m.available) return;
+                    // Selectable without a key, same as the main chat picker.
+                    // The composer says what it needs before anything is typed.
                     onSwitch(m.id);
                     setOpen(false);
                   }}
@@ -297,14 +298,16 @@ export default function ModelDropdown({ models, activeModel, onSwitch }: ModelDr
                     textAlign: 'left',
                     fontSize: 12,
                     color: '#cdd6f4',
-                    cursor: m.available ? 'pointer' : 'default',
-                    opacity: m.available ? 1 : 0.35,
+                    cursor: 'pointer',
+                    // Dimmed enough to read as "needs something", not so dim it
+                    // reads as disabled — it is selectable now.
+                    opacity: m.available ? 1 : 0.7,
                   }}
                   onMouseEnter={(e) => {
-                    if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)';
+                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)';
                   }}
                   onMouseLeave={(e) => {
-                    if (m.available && !isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                   }}
                 >
                   <span

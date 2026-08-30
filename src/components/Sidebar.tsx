@@ -1088,6 +1088,10 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
                   const next = key === 'Platform';
                   setUsePlatform(next);
                   try { localStorage.setItem('ava-ide-use-platform', next ? '1' : '0'); } catch { /* */ }
+                  // The sidecar learns this from buildSidecarConfig, which
+                  // withholds the platform key outright on API Key — so this
+                  // one line is the whole switch, and there is no second copy
+                  // of it to keep in step.
                   // Re-init the sidecar so routing actually switches — mirrors the
                   // extension's set_provider_source -> session re-init. BYOK ('0')
                   // withholds the platform key so the persona team runs on the
@@ -1120,11 +1124,22 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
         <>
           {!showConnect ? (
             <>
+              {/* House button — the chat's New Chat pill (translucent accent
+                  fill, accent border + text), at the same 18% / 40% weights the
+                  Platform / API Key toggle uses for its selected state. Was
+                  solid accent with white text, which nothing else in either
+                  sidebar does. */}
               <button
                 onClick={() => setShowConnect(true)}
-                style={{ width: '100%', padding: '7px 0', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer', marginBottom: 6 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#9333ea'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
+                style={{
+                  width: '100%', padding: '7px 0', borderRadius: 8,
+                  border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+                  background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
+                  color: 'var(--accent)', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', marginBottom: 6, transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 26%, transparent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 18%, transparent)'; }}
               >
                 {t('dash.auth.connect')}
               </button>
