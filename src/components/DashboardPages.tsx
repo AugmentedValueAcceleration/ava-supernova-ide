@@ -5276,7 +5276,7 @@ export function AvaChatPage() {
                       // DeepSeek V4 is 1M context — the 131072 here was V3-era and
                       // made the context meter read ~8x fuller than reality.
                       'qwen3.5-flash': 262144, 'qwen3.7-flash': 1000000, 'qwen3-coder-next': 256000, 'qwen3-coder-flash': 1000000, 'deepseek-v4-pro': 1000000, 'deepseek-v4-flash': 1000000,
-                      'glm-5.2': 1000000, 'glm-4.5-air': 128000,
+                      'glm-5.3': 1000000, 'glm-5.3-flash': 1000000,
                       'hy3': 262144,
                       'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
                       // Lightning is also 1M. Missing here it fell to the
@@ -15152,9 +15152,9 @@ export function SettingsPage() {
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4 Pro and V4 Flash \u2014 1M context, MIT open-weight' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.7 Code \u2014 agentic coding leader' },
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M3 flagship, M2.7 standard' },
-    { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5.2 \u2014 open-weights, 1M context, top-tier coding' },
+    { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5.3 \u2014 open-weights, 1M context, top-tier coding' },
     { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.7 Plus and 3.7 Max — vision, 1M context' },
-    { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4, Codestral, Devstral 2' },
+    { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4 — European, vision' },
     { id: 'tencent', name: 'Tencent Hunyuan', placeholder: '...', signupUrl: 'https://tokenhub.tencentmaas.com', description: 'Hunyuan Hy3 — open-weight MoE, agentic, 262K context, very cheap' },
     { id: 'nvidia', name: 'NVIDIA', placeholder: 'nvapi-...', signupUrl: 'https://build.nvidia.com', description: 'Nemotron 3 Ultra — open-weight, 1M context, frontier reasoning (BYOK)' },
     // Not a chat provider — powers Desktop mode's Fast vision lane (Holo).
