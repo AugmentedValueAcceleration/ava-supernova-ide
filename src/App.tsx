@@ -158,6 +158,31 @@ export default function App() {
   // i18n — init on mount, re-render on locale change
   useLocale();
   useEffect(() => { initLocale(); }, []);
+
+  // The projects folder exists from launch, not from the first time somebody
+  // starts a project. The storage bar's "Your projects" line and the Settings
+  // path both name it already; this is what makes that name true, for installs
+  // of any age — a recursive mkdir on an existing folder does nothing.
+  //
+  // In the RENDERER, not the sidecar: the sidecar only starts when canChat is
+  // true, so a user with no chat key and no account — the local-first case this
+  // is for — would never reach it. Same trap as wiring the signed-out data
+  // folder to the sign-out event rather than to startup.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [{ homeDir }, fs, { readProjectsHomeSetting }, { projectsHomeFrom }] = await Promise.all([
+          import('@tauri-apps/api/path'),
+          import('@tauri-apps/plugin-fs'),
+          import('./lib/shared-config'),
+          import('@ava/core/projects/home'),
+        ]);
+        const configured = await readProjectsHomeSetting();
+        const home = projectsHomeFrom(await homeDir(), configured);
+        await fs.mkdir(home, { recursive: true });
+      } catch { /* unwritable home is not a reason to block startup */ }
+    })();
+  }, []);
   // Start capturing sidecar activity from launch so the Output/Problems panels
   // have the full history the moment they're opened.
   useEffect(() => { ensureSidecarLog(); }, []);

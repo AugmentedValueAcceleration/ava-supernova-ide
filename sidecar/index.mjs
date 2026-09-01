@@ -2311,6 +2311,10 @@ async function handleInit(data) {
     // Store for hot-swap model changes
     globalThis._providerRegistry = providerRegistry;
     globalThis._cwd = cwd;
+    // Where create_project puts a new folder — the same resolver the
+    // Brainstorm prefix uses, so the address she quotes is the address she
+    // writes to.
+    sharedState.projectsHome = resolveProjectsHome();
     globalThis._sharedState = sharedState;
     globalThis._currentModel = resolved.model;
     globalThis._activeProvider = resolved.provider;

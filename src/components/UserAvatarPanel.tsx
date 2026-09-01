@@ -70,6 +70,9 @@ export function UserAvatarPanel({ fallbackName }: { fallbackName?: string | null
     const resized = await resize(dataUri);
     localStorage.setItem('ava-ide-user-avatar', resized);
     setAvatar(resized);
+    // Tell the rest of the app. Writing to storage and saying nothing meant
+    // the chat kept showing the default until it happened to remount.
+    try { window.dispatchEvent(new CustomEvent('ava-avatar-changed')); } catch { /* non-DOM */ }
     if (isConnected() && cloudSyncEnabled()) {
       apiFetch('/settings', { method: 'POST', body: JSON.stringify({ user_avatar: resized }) }).catch(() => {});
     }
@@ -78,6 +81,7 @@ export function UserAvatarPanel({ fallbackName }: { fallbackName?: string | null
   const remove = useCallback(() => {
     localStorage.removeItem('ava-ide-user-avatar');
     setAvatar('');
+    try { window.dispatchEvent(new CustomEvent('ava-avatar-changed')); } catch { /* non-DOM */ }
     if (isConnected() && cloudSyncEnabled()) {
       apiFetch('/settings', { method: 'POST', body: JSON.stringify({ user_avatar: null }) }).catch(() => {});
     }

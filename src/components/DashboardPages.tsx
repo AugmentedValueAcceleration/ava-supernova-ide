@@ -3228,7 +3228,25 @@ export function AvaChatPage() {
     return result;
   }, [secrets]);
 
-  const chatUserAvatar = useMemo(() => localStorage.getItem('ava-ide-user-avatar') || '', []);
+  // Re-read when it changes rather than once at mount. Set an avatar and the
+  // chat showed the default until the page remounted — the value was right in
+  // storage the whole time, nothing was watching it.
+  const [chatUserAvatar, setChatUserAvatar] = useState<string>(
+    () => { try { return localStorage.getItem('ava-ide-user-avatar') || ''; } catch { return ''; } },
+  );
+  useEffect(() => {
+    const refresh = () => {
+      try { setChatUserAvatar(localStorage.getItem('ava-ide-user-avatar') || ''); } catch { /* storage off */ }
+    };
+    // Auth too: signing in pulls the avatar down from the account, and
+    // disconnect clears it.
+    window.addEventListener('ava-avatar-changed', refresh);
+    window.addEventListener('ava-auth-changed', refresh);
+    return () => {
+      window.removeEventListener('ava-avatar-changed', refresh);
+      window.removeEventListener('ava-auth-changed', refresh);
+    };
+  }, []);
   // Ava's avatar is brand-locked — sourced from
   // packages/core/assets/ava-avatar.jpeg (copied to public/). The
   // operator-override path via `ava-ide-ai-avatar` localStorage was
@@ -3614,6 +3632,34 @@ export function AvaChatPage() {
       fetchUserTasks();
     } catch { /* */ }
   }, [fetchUserTasks]);
+
+  // Whether a project is open at all — the button is hidden without one, and
+  // 'ava-folder-changed' is what every other reader of this uses, so opening a
+  // folder makes it appear without a remount.
+  const [projectFolder, setProjectFolder] = useState<string | null>(() => {
+    try { return localStorage.getItem('ava-ide-project-folder'); } catch { return null; }
+  });
+  useEffect(() => {
+    const onFolder = (e: Event) => setProjectFolder(((e as CustomEvent).detail as string) || null);
+    window.addEventListener('ava-folder-changed', onFolder);
+    return () => window.removeEventListener('ava-folder-changed', onFolder);
+  }, []);
+
+  // The PROJECT folder — what "open folder" means when it sits beside New
+  // Chat. Distinct from handleOpenTasksFolder below, which opens the tasks
+  // store and lives in the tasks panel where that is obvious.
+  const handleOpenProjectFolder = useCallback(async () => {
+    const folder = (() => {
+      try { return localStorage.getItem('ava-ide-project-folder'); } catch { return null; }
+    })();
+    if (!folder) return;
+    try {
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(folder);
+    } catch (e) {
+      console.warn('[chat] open project folder failed', e);
+    }
+  }, []);
 
   const handleOpenTasksFolder = useCallback(async () => {
     try {
@@ -5765,6 +5811,30 @@ export function AvaChatPage() {
             </span>
           </button>
           </Tooltip>
+
+          {/* Open the project folder. Only reachable before this from inside
+              the tasks panel, which had to be expanded to see it and opened a
+              different folder anyway. Hidden with no project open: a button
+              that cannot act is noise. */}
+          {projectFolder && (
+            <Tooltip content={t('dash.library.open_folder')} placement="bottom">
+            <button
+              onClick={handleOpenProjectFolder}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                background: 'transparent', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                borderRadius: 8, color: '#a6adc8', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#a6adc8'; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+              {t('dash.library.open_folder')}
+            </button>
+            </Tooltip>
+          )}
 
           {/* New Chat button */}
           <Tooltip content={t('dash.chat.new_chat')} placement="bottom">
