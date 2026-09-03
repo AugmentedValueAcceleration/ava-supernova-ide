@@ -192,6 +192,7 @@ const {
   ProviderHealthTracker,
   ResilientProvider,
   Conductor,
+  resolveVisionDescriber,
   AutoCoordinator,
   IntentClassifier,
   MemoryAgent,
@@ -2242,8 +2243,9 @@ async function handleInit(data) {
     // vision bridge below was dead — attaching an image on a text-only model
     // (DeepSeek, Mistral) had nothing to route to. qwen3.7-plus is what core's
     // own VISION_REROUTE uses for exactly this, and it does see images.
-    const visionResolved = providerRegistry.resolveModel('platform:qwen3.7-plus')
-      || providerRegistry.resolveModel('qwen:qwen3.7-plus');
+    // Any vision-capable model this user actually holds a key for, cheapest
+    // first — not just Qwen. See resolveVisionDescriber in core.
+    const visionResolved = resolveVisionDescriber(providerRegistry);
 
     // Build resilient provider with fallback
     const healthTracker = new ProviderHealthTracker();
@@ -3992,8 +3994,9 @@ async function handleSetModel(data) {
     // vision bridge below was dead — attaching an image on a text-only model
     // (DeepSeek, Mistral) had nothing to route to. qwen3.7-plus is what core's
     // own VISION_REROUTE uses for exactly this, and it does see images.
-    const visionResolved = providerRegistry.resolveModel('platform:qwen3.7-plus')
-      || providerRegistry.resolveModel('qwen:qwen3.7-plus');
+    // Any vision-capable model this user actually holds a key for, cheapest
+    // first — not just Qwen. See resolveVisionDescriber in core.
+    const visionResolved = resolveVisionDescriber(providerRegistry);
 
     agent = new Agent({
       provider: resolved.provider,
