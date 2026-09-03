@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { readHCompanyKey, writeHCompanyKey } from '../lib/shared-config';
 import { ALL_MODELS, PLATFORM_MODELS } from '@ava/core/models';
 import { providerLabel } from '../lib/chat-models';
 import { APP_VERSION } from '../version';
@@ -15047,27 +15046,6 @@ export function SettingsPage() {
     const t = setInterval(check, 5000);
     return () => clearInterval(t);
   }, [desktopVisionMode]);
-  // H Company key (desktop vision, BYOK-only — operator decision 2026-07-02):
-  // persisted to ~/.ava/config.json (providers.hcompany.apiKey) and live-pushed
-  // to the sidecar so Fast vision works without a restart.
-  const [hcKey, setHcKey] = useState('');
-  const [hcKeySaved, setHcKeySaved] = useState<boolean | null>(null); // null = unknown yet
-  useEffect(() => {
-    readHCompanyKey().then((k) => {
-      setHcKeySaved(!!k);
-      if (k) setHcKey(k);
-      // Mirror into the API Keys page row — one key, two surfaces, one truth.
-      setProviderKeys(prev => ({ ...prev, hcompany: !!k }));
-    }).catch(() => setHcKeySaved(false));
-  }, []);
-  const saveHcKey = useCallback(async () => {
-    const ok = await writeHCompanyKey(hcKey).catch(() => false);
-    if (ok) {
-      setHcKeySaved(!!hcKey.trim());
-      setProviderKeys(prev => ({ ...prev, hcompany: !!hcKey.trim() })); // keep the API Keys row in step
-      getSidecar().setHCompanyKey(hcKey).catch(() => {}); // live-apply; config covers next boot
-    }
-  }, [hcKey]);
   useEffect(() => {
     // The download runs in RUST (works from a cold app — no sidecar needed);
     // progress arrives as Tauri events. The sidecar listeners remain for the
@@ -15157,11 +15135,9 @@ export function SettingsPage() {
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4 — European, vision' },
     { id: 'tencent', name: 'Tencent Hunyuan', placeholder: '...', signupUrl: 'https://tokenhub.tencentmaas.com', description: 'Hunyuan Hy3 — open-weight MoE, agentic, 262K context, very cheap' },
     { id: 'nvidia', name: 'NVIDIA', placeholder: 'nvapi-...', signupUrl: 'https://build.nvidia.com', description: 'Nemotron 3 Ultra — open-weight, 1M context, frontier reasoning (BYOK)' },
-    // Not a chat provider — powers Desktop mode's Fast vision lane (Holo).
     // Saved LOCALLY only (~/.ava/config.json), never synced to the cloud:
     // this key authorises screenshots of the user's screen to leave the
     // machine, so it stays on the machine.
-    { id: 'hcompany', name: 'H Company (Holo Vision)', placeholder: '...', signupUrl: 'https://www.hcompany.ai', description: 'Holo 3.1 — visual grounding for Desktop mode’s Fast vision lane (BYOK, key stays on this device)' },
   ];
 
   // Shared with the onboarding overlay so the two lists never drift.
@@ -15202,16 +15178,7 @@ export function SettingsPage() {
     const key = providerInputs[providerId]?.trim();
     if (!key) return;
     setSavingProvider(providerId);
-    // H Company is the desktop-vision key — LOCAL ONLY, never cloud-synced
-    // (it authorises screenshots to leave the machine, so it stays on the
-    // machine). Same storage as the Desktop settings field; live-applied.
-    if (providerId === 'hcompany') {
-      writeHCompanyKey(key).then((ok) => {
-        if (ok) getSidecar().setHCompanyKey(key).catch(() => {});
-      }).catch(() => {});
-      setHcKeySaved(true);
-      setHcKey(key);
-    } else if (connected && cloudSyncEnabled()) {
+    if (connected && cloudSyncEnabled()) {
       // Provider keys never leave the device in Local mode. OS keychain
       // on the extension holds the BYOK keys locally; mirroring to cloud
       // is opt-in via Data Mode.
@@ -15227,12 +15194,7 @@ export function SettingsPage() {
   };
 
   const handleRemoveProviderKey = (providerId: string) => {
-    if (providerId === 'hcompany') {
-      writeHCompanyKey('').catch(() => {});
-      getSidecar().setHCompanyKey('').catch(() => {});
-      setHcKeySaved(false);
-      setHcKey('');
-    } else if (connected && cloudSyncEnabled()) {
+    if (connected && cloudSyncEnabled()) {
       apiFetch('/settings/provider-key', {
         method: 'DELETE',
         body: JSON.stringify({ provider: providerId }),
@@ -15963,14 +15925,13 @@ export function SettingsPage() {
               <span style={{ color: '#89b4fa' }}>◉</span>
               Vision — how Ava sees windows the system can't read
             </div>
-            {/* Vision is FREE on every lane — these options are about the
-                trade the user actually feels: privacy vs speed. No silent
-                switching between lanes; the choice IS the consent. */}
+            {/* On-device or off. There is no cloud lane to switch to, so
+                the only question is whether Ava may look at all — and the
+                choice IS the consent. */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               {([
                 { id: 'off' as const,   label: t('dash.settings.vision.off') },
                 { id: 'local' as const, label: t('dash.settings.vision.private') },
-                { id: 'cloud' as const, label: t('dash.settings.vision.fast') },
               ]).map((opt) => {
                 const active = desktopVisionMode === opt.id;
                 // Private IS the on-device model — a lane you can't run yet
@@ -16005,40 +15966,10 @@ export function SettingsPage() {
               {desktopVisionMode === 'off' &&
                 'Ava never takes screenshots. If a window can\'t be read (games, canvas apps, custom UIs), she tells you so instead of guessing. Most tasks don\'t need vision — the accessibility tree and browser cover them for free.'}
               {desktopVisionMode === 'local' &&
-                'Everything stays on this machine — screenshots never leave your computer. Slower: roughly half a minute per look on a typical laptop, a couple of seconds on a gaming PC. Free forever, works offline. Requires a one-time model download.'}
-              {desktopVisionMode === 'cloud' &&
-                'A couple of seconds per look. Uses your own H Company key (below). Screenshots go directly from your machine to H Company — never through Ava\'s servers — and only when a window can\'t be read, never for every action.'}
+                (localVision?.installed
+                  ? 'Everything stays on this machine — screenshots never leave your computer. Free, works offline, and only used when a window can\'t be read. How long a look takes depends on your hardware.'
+                  : 'Everything stays on this machine — screenshots never leave your computer. Free, works offline, and only used when a window can\'t be read. How long a look takes depends on your hardware. Needs a one-time model download, below.')}
             </div>
-            {/* BYOK key for the Fast lane — cloud vision runs on the user's own
-                H Company key, never a platform key (decision 2026-07-02). */}
-            {desktopVisionMode === 'cloud' && (
-              <div style={{ fontSize: 11, marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <input
-                  type="password"
-                  value={hcKey}
-                  onChange={(e) => setHcKey(e.target.value)}
-                  placeholder="H Company API key (hai-…)"
-                  style={{
-                    flex: '1 1 260px', maxWidth: 380, padding: '5px 10px', borderRadius: 6,
-                    background: 'rgba(0,0,0,0.25)', border: '1px solid #45475a',
-                    color: '#cdd6f4', fontSize: 11, outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={() => { void saveHcKey(); }}
-                  style={{
-                    padding: '5px 14px', borderRadius: 6, border: '1px solid #45475a',
-                    background: 'linear-gradient(135deg, #89b4fa, #739df2)', color: '#11111b',
-                    fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                  }}
-                >
-                  Save key
-                </button>
-                <span style={{ color: hcKeySaved ? '#a6e3a1' : '#9399b2' }}>
-                  {hcKeySaved === null ? '' : hcKeySaved ? '● Key saved — Fast vision enabled' : '○ No key yet — Fast stays unavailable until you add one'}
-                </span>
-              </div>
-            )}
             {/* Always-visible install state + download button — transparency
                 over guesswork. The button never hides: active when the model
                 is missing, inactive (labelled Installed) once it's on disk. */}

@@ -876,28 +876,21 @@ const inputBridge = {
  * the cloud lane the user explicitly enabled.
  */
 const visionBridge = {
-  // Modes are CONSENT, not preference (decision 2026-06-10 — vision is FREE
-  // on every lane):
+  // Modes are CONSENT, not preference. On-device or off:
   //   'off'   — never capture the screen.
-  //   'local' — Private: on-device model ONLY. Never falls through to cloud;
-  //             a screenshot leaving the machine under "Private" would be a
-  //             broken promise, not a fallback.
-  //   'cloud' — Fast: user's own H Company key if present, else the free
-  //             platform proxy (signed-in).
+  //   'local' — on-device model only. The screenshot never leaves the machine.
+  //
+  // The cloud lane was removed on 2026-09-03. There is no key to add and no
+  // fallback to fall through to, which is a stronger promise than the one
+  // "never falls through to cloud" used to make.
   /** Structured lane + honesty (verified?) via the shared core probe, so Scout
-   *  advertises vision truthfully — the local Holo lane is unverified until
-   *  H Company confirms it, and the shippable verified lane is cloud-BYOK. */
+   *  advertises vision truthfully — on-device vision stays unverified until
+   *  its quality and latency have actually been measured. */
   capability() {
     const ss = globalThis._sharedState || {};
     return desktopCore.probeVisionCapability({
       visionMode: ss.desktopVisionMode || 'off',
       localModelInstalled: !!ss.localVisionEndpoint,
-      hasHCompanyKey: !!ss.hcompanyApiKey,
-      // BYOK-only (operator decision 2026-07-02): cloud vision runs on the
-      // user's OWN H Company key, never on a platform key — Ava stays out of
-      // the screenshot data path. The lane may return later as a priced
-      // feature; until then the probe never sees a platform key.
-      hasPlatformKey: false,
     });
   },
   isAvailable() {
@@ -910,19 +903,11 @@ const visionBridge = {
     const { image, width, height, originX = 0, originY = 0 } = shot?.data ?? shot ?? {};
     if (!image) return null;
 
-    // Normalized [0,1000] from the ONE lane the user consented to. Cloud is
-    // BYOK-ONLY (operator decision 2026-07-02): the screenshot goes straight
-    // from this machine to H Company under the USER'S key — no platform-key
-    // fallback, Ava's servers are never in the data path.
-    const mode = ss.desktopVisionMode || 'off';
-    let norm = null;
-    if (mode === 'local') {
-      norm = await holoLocalizeLocal(ss.localVisionEndpoint, image, targetDescription);
-    } else if (ss.hcompanyApiKey) {
-      norm = await holoLocalizeDirect(ss.hcompanyApiKey, image, targetDescription);
-    } else {
-      return null; // no own key = no cloud vision; capability() already reported this honestly
-    }
+    // Normalized [0,1000] from the on-device model. There is no other lane:
+    // the screenshot is read by a process on this machine and goes nowhere.
+    // isAvailable() above already returned false if the model is not running,
+    // so reaching here means the local endpoint is live.
+    const norm = await holoLocalizeLocal(ss.localVisionEndpoint, image, targetDescription);
     if (!norm) return null;
     // Map normalized [0,1000] back to PHYSICAL virtual-screen pixels: the image
     // spans the whole virtual desktop, so add its origin (negative when a
@@ -1090,31 +1075,6 @@ function parseHoloCoords(text) {
   if (!m) return null;
   const x = Number(m[1]); const y = Number(m[2]);
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
-}
-
-/** BYOK lane — the user's own H Company key, straight to the API. */
-async function holoLocalizeDirect(apiKey, imageB64, targetDescription) {
-  const resp = await fetch('https://api.hcompany.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'holo3-1-35b-a3b',
-      max_tokens: 128,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: `data:image/png;base64,${imageB64}` } },
-          { type: 'text', text: `Localize this element on the screenshot: ${targetDescription}\nReturn ONLY the coordinates as JSON {"x": <0-1000>, "y": <0-1000>} (normalized to the image). No prose.` },
-        ],
-      }],
-    }),
-  });
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => '');
-    throw new Error(`Holo vision request failed (${resp.status}): ${errText.slice(0, 160)}`);
-  }
-  const data = await resp.json();
-  return parseHoloCoords(data?.choices?.[0]?.message?.content);
 }
 
 // (The platform-hosted vision lane was removed 2026-07-02 — cloud vision is
@@ -2172,7 +2132,6 @@ async function handleInit(data) {
       // vision key exists, so "whose key is this?" always has one answer.
       visionProvider: visionBridge,
       desktopVisionMode: config.desktopVisionMode || 'off',
-      hcompanyApiKey: config.providers?.hcompany?.apiKey,
       // Desktop safety gate — the @ava/core tools call these on every
       // mutative action. Permission level and budget are read per call;
       // the approval handler emits a confirm_required NDJSON event and
@@ -4427,15 +4386,6 @@ rl.on('line', async (line) => {
           pending.resolve({ data: data.result });
         }
       }
-      break;
-    }
-    case 'set_hcompany_key': {
-      // Live-apply the user's own H Company key (desktop vision, BYOK-only) —
-      // persisted by the renderer into ~/.ava/config.json; this makes it take
-      // effect without a sidecar restart. Empty clears it.
-      const key = typeof data.key === 'string' && data.key.trim() ? data.key.trim() : undefined;
-      if (globalThis._sharedState) globalThis._sharedState.hcompanyApiKey = key;
-      emit({ event: 'info', message: key ? 'H Company key set — Fast vision available.' : 'H Company key cleared.' });
       break;
     }
     case 'update_desktop_automation_settings': {

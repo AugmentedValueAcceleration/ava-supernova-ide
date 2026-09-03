@@ -691,15 +691,13 @@ export class SidecarManager {
     await this.send({ cmd: 'set_desktop_permission_level', level });
   }
 
-  /** Live-apply the user's own H Company key (desktop vision, BYOK-only).
-   *  Pass '' to clear. Persistence is the renderer's job (shared-config). */
-  async setHCompanyKey(key: string): Promise<void> {
-    await this.send({ cmd: 'set_hcompany_key', key });
-  }
-
-  /** Perception setting (Phase C3): off = never capture the screen; local =
-   *  on-device vision only (Private); cloud = account/BYOK Holo (Fast). */
-  async setDesktopVisionMode(mode: 'off' | 'local' | 'cloud'): Promise<void> {
+  /** Perception setting: off = never capture the screen; local = on-device
+   *  vision, and the screenshot never leaves this machine. There is no third
+   *  option — the cloud lane was removed on 2026-09-03, and this signature
+   *  accepted 'cloud' for a while afterwards without any typecheck noticing,
+   *  because the callers had already narrowed and a narrower type is
+   *  assignable to a wider one. */
+  async setDesktopVisionMode(mode: 'off' | 'local'): Promise<void> {
     await this.send({ cmd: 'set_desktop_vision_mode', mode });
   }
 
