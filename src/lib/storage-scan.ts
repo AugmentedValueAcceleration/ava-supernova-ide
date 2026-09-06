@@ -34,7 +34,7 @@ export const AVA_HOME_REL = '.ava';
 
 // The category rules — labels, order, and which folder counts as what — live
 // in core so this surface and the other cannot disagree about the user's disk.
-import { CATEGORY_LABEL, CATEGORY_ORDER, categoryOf } from '@ava/core/projects/storage';
+import { CATEGORY_LABEL, CATEGORY_ORDER, categoryOf, SKIP_IN_AVA_SCAN } from '@ava/core/projects/storage';
 
 
 /** Recursive on-disk size of a directory (bytes). Best-effort — children are
@@ -163,6 +163,10 @@ export async function scanStorage(): Promise<StorageScan> {
 
   for (const e of top) {
     const rel = `${AVA_HOME_REL}/${e.name}`;
+    // The user's own work lives in `~/.ava/projects` now. It is measured
+    // separately as THEIR half of the bar; walking it here would count it
+    // twice and file their source under Ava's footprint.
+    if (SKIP_IN_AVA_SCAN.includes(e.name.toLowerCase()) && e.isDirectory) continue;
     if (e.name === 'users' && e.isDirectory) {
       // Roll each account-scoped dir's children into the shared categories.
       let users: string[] = [];
