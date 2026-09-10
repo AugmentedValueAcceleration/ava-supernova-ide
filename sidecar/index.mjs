@@ -3838,7 +3838,7 @@ async function handleSetModel(data) {
     const sharedState = globalThis._sharedState || {};
 
     // Maestro / Supernova / Aurora orchestrated modes — all go through
-    // AutoCoordinator. Supernova pins coordinator to DeepSeek V4 Pro and
+    // AutoCoordinator. Supernova pins coordinator to DeepSeek Flash and
     // runs Builder spawns on Qwen 3.6 Plus per the polyglot routing map.
     // Aurora pins coordinator to Mistral Medium 3.5 (AURORA_COORDINATOR_ID)
     // with a Mistral-only resolution chain — never silently routes to a
@@ -3892,7 +3892,7 @@ async function handleSetModel(data) {
           }
         }
       } else if (data.model === 'supernova') {
-        preferredCoordinatorId = 'platform:deepseek-v4-pro-platform';
+        preferredCoordinatorId = 'platform:deepseek-flash-platform';
       } else if (data.model === 'longxiang') {
         // Kimi K3 holds both the coordinator and Builder seats. Platform id
         // first, then BYOK — same shape as Aurora's chain above, and the same

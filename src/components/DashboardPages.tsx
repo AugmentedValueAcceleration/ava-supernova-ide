@@ -2615,10 +2615,9 @@ export function AvaChatPage() {
     'qwen3.5-flash': 'platform:qwen-flash',
     // `deepseek-chat`/`deepseek-reasoner` retire upstream 2026-07-24 — old
     // picker ids stay mapped, pointed at the V4 tier each one meant.
-    'deepseek-chat': 'deepseek:deepseek-v4-flash',
-    'deepseek-reasoner': 'deepseek:deepseek-v4-pro',
-    'deepseek-v4-pro': 'deepseek:deepseek-v4-pro',
-    'deepseek-v4-flash': 'deepseek:deepseek-v4-flash',
+    'deepseek-chat': 'deepseek:deepseek-flash',
+    'deepseek-reasoner': 'deepseek:deepseek-flash',
+    'deepseek-flash': 'deepseek:deepseek-flash',
     'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
     'glm-4-plus': 'zhipu:glm-4-plus',
     'mistral-large': 'mistral:mistral-large-3',
@@ -3467,7 +3466,7 @@ export function AvaChatPage() {
     // the plan cannot actually drive.
     //
     // Ids are matched with the `-platform` disambiguator stripped: the managed
-    // entry for deepseek-v4-pro is deepseek-v4-pro-platform, while qwen3.7-plus
+    // entry for deepseek-flash is deepseek-flash-platform, while qwen3.7-plus
     // carries no suffix at all.
     const planServes = new Set(
       connected
@@ -5274,7 +5273,7 @@ export function AvaChatPage() {
                       'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
                       // DeepSeek V4 is 1M context — the 131072 here was V3-era and
                       // made the context meter read ~8x fuller than reality.
-                      'qwen3.5-flash': 262144, 'qwen3.7-flash': 1000000, 'qwen3-coder-next': 256000, 'qwen3-coder-flash': 1000000, 'deepseek-v4-pro': 1000000, 'deepseek-v4-flash': 1000000,
+                      'qwen3.5-flash': 262144, 'qwen3.7-flash': 1000000, 'qwen3-coder-next': 256000, 'qwen3-coder-flash': 1000000, 'deepseek-flash': 1000000, 'deepseek-flash': 1000000,
                       'glm-5.3': 1000000, 'glm-5.3-flash': 1000000,
                       'hy3': 262144,
                       'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
@@ -14538,9 +14537,9 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'kimi-k3': { input: 3.00, output: 15.00 },
   'kimi-k2.7-code': { input: 0.95, output: 4.00 },
   'kimi-k2.6': { input: 0.95, output: 4.00 },
-  // Off-peak (2026-08-16 tariff); peak 01:00-04:00 + 06:00-10:00 UTC is 2×.
-  'deepseek-v4-pro': { input: 0.66, output: 1.98 },
-  'deepseek-v4-flash': { input: 0.22, output: 0.66 },
+  // ONE model since 2026-09-10 — V4 Pro and V4 Flash both retired into V4.1
+  // Flash. Off-peak; peak 01:00-04:00 + 06:00-10:00 UTC Mon-Fri is 2×.
+  'deepseek-flash': { input: 0.15, output: 0.60 },
 };
 
 const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
@@ -15127,7 +15126,7 @@ export function SettingsPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const PROVIDERS = [
-    { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4 Pro and V4 Flash \u2014 1M context, MIT open-weight' },
+    { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek Flash and V4 Flash \u2014 1M context, MIT open-weight' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.7 Code \u2014 agentic coding leader' },
     { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M3 flagship, M2.7 standard' },
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5.3 \u2014 open-weights, 1M context, top-tier coding' },

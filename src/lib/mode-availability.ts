@@ -8,7 +8,7 @@ import { t } from './i18n';
 // Each mode is gated by the fleet of provider keys it actually needs:
 //
 //   Maestro   → Qwen-only fleet (Qwen 3.7 Plus + 3.5 Flash light tier).
-//   Supernova → DeepSeek + Qwen ensemble (DeepSeek V4 Pro coordinator
+//   Supernova → DeepSeek + Qwen ensemble (DeepSeek Flash coordinator
 //               + V4 Flash mid-tier; Qwen builder + light + vision +
 //               long-form).
 //   Aurora    → Mistral-only EU stack (Medium 3.5 lead + Small 4

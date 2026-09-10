@@ -27,10 +27,9 @@ export const SIDECAR_MODEL_MAP: Record<string, string> = {
   // Keep the old picker ids mapped so a stored preference still resolves, but
   // point them at the V4 tier each one used to mean (chat → non-thinking Flash,
   // reasoner → thinking; Pro is the frontier tier).
-  'deepseek-chat': 'deepseek:deepseek-v4-flash',
-  'deepseek-reasoner': 'deepseek:deepseek-v4-pro',
-  'deepseek-v4-pro': 'deepseek:deepseek-v4-pro',
-  'deepseek-v4-flash': 'deepseek:deepseek-v4-flash',
+  'deepseek-chat': 'deepseek:deepseek-flash',
+  'deepseek-reasoner': 'deepseek:deepseek-flash',
+  'deepseek-flash': 'deepseek:deepseek-flash',
   'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
   'glm-4-plus': 'zhipu:glm-4-plus',
   'mistral-large': 'mistral:mistral-large-3',
