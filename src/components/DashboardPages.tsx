@@ -49,6 +49,7 @@ import {
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { DesignStudio } from './DesignStudio';
+import { toolStatusLabel } from '../lib/tool-label';
 import { t, tt, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
 import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
@@ -4398,20 +4399,12 @@ export function AvaChatPage() {
         break;
 
       case 'tool_call_start': {
-        // Show tool name as status
-        const toolLabel = event.toolName === 'bash' ? t('dash.chat.status.tool.bash')
-          : event.toolName === 'glob' || event.toolName === 'list_directory' ? t('dash.chat.status.tool.glob')
-          : event.toolName === 'grep' || event.toolName === 'find_symbol' ? t('dash.chat.status.tool.grep')
-          : event.toolName === 'file_read' ? t('dash.chat.status.tool.file_read')
-          : event.toolName === 'file_write' || event.toolName === 'file_edit' ? t('dash.chat.status.tool.file_write')
-          : event.toolName === 'git_status' || event.toolName === 'git_diff' ? t('dash.chat.status.tool.git')
-          : event.toolName === 'web_search' ? t('dash.chat.status.tool.web_search')
-          : event.toolName === 'memory_recall' ? t('dash.chat.status.tool.memory_recall')
-          : event.toolName === 'memory_save' ? t('dash.chat.status.tool.memory_save')
-          : event.toolName === 'test_run' ? t('dash.chat.status.tool.test_run')
-          : event.toolName === 'analyze_architecture' ? t('dash.chat.status.tool.architecture')
-          : event.toolName === 'project_index' ? t('dash.chat.status.tool.project_index')
-          : event.toolName ? `Using ${event.toolName}...` : '';
+        // Name the actual file, command or pattern — not just the kind of
+        // thing happening. The arguments were already on this event and went
+        // unused, so the status said "Reading file..." while knowing perfectly
+        // well WHICH file. For someone learning, that specific sequence is the
+        // lesson: read this, change that, run the tests.
+        const toolLabel = toolStatusLabel(event.toolName, event.args);
         if (toolLabel) setStatusText(toolLabel);
         setMessages((prev) => {
           const copy = [...prev];
