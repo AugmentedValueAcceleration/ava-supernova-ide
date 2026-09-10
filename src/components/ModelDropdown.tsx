@@ -1,7 +1,7 @@
 // IDE model dropdown — parity with the extension's ModelSelector.
 //
 // Behaviour:
-//   - Orchestrated section at the top: Supernova (polyglot, V4 Pro coordinator)
+//   - Orchestrated section at the top: Supernova (polyglot, DeepSeek Flash coordinator)
 //     and Maestro (single conductor on Qwen 3.7 Plus). Both highlighted as
 //     Ava-orchestrated modes vs raw model picks.
 //   - Supernova is admin-only at preview while the DeepSeek partnership is

@@ -8,8 +8,9 @@ import { t } from './i18n';
 // Each mode is gated by the fleet of provider keys it actually needs:
 //
 //   Maestro   → Qwen-only fleet (Qwen 3.7 Plus + 3.5 Flash light tier).
-//   Supernova → DeepSeek + Qwen ensemble (DeepSeek Flash coordinator
-//               + V4 Flash mid-tier; Qwen builder + light + vision +
+//   Supernova → DeepSeek + Qwen ensemble (DeepSeek Flash takes the
+//               coordinator AND mid-tier seats — one model since the
+//               2026-09-10 collapse; Qwen builder + light + vision +
 //               long-form).
 //   Aurora    → Mistral-only EU stack (Medium 3.5 lead + Small 4
 //               workhorse + Large 3 reserve).
@@ -46,7 +47,7 @@ export function activeProviderSource(): 'platform' | 'byok' {
 }
 
 //   Longxiang → open-weights Kimi/Qwen/DeepSeek stack (K3 lead + Builder,
-//               Qwen 3.7 Plus mid-tier + vision, V4 Flash volume).
+//               Qwen 3.7 Plus mid-tier + vision, DeepSeek Flash volume).
 //               Gated by LONGXIANG_LIVE below, then available exactly like
 //               the other three: platform connection OR the BYOK keys
 //               (moonshot + qwen + deepseek). It was BYOK-only before
