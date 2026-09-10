@@ -591,6 +591,78 @@ let currentMode = 'work';
  */
 let openDocument = null;
 let isRunning = false;
+
+// ─── Session reflection ─────────────────────────────────────────────────────
+//
+// Mirrors packages/extension/src/webview/AvaViewProvider.ts.
+//
+// Reflection used to have exactly ONE trigger here: handleInit, when a new
+// session replaced an existing one. So it ran on a project or conversation
+// switch and nowhere else — close the IDE after an evening's work and the
+// whole session was lost. Worse than the extension, which at least had three
+// transitions.
+//
+// It is worse again in this process specifically: the sidecar is killed when
+// the Tauri app closes, so a fire-and-forget reflection at shutdown has even
+// less chance of finishing than it did in the extension host. On Windows a
+// killed child may receive no signal at all.
+//
+// So the idle timer is the PRIMARY path, not the backstop. Reflection happens
+// when the session goes quiet, and shutdown is only a best-effort extra.
+let idleReflectTimer = null;
+/** User-turn count at last reflection, keyed by conversation id. A single
+ *  counter would carry across a conversation switch and skip the new one. */
+const lastReflectedTurns = new Map();
+/** Ten minutes. Short windows would let a session feed its own memories back
+ *  into its own context mid-flow, which is why reflection was kept off the hot
+ *  path in the first place. */
+const IDLE_REFLECT_MS = 10 * 60_000;
+
+/** Reflect a session into memory, skipping material already reflected. */
+async function reflectSession(conv) {
+  if (!conv || !memoryAgentInstance) return 0;
+  const messages = conv.getMessages();
+  const userTurns = messages.filter((m) => m.role === 'user').length;
+  if (userTurns < 2) return 0; // reflectOnSession needs >= 2 user turns
+  if (userTurns <= (lastReflectedTurns.get(conv.id) ?? 0)) return 0;
+  try {
+    const saved = await memoryAgentInstance.reflectOnSession(messages, conv.id);
+    lastReflectedTurns.set(conv.id, userTurns);
+    return saved;
+  } catch {
+    return 0; // never block anything on memory
+  }
+}
+
+function cancelIdleReflection() {
+  if (idleReflectTimer) {
+    clearTimeout(idleReflectTimer);
+    idleReflectTimer = null;
+  }
+}
+
+/** Reflect once the session has been quiet. Cancelled by the next turn. */
+function scheduleIdleReflection() {
+  cancelIdleReflection();
+  const conv = conversation;
+  if (!conv || !memoryAgentInstance) return;
+  idleReflectTimer = setTimeout(() => {
+    idleReflectTimer = null;
+    void reflectSession(conv);
+  }, IDLE_REFLECT_MS);
+  // Never hold the process open just for this.
+  idleReflectTimer.unref?.();
+}
+
+/** Bounded best-effort reflection when the process is going away. */
+async function flushMemoryOnShutdown(timeoutMs = 4000) {
+  cancelIdleReflection();
+  if (!conversation || !memoryAgentInstance) return;
+  await Promise.race([
+    reflectSession(conversation).then(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
+}
 // Second conversation thread — the focused "Ava Health & Fitness" room. Same
 // agent + memory + tools as the main chat, but its own message history so
 // health planning never lands in the main thread. The IDE's chat surfaces
@@ -961,6 +1033,25 @@ async function ensureLocalVisionServer() {
   return null;
 }
 process.on('exit', () => { try { localVisionProc?.kill(); } catch { /* gone */ } });
+
+// Best-effort reflection when the process is asked to go away.
+//
+// The Tauri shell kills this process on quit, so these may not fire at all —
+// on Windows a killed child often receives no signal. That is precisely why
+// the idle timer above is the primary path and this is only an extra chance,
+// not the mechanism.
+let shuttingDown = false;
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGBREAK', 'SIGHUP']) {
+  try {
+    process.on(sig, () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      flushMemoryOnShutdown()
+        .catch(() => {})
+        .finally(() => process.exit(0));
+    });
+  } catch { /* signal unsupported on this platform */ }
+}
 
 // Where the packaged model files are hosted. Overridable for testing;
 // the public host is decided by the operator (publishing is held) — until
@@ -1514,7 +1605,8 @@ async function handleInit(data) {
     // ending — not the one we're opening. No-op on first init (no prior
     // conversation).
     if (memoryAgentInstance && conversation) {
-      Promise.resolve(memoryAgentInstance.reflectOnSession(conversation.getMessages(), conversation.id)).catch(() => {});
+      cancelIdleReflection();
+      void reflectSession(conversation);
     }
     const config = data.config || {};
     // SECURITY: cwd must be a specific project folder, never fallback to home directory.
@@ -2781,6 +2873,8 @@ async function handleMessage(data) {
     return;
   }
 
+  // Session is alive again — do not reflect mid-flow.
+  cancelIdleReflection();
   isRunning = true;
   const abortController = new AbortController();
   currentAbort = abortController;
@@ -3429,6 +3523,10 @@ async function handleMessage(data) {
   } finally {
     isRunning = false;
     currentAbort = null;
+    // Turn over — start the idle clock. Cancelled if another turn arrives; if
+    // the user wanders off or closes the IDE later, the session still reaches
+    // memory, which it previously did not.
+    scheduleIdleReflection();
     // Restore the main thread + lane after a room turn (health or learning).
     // The room thread keeps its appended messages (same object, still held in
     // healthConversation / learningConversations); only the active pointer flips
