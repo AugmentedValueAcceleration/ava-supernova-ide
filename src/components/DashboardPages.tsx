@@ -12326,7 +12326,14 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                     {(() => {
                       const iconFallback = <span style={{ color: colors.text, opacity: 0.95 }}><MediaKindIcon kind={kind} size={52} weight="duotone" /></span>;
                       if (kind === 'image') {
-                        return <LocalThumb file={file} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
+                        // An icon or a logo is shown WHOLE. `cover` is right for
+                        // a photo — a frame filling its card is the gallery look
+                        // — but it crops a square icon on a wide card to the
+                        // middle of the glyph: a bell became an orange curve.
+                        const whole = file.designType === 'icon' || file.designType === 'logo';
+                        return <LocalThumb file={file} style={whole
+                          ? { width: '100%', height: '100%', objectFit: 'contain', padding: 12, boxSizing: 'border-box' }
+                          : { width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
                       }
                       if (kind === 'video') {
                         return <LocalVideoThumb file={file} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
