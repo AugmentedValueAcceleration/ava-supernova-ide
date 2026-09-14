@@ -680,6 +680,31 @@ export function DesignStudio() {
   const [logoSpec, setLogoSpec] = useState<MarkSpec | null>(null);           // the construction Ava last authored
   const [logoBoard, setLogoBoard] = useState(CHECKER);                       // check-against board
   const logoHits = useMemo(() => searchShapes(logoQuery, 24), [logoQuery]);
+
+  // What the right-hand panel is set to, in one line, sent with every design-lane
+  // turn. Ported from the extension, where it was the half that was missing: the
+  // dials were only ever a silent fallback, so Ava designed blind and her
+  // arguments always won — "Lettermark" selected while a symbol rendered. Here
+  // the IDE had the same fault for the same reason: the sidecar call passed
+  // nothing for the panel. Now she sees it, works from it, and may change it
+  // when the design calls for it.
+  const designPanel = useMemo(() => {
+    if (view !== 'logo') return undefined;
+    const bits = [
+      `form: ${logoForm}`,
+      logoForm === 'emblem' ? `tagline: ${logoTagline || '(none)'}` : '',
+      `mark type: ${logoMarkType}`,
+      logoMarkType === 'icon' ? `shape: ${logoMark}` : '',
+      logoMarkType === 'letter' ? `container: ${logoContainer}` : '',
+      logoMarkType === 'geometry' && logoSpec ? `current construction: ${logoSpec.concept}` : '',
+      `style: ${logoStyle}`,
+      `colour: ${logoColour}`,
+      TWO_TONE(logoStyle) ? `second colour: ${logoSecondary}` : '',
+      `wordmark font: ${logoFontId || suggestFont(kit.styleTags).id}`,
+      `wordmark colour: ${logoWordColour}`,
+    ].filter(Boolean);
+    return bits.join(' · ');
+  }, [view, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
   // Register the bundled wordmark fonts (from bytes) when the Logo room opens, so
   // the font picker previews each name in its own typeface.
   useEffect(() => { if (view === 'logo') void registerWordmarkFonts(); }, [view]);
@@ -1523,7 +1548,7 @@ export function DesignStudio() {
             </button>
           </div>
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-            <DesignArchitectDock showMessages={renderConv} onComposerFocus={() => setDockOpen(true)} designRoom={designRoom} />
+            <DesignArchitectDock showMessages={renderConv} onComposerFocus={() => setDockOpen(true)} designRoom={designRoom} designPanel={designPanel} />
           </div>
         </div>
       </div>
@@ -1833,7 +1858,7 @@ const DOCK_STARTERS_VOICE: { icon: string; key: string }[] = [
 
 const DESIGN_CHAT_KEY = 'ava-ide-design-chat';
 
-function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon' }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' }) {
+function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon', designPanel }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo'; designPanel?: string }) {
   // Persist the design conversation like every other room — it was pure local
   // state before, so it vanished on every reload / tab switch.
   const [messages, setMessages] = useState<DockMessage[]>(() => {
@@ -1939,10 +1964,10 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
       .filter((m) => (m.role === 'user' || m.role === 'ava') && m.text.trim())
       .map((m) => ({ role: m.role === 'ava' ? 'assistant' : 'user', text: m.text }));
     logDiag(`design send → sendMessage(surface=design, room=${designRoom}, ready=${sc.isReady}, history=${history.length}) "${text.slice(0, 40)}"`);
-    sc.sendMessage(text || '(see attachment)', atts, history.length ? history : undefined, 'design', undefined, designRoom)
+    sc.sendMessage(text || '(see attachment)', atts, history.length ? history : undefined, 'design', undefined, designRoom, designPanel)
       .then(() => logDiag('design send → sendMessage resolved (written to sidecar)'))
       .catch((e) => { logDiag(`design send FAILED: ${e?.message || e}`, 'error'); setStreaming(false); });
-  }, [attachments, designRoom]);
+  }, [attachments, designRoom, designPanel]);
 
   const handleAttach = useCallback(() => {
     const picker = document.createElement('input');

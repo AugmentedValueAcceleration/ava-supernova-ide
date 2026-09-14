@@ -3132,7 +3132,7 @@ async function handleMessage(data) {
     const effectiveContent = activeLane === 'health'
       ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary(), getTrainingLogSummary())
       : activeLane === 'design'
-      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo'].includes(data.designRoom) ? data.designRoom : 'icon', undefined, designProjectContext)
+      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
       : activeLane === 'learning'
       ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
       : data.content;
