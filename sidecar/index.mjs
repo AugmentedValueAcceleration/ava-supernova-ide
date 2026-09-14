@@ -176,6 +176,7 @@ const {
   todayLocal,
   isRoutingMode,
   getDesignStudioPrefix,
+  loadFreshDesignContext,
   getTeachModePrefix,
   loadDecisionsState,
   getPlanModePrefix,
@@ -3114,10 +3115,24 @@ async function handleMessage(data) {
     // (catalogue-first, profile-aware, safety rail). The prefix already carries
     // the [Health Room] tag the core agent reads for tool gating, so the
     // mode-tag path below stays empty for this lane.
+    // Design Studio: the Designer reads the open project's Decisions folder
+    // — overview, context, palette, typography, voice, assets log. The coding
+    // path on this same sidecar has loaded that folder since handleInit (see
+    // loadDecisionsState above) and the Designer, whose whole job is the look,
+    // never saw it. Read fresh per message, not cached: edits to
+    // Decisions/design/*.md take effect on the next turn with no plumbing.
+    // No project open → null → she designs from the brand kit as before.
+    let designProjectContext = null;
+    if (activeLane === 'design') {
+      try {
+        designProjectContext = globalThis.__avaProjectRoot ? await loadFreshDesignContext(globalThis.__avaProjectRoot) : null;
+      } catch { /* unreadable folder — the prefix handles null */ }
+    }
+
     const effectiveContent = activeLane === 'health'
       ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary(), getTrainingLogSummary())
       : activeLane === 'design'
-      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo'].includes(data.designRoom) ? data.designRoom : 'icon')
+      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo'].includes(data.designRoom) ? data.designRoom : 'icon', undefined, designProjectContext)
       : activeLane === 'learning'
       ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
       : data.content;
