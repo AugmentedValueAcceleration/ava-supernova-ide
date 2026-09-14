@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -59,6 +59,7 @@ import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sideca
 // The dependency-free leaf, so this renderer and the sidecar agree on what
 // is exportable and what it is called without either keeping its own list.
 import { canExport, targetsFor, TARGET_LABELS, type ExportFormat } from '@ava/core/authoring/formats';
+import { exportOptionsFor, originalExt, transcodeImage, withExt, type ExportFormat as ImageExportFormat, type ExportOption as ImageExportOption } from '../lib/image-export';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
 import { Tooltip } from './Tooltip';
@@ -12572,19 +12573,39 @@ function LibraryPreviewModal({
   // handleReveal removed with the top-level button: each row under Formats
   // opens its own file's folder, which is the one the user pointed at.
 
-  const handleDownload = async () => {
+  // The formats on offer. Images can be re-encoded here in the webview (see
+  // image-export.ts for why SVG is offered only when the source IS vector);
+  // everything else gets its original bytes and nothing invented.
+  // The real extension lives on the file's path (a Studio make's `name` is
+  // its title, which may carry none) — so detect the format from that, and
+  // only fall back to the display name for cloud rows that have no path.
+  const bytesName = file.localPath || file.path || deriveFilename();
+  const downloadOptions = useMemo<ImageExportOption[]>(() => {
+    if (mediaKind === 'image') return exportOptionsFor(bytesName);
+    const ext = originalExt(bytesName, '');
+    return [{ format: 'original', label: ext ? `Original (${ext.toUpperCase()})` : 'Download', ext }];
+  }, [mediaKind, bytesName]);
+  const [downloadingFormat, setDownloadingFormat] = useState<ImageExportFormat | null>(null);
+
+  // Download — with a format. This used to write whatever bytes were on disk
+  // straight into ~/Downloads, which meant WebP and only WebP for anything
+  // the Studio made. Now: fetch the bytes once, re-encode in the webview if a
+  // different format was asked for, and let a save dialog choose where. The
+  // bytes are already local, so the transcode reads from a blob URL and never
+  // touches CORS.
+  const handleDownloadAs = async (opt: ImageExportOption) => {
     setBusy('download');
+    setDownloadingFormat(opt.format);
     try {
-      const [{ downloadDir, join }, fsPlugin] = await Promise.all([
+      const [{ downloadDir, join }, fsPlugin, { save }] = await Promise.all([
         import('@tauri-apps/api/path'),
         import('@tauri-apps/plugin-fs'),
+        import('@tauri-apps/plugin-dialog'),
       ]);
-      const safeName = deriveFilename()
+      const safeName = withExt(deriveFilename(), opt.ext)
         .replace(/[\\/]/g, '_')
         .replace(/[^a-zA-Z0-9._ -]/g, '_')
         .slice(0, 200) || 'download';
-      const dir = await downloadDir();
-      const destPath = await join(dir, safeName);
 
       let buf: Uint8Array;
       if (isCloud) {
@@ -12597,11 +12618,31 @@ function LibraryPreviewModal({
         if (!abs) throw new Error('Could not resolve local path.');
         buf = await fsPlugin.readFile(abs);
       }
+
+      // PNG / JPG: re-encode from the pixels. JPG is composited on white — it
+      // has no alpha, and a matted icon would otherwise come out on black.
+      if (opt.format === 'png' || opt.format === 'jpg') {
+        const srcExt = originalExt(bytesName);
+        const blob = new Blob([buf as BlobPart], { type: ASSET_MIME[srcExt] ?? 'application/octet-stream' });
+        const blobUrl = URL.createObjectURL(blob);
+        try {
+          const dataUri = await transcodeImage(blobUrl, opt.format);
+          const b64 = dataUri.split(',')[1] ?? '';
+          buf = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        } finally { URL.revokeObjectURL(blobUrl); }
+      }
+
+      const dir = await downloadDir();
+      const destPath = await save({
+        defaultPath: await join(dir, safeName),
+        filters: [{ name: opt.label, extensions: [opt.ext] }],
+      });
+      if (!destPath) return; // they changed their mind — not an error
       await fsPlugin.writeFile(destPath, buf);
-      showToast(`Downloaded: ${safeName}`);
+      showToast(`Saved: ${String(destPath).split(/[\\/]/).pop()}`);
     } catch (err) {
       showToast(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally { setBusy(null); }
+    } finally { setBusy(null); setDownloadingFormat(null); }
   };
 
   const handleDelete = async () => {
@@ -12967,11 +13008,20 @@ function LibraryPreviewModal({
           </div>
         ) : (
           <>
-            {actionBtn(
-              busy === 'download' ? 'Downloading…' : 'Download',
-              handleDownload,
-              { primary: isCloud, disabled: isCloud && !file.url },
-            )}
+            {/* Download, one button per format. The first is the original bytes
+                (or SVG when the source is vector); PNG and JPG are made here
+                from the pixels. See image-export.ts for why a raster image
+                never grows an SVG option. */}
+            <span style={{ fontSize: 10, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', alignSelf: 'center' }}>Download</span>
+            {downloadOptions.map((opt, i) => (
+              <Fragment key={opt.format}>
+                {actionBtn(
+                  downloadingFormat === opt.format ? 'Saving…' : opt.label,
+                  () => handleDownloadAs(opt),
+                  { primary: i === 0, disabled: busy !== null || (isCloud && !file.url) },
+                )}
+              </Fragment>
+            ))}
             <div style={{ flex: 1 }} />
             {actionBtn(t('library.delete'), () => setConfirmDelete(true), { danger: true, disabled: isCloud && !file.id })}
           </>
