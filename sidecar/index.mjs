@@ -177,6 +177,7 @@ const {
   isRoutingMode,
   getDesignStudioPrefix,
   loadFreshDesignContext,
+  summariseEquipment,
   getTeachModePrefix,
   loadDecisionsState,
   getPlanModePrefix,
@@ -1325,7 +1326,14 @@ function getHealthProfileSummary() {
     if (p?.constraints?.allergens?.length) lines.push(`Allergens: ${p.constraints.allergens.join(', ')}`);
     if (p?.constraints?.dietary?.length) lines.push(`Dietary preferences: ${p.constraints.dietary.join(', ')}`);
     if (p?.constraints?.injuries?.length) lines.push(`Injuries / limitations: ${p.constraints.injuries.join(', ')}`);
-    if (p?.constraints?.equipment_available?.length) lines.push(`Equipment available: ${p.constraints.equipment_available.join(', ')}`);
+    // Places, load ranges and gym days — not a flat list of slugs. Mirrors the
+    // extension exactly by sharing core's builder, so the two summaries cannot
+    // say different things about the same profile.
+    for (const line of summariseEquipment(
+      p?.constraints?.equipment_available,
+      p?.constraints?.equipment_loads,
+      p?.constraints?.gym_days,
+    )) lines.push(line);
     if (p?.constraints?.minutes_per_day_target) lines.push(`Time budget per day: ${p.constraints.minutes_per_day_target} minutes`);
     const tw = p?.schedule?.training_window;
     if (tw?.start && tw?.end) lines.push(`Training window: ${tw.start}–${tw.end}`);
