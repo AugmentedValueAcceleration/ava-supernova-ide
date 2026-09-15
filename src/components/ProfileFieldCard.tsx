@@ -4,7 +4,7 @@ import { DateField } from './MiniDatePicker';
 // Shared field registry — same source the sidecar saves from, so "what Ava
 // asks", "what this card renders", and "where it saves" never drift. Pure data
 // (no node deps), imported from the built core like the i18n strings.
-import { HEALTH_PROFILE_FIELDS, humaniseSlug } from '../../../core/dist/health/profile-fields.js';
+import { HEALTH_PROFILE_FIELDS, optionLabel } from '../../../core/dist/health/profile-fields.js';
 import { TimeField } from './TimeField';
 import { CookingTimeGrid, type CookTime } from './CookingTimeGrid';
 
@@ -54,7 +54,7 @@ export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSk
     );
   }
 
-  const optLabel = (o: { value: string; labelKey?: string }) => (o.labelKey ? t(o.labelKey) : humaniseSlug(o.value));
+  const optLabel = (o: { value: string; labelKey?: string; label?: string }) => optionLabel(o, t);
   const hasHints = !!def.options?.some((o) => o.hintKey);
 
   return (
