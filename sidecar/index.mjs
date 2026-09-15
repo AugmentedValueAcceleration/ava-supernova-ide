@@ -178,6 +178,7 @@ const {
   getDesignStudioPrefix,
   loadFreshDesignContext,
   summariseEquipment,
+  coerceLoad,
   getTeachModePrefix,
   loadDecisionsState,
   getPlanModePrefix,
@@ -1500,6 +1501,11 @@ function coerceProfileFieldValue(def, raw) {
     }
     case 'multiselect':
       return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
+    // Without this the default branch returns null for anything that is not a
+    // string, so the whole answer would be dropped on save without a word.
+    // Mirrors the extension host; coerceLoad is core's, shared with the cards.
+    case 'load_range':
+      return coerceLoad(raw);
     case 'cooking_grid':
       return coerceCookingGrid(raw);
     case 'text': {

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { t, useLocale } from '../lib/i18n';
+import { t, tt, useLocale } from '../lib/i18n';
 import { DateField } from './MiniDatePicker';
 // Shared field registry — same source the sidecar saves from, so "what Ava
 // asks", "what this card renders", and "where it saves" never drift. Pure data
 // (no node deps), imported from the built core like the i18n strings.
 import { HEALTH_PROFILE_FIELDS, optionLabel } from '../../../core/dist/health/profile-fields.js';
+import { coerceLoad, defaultLoadFor, describeLoad, type EquipmentLoad } from '../../../core/dist/health/equipment-load.js';
 import { TimeField } from './TimeField';
 import { CookingTimeGrid, type CookTime } from './CookingTimeGrid';
 
@@ -38,6 +39,12 @@ export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSk
     def?.asArray && Array.isArray(currentValue) ? currentValue.join('\n')
     : currentValue != null && !Array.isArray(currentValue) && def?.control !== 'cooking_grid' ? String(currentValue) : '',
   );
+  // Load range — mode plus two or three numbers, which fits none of the other
+  // controls. Mirrors the extension's card exactly; the shape, the coercion and
+  // the default all come from core so the two cannot disagree about what a
+  // valid answer is.
+  const [load, setLoad] = useState<EquipmentLoad>(() =>
+    coerceLoad(currentValue) ?? defaultLoadFor(def?.loadSlug ?? ''));
   const [grid, setGrid] = useState<CookTime>(
     currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue) && (currentValue as CookTime).by_day
       ? (currentValue as CookTime)
@@ -129,6 +136,95 @@ export function ProfileFieldCard({ field, question, currentValue, onSubmit, onSk
             {def.unit && <span style={{ fontSize: 12, color: '#8b8398' }}>{def.unit}</span>}
           </div>
           <Actions onSave={() => onSubmit(text.trim())} onSkip={onSkip} disabled={!text.trim()} />
+        </>
+      )}
+
+      {def.control === 'load_range' && (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['adjustable', 'fixed'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setLoad(m === load.mode ? load : defaultLoadFor(def.loadSlug ?? ''))}
+                  style={{
+                    borderRadius: 9999, padding: '4px 12px', fontSize: 12, cursor: 'pointer',
+                    background: load.mode === m ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+                    border: `1px solid ${load.mode === m ? accent : border}`,
+                    color: load.mode === m ? accent : '#cdd6f4',
+                  }}
+                >
+                  {m === 'adjustable' ? tt('health.fill.load.adjustable', 'Adjustable') : tt('health.fill.load.fixed', 'Fixed weights')}
+                </button>
+              ))}
+            </div>
+
+            {load.mode === 'adjustable' ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: '#8b8398' }}>
+                {([
+                  ['minKg', tt('health.fill.load.from', 'from')],
+                  ['maxKg', tt('health.fill.load.to', 'to')],
+                  ['stepKg', tt('health.fill.load.step', 'in steps of')],
+                ] as const).map(([key, label]) => (
+                  <span key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {label}
+                    <input
+                      type="number" step="0.5" min="0" inputMode="decimal"
+                      value={String((load as Extract<EquipmentLoad, { mode: 'adjustable' }>)[key])}
+                      onChange={(e) => setLoad({ ...(load as Extract<EquipmentLoad, { mode: 'adjustable' }>), [key]: e.target.value === '' ? 0 : Number(e.target.value) })}
+                      style={{ ...inputStyle, width: 80 }}
+                    />
+                    kg
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {(load as Extract<EquipmentLoad, { mode: 'fixed' }>).weightsKg.map((w, i) => (
+                    <button
+                      key={`${w}-${i}`}
+                      onClick={() => setLoad({ mode: 'fixed', weightsKg: (load as Extract<EquipmentLoad, { mode: 'fixed' }>).weightsKg.filter((_, j) => j !== i) })}
+                      title={tt('health.fill.load.remove', 'Remove')}
+                      style={{
+                        borderRadius: 9999, padding: '4px 12px', fontSize: 12, cursor: 'pointer',
+                        background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                        border: `1px solid ${accent}`, color: accent,
+                      }}
+                    >
+                      {w} kg ×
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="number" step="0.5" min="0" inputMode="decimal" value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder={tt('health.fill.load.add', 'add a weight')}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter' || !text.trim()) return;
+                      const n = Number(text);
+                      if (Number.isFinite(n) && n > 0) {
+                        setLoad({ mode: 'fixed', weightsKg: [...(load as Extract<EquipmentLoad, { mode: 'fixed' }>).weightsKg, n] });
+                        setText('');
+                      }
+                    }}
+                    style={{ ...inputStyle, width: 110 }}
+                  />
+                  <span style={{ fontSize: 11, color: '#8b8398' }}>{tt('health.fill.load.add_hint', 'type a weight, press Enter')}</span>
+                </div>
+              </div>
+            )}
+
+            {/* What they just described, in the words the plan will use — and
+                the ceiling, which is the number people are surprised by:
+                2.5–24 in 2.5s tops out at 22.5, not 24. */}
+            <div style={{ fontSize: 11, color: '#8b8398' }}>
+              {describeLoad(def.loadSlug ?? '', coerceLoad(load) ?? undefined)
+                ?? tt('health.fill.load.invalid', 'That range cannot make any weight — check the numbers.')}
+            </div>
+          </div>
+          <Actions onSave={() => onSubmit(coerceLoad(load))} onSkip={onSkip} disabled={!coerceLoad(load)} />
         </>
       )}
 
