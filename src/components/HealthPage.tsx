@@ -1123,6 +1123,12 @@ export function ExerciseDetailBody({ ex }: { ex: HealthExerciseDetail }) {
               <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.beginner_detail}</p>
             </div>
           )}
+          {ex.advanced_detail && (
+            <div>
+              {sectionLabel(t('health.browse.going_further'))}
+              <p style={{ fontSize: 13, lineHeight: 1.55, color: '#cdd6f4', margin: 0 }}>{ex.advanced_detail}</p>
+            </div>
+          )}
           {ex.common_mistakes && (
             <div>
               {sectionLabel(t('health.browse.common_mistakes'))}
@@ -2039,6 +2045,7 @@ function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxo
   const [difficulty, setDifficulty] = useState(3);
   const [description, setDescription] = useState('');
   const [beginnerDetail, setBeginnerDetail] = useState('');
+  const [advancedDetail, setAdvancedDetail] = useState('');
   const [commonMistakes, setCommonMistakes] = useState('');
   const [steps, setSteps] = useState<string[]>(['']);
   const [contraindications, setContraindications] = useState<string[]>([]);
@@ -2059,6 +2066,7 @@ function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxo
         difficulty,
         description: description.trim() || null,
         beginner_detail: beginnerDetail.trim() || null,
+        advanced_detail: advancedDetail.trim() || null,
         common_mistakes: commonMistakes.trim() || null,
         steps: steps.map(s => s.trim()).filter(Boolean),
         contraindication_slugs: contraindications,
@@ -2117,6 +2125,9 @@ function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxo
       </Field>
       <Field label={t('health.submit.ex_beginner_label_short')}>
         <textarea value={beginnerDetail} onChange={e => setBeginnerDetail(e.target.value)} rows={2} style={area} />
+      </Field>
+      <Field label={t('health.submit.ex_advanced_label_short')}>
+        <textarea value={advancedDetail} onChange={e => setAdvancedDetail(e.target.value)} rows={2} style={area} />
       </Field>
       <Field label={t('health.submit.ex_mistakes_label_short')}>
         <textarea value={commonMistakes} onChange={e => setCommonMistakes(e.target.value)} rows={2} style={area} />

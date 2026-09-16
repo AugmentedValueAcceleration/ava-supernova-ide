@@ -105,6 +105,7 @@ export interface HealthExerciseDetail extends HealthExerciseSummary {
   steps: string[];
   routine: HealthExerciseRoutine;
   beginner_detail: string | null;
+  advanced_detail?: string | null;
   common_mistakes: string | null;
   demo_video_url: string | null;
   thumbnail_url: string | null;
@@ -447,6 +448,7 @@ export interface HealthExerciseSubmissionPayload {
   difficulty: number;
   description: string | null;
   beginner_detail: string | null;
+  advanced_detail?: string | null;
   common_mistakes: string | null;
   steps: string[];
   contraindication_slugs: string[];
