@@ -1704,7 +1704,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
   useLocale(); // re-render on locale change; `t` is a direct import
   const [monthOffset, setMonthOffset] = useState(0);
   const [taskDates, setTaskDates] = useState<Set<string>>(new Set());
-  const [planMarks, setPlanMarks] = useState<Map<string, { training: boolean; meals: boolean }>>(new Map());
+  const [planMarks, setPlanMarks] = useState<Map<string, { training: boolean; meals: boolean; rest: boolean }>>(new Map());
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem('ava.ideSidebarCalCollapsed') === '1'; } catch { return false; }
   });
@@ -1718,18 +1718,21 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
   // (amber), matching the Plans calendar.
   useEffect(() => {
     loadHealthPlanIndex().then(plans => {
-      const map = new Map<string, { training: boolean; meals: boolean }>();
+      const map = new Map<string, { training: boolean; meals: boolean; rest: boolean }>();
       for (const p of plans) {
         if (!p.start_date) continue;
         const start = new Date(`${p.start_date}T00:00:00`);
         if (isNaN(start.getTime())) continue;
         const training = p.type === 'fitness' || p.type === 'combined';
         const meals = p.type === 'meal' || p.type === 'combined';
+        const restDays = new Set(p.rest_days ?? []);
         for (let i = 0; i < p.duration_days; i++) {
           const d = new Date(start); d.setDate(d.getDate() + i);
           const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          const prev = map.get(key) ?? { training: false, meals: false };
-          map.set(key, { training: prev.training || training, meals: prev.meals || meals });
+          const prev = map.get(key) ?? { training: false, meals: false, rest: false };
+          // A rest day in a fitness plan is marked as rest, not as training.
+          const isRest = training && restDays.has(i + 1);
+          map.set(key, { training: prev.training || (training && !isRest), meals: prev.meals || meals, rest: prev.rest || isRest });
         }
       }
       setPlanMarks(map);
@@ -1829,6 +1832,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
           const mk = planMarks.get(iso);
           const dots: string[] = [];
           if (mk?.training) dots.push('var(--accent)');
+          if (mk?.rest && !mk?.training) dots.push('#34d399');
           if (mk?.meals) dots.push('#f59e0b');
           if (taskDates.has(iso)) dots.push('#38bdf8');
           return (

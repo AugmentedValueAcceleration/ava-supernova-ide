@@ -417,20 +417,23 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
   }, [plans]);
 
   const planMarks = useMemo(() => {
-    const map = new Map<string, { training: boolean; meals: boolean }>();
+    const map = new Map<string, { training: boolean; meals: boolean; rest: boolean }>();
     for (const p of fullPlans) {
       if (!p.start_date) continue;
       const start = new Date(`${p.start_date}T00:00:00`);
       if (isNaN(start.getTime())) continue;
       for (const day of p.days) {
-        const hasTraining = (p.type === 'fitness' || p.type === 'combined') && day.training.some(e => e.name);
+        const fitness = p.type === 'fitness' || p.type === 'combined';
+        // A rest day is a REST day even when it carries a stretch or a walk.
+        const isRest = fitness && day.kind === 'rest';
+        const hasTraining = fitness && !isRest && day.training.some(e => e.name);
         const hasMeals = (p.type === 'meal' || p.type === 'combined') && day.meals.some(m => m.name);
-        if (!hasTraining && !hasMeals) continue;
+        if (!hasTraining && !hasMeals && !isRest) continue;
         const d = new Date(start);
         d.setDate(d.getDate() + (day.day_index - 1));
         const key = ymd(d);
-        const prev = map.get(key) ?? { training: false, meals: false };
-        map.set(key, { training: prev.training || hasTraining, meals: prev.meals || hasMeals });
+        const prev = map.get(key) ?? { training: false, meals: false, rest: false };
+        map.set(key, { training: prev.training || hasTraining, meals: prev.meals || hasMeals, rest: prev.rest || isRest });
       }
     }
     return map;
@@ -1521,13 +1524,15 @@ function PlanBuilder(props: {
           {draft.days.map(d => {
             const date = planDate(draft.start_date, d.day_index);
             const active = selectedDay === d.day_index;
-            const has = (showTraining && d.training.length > 0) || (showMeals && d.meals.length > 0);
+            const isRest = showTraining && d.kind === 'rest';
+            const has = (showTraining && !isRest && d.training.length > 0) || (showMeals && d.meals.length > 0);
             return (
               <button key={d.day_index} type="button" onClick={() => setSelectedDay(d.day_index)}
                 style={{ borderRadius: 8, border: `1px solid ${active ? ACCENT : BORDER}`, background: active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent', padding: '6px 10px', textAlign: 'left', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: active ? ACCENT : TEXT }}>
                   {t('health.plans.day_n', { n: d.day_index })}
                   {has && <span style={{ height: 6, width: 6, borderRadius: 999, background: ACCENT }} aria-hidden />}
+                  {isRest && !has && <span style={{ height: 6, width: 6, borderRadius: 999, background: '#34d399' }} title={t('health.week.rest')} aria-hidden />}
                 </div>
                 <div style={{ marginTop: 4, fontSize: 9, color: MUTED }}>
                   {date ? date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }) : (d.kind === 'rest' ? t('health.week.rest') : '·')}
@@ -1571,7 +1576,7 @@ function PlanBuilder(props: {
 function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelectDate, fill, logged }: {
   month: Date;
   onMonthChange: (d: Date) => void;
-  marks: Map<string, { training: boolean; meals: boolean }>;
+  marks: Map<string, { training: boolean; meals: boolean; rest: boolean }>;
   /** Dates with a RECORDED session. A planned day and a done day should not
    *  look the same — the whole reason for keeping a log is being able to see
    *  what you actually did, and a calendar that only shows intent hides it. */
@@ -1621,7 +1626,7 @@ function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelec
             const c = content?.get(key);
             const isToday = key === today;
             const isSelected = key === selected;
-            const hasContent = !!mk && (mk.training || mk.meals);
+            const hasContent = !!mk && (mk.training || mk.meals || mk.rest);
             const items = c ? [
               ...c.training.map(name => ({ icon: '🏋', name })),
               ...c.meals.map(name => ({ icon: '🍽', name })),
@@ -1648,9 +1653,10 @@ function MonthCalendar({ month, onMonthChange, marks, content, selected, onSelec
                     <span style={{ fontSize: 10, lineHeight: 1, color: '#a6e3a1' }} title={t('health.log.logged_count')} aria-hidden>✓</span>
                   )}
                   {/* Dots only when there's no detailed content to show. */}
-                  {!c && (mk?.training || mk?.meals) && (
+                  {!c && (mk?.training || mk?.meals || mk?.rest) && (
                     <span style={{ display: 'flex', gap: 3 }}>
                       {mk?.training && <span style={{ height: 6, width: 6, borderRadius: 3, background: ACCENT }} />}
+                      {mk?.rest && !mk?.training && <span style={{ height: 6, width: 6, borderRadius: 3, background: '#34d399' }} title={t('health.week.rest')} />}
                       {mk?.meals && <span style={{ height: 6, width: 6, borderRadius: 3, background: AMBER }} />}
                     </span>
                   )}
