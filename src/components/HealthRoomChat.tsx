@@ -318,9 +318,19 @@ export function HealthRoomChat({ active }: { active: boolean }) {
               <div key={m.id} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
                 {m.toolCalls && m.toolCalls.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-                    {m.toolCalls.map((tc, i) => (
+                    {/* Consecutive calls of the same tool fold into one chip with a
+                        count — a plan that took six catalogue searches was six
+                        chips of the same word. Mirrors the extension's LookupStrip. */}
+                    {m.toolCalls.reduce<Array<ToolChip & { n: number }>>((acc, tc) => {
+                      const last = acc[acc.length - 1];
+                      if (last && last.name === tc.name) {
+                        last.n += 1;
+                        last.status = tc.status === 'error' || last.status === 'error' ? 'error' : tc.status === 'running' || last.status === 'running' ? 'running' : 'done';
+                      } else acc.push({ ...tc, n: 1 });
+                      return acc;
+                    }, []).map((tc, i) => (
                       <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: tc.status === 'error' ? '#f38ba8' : tc.status === 'done' ? '#a6e3a1' : '#a78bfa' }}>
-                        {tc.status === 'done' ? '✓' : tc.status === 'error' ? '✕' : '⋯'} {tc.name}
+                        {tc.status === 'done' ? '✓' : tc.status === 'error' ? '✕' : '⋯'} {tc.name === 'health_catalogue_search' ? t('tool.lookup.catalogue') : tc.name}{tc.n > 1 ? ` × ${tc.n}` : ''}
                       </span>
                     ))}
                   </div>
