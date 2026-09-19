@@ -3408,6 +3408,9 @@ async function handleMessage(data) {
           case 'context_truncated':
             emit({ event: 'context_truncated', droppedCount: agentEvent.droppedCount });
             break;
+          case 'context_truncated':
+            emit({ event: 'context_truncated', droppedCount: agentEvent.droppedCount });
+            break;
           case 'error':
             emit({ event: 'agent_error', message: agentEvent.error.message });
             break;

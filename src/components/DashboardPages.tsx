@@ -4365,6 +4365,15 @@ export function AvaChatPage() {
         setStatusText('');
         break;
 
+      case 'context_truncated':
+        // A notice, never an error — same quiet line as a compression.
+        setMessages((prev) => [...prev, {
+          id: mkId(), role: 'system' as const,
+          text: t('compression.context_truncated', { count: Number((event as { droppedCount?: number }).droppedCount ?? 0) }),
+          timestamp: Date.now(),
+        }]);
+        break;
+
       case 'thinking_delta':
         setStatusText(t('dash.chat.status.thinking'));
         break;
