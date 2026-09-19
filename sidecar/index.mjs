@@ -3316,6 +3316,29 @@ async function handleMessage(data) {
       ];
     }
 
+    // ── Compact BETWEEN turns, and keep it ────────────────────────────────
+    // Mirrors the extension (19 Sep 2026). The agent's in-turn compression
+    // never reached the saved conversation, so every turn past the threshold
+    // re-summarised the whole history and the context bar shot back up. The
+    // host now asks the same gate before the turn and records the boundary
+    // on the conversation: transcript untouched, model sees summary + tail.
+    // `messages` was built from getMessages() plus this turn's primers; the
+    // primers are the tail of it, so they survive the swap to the context view.
+    const primersThisTurn = messages.slice(conversation.getMessages().length);
+    if (agent && typeof agent.shouldCompact === 'function' && agent.shouldCompact(conversation.getContextMessages())) {
+      try {
+        const { compaction } = await agent.compact(conversation.getContextMessages(), (ev) => {
+          if (ev.type === 'context_compression_start') emit({ event: 'context_compression_start' });
+          if (ev.type === 'context_compression_end') emit({ event: 'context_compression_end', originalTokens: ev.originalTokens, compressedTokens: ev.compressedTokens });
+          if (ev.type === 'context_usage') emit({ event: 'context_usage', ...ev.context });
+        }, abortController.signal);
+        if (compaction) conversation.applyCompaction(compaction);
+      } catch (err) {
+        emit({ event: 'info', message: `Compaction skipped: ${err.message}` });
+      }
+    }
+    messages = [...conversation.getContextMessages(), ...primersThisTurn];
+
     // Run main agent loop (Auto Mode if available, otherwise direct agent)
     const runner = autoCoordinator || agent;
     const updated = await runner.run(
@@ -3453,7 +3476,13 @@ async function handleMessage(data) {
       abortController.signal,
     );
 
-    conversation.setMessages(updated);
+    // Agent.run() returns ONLY the turn's new messages (core's Option 2
+    // contract). setMessages(updated) here collapsed the conversation to that
+    // turn every time; the "resync from UI history" above then rebuilt it from
+    // text-only UI messages — no tool results, no mode tags. Append, as the
+    // extension does, and keep the transcript whole.
+    conversation.appendMessages(updated);
+    const fullHistory = conversation.getMessages();
 
     // Persist the full conversation to the shared local history files (best-effort,
     // non-blocking) — same format + location the extension uses, so a user who
@@ -3470,9 +3499,8 @@ async function handleMessage(data) {
     // Fail-safe — a distil error never breaks the turn.
     if (currentMode === 'desktop' && memoryManager && typeof data.content === 'string') {
       try {
-        // This turn's messages = everything after the last user message.
-        const lastUserIdx = updated.map(m => m.role).lastIndexOf('user');
-        const turnMsgs = lastUserIdx >= 0 ? updated.slice(lastUserIdx + 1) : updated;
+        // This turn's messages — exactly what run() returned.
+        const turnMsgs = updated;
         // Index tool results by call id so each action can be marked worked/failed.
         const resultById = {};
         for (const m of turnMsgs) {
@@ -3530,11 +3558,11 @@ async function handleMessage(data) {
     }
 
     // Auto-journal: every 5th user message, Ava writes a brief observation
-    const userMsgCount = updated.filter(m => m.role === 'user').length;
+    const userMsgCount = fullHistory.filter(m => m.role === 'user').length;
     if (journalManager && userMsgCount > 0 && userMsgCount % 5 === 0) {
       try {
         const today = todayLocal();
-        const lastFew = updated.slice(-10).map(m => {
+        const lastFew = fullHistory.slice(-10).map(m => {
           const text = typeof m.content === 'string' ? m.content : (m.content?.[0]?.text || '');
           return `[${m.role}] ${text.slice(0, 200)}`;
         }).join('\n');
@@ -3624,7 +3652,7 @@ async function handleInterrupt() {
     try {
       conversation.addUserMessage('[User interrupted — wants your attention]');
       const updated = await agent.run(
-        conversation.getMessages(),
+        conversation.getContextMessages(),
         (agentEvent) => {
           switch (agentEvent.type) {
             case 'stream_start': emit({ event: 'stream_start' }); break;
@@ -3635,7 +3663,7 @@ async function handleInterrupt() {
         },
         currentAbort.signal,
       );
-      conversation.setMessages(updated);
+      conversation.appendMessages(updated);
 
       const lastAssistant = updated.filter(m => m.role === 'assistant').pop();
       const content = typeof lastAssistant?.content === 'string' ? lastAssistant.content : '';
