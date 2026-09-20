@@ -3698,40 +3698,112 @@ export function AvaChatPage() {
   const [atBottom, setAtBottom] = useState(true);
   // Distinguishes "the conversation just appeared" from "a message arrived".
   const hasLandedRef = useRef(false);
+  // Whether the view follows new content. A ref, not state: the follow runs
+  // from a resize observer and must read the latest answer without a render.
+  // Decided by what the USER did — a wheel tick upwards, a scroll that lands
+  // off the bottom — never by where a follow scroll happened to leave them.
+  // Deciding it from position alone was the bug: a smooth follow in flight
+  // won against the wheel, and once back within the threshold they counted
+  // as "at the bottom" and the stream pinned them there for as long as it
+  // ran (19 Sep 2026).
+  const followRef = useRef(true);
+  // Set just before a follow scroll so the one scroll event it fires is not
+  // read as the user moving.
+  const programmaticScrollRef = useRef(false);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+  // Instant, never smooth: an animation in flight is what fought the reader.
+  const scrollToBottom = useCallback(() => {
     const el = messagesScrollRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior });
+    // Already there: no move, so no scroll event to consume the flag.
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 1) return;
+    programmaticScrollRef.current = true;
+    el.scrollTop = el.scrollHeight;
   }, []);
+
+  const jumpToLatest = useCallback(() => {
+    followRef.current = true;
+    scrollToBottom();
+    setAtBottom(true);
+  }, [scrollToBottom]);
 
   const handleMessagesScroll = useCallback(() => {
     const el = messagesScrollRef.current;
     if (!el) return;
     // A threshold, not equality: sub-pixel rounding and a growing last message
     // both mean scrollTop never exactly equals the maximum.
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setAtBottom(distance < 80);
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setAtBottom(near);
+    if (programmaticScrollRef.current) { programmaticScrollRef.current = false; return; }
+    // Off the bottom always means stop following, whoever moved them.
+    if (!near) { followRef.current = false; return; }
+    // Near the bottom switches following back on ONLY behind a gesture of
+    // theirs. A scroll event on its own is not intent: the browser fires one
+    // when the content SHRINKS and scrollTop is clamped to the new maximum —
+    // the thinking indicator unmounting as text starts, a tool's live output
+    // folding into its chip, a confirmation card collapsing once approved —
+    // and that clamp lands "near the bottom" with nobody having touched
+    // anything. Reading it as "they scrolled back down" re-armed the follow
+    // on every response and every tool call (19 Sep 2026). And a wheel tick
+    // UP is excluded even though it is a gesture: Chromium animates it, so
+    // its first scroll events also land within the threshold.
+    const now = performance.now();
+    const gesture = draggingRef.current || now - lastGestureAtRef.current < 1000;
+    const wheelUp = now - lastWheelUpAtRef.current < 300;
+    if (gesture && !wheelUp) followRef.current = true;
   }, []);
+
+  // The wheel is the common case and it must win instantly: one tick up is
+  // "I am reading", whatever the position says a frame later.
+  const lastWheelUpAtRef = useRef(0);
+  // The gestures that may switch following back on: wheel, scrollbar drag,
+  // keyboard. The drag is a flag rather than a timestamp because Chromium
+  // delivers no pointer events to the page while the thumb is held.
+  const lastGestureAtRef = useRef(0);
+  const draggingRef = useRef(false);
+  const noteGesture = useCallback(() => { lastGestureAtRef.current = performance.now(); }, []);
+  const handleMessagesWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    noteGesture();
+    if (e.deltaY < 0) { followRef.current = false; lastWheelUpAtRef.current = performance.now(); }
+  }, [noteGesture]);
+  const handleMessagesPointerDown = useCallback(() => { draggingRef.current = true; noteGesture(); }, [noteGesture]);
+  useEffect(() => {
+    const release = () => { draggingRef.current = false; };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => { window.removeEventListener('pointerup', release); window.removeEventListener('pointercancel', release); };
+  }, []);
+
+  // Follow the content as it GROWS, while following is on. Driven by the
+  // content's size rather than by state changes: a tool result or an image
+  // that finishes rendering later moves the bottom too. A callback ref,
+  // because the list is hidden while data loads.
+  const contentObserverRef = useRef<ResizeObserver | null>(null);
+  const messagesContentRef = useCallback((el: HTMLDivElement | null) => {
+    contentObserverRef.current?.disconnect();
+    contentObserverRef.current = null;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => { if (followRef.current) scrollToBottom(); });
+    observer.observe(el);
+    contentObserverRef.current = observer;
+  }, [scrollToBottom]);
 
   useEffect(() => {
     if (messages.length === 0) { hasLandedRef.current = false; return; }
-    if (!hasLandedRef.current) {
-      // First paint of this conversation. Instant, and after layout — a
-      // smooth scroll here is the thing that leaves you at the top.
-      hasLandedRef.current = true;
-      requestAnimationFrame(() => {
-        scrollToBottom('auto');
-        // Again on the next frame: code blocks and images resolve their
-        // height after the first, moving the bottom down under us.
-        requestAnimationFrame(() => scrollToBottom('auto'));
-      });
-      setAtBottom(true);
-      return;
-    }
-    // Following along — but only if they have not scrolled up to read.
-    if (atBottom) scrollToBottom('smooth');
-  }, [messages, atBottom, scrollToBottom]);
+    if (hasLandedRef.current) return;
+    // First paint of this conversation. Instant, and after layout — a
+    // smooth scroll here is the thing that leaves you at the top.
+    hasLandedRef.current = true;
+    followRef.current = true;
+    setAtBottom(true);
+    requestAnimationFrame(() => {
+      scrollToBottom();
+      // Again on the next frame: code blocks and images resolve their
+      // height after the first, moving the bottom down under us.
+      requestAnimationFrame(scrollToBottom);
+    });
+    // Everything after landing is the resize observer's job.
+  }, [messages, scrollToBottom]);
 
   // Switching conversation is a fresh landing, not a new message.
   useEffect(() => { hasLandedRef.current = false; }, [currentConvId]);
@@ -5932,12 +6004,23 @@ export function AvaChatPage() {
       <div
         ref={messagesScrollRef}
         onScroll={handleMessagesScroll}
+        onWheel={handleMessagesWheel}
+        onPointerDown={handleMessagesPointerDown}
+        onKeyDown={noteGesture}
         style={{
           flex: dataLoading ? 0 : 1,
-          display: dataLoading ? 'none' : 'flex',
-          overflowY: 'auto', padding: '20px 24px',
-          flexDirection: 'column', gap: 4,
+          display: dataLoading ? 'none' : 'block',
+          overflowY: 'auto',
           position: 'relative',
+        }}
+      >
+      {/* The content that grows — observed to follow the stream. */}
+      <div
+        ref={messagesContentRef}
+        style={{
+          minHeight: '100%', boxSizing: 'border-box',
+          display: 'flex', flexDirection: 'column', gap: 4,
+          padding: '20px 24px',
         }}
       >
         {/* Empty-state helper — six starter chips covering each mode,
@@ -6520,6 +6603,7 @@ export function AvaChatPage() {
 
         <div ref={messagesEndRef} />
       </div>
+      </div>
 
       {/* Jump to the latest. Shown only when scrolled away from the bottom,
           because a button offering to take you where you already are is just
@@ -6528,7 +6612,7 @@ export function AvaChatPage() {
       {!atBottom && messages.length > 0 && (
         <div style={{ position: 'relative', height: 0 }}>
           <button
-            onClick={() => scrollToBottom('smooth')}
+            onClick={jumpToLatest}
             title={t('chat.jump_to_latest')}
             aria-label={t('chat.jump_to_latest')}
             style={{
