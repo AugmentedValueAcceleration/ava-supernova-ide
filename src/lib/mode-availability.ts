@@ -66,9 +66,17 @@ export type ModeId = 'maestro' | 'supernova' | 'aurora' | 'longxiang';
  * type-only one, so the compiled module has zero runtime dependencies.
  */
 // @ts-ignore — untyped deep import into core's dist, matching i18n.ts
-import { LONGXIANG_ENABLED } from '../../../core/dist/auto/longxiang-router.js';
+// Both flags come from routing-modes, the import-free file every surface can
+// reach — see its header on the nine times a hand-written fleet list went wrong.
+// longxiang-router re-exports LONGXIANG_ENABLED for older callers; taking both
+// from the source avoids depending on that.
+import { LONGXIANG_ENABLED, AURORA_ENABLED } from '../../../core/dist/auto/routing-modes.js';
 
 export const LONGXIANG_LIVE: boolean = LONGXIANG_ENABLED;
+/** Aurora went dark on 2026-10-06. Mistral has not answered the 9 Sep approach,
+ *  so a Mistral-only fleet advertises a relationship that does not exist. Same
+ *  shape as LONGXIANG_LIVE, and the same single source in core. */
+export const AURORA_LIVE: boolean = AURORA_ENABLED;
 
 export interface ByokKeys {
   qwen: boolean;
@@ -177,7 +185,7 @@ export function getModeAvailability(state: ModeAvailabilityState): ModeAvailabil
   return {
     maestro:   platformConnected || byok.qwen,
     supernova: platformConnected || (byok.qwen && byok.deepseek),
-    aurora:    platformConnected || byok.mistral,
+    aurora:    AURORA_LIVE && (platformConnected || byok.mistral),
     longxiang: LONGXIANG_LIVE && (platformConnected || (byok.moonshot && byok.qwen && byok.deepseek)),
   };
 }
@@ -195,7 +203,9 @@ export function getModeAvailability(state: ModeAvailabilityState): ModeAvailabil
  * displays the fleet's name and we are not announcing Longxiang early.
  */
 export function isModeListed(mode: ModeId): boolean {
-  return mode !== 'longxiang' || LONGXIANG_LIVE;
+  if (mode === 'longxiang') return LONGXIANG_LIVE;
+  if (mode === 'aurora') return AURORA_LIVE;
+  return true;
 }
 
 // Reactive hook — recomputes when the user signs in/out, switches
