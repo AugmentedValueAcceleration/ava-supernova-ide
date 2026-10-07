@@ -1,4 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTabTransition } from '../lib/useTabTransition';
+import { TabSpinner } from './TabSpinner';
 import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -48,7 +50,7 @@ import {
   Trophy as PhTrophy,
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
-import { DesignStudio } from './DesignStudio';
+import { DesignStudioLazy } from './DesignStudio.lazy';
 import { toolStatusLabel } from '../lib/tool-label';
 import { t, tt, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
@@ -8040,7 +8042,13 @@ export function ChatHistoryPage() {
   // the Command Centre's trust-nudge Review button sets this before it
   // navigates, so a finding lands on the audit view rather than dropping you
   // on the conversation list to go hunting.
-  const [activeTab, setActiveTab] = useState<'conversations' | 'usage' | 'audit'>(() => {
+  // History's tabs both FETCH (usage, audit) and re-render, so one indicator
+  // covers either cause — a data dot plus a render spinner would be two symbols
+  // on one tab each meaning "wait". The lazy initialiser matters: the starting
+  // tab comes from a one-shot sessionStorage handoff that must be read and
+  // cleared exactly once, not on every render.
+  const { current: activeTab, pending: tabPending, switchTo: setActiveTab } =
+    useTabTransition<'conversations' | 'usage' | 'audit'>(() => {
     try {
       const handoff = sessionStorage.getItem('ava-ide-usage-tab');
       if (handoff === 'audit' || handoff === 'usage') {
@@ -8282,9 +8290,9 @@ export function ChatHistoryPage() {
 
         {/* ── Tabs ───────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', marginBottom: 16, paddingBottom: 1 }}>
-          <button style={tabStyle(activeTab === 'conversations')} onClick={() => setActiveTab('conversations')}>{t('dash.history.tab_conversations')}</button>
-          <button style={tabStyle(activeTab === 'usage')} onClick={() => setActiveTab('usage')}>{t('dash.history.tab_usage')}</button>
-          <button style={tabStyle(activeTab === 'audit')} onClick={() => setActiveTab('audit')}>{t('dash.history.tab_audit')}</button>
+          <button style={tabStyle(activeTab === 'conversations')} onClick={() => setActiveTab('conversations')}>{t('dash.history.tab_conversations')}{tabPending === 'conversations' && <TabSpinner />}</button>
+          <button style={tabStyle(activeTab === 'usage')} onClick={() => setActiveTab('usage')}>{t('dash.history.tab_usage')}{tabPending === 'usage' && <TabSpinner />}</button>
+          <button style={tabStyle(activeTab === 'audit')} onClick={() => setActiveTab('audit')}>{t('dash.history.tab_audit')}{tabPending === 'audit' && <TabSpinner />}</button>
         </div>
 
         {/* ── Audit Tab — every tool call Ava made on this machine.
@@ -11985,7 +11993,12 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       await mkdir(rel, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
       await openPath(await join(await homeDir(), rel));
     } catch (e) {
-      console.warn('[library] open creative folder failed', e);
+      // console.ERROR, and it says what to check. This failed silently for an
+      // unknown length of time because `opener:default` does NOT include
+      // allow-open-path — it grants open-url, reveal-item-in-dir and
+      // default-urls only — so every openPath() in the IDE was denied and each
+      // one warned into a console nobody had open.
+      console.error('[library] open creative folder failed — check opener:allow-open-path in src-tauri/capabilities', e);
     }
   };
 
@@ -17570,7 +17583,7 @@ export function CreativeStudioPage() {
   // icon, logo, image, video and voice.
   return (
     <div style={{ ...pageWrapper, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
-      <DesignStudio />
+      <LazyPage><DesignStudioLazy /></LazyPage>
     </div>
   );
 }
