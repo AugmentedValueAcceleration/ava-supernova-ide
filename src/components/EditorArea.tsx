@@ -21,7 +21,8 @@ import {
   AccountPage,
   HelpPage,
 } from './DashboardPages';
-import { DocumentationPage } from './DocumentationPage';
+import { DocumentationPageLazy } from './DocumentationPage.lazy';
+import { LazyPage } from './LazyPage';
 import { HealthPage } from './HealthPage';
 import { useState, useEffect } from 'react';
 import { readTextFile } from '@tauri-apps/plugin-fs';
@@ -143,7 +144,7 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'settings': SettingsPage,
   'connections': ConnectionsPage,
   'support': SupportPage,
-  'documentation': DocumentationPage,
+  'documentation': DocumentationPageLazy,
   'release-notes': ReleaseNotesPage,
   'roadmap': RoadmapPage,
   'planner': PlannerPage,
@@ -430,7 +431,10 @@ export default function EditorArea({ dashboardPage, openFiles = [], activeFilePa
       {showingFile && activeFilePath ? (
         <FileViewer path={activeFilePath} />
       ) : (
-        <DashboardComponent />
+        /* Wraps the WHOLE registry, not just Documentation: any page in the
+           map may be lazy, and a boundary per page is a boundary someone
+           forgets to add. */
+        <LazyPage><DashboardComponent /></LazyPage>
       )}
 
     </div>

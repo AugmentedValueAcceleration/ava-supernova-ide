@@ -89,7 +89,8 @@ import {
   BUILTIN_KINDS, KIND_COLORS,
   type JournalMonthEntry, type JournalKind, type JournalSearchHit, type JournalAuthor, type JournalDaySummary,
 } from '../lib/journal-store';
-import { DocumentationPage } from './DocumentationPage';
+import { DocumentationPageLazy } from './DocumentationPage.lazy';
+import { LazyPage } from './LazyPage';
 import { LibraryPapersPage } from './LibraryPapersPage';
 import { ContextBar } from './ContextBar';
 import { getToolHeader } from './tool-header';
@@ -17391,7 +17392,7 @@ export function HelpPage() {
         ))}
       </div>
       {tab === 'support' && <SupportPage />}
-      {tab === 'docs' && <DocumentationPage />}
+      {tab === 'docs' && <LazyPage><DocumentationPageLazy /></LazyPage>}
       {tab === 'releases' && <ReleaseNotesPage />}
       {tab === 'roadmap' && <RoadmapInner />}
     </div>
