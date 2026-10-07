@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useTabTransition } from '../lib/useTabTransition';
+import { TabSpinner } from './TabSpinner';
 import { t } from '../lib/i18n';
 
 /**
@@ -82,7 +84,8 @@ function authorLine(authors: PaperAuthor[]): string {
 }
 
 export function LibraryPapersPage() {
-  const [tab, setTab] = useState<PapersTab>('featured');
+  const { current: tab, pending: tabPending, switchTo: setTab } =
+    useTabTransition<PapersTab>('featured');
   const [discipline, setDiscipline] = useState<'all' | PaperDiscipline>('all');
   const [searchInput, setSearchInput] = useState('');
   const [papersByTab, setPapersByTab] = useState<Record<PapersTab, LibraryPaper[]>>({
@@ -280,7 +283,7 @@ export function LibraryPapersPage() {
                     marginBottom: -1,
                   }}
                 >
-                  {t(`ide.papers.tab.${tb.id}`)}
+                  {t(`ide.papers.tab.${tb.id}`)}{tabPending === tb.id && <TabSpinner />}
                 </button>
               );
             })}

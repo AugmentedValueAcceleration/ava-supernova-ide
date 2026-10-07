@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTabTransition } from '../lib/useTabTransition';
+import { TabSpinner } from './TabSpinner';
 import { HealthRoomChat } from './HealthRoomChat';
 import { TimeField } from './TimeField';
 import { DateField } from './MiniDatePicker';
@@ -90,7 +92,12 @@ export function HealthPage() {
   useLocale();
   // Opens on your plans, like the extension. What you came for is what you
   // are working towards, not the catalogue.
-  const [tab, setTab] = useState<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'plans');
+  // `current` is destructured as `tab` so every `tab === '...'` render check in
+  // this file is untouched. setNow for programmatic jumps (the pending-room
+  // effect, and the handler below that lands you on Plans after an action):
+  // nobody clicked a tab there, so there is nothing to acknowledge.
+  const { current: tab, pending: tabPending, switchTo: setTabUser, setNow: setTab } =
+    useTabTransition<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'plans');
   const [contributeOpen, setContributeOpen] = useState(false);
   /** A card opened from the Ready-made tab, shown as its full week. */
   const [starterOpenId, setStarterOpenId] = useState<string | null>(null);
@@ -156,12 +163,12 @@ export function HealthPage() {
           >{t('health.browse.contribute')}</button>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
-          <button onClick={() => setTab('plans')} style={tabBtnStyle(tab === 'plans')}>{t('health.browse.tab.plans')}</button>
-          <button onClick={() => setTab('starters')} style={tabBtnStyle(tab === 'starters')}>{t('health.browse.tab.starters')}</button>
-          <button onClick={() => setTab('exercises')} style={tabBtnStyle(tab === 'exercises')}>{t('health.browse.tab.exercises')}</button>
-          <button onClick={() => setTab('recipes')} style={tabBtnStyle(tab === 'recipes')}>{t('health.browse.tab.recipes')}</button>
-          <button onClick={() => setTab('profile')} style={tabBtnStyle(tab === 'profile')}>{t('health.browse.tab.profile')}</button>
-          <button onClick={() => setTab('ava')} style={tabBtnStyle(tab === 'ava')}>{t('health.browse.tab.ava')}</button>
+          <button onClick={() => setTabUser('plans')} style={tabBtnStyle(tab === 'plans')}>{t('health.browse.tab.plans')}{tabPending === 'plans' && <TabSpinner />}</button>
+          <button onClick={() => setTabUser('starters')} style={tabBtnStyle(tab === 'starters')}>{t('health.browse.tab.starters')}{tabPending === 'starters' && <TabSpinner />}</button>
+          <button onClick={() => setTabUser('exercises')} style={tabBtnStyle(tab === 'exercises')}>{t('health.browse.tab.exercises')}{tabPending === 'exercises' && <TabSpinner />}</button>
+          <button onClick={() => setTabUser('recipes')} style={tabBtnStyle(tab === 'recipes')}>{t('health.browse.tab.recipes')}{tabPending === 'recipes' && <TabSpinner />}</button>
+          <button onClick={() => setTabUser('profile')} style={tabBtnStyle(tab === 'profile')}>{t('health.browse.tab.profile')}{tabPending === 'profile' && <TabSpinner />}</button>
+          <button onClick={() => setTabUser('ava')} style={tabBtnStyle(tab === 'ava')}>{t('health.browse.tab.ava')}{tabPending === 'ava' && <TabSpinner />}</button>
         </div>
       </div>
 

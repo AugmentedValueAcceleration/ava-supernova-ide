@@ -11,6 +11,8 @@
 // ONE fixed-size overlay: setup → build → add are phases inside it.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useTabTransition } from '../lib/useTabTransition';
+import { TabSpinner } from './TabSpinner';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import {
   loadExercises, loadRecipes, loadExerciseDetail, loadRecipeDetail,
@@ -333,7 +335,8 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
   /** Persist an edited plan from the calendar day view (refreshes the list). */
   onSavePlan: (plan: HealthPlan) => void;
 }) {
-  const [tab, setTab] = useState<'calendar' | 'programs' | 'past'>('calendar');
+  const { current: tab, pending: tabPending, switchTo: setTab } =
+    useTabTransition<'calendar' | 'programs' | 'past'>('calendar');
   /** What you are doing, and what you did. Archive-by-default means the second
    *  list only grows, and mixing them buries the first. */
   const current = useMemo(
@@ -463,7 +466,7 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan }: {
             padding: '6px 12px', fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer', background: 'transparent',
             color: tab === key ? TEXT : MUTED,
             borderBottom: tab === key ? `2px solid ${ACCENT}` : '2px solid transparent',
-          }}>{label}</button>
+          }}>{label}{tabPending === key && <TabSpinner />}</button>
         ))}
       </div>
 
