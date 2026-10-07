@@ -1,4 +1,27 @@
 #!/usr/bin/env node
+// ── Why createUpdaterArtifacts is FALSE in tauri.conf.json (2026-10-07) ──
+//
+// This script builds latest.json for the auto-updater. It is currently moot,
+// and the config records none of that because JSON takes no comments — so the
+// reason lives here, beside the thing it affects.
+//
+// Setting bundle.createUpdaterArtifacts true makes Tauri demand
+// TAURI_SIGNING_PRIVATE_KEY at bundle time. That is the MINISIGN key that
+// signs update packages so an installed IDE will accept them. It is NOT the
+// Microsoft / Authenticode certificate we are waiting on, which only governs
+// whether Defender warns on download. The two are unrelated and neither
+// unlocks the other — worth stating plainly, because waiting on Microsoft does
+// not block building installers and the error message does not say so.
+//
+// Nothing is lost while the IDE is not publicly released: the updater has
+// never shipped. Its endpoint 404s and no .sig has ever been built, so the
+// artifacts had no reader.
+//
+// BEFORE THE PUBLIC RELEASE: set it back to true, and only once the minisign
+// private key is in hand AND BACKED UP. It lives on one machine. An update
+// that existing installations will accept can only ever be signed with that
+// one key — lose it and every installed copy is stranded on its version.
+
 /**
  * Build latest.json — the manifest the in-app updater actually reads.
  *
@@ -64,6 +87,19 @@ if (!installer) {
   process.exit(1);
 }
 if (!sig) {
+  // Two very different situations, and conflating them turns a deliberate
+  // choice into a red build. When the config says not to produce updater
+  // artifacts, a missing .sig is the expected outcome and there is simply no
+  // manifest to write. Only an UNEXPECTED missing signature is an error, and
+  // that one stays loud: an unsigned update is rejected by every client,
+  // silently.
+  if (conf?.bundle?.createUpdaterArtifacts === false) {
+    console.log(
+      `Skipping latest.json for ${version}: bundle.createUpdaterArtifacts is false, so no ` +
+      '.sig was produced and there is nothing to publish an update from.',
+    );
+    process.exit(0);
+  }
   console.error(
     `Installer present but NO .sig for ${version}.\n` +
     'That means the build did not sign it — check bundle.createUpdaterArtifacts is true\n' +
