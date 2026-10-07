@@ -23,7 +23,7 @@ import {
 } from '@phosphor-icons/react';
 import type { ActivityItem, SidebarPosition } from '../App';
 import { getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
-import { t, useLocale, getLocale } from '../lib/i18n';
+import { t, tt, useLocale, getLocale } from '../lib/i18n';
 import { SignInPanel } from './SignInPanel';
 import { localYmd } from '@ava/core/dates';
 
@@ -927,6 +927,19 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
     try { return localStorage.getItem('ava-ide-platform-key') || ''; } catch { return ''; }
   });
   const [email, setEmail] = useState(() => getStoredEmail() || '');
+  /**
+   * The avatar, in state and SUBSCRIBED — not read from localStorage mid-render.
+   *
+   * It was `localStorage.getItem('ava-ide-user-avatar')` inside the JSX, which
+   * only re-reads when the sidebar happens to re-render for some other reason.
+   * Set a picture on the profile page and the sidebar kept the default outline
+   * until something unrelated moved. UserAvatarPanel dispatches
+   * 'ava-avatar-changed' precisely so this does not happen, and DashboardPages
+   * already listens for it — the sidebar simply never did.
+   */
+  const [avatar, setAvatar] = useState<string>(() => {
+    try { return localStorage.getItem('ava-ide-user-avatar') || ''; } catch { return ''; }
+  });
   const [tier, setTier] = useState(() => getStoredTier() || 'free');
   const [showConnect, setShowConnect] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
@@ -943,13 +956,51 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
         setPlatformKey(localStorage.getItem('ava-ide-platform-key') || '');
         setEmail(getStoredEmail() || '');
         setTier(getStoredTier() || 'free');
+        setAvatar(localStorage.getItem('ava-ide-user-avatar') || '');
       } catch { /* non-fatal */ }
     };
+    const refreshAvatar = () => {
+      try { setAvatar(localStorage.getItem('ava-ide-user-avatar') || ''); } catch { /* storage off */ }
+    };
     window.addEventListener('ava-auth-changed', refresh);
-    return () => window.removeEventListener('ava-auth-changed', refresh);
+    // Signing in pulls an avatar down from the account and disconnect clears
+    // it, so auth refreshes this too — same pairing the chat uses.
+    window.addEventListener('ava-avatar-changed', refreshAvatar);
+    return () => {
+      window.removeEventListener('ava-auth-changed', refresh);
+      window.removeEventListener('ava-avatar-changed', refreshAvatar);
+    };
   }, []);
 
   const isConnected = platformKey.startsWith('sk-ava-');
+
+  /**
+   * Back-fill the email when we are connected but do not have one.
+   *
+   * It is written at sign-in (lib/sign-in.ts) and only if that response carried
+   * it, so anyone who signed in before that line existed — or through a path
+   * that returned no account — has a platform key and no email, forever. There
+   * was nothing to fill it in afterwards, and the panel fell back to showing a
+   * fragment of the API KEY where the user's address belongs.
+   *
+   * /account-info returns it, and the dashboard already calls that endpoint, so
+   * this is one extra request on the rare boot where the value is missing
+   * rather than a new round trip for everyone.
+   */
+  useEffect(() => {
+    if (!isConnected || email) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch('/account-info');
+        const addr = typeof res?.email === 'string' ? res.email : '';
+        if (cancelled || !addr) return;
+        try { localStorage.setItem('ava-ide-email', addr); } catch { /* storage full/disabled */ }
+        setEmail(addr);
+      } catch { /* offline, or the key is no longer valid — leave the placeholder */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isConnected, email]);
 
   // Collapsed rail: just the avatar (or initial) at the bottom of the
   // narrow nav. Mirrors the extension NavSidebar's collapsed footer.
@@ -957,7 +1008,7 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
     const initial = (email || 'A')[0].toUpperCase();
     return (
       <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', width: '100%', display: 'flex', justifyContent: 'center' }}>
-        <Tooltip content={isConnected ? `${email} (${tier})` : 'Not connected — expand sidebar to sign in'} placement="top">
+        <Tooltip content={isConnected ? `${email || tt('dash.settings.connected', 'Signed in')} (${tier})` : 'Not connected — expand sidebar to sign in'} placement="top">
           <div
             style={{
               width: 32, height: 32, borderRadius: '50%',
@@ -965,9 +1016,15 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
               color: isConnected ? '#cba6f7' : '#6c7086',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 12, fontWeight: 600, userSelect: 'none',
+              overflow: 'hidden',
             }}
           >
-            {initial}
+            {/* The comment above this block always said "the avatar (or
+                initial)" and it only ever rendered the initial, so collapsing
+                the sidebar threw the picture away. */}
+            {avatar
+              ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initial}
           </div>
         </Tooltip>
       </div>
@@ -1042,7 +1099,7 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
           {/* Connected state */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             {(() => {
-              const av = localStorage.getItem('ava-ide-user-avatar');
+              const av = avatar;
               return (
                 <div style={{
                   width: 24, height: 24, borderRadius: '50%',
@@ -1063,7 +1120,13 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
             })()}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {email || platformKey.slice(0, 12) + '...'}
+                {/* NEVER the platform key. It used to fall back to
+                    platformKey.slice(0, 12), which put a live credential
+                    fragment in the sidebar where the account address belongs —
+                    visible in every screenshot and screen share. The effect
+                    above fetches the real address; until it lands, say what the
+                    row IS rather than showing something that merely fills it. */}
+                {email || tt('dash.settings.connected', 'Signed in')}
               </div>
               <span style={{ fontSize: 9, fontWeight: 600, color: tierColors[tier] || '#a6e3a1', background: `${tierColors[tier] || '#a6e3a1'}18`, padding: '1px 6px', borderRadius: 3, textTransform: 'capitalize' as const }}>
                 {tier}
