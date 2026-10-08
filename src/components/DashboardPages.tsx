@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ALL_MODELS, PLATFORM_MODELS } from '@ava/core/models';
+import { ALL_SCAFFOLD_TAGS } from '@ava/core/mode-tags';
 import { providerLabel } from '../lib/chat-models';
 import { APP_VERSION } from '../version';
 // Phosphor icons (duotone weight) — distinctive layered fill that reads
@@ -2913,17 +2914,49 @@ export function AvaChatPage() {
   // — regardless of mount timing.
   useEffect(() => {
     const drainPending = () => {
+      let conv: { id?: string; title?: string; messages?: unknown[] } | null = null;
       try {
         const raw = localStorage.getItem('ava-ide-load-conversation');
         if (!raw) return;
         localStorage.removeItem('ava-ide-load-conversation');
-        const conv = JSON.parse(raw);
-        if (conv.messages && Array.isArray(conv.messages)) {
-          setMessages(conv.messages);
-          setConversationTitle(conv.title || t('dash.chat.new_chat'));
-          setCurrentConvId(typeof conv.id === 'string' ? conv.id : null);
+        conv = JSON.parse(raw);
+      } catch { return; }
+      if (!conv) return;
+
+      // The handoff carries an ID; the transcript is read from disk here.
+      // It used to arrive inline through localStorage, which cannot hold a
+      // large conversation — see the note at the click handler.
+      //
+      // `messages` is still honoured when present so an older pending handoff
+      // written by a previous build still opens instead of silently doing
+      // nothing on the one upgrade where it matters.
+      if (Array.isArray(conv.messages) && conv.messages.length) {
+        setMessages(conv.messages as any[]);
+        setConversationTitle(conv.title || t('dash.chat.new_chat'));
+        setCurrentConvId(typeof conv.id === 'string' ? conv.id : null);
+        return;
+      }
+      if (typeof conv.id !== 'string') return;
+      const id = conv.id;
+      const title = conv.title;
+      void (async () => {
+        try {
+          const { readHistoryConversation } = await import('../lib/history-store');
+          const rec = await readHistoryConversation(id);
+          if (!rec?.messages?.length) {
+            // Loud. A conversation that will not open is the symptom this
+            // whole change exists to remove, and a silent return is what made
+            // the original take a screenshot to notice.
+            console.error(`[history] could not read transcript for ${id} — nothing to restore`);
+            return;
+          }
+          setMessages(coreMsgsToChatMsgs(rec.messages as any[]));
+          setConversationTitle(title || rec.title || t('dash.chat.new_chat'));
+          setCurrentConvId(id);
+        } catch (err) {
+          console.error(`[history] restore failed for ${id}`, err);
         }
-      } catch { /* ignore */ }
+      })();
     };
     drainPending();
     // History is drained synchronously from localStorage on mount, so the
@@ -8020,17 +8053,90 @@ export function AvaChatPage() {
 }
 
 /* ===== 2b. Chat History ===== */
-// Map a core Message (from the shared ~/.ava history files) → the IDE chat
-// display shape. System/tool messages are dropped; assistant → 'ava'. Output is
-// JSON-stashed for AvaChatPage to setMessages, so a loose shape is fine.
-function coreMsgToChatMsg(m: any, i: number): any | null {
-  if (!m || m.role === 'system' || m.role === 'tool') return null;
-  const text = typeof m.content === 'string'
-    ? m.content
-    : Array.isArray(m.content)
-      ? m.content.filter((b: any) => b?.type === 'text').map((b: any) => b.text || '').join('')
-      : '';
-  return { id: `hist-${i}-${m.role}`, role: m.role === 'user' ? 'user' : 'ava', text, timestamp: Date.now() };
+
+/** Flatten a core message's content (string | ContentPart[]) to display text. */
+function histText(content: any): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.filter((b: any) => b?.type === 'text').map((b: any) => b.text || '').join('');
+}
+
+/**
+ * Strip the mode tag off a restored USER message.
+ *
+ * A mode announces itself with a literal bracket tag at the head of the user's
+ * message, and the whole internal briefing rides behind it. Restored without
+ * stripping, the operator is shown "[Work Mode] You are Ava the Builder..."
+ * where their own sentence should be.
+ *
+ * The tag list is IMPORTED, not retyped. core/src/agent/mode-tags.ts exists
+ * because nine hand-written copies had drifted apart — the extension's copy
+ * carried the dead '[Security Mode]' and not the live '[Security Audit Mode]',
+ * so exactly this bug survived there for months. It is an import-free leaf,
+ * which is what lets the IDE read it without pulling core's graph into the
+ * bundle.
+ */
+function stripModeTag(text: string): string {
+  if (typeof text !== 'string') return text;
+  for (const tag of ALL_SCAFFOLD_TAGS) {
+    if (text.startsWith(tag)) return text.slice(tag.length).trimStart();
+  }
+  return text;
+}
+
+/**
+ * Map the shared ~/.ava transcript into the IDE chat's display shape.
+ *
+ * Takes the WHOLE message list rather than one message at a time, because a
+ * tool call and its result are two separate entries — `role:'assistant'` with
+ * `tool_calls`, then `role:'tool'` keyed by `tool_call_id` — and they have to
+ * be reunited to render a chip with its output.
+ *
+ * That is why this replaced a per-message map. The old one dropped tool_calls
+ * entirely and still emitted a bubble for an assistant turn that had nothing
+ * BUT tool calls, so a reopened conversation was pocked with empty bubbles
+ * where the work had been. The extension fixed this in buildUIMessages and the
+ * IDE never got it.
+ */
+function coreMsgsToChatMsgs(messages: any[]): any[] {
+  const resultByCallId = new Map<string, string>();
+  for (const m of messages) {
+    if (m?.role === 'tool' && m.tool_call_id) resultByCallId.set(m.tool_call_id, histText(m.content));
+  }
+
+  const out: any[] = [];
+  messages.forEach((m, i) => {
+    if (!m || (m.role !== 'user' && m.role !== 'assistant')) return;
+
+    const raw = histText(m.content);
+    const text = m.role === 'user' ? stripModeTag(raw) : raw;
+    const calls: any[] = m.role === 'assistant' && Array.isArray(m.tool_calls) ? m.tool_calls : [];
+
+    // Keep a turn with text OR tool calls; drop one with neither. A turn with
+    // neither is what produced the empty bubbles.
+    if (!text && calls.length === 0) return;
+
+    const toolCalls = calls.map((tc: any) => {
+      const result = resultByCallId.get(tc?.id);
+      return {
+        name: tc?.function?.name ?? 'tool',
+        // Restored turns are finished by definition — never 'running', or the
+        // chip spins forever on a call that completed days ago.
+        status: 'done' as const,
+        ...(result !== undefined ? { result } : {}),
+        args: (() => { try { return JSON.parse(tc?.function?.arguments || '{}'); } catch { return {}; } })(),
+      };
+    });
+
+    out.push({
+      id: `hist-${i}-${m.role}`,
+      role: m.role === 'user' ? 'user' : 'ava',
+      text,
+      timestamp: Date.now(),
+      ...(toolCalls.length ? { toolCalls } : {}),
+    });
+  });
+  return out;
 }
 
 export function ChatHistoryPage() {
@@ -8595,15 +8701,21 @@ export function ChatHistoryPage() {
                     // Don't open while this card is being renamed — a drag-select
                     // in the title input can end on the card and fire this click.
                     if (editingId === conv.id) return;
-                    // Read the full transcript file, map core messages → the chat
-                    // display shape, then hand off to AvaChatPage (localStorage
-                    // handoff + navigate).
-                    const { readHistoryConversation } = await import('../lib/history-store');
-                    const rec = await readHistoryConversation(conv.id);
-                    const messages = rec?.messages?.length
-                      ? (rec.messages as any[]).map((m, i) => coreMsgToChatMsg(m, i)).filter(Boolean)
-                      : (conv.messages || []);
-                    localStorage.setItem('ava-ide-load-conversation', JSON.stringify({ id: conv.id, title: conv.title, messages }));
+                    // Hand off the ID ONLY. AvaChatPage reads the transcript
+                    // itself.
+                    //
+                    // This used to serialise every mapped message into
+                    // localStorage. localStorage has a ~5MB quota, one
+                    // conversation here is 6,742 messages and 28MB on disk, and
+                    // setItem throws QuotaExceededError well before that — with
+                    // no try around it, so the navigate on the next line never
+                    // ran and the click did nothing at all. Every small
+                    // conversation opened fine, which is exactly why it looked
+                    // like one broken row rather than a size limit.
+                    //
+                    // An id is a few dozen bytes and cannot outgrow the quota,
+                    // so the failure cannot come back as the transcript grows.
+                    localStorage.setItem('ava-ide-load-conversation', JSON.stringify({ id: conv.id, title: conv.title }));
                     window.dispatchEvent(new CustomEvent('ava-load-conversation'));
                     window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'ava-chat' }));
                   }}
