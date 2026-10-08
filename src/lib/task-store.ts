@@ -287,6 +287,21 @@ export async function updateLocalTask(id: string, u: UpdateTaskInput): Promise<v
   });
 }
 
+/**
+ * Archive a task — the store's form of "delete".
+ *
+ * There is deliberately no hard delete. readLocalTasks() filters archived
+ * entries out, so this disappears from every view exactly as a delete would,
+ * while the row stays in a JSON file the operator can open and recover from.
+ * A task may be something Ava is part-way through; losing it outright to a
+ * misclick is a worse outcome than a file that needs tidying.
+ */
+export async function archiveLocalTask(id: string): Promise<void> {
+  await mutateTask(id, (t) => {
+    t.status = 'archived';
+  });
+}
+
 // ── Reminders (webview-side scheduler reads/writes these) ────────────────────
 
 /** Wall-clock fire time (epoch ms) for a task's reminder, or null. Date-only

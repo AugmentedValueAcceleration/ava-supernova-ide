@@ -78,7 +78,7 @@ import { CoursePath } from './CoursePath';
 import { Progression } from './Progression';
 import { readLocalLearning, setActiveCourse, deleteCourse } from '../lib/learning-store';
 import IdeTasksPanel, { IdeTasksSpine, type SessionTaskUI, type AvaCompletedTaskUI, type TodayTaskUI, type PlanRecordUI, type CreateTaskInput as TaskCreateInput, type UpdateTaskInput as TaskUpdateInput } from './IdeTasksPanel';
-import { readLocalTasks, createLocalTask, toggleLocalTask, toggleLocalSubtask, updateLocalTask, tasksFolderPath } from '../lib/task-store';
+import { readLocalTasks, createLocalTask, toggleLocalTask, toggleLocalSubtask, updateLocalTask, archiveLocalTask, tasksFolderPath } from '../lib/task-store';
 import { startTaskReminderScheduler } from '../lib/task-reminders';
 import { IdeTaskSuggestCard } from './IdeTaskSuggestCard';
 import { PlanApprovalCard } from './PlanApprovalCard';
@@ -2958,7 +2958,48 @@ export function AvaChatPage() {
         }
       })();
     };
+    /**
+     * Restore a transcript that was too large to persist inline.
+     *
+     * The persist effect writes `{ byId }` instead of the messages once a
+     * conversation passes the localStorage budget. Without this it would write
+     * that marker, the initialiser would fail its Array.isArray check, and the
+     * chat would open on the welcome message — which is the "it forgets the
+     * chat when I switch tabs" symptom, just moved.
+     *
+     * Runs only when nothing was handed off, so an explicit click always wins.
+     */
+    const restoreLargeCurrent = () => {
+      try {
+        const raw = localStorage.getItem('ava-ide-chat-current');
+        if (!raw || raw[0] !== '{') return false;   // array = inline, already restored
+        const marker = JSON.parse(raw);
+        if (typeof marker?.byId !== 'string') return false;
+        const id = marker.byId;
+        void (async () => {
+          try {
+            const { readHistoryConversation } = await import('../lib/history-store');
+            const rec = await readHistoryConversation(id);
+            if (!rec?.messages?.length) {
+              console.error(`[chat] current conversation ${id} is persisted by id but unreadable`);
+              return;
+            }
+            setMessages(coreMsgsToChatMsgs(rec.messages as any[]));
+            setConversationTitle(rec.title || t('dash.chat.new_chat'));
+            setCurrentConvId(id);
+          } catch (err) {
+            console.error(`[chat] could not restore ${id} from disk`, err);
+          }
+        })();
+        return true;
+      } catch { return false; }
+    };
+
+    const hadHandoff = (() => {
+      try { return !!localStorage.getItem('ava-ide-load-conversation'); } catch { return false; }
+    })();
     drainPending();
+    if (!hadHandoff) restoreLargeCurrent();
     // History is drained synchronously from localStorage on mount, so the
     // gate flips false immediately. Kept as a state flag (rather than a
     // constant false) so the loading banner has a consistent shape with
@@ -3618,6 +3659,7 @@ export function AvaChatPage() {
   const fetchUserTasks = useCallback(async () => {
     try {
       const today = todayLocal();
+      // (see announceTasksChanged below — the Planner listens for it)
       const entries = await readLocalTasks();
       const mapped: TodayTaskUI[] = entries.map((t) => ({
         id: t.id, title: t.title, description: t.description,
@@ -3645,6 +3687,9 @@ export function AvaChatPage() {
     try {
       await toggleLocalTask(taskId);
       fetchUserTasks();
+      // The Planner reads the same store; tell it to re-read rather than
+      // leave it showing a snapshot taken before this write.
+      try { window.dispatchEvent(new CustomEvent('ava-tasks-changed')); } catch { /* non-DOM */ }
     } catch { /* */ }
   }, [fetchUserTasks]);
 
@@ -3652,6 +3697,9 @@ export function AvaChatPage() {
     try {
       await createLocalTask(task);
       fetchUserTasks();
+      // The Planner reads the same store; tell it to re-read rather than
+      // leave it showing a snapshot taken before this write.
+      try { window.dispatchEvent(new CustomEvent('ava-tasks-changed')); } catch { /* non-DOM */ }
     } catch { /* */ }
   }, [fetchUserTasks]);
 
@@ -3659,6 +3707,9 @@ export function AvaChatPage() {
     try {
       await toggleLocalSubtask(taskId, subtaskId);
       fetchUserTasks();
+      // The Planner reads the same store; tell it to re-read rather than
+      // leave it showing a snapshot taken before this write.
+      try { window.dispatchEvent(new CustomEvent('ava-tasks-changed')); } catch { /* non-DOM */ }
     } catch { /* */ }
   }, [fetchUserTasks]);
 
@@ -3666,6 +3717,9 @@ export function AvaChatPage() {
     try {
       await updateLocalTask(taskId, updates);
       fetchUserTasks();
+      // The Planner reads the same store; tell it to re-read rather than
+      // leave it showing a snapshot taken before this write.
+      try { window.dispatchEvent(new CustomEvent('ava-tasks-changed')); } catch { /* non-DOM */ }
     } catch { /* */ }
   }, [fetchUserTasks]);
 
@@ -3710,8 +3764,41 @@ export function AvaChatPage() {
   }, []);
 
   // ── Persist messages ──────────────────────────────────────────────────────
+  //
+  // The whole transcript goes into localStorage so the chat survives a tab
+  // switch, and that works right up until a conversation is bigger than the
+  // ~5MB quota. One here restores to 3,558 bubbles and 3,183 tool chips —
+  // about 10.4MB — so setItem threw QuotaExceededError into an empty catch,
+  // nothing was written, and switching tabs fell back to whatever was stored
+  // before. The chat appeared to forget the conversation you had just opened.
+  //
+  // Big ones are therefore persisted BY ID and re-read from disk on mount.
+  // Small ones keep going in whole, because that is the common case and it
+  // restores without touching the filesystem.
+  //
+  // The budget is deliberately well under the quota: entries are UTF-16 in
+  // most browsers, so a 2M-character string is already ~4MB, and this is not
+  // the only key sharing the origin.
+  const PERSIST_BUDGET_CHARS = 2_000_000;
   useEffect(() => {
-    try { localStorage.setItem('ava-ide-chat-current', JSON.stringify(messages)); } catch { /* */ }
+    try {
+      const json = JSON.stringify(messages);
+      if (json.length <= PERSIST_BUDGET_CHARS) {
+        localStorage.setItem('ava-ide-chat-current', json);
+      } else if (currentConvId) {
+        // Too big to inline, but it is on disk — remember WHICH one.
+        localStorage.setItem('ava-ide-chat-current', JSON.stringify({ byId: currentConvId }));
+      } else {
+        // Too big and never saved: keep the tail rather than lose everything.
+        // An unsaved chat this large is not a case that has come up, but
+        // silently storing nothing is how the bug above went unnoticed.
+        const tail = messages.slice(-200);
+        localStorage.setItem('ava-ide-chat-current', JSON.stringify(tail));
+        console.warn(`[chat] transcript over ${PERSIST_BUDGET_CHARS} chars and unsaved — persisted the last ${tail.length} messages only.`);
+      }
+    } catch (err) {
+      console.error('[chat] could not persist the current transcript', err);
+    }
     // Derive conversation title from first user message
     const firstUser = messages.find((m) => m.role === 'user');
     if (firstUser) {
@@ -9272,13 +9359,56 @@ function formatTaskDate(dateStr: string | undefined): string {
 
 export function TasksPage() {
   useLocale();
-  const connected = checkConnected();
-  const { data: rawTasks, loading, error } = useApiData<any>('/tasks', []);
+  // No cloud read: the shared store on disk is the record. `error` is kept
+  // only because the empty state below still renders it.
+  const error = null;
 
-  // Local-first: load from localStorage, always available
-  const [tasks, setTasks] = useState<any[]>(() => {
-    try { const saved = localStorage.getItem('ava-ide-tasks'); return saved ? JSON.parse(saved) : []; } catch { return []; }
-  });
+  // THE SHARED STORE, not a private copy.
+  //
+  // This page used to keep its own list in localStorage['ava-ide-tasks'] and
+  // never read ~/.ava/tasks.json at all — so there were two unconnected task
+  // systems in one app. The right-hand panel reads the shared store through
+  // readLocalTasks(), which is what the CLI, the extension and Ava herself
+  // write to, so a task Ava created appeared in that panel and could never
+  // appear here. Tasks added here were invisible to her for the same reason.
+  const [tasks, setTasks] = useState<any[]>([]);
+  // True until the first disk read lands. Without it the page paints "no
+  // tasks yet" for a frame and then fills in, which reads as an empty board
+  // rather than one that has not been read — the same class of lie the
+  // sidebar spinners were added to stop.
+  const [loading, setLoading] = useState(true);
+
+  /** Shared store → the shape this page renders (due_date, done). */
+  const loadTasks = useCallback(async () => {
+    try {
+      const entries = await readLocalTasks();
+      setTasks(entries.map((e) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        priority: e.priority || 'medium',
+        status: e.status || 'todo',
+        done: e.status === 'done',
+        due_date: e.dueDate,
+        category: e.category || 'general',
+        subtasks: e.subtasks,
+      })));
+    } catch (err) {
+      console.error('[tasks] could not read the shared task store', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadTasks(); }, [loadTasks]);
+  // Ava writes straight to the store, and the right-hand panel writes to it
+  // too, so re-read when either says something changed rather than holding a
+  // snapshot that silently drifts.
+  useEffect(() => {
+    const onChanged = () => { void loadTasks(); };
+    window.addEventListener('ava-tasks-changed', onChanged);
+    return () => window.removeEventListener('ava-tasks-changed', onChanged);
+  }, [loadTasks]);
   const [filter, setFilter] = useState<TaskFilter>('all');
   const [showForm, setShowForm] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -9293,6 +9423,11 @@ export function TasksPage() {
 
   // Calendar date filter (set by sidebar calendar click)
   const [selectedCalDate, setSelectedCalDate] = useState<string | null>(null);
+  // Mirrors the extension's Tasks tab. 'all' by default here, deliberately:
+  // the extension opens date-scoped, which hides every OVERDUE task (its
+  // due_date is not today) behind a view that shows an Overdue count in the
+  // same header. Parity is the control, not the blind spot.
+  const [dateScope, setDateScope] = useState<'selected' | 'all'>('all');
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -9300,28 +9435,19 @@ export function TasksPage() {
       if (date) {
         setSelectedCalDate(date);
         setFilter('all');
+        // Picking a day on the calendar IS asking for that day.
+        setDateScope('selected');
       }
     };
     window.addEventListener('ava-task-date-selected', handler);
     return () => window.removeEventListener('ava-task-date-selected', handler);
   }, []);
 
-  // Persist to localStorage on every change
-  useEffect(() => {
-    try { localStorage.setItem('ava-ide-tasks', JSON.stringify(tasks)); } catch {}
-  }, [tasks]);
-
-  // Merge cloud tasks when connected — add any cloud tasks not already local
-  useEffect(() => {
-    const cloudList = Array.isArray(rawTasks) ? rawTasks : rawTasks?.tasks || [];
-    if (cloudList.length === 0 || loading) return;
-    setTasks(prev => {
-      const localIds = new Set(prev.map((t: any) => t.id || t._id));
-      const newFromCloud = cloudList.filter((t: any) => !localIds.has(t.id || t._id));
-      if (newFromCloud.length === 0) return prev;
-      return [...prev, ...newFromCloud];
-    });
-  }, [rawTasks, loading]);
+  // No private persistence and no cloud merge any more. The store on disk is
+  // the record; mirroring it into localStorage is what let the two copies
+  // disagree. The cloud merge was dead in any case — cloudSyncEnabled() has
+  // returned false since storage sunset, so every write below took the
+  // local-only branch and nothing was ever read back from /tasks.
 
   const stats = useMemo(() => {
     return {
@@ -9333,9 +9459,13 @@ export function TasksPage() {
   }, [tasks]);
 
   const filtered = useMemo(() => {
-    // If a calendar date is selected, show all tasks for that day
-    if (selectedCalDate) {
-      return tasks.filter((t: any) => t.due_date && t.due_date.slice(0, 10) === selectedCalDate);
+    // Date scope. A task with NO due date is not scheduled for another day,
+    // it is unscheduled — so it stays visible rather than vanishing from every
+    // date at once. Same rule as the extension; Ava creates tasks without a
+    // due date unless asked, and filtering them out loses them entirely.
+    if (dateScope === 'selected') {
+      const day = selectedCalDate ?? todayLocal();
+      return tasks.filter((t: any) => !t.due_date || t.due_date.slice(0, 10) === day);
     }
     switch (filter) {
       case 'today': return tasks.filter((t: any) => isTaskDueToday(t) && !t.done && t.status !== 'done');
@@ -9343,7 +9473,7 @@ export function TasksPage() {
       case 'completed': return tasks.filter((t: any) => t.done || t.status === 'done');
       default: return tasks.filter((t: any) => !t.done && t.status !== 'done');
     }
-  }, [tasks, filter, selectedCalDate]);
+  }, [tasks, filter, selectedCalDate, dateScope]);
 
   const resetForm = () => {
     setFormTitle('');
@@ -9353,70 +9483,57 @@ export function TasksPage() {
     setShowForm(false);
   };
 
+  // Every write goes through the shared store and then re-reads it, so this
+  // page and the right-hand panel cannot drift apart. The cloud branches that
+  // used to sit here were unreachable — cloudSyncEnabled() is false — and all
+  // they did was obscure which path actually ran.
+  const announceChanged = () => {
+    try { window.dispatchEvent(new CustomEvent('ava-tasks-changed')); } catch { /* non-DOM */ }
+  };
+
   const addTask = async () => {
     if (!formTitle.trim()) return;
-    const newTask: any = {
-      id: String(Date.now()),
-      title: formTitle.trim(),
-      priority: formPriority,
-      due_date: formDueDate || undefined,
-      category: formCategory,
-      done: false,
-      status: 'todo',
-    };
-    // Local-only path: Data Mode = Local, OR user not connected. Both
-    // cases skip the cloud write — we just add to the React state and
-    // return. (When Data Mode flips back to Cloud/Both, the Sync tab's
-    // bulk push will upload whatever isn't already there.)
-    if (!connected || !cloudSyncEnabled()) {
-      setTasks((t) => [...t, newTask]);
-      resetForm();
-      return;
-    }
     try {
-      const created = await apiFetch('/tasks', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: formTitle.trim(),
-          priority: formPriority,
-          due_date: formDueDate || undefined,
-          category: formCategory,
-        }),
+      await createLocalTask({
+        title: formTitle.trim(),
+        priority: formPriority as 'low' | 'medium' | 'high',
+        due_date: formDueDate || undefined,
+        category: formCategory,
       });
-      setTasks((t) => [...t, created]);
+      await loadTasks();
+      announceChanged();
       resetForm();
-    } catch {
-      setTasks((t) => [...t, newTask]);
-      resetForm();
+    } catch (err) {
+      console.error('[tasks] could not create task', err);
     }
   };
 
   const toggleTask = async (task: any) => {
     const id = task.id || task._id;
-    const newDone = !(task.done || task.status === 'done');
-    setTasks((t) =>
-      t.map((tt) =>
-        (tt.id || tt._id) === id
-          ? { ...tt, done: newDone, status: newDone ? 'done' : 'todo' }
-          : tt
-      )
-    );
-    if (connected && cloudSyncEnabled()) {
-      try {
-        await apiFetch(`/tasks/${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status: newDone ? 'done' : 'todo', done: newDone }),
-        });
-      } catch { /* local toggle stands */ }
+    if (!id) return;
+    try {
+      await toggleLocalTask(id);
+      await loadTasks();
+      announceChanged();
+    } catch (err) {
+      console.error(`[tasks] could not toggle ${id}`, err);
     }
   };
 
   const deleteTask = async (task: any) => {
     const id = task.id || task._id;
-    setTasks((t) => t.filter((tt) => (tt.id || tt._id) !== id));
     setConfirmDeleteId(null);
-    if (connected && cloudSyncEnabled()) {
-      try { await apiFetch(`/tasks/${id}`, { method: 'DELETE' }); } catch { /* */ }
+    if (!id) return;
+    // ARCHIVE, not destroy. The shared store has no delete, and readLocalTasks
+    // filters archived out — so this disappears from both views exactly as a
+    // delete would, without shredding something Ava may have been mid-way
+    // through. The store is a plain JSON file the operator can edit by hand.
+    try {
+      await archiveLocalTask(id);
+      await loadTasks();
+      announceChanged();
+    } catch (err) {
+      console.error(`[tasks] could not archive ${id}`, err);
     }
   };
 
@@ -9605,24 +9722,59 @@ export function TasksPage() {
           ))}
         </div>
 
-        {/* Calendar date filter indicator */}
-        {selectedCalDate && (
+        {/* Date scope — mirrors the extension's Tasks tab. Always visible,
+            rather than appearing only after a calendar pick: a filter you
+            cannot see is a filter you cannot undo, and an empty list then
+            reads as "no tasks" instead of "not on this day". */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '8px 14px', marginBottom: 12, borderRadius: 10,
+          background: 'var(--bg-card, rgba(26,16,40,0.6))',
+          border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+        }}>
+          <span style={{ fontSize: 11, color: '#6c7086' }}>
+            {dateScope === 'selected' ? (
+              <>
+                {tt('dash.tasks.showing_for', 'Showing tasks for')}{' '}
+                <span style={{ fontWeight: 600, color: 'var(--accent)' }}>
+                  {(selectedCalDate ?? todayLocal()) === todayLocal()
+                    ? tt('dash.tasks.today_lc', 'today')
+                    : new Date((selectedCalDate ?? todayLocal()) + 'T00:00:00').toLocaleDateString(getLocale(), { weekday: 'short', day: 'numeric', month: 'short' })}
+                </span>{' '}
+                {tt('dash.tasks.plus_undated', 'plus anything undated')}
+              </>
+            ) : (
+              <>
+                {tt('dash.tasks.showing', 'Showing')}{' '}
+                <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{tt('dash.tasks.all_tasks', 'all tasks')}</span>
+              </>
+            )}
+          </span>
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '8px 14px', marginBottom: 12, borderRadius: 8,
-            background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2, padding: 2,
+            borderRadius: 7, background: 'rgba(0,0,0,0.25)',
+            border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
           }}>
-            <span style={{ fontSize: 12, color: 'var(--accent)' }}>
-              Showing tasks for {new Date(selectedCalDate + 'T00:00:00').toLocaleDateString(getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </span>
-            <button
-              onClick={() => setSelectedCalDate(null)}
-              style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer', fontSize: 11 }}
-            >
-              Clear
-            </button>
+            {([['selected', tt('dash.tasks.selected_day', 'Selected day')], ['all', tt('dash.tasks.all', 'All')]] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setDateScope(key);
+                  // Leaving the day view clears the pinned date, or the label
+                  // and the calendar disagree about what is being shown.
+                  if (key === 'all') setSelectedCalDate(null);
+                }}
+                style={{
+                  padding: '3px 10px', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 10,
+                  background: dateScope === key ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'transparent',
+                  color: dateScope === key ? 'var(--accent)' : '#6c7086',
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* Task list */}
         {loading ? <LoadingSpinner /> : error ? <ErrorBanner message={error} /> : (
