@@ -136,7 +136,15 @@ function recalcProgress(curr: any): void {
     curr.progress_percent = Math.round(
       mods.reduce((s: number, m: any) => s + (m.progress_percent ?? 0), 0) / mods.length,
     );
-    if (curr.progress_percent === 100) curr.status = 'completed';
+    if (curr.progress_percent === 100) {
+      curr.status = 'completed';
+      // Stamp the finish. deriveCertificates dates the certificate from this
+      // and folds it into the verification hash, so a course that completed
+      // without it produced an undated certificate. Core backfills a missing
+      // value from updated_at on its next read, which hid this — the date
+      // was approximately right, by accident.
+      if (!curr.completed_at) curr.completed_at = new Date().toISOString();
+    }
   }
 }
 
@@ -167,10 +175,18 @@ export async function saveStepProgress(
 
 /** Mark a lesson complete + recompute progress in the local store. Returns the
  *  updated curriculums so the UI can refresh its bars + ticks. */
+/**
+ * @param score — the share of steps MASTERED, not a participation mark.
+ * @param minutes — what the player measured. Nothing else measures it:
+ *   core's trackTime needs `started_at`, which only the Ava-taught path
+ *   sets, so a course done entirely in the player showed 0 hours on its
+ *   certificate.
+ */
 export async function saveLessonComplete(
   curriculumId: string,
   lessonId: string,
   score: number,
+  minutes?: number,
 ): Promise<any[]> {
   try {
     const curriculums = await readLocalLearning();
@@ -181,6 +197,11 @@ export async function saveLessonComplete(
       lesson.score = score;
       lesson.best_score = Math.max(lesson.best_score ?? 0, score);
       lesson.completed_at = new Date().toISOString();
+      // Capped at two hours per lesson, the same way core's trackTime caps
+      // it, so a window left open overnight does not become a 14-hour lesson.
+      if (typeof minutes === 'number' && minutes > 0) {
+        lesson.time_spent_minutes = (lesson.time_spent_minutes ?? 0) + Math.min(minutes, 120);
+      }
       recalcProgress(curr);
       await writeLocalCurriculums(curriculums);
     }
