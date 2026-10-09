@@ -10522,7 +10522,13 @@ function MyLearningTab() {
     color: active ? '#c084fc' : '#6c7086', fontSize: 12, fontWeight: 500, cursor: 'pointer',
   });
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
+    // flex:1 + minWidth:0, because the PARENT is `display: flex`. Without them
+    // this is a flex item with no basis, so it sizes to its content and both
+    // inner tabs rendered in a column about a third of the window wide with
+    // the rest left empty. The Courses tab looked right only because
+    // LearningLibraryPage uses pageWrapper, which carries flex:1 — the
+    // difference was never in these two components.
+    <div style={{ flex: 1, minWidth: 0, height: '100%', overflowY: 'auto' }}>
       <div style={{ display: 'flex', gap: 8, padding: '16px 32px 0' }}>
         <button onClick={() => setInner('progression')} style={innerBtn(inner === 'progression')}>{t('learning.tab.progression')}</button>
         <button onClick={() => setInner('courses')} style={innerBtn(inner === 'courses')}>{t('learning.tab.my_courses')}</button>

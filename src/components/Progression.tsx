@@ -50,6 +50,24 @@ export function Progression() {
   const [profile, setProfile] = useState<LearnerProfile>(() => emptyLearnerProfile());
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  // The user's picture, if they have set one. Same key and same event the
+  // sidebar and the chat use — read into state and SUBSCRIBED, never read
+  // from localStorage mid-render, or a newly set avatar does not appear here
+  // until something unrelated causes a re-render.
+  const [avatar, setAvatar] = useState<string>(() => {
+    try { return localStorage.getItem('ava-ide-user-avatar') || ''; } catch { return ''; }
+  });
+  useEffect(() => {
+    const refresh = () => {
+      try { setAvatar(localStorage.getItem('ava-ide-user-avatar') || ''); } catch { /* storage off */ }
+    };
+    window.addEventListener('ava-avatar-changed', refresh);
+    window.addEventListener('ava-auth-changed', refresh);
+    return () => {
+      window.removeEventListener('ava-avatar-changed', refresh);
+      window.removeEventListener('ava-auth-changed', refresh);
+    };
+  }, []);
   const [draft, setDraft] = useState<LearnerProfile | null>(null);
 
   const reload = useCallback(async () => {
@@ -110,7 +128,11 @@ export function Progression() {
       {/* ── Header card ─────────────────────────────────────────── */}
       <div style={{ borderRadius: 16, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(26, 16, 40, 0.6)', padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-          <div style={{ display: 'flex', height: 64, width: 64, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontSize: 22, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, var(--accent), #7c3aed)' }}>{initial}</div>
+          <div style={{ display: 'flex', height: 64, width: 64, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', overflow: 'hidden', fontSize: 22, fontWeight: 700, color: '#fff', background: avatar ? 'transparent' : 'linear-gradient(135deg, var(--accent), #7c3aed)' }}>
+            {avatar
+              ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initial}
+          </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <h2 style={{ margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 18, fontWeight: 600, color: '#cdd6f4' }}>{displayName}</h2>
