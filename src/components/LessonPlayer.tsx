@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { saveStepProgress, saveLessonComplete } from '../lib/learning-store';
+import { gradeOpenAnswer } from '../lib/api';
+import { getLocale } from '../lib/i18n';
+import type { GradeResult } from '@ava/core/learning';
 
 // Minimal local mirror of DashboardLessonStep (extension's
 // dashboard-message-types.ts). The IDE's lesson/module objects are loosely
@@ -147,19 +150,54 @@ export function LessonPlayer({ lesson, curriculumId, onComplete, onClose }: Prop
         ))}
       </div>
 
-      <StepCard key={step.id} step={step} onDone={handleStepDone} />
+      <StepCard key={step.id} step={step} lessonTitle={lesson.title} onDone={handleStepDone} />
     </div>
   );
 }
 
-function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) => void }) {
+function StepCard({ step, lessonTitle, onDone }: { step: LessonStep; lessonTitle: string; onDone: (r: StepResult) => void }) {
   const kind = step.interaction.kind;
   const [picked, setPicked] = useState<string | null>(null);
   const [text, setText] = useState(step.last_attempt ?? step.interaction.starter ?? '');
   const [revealed, setRevealed] = useState(false);
+  const [grading, setGrading] = useState(false);
+  const [grade, setGrade] = useState<GradeResult | null>(null);
+  const [gradeError, setGradeError] = useState<string | null>(null);
 
   const isDeterministic = kind === 'choice' || kind === 'predict';
   const correct = isDeterministic && picked !== null && norm(picked) === norm(step.interaction.answer ?? '');
+  // No rubric means there is nothing to grade against. The step still plays,
+  // self-checked, and no request is sent — spending a credit to be told the
+  // course is missing something is the learner paying for our gap.
+  const gradable = !isDeterministic && !!step.interaction.evaluation?.trim();
+
+  async function askForGrade() {
+    setGrading(true);
+    setGrade(null);
+    setGradeError(null);
+    const outcome = await gradeOpenAnswer({
+      kind: kind === 'code' ? 'code' : 'free_text',
+      prompt: step.interaction.prompt,
+      rubric: step.interaction.evaluation ?? '',
+      answer: text,
+      starter: step.interaction.starter,
+      lessonTitle,
+      locale: getLocale(),
+    });
+    setGrading(false);
+    if (outcome.ok) {
+      setGrade(outcome.result);
+      return;
+    }
+    // A missing rubric is the COURSE's gap, and saying so is the honest
+    // answer. Anything else is ours, and the learner's answer is untouched
+    // either way — neither is a reason to mark them down.
+    setGradeError(
+      outcome.reason === 'no_rubric'
+        ? 'This step has no marking guide yet, so it cannot be graded. That is the course to fix, not your answer.'
+        : outcome.error,
+    );
+  }
 
   return (
     <div style={{
@@ -247,7 +285,57 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
             : (step.feedback?.incorrect || `Not quite — the answer is "${step.interaction.answer}".`)}
         </p>
       )}
-      {!isDeterministic && revealed && step.interaction.evaluation && (
+      {grading && (
+        <p style={{ marginTop: 12, fontSize: 12, color: '#6c7086' }}>Reading your answer{'\u2026'}</p>
+      )}
+      {!grading && grade && (
+        <div style={{
+          marginTop: 12, borderRadius: 10, padding: 12,
+          border: `1px solid ${grade.verdict === 'strong' ? 'rgba(52,211,153,0.3)' : grade.verdict === 'partial' ? 'rgba(251,191,36,0.3)' : 'rgba(248,113,113,0.3)'}`,
+          background: grade.verdict === 'strong' ? 'rgba(52,211,153,0.06)' : grade.verdict === 'partial' ? 'rgba(251,191,36,0.06)' : 'rgba(248,113,113,0.06)',
+        }}>
+          <p style={{
+            margin: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
+            color: grade.verdict === 'strong' ? '#34d399' : grade.verdict === 'partial' ? '#fbbf24' : '#f87171',
+          }}>
+            {grade.verdict === 'strong' ? 'That holds up' : grade.verdict === 'partial' ? 'Part of the way there' : 'Not yet'}
+          </p>
+          <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 1.6, color: '#cdd6f4', whiteSpace: 'pre-wrap' }}>
+            {grade.feedback}
+          </p>
+          {grade.met.length > 0 && (
+            <ul style={{ margin: '8px 0 0 0', padding: 0, listStyle: 'none' }}>
+              {grade.met.map((m, k) => (
+                <li key={`met-${k}`} style={{ fontSize: 11, lineHeight: 1.6, color: '#a6adc8' }}>
+                  <span style={{ color: '#34d399' }}>{'\u2713'}</span> {m}
+                </li>
+              ))}
+            </ul>
+          )}
+          {grade.missing.length > 0 && (
+            <ul style={{ margin: '8px 0 0 0', padding: 0, listStyle: 'none' }}>
+              {grade.missing.map((m, k) => (
+                <li key={`missing-${k}`} style={{ fontSize: 11, lineHeight: 1.6, color: '#a6adc8' }}>
+                  <span style={{ color: '#fbbf24' }}>{'\u2192'}</span> {m}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {!grading && gradeError && (
+        <p style={{ marginTop: 12, fontSize: 12, lineHeight: 1.6, color: '#f87171' }}>{gradeError}</p>
+      )}
+      {/* No rubric to grade against, so the best the player can do is let them
+          move on. Never silently mastered. */}
+      {!isDeterministic && !gradable && revealed && (
+        <p style={{ marginTop: 12, fontSize: 12, lineHeight: 1.6, color: '#6c7086' }}>
+          This step has no marking guide yet, so it is yours to judge. Read it back against what the step asked for.
+        </p>
+      )}
+      {/* The rubric sits ALONGSIDE the verdict, not instead of it: the learner
+          should see what was asked of them next to what they were told. */}
+      {!isDeterministic && (grade || gradeError) && step.interaction.evaluation && (
         <div style={{
           marginTop: 12, borderRadius: 10, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
           background: 'color-mix(in srgb, var(--accent) 5%, transparent)', padding: 12,
@@ -257,9 +345,6 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
           </p>
           <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 1.6, color: '#a6adc8' }}>
             {step.interaction.evaluation}
-          </p>
-          <p style={{ marginTop: 8, marginBottom: 0, fontSize: 10, color: '#6c7086' }}>
-            Soon: Ava reads your actual answer and grades it against this live.
           </p>
         </div>
       )}
@@ -272,17 +357,47 @@ function StepCard({ step, onDone }: { step: LessonStep; onDone: (r: StepResult) 
             onClick={() => onDone({ status: correct ? 'mastered' : 'attempted', lastAttempt: picked })}
             label="Continue"
           />
-        ) : !revealed ? (
-          <ActionButton
-            disabled={text.trim().length === 0}
-            onClick={() => setRevealed(true)}
-            label="Check"
-          />
-        ) : (
+        ) : grade?.mastered ? (
+          /* Mastery comes from the verdict, never from pressing Continue. */
           <ActionButton
             disabled={false}
             onClick={() => onDone({ status: 'mastered', lastAttempt: text })}
             label="Continue"
+          />
+        ) : grade || gradeError ? (
+          /* Graded short, or grading failed. Another go is the useful default,
+             and moving on is allowed — it records what it actually was,
+             which is attempted, so the course cannot complete on it. */
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => onDone({ status: 'attempted', lastAttempt: text })}
+              style={{
+                borderRadius: 10, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                background: 'transparent', color: '#a6adc8', padding: '8px 16px',
+                fontSize: 12, fontWeight: 500, cursor: 'pointer',
+              }}
+            >
+              Move on
+            </button>
+            <ActionButton
+              disabled={text.trim().length === 0}
+              onClick={() => void askForGrade()}
+              label="Try again"
+            />
+          </div>
+        ) : !gradable && revealed ? (
+          /* No rubric, so nothing graded it. Attempted, not mastered: a step
+             nobody could check must not count towards a certificate. */
+          <ActionButton
+            disabled={false}
+            onClick={() => onDone({ status: 'attempted', lastAttempt: text })}
+            label="Continue"
+          />
+        ) : (
+          <ActionButton
+            disabled={text.trim().length === 0 || grading}
+            onClick={() => (gradable ? void askForGrade() : setRevealed(true))}
+            label={grading ? 'Checking\u2026' : 'Check'}
           />
         )}
       </div>

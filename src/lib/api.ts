@@ -1,4 +1,5 @@
 import { dataModeHeader } from './data-mode';
+import type { GradeResult } from '@ava/core/learning';
 
 const PLATFORM_URL = 'https://avasupernova.com/api';
 
@@ -168,6 +169,98 @@ export async function apiFetch(path: string, options?: RequestInit) {
   return res.json();
 }
 
+/* ── Grading an open lesson answer ────────────────────────── */
+
+export interface GradeOpenAnswerRequest {
+  kind: 'free_text' | 'code';
+  /** What the step asked the learner to do. */
+  prompt: string;
+  /** The step's `interaction.evaluation`. Without it there is nothing to grade. */
+  rubric: string;
+  answer: string;
+  starter?: string;
+  lessonTitle?: string;
+  locale?: string;
+}
+
+export type GradeOpenAnswerOutcome =
+  | { ok: true; result: GradeResult }
+  | { ok: false; error: string; reason?: 'no_rubric' | 'empty_answer' | 'unreadable' };
+
+/**
+ * Grade ONE open answer against the rubric the course author wrote.
+ *
+ * Deliberately NOT built on apiFetch, for two reasons. apiFetch throws on a
+ * non-OK response, which discards the body — and the body is where `reason`
+ * lives, the field that separates "this course has no marking guide" from
+ * "grading failed". Collapsing those into one error would blame the learner
+ * for a hole in the course. It also requires a platform key, and a BYOK user
+ * grades on their own Qwen key for nothing.
+ *
+ * Mirrors the extension host exactly: platform account spends 1 credit, a
+ * BYOK Qwen key is proxied and spends none.
+ */
+export async function gradeOpenAnswer(req: GradeOpenAnswerRequest): Promise<GradeOpenAnswerOutcome> {
+  const platformKey = getPlatformKey();
+  const byokKey = readByokQwenKey();
+  if (!platformKey && !byokKey) {
+    return { ok: false, error: 'Grading needs a platform account or a Qwen key in Settings.' };
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Ava-Platform': 'ide',
+    'X-Ava-Device': getDeviceId(),
+    'X-Ava-Timezone': localTimezone(),
+  };
+  if (platformKey) {
+    headers['Authorization'] = `Bearer ${platformKey}`;
+  } else if (byokKey) {
+    headers['X-BYOK-Provider'] = 'qwen';
+    headers['X-BYOK-Key'] = byokKey;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${PLATFORM_URL}/learning/grade`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(req),
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Grading could not reach the network.' };
+  }
+
+  const body = await res.json().catch(() => null) as
+    | { result?: GradeResult; error?: string; reason?: 'no_rubric' | 'empty_answer' | 'unreadable' }
+    | null;
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: body?.error || `Grading failed (${res.status}).`,
+      reason: body?.reason,
+    };
+  }
+  if (!body?.result) {
+    return { ok: false, error: 'Grading came back empty.', reason: 'unreadable' };
+  }
+  return { ok: true, result: body.result };
+}
+
+/** The Qwen key the Sidebar saves, if there is one. Same store the sidecar
+ *  boot reads, so a key that works for chat works for grading. */
+function readByokQwenKey(): string | null {
+  try {
+    const raw = localStorage.getItem('ava-ide-byok');
+    if (!raw) return null;
+    const keys = JSON.parse(raw) as Record<string, string>;
+    const key = keys?.Qwen?.trim();
+    return key || null;
+  } catch {
+    return null;
+  }
+}
 export function apiStreamUrl(path: string): string {
   return `${PLATFORM_URL}${path}`;
 }
