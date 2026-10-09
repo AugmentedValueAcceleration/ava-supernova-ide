@@ -12123,12 +12123,17 @@ export function LearningLibraryPage() {
 
                   {/* Footer stats */}
                   <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#6c7086', borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', paddingTop: 10, marginTop: 'auto' }}>
-                    {p.estimated_hours && <span>{'\u23f1'} {p.estimated_hours}h</span>}
-                    <span>{'\ud83d\udc65'} {p.fork_count}</span>
+                    {/* No glyphs. On the detail header the label under each
+                        number said what it was, so the icons were decoration;
+                        here there are no labels, so the glyph WAS the label —
+                        strip it and the row reads "2.3h 0 0". Each value says
+                        what it is instead. */}
+                    {p.estimated_hours && <span>{p.estimated_hours}h</span>}
+                    <span>{p.fork_count} {t('dash.learning_library.learners')}</span>
                     {/* Shown at zero: hiding it left unrated cards one stat
                         short of their neighbours, so the row read as ragged
                         and the rated ones looked like the only real courses. */}
-                    <span style={{ color: avgRating ? '#fbbf24' : '#6c7086' }}>{'\u2605'} {avgRating}</span>
+                    <span style={{ color: avgRating ? '#fbbf24' : '#6c7086' }}>{avgRating}/5</span>
                   </div>
                 </div>
               </button>
