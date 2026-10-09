@@ -561,15 +561,6 @@ async function pollVideoStatus(taskId, platformKey) {
 // ─── State ──────────────────────────────────────────────────────────────────
 
 let agent = null;
-/**
- * The provider + model the user CHOSE, kept so a one-shot call that is not
- * a chat turn (grading an open lesson answer) runs on the same model as
- * everything else they do.
- *
- * Stashed at module level because the registry is local to handleInit, and
- * grading arrives as its own command long afterwards.
- */
-let activeGradingTarget = null;
 let conductor = null;
 let autoCoordinator = null;
 let conversation = null;
@@ -1736,8 +1727,6 @@ async function handleInit(data) {
       return;
     }
 
-    // Remember what the user is on, for one-shot calls outside the chat loop.
-    activeGradingTarget = { provider: resolved.provider, model: resolved.model };
 
     // Tools
     toolRegistry = new ToolRegistry();
@@ -3671,14 +3660,21 @@ async function handleGradeOpenAnswer(data) {
     return;
   }
 
-  if (!activeGradingTarget) {
+  // The model the user is on RIGHT NOW. Read from the globals rather than
+  // captured at init, because set_model hot-swaps without re-running init —
+  // a cached copy would keep grading on the model from the last full start,
+  // which is the silent-model-revert bug this file already warns about
+  // elsewhere. Same pair runDesktopConductorTurn uses for the same reason.
+  const provider = globalThis._activeProvider;
+  const model = globalThis._currentModel;
+  if (!provider || !model) {
     emit({ event: 'open_answer_graded', stepId, ok: false, error: 'No model is configured yet, so your answer cannot be graded.' });
     return;
   }
 
   try {
-    const response = await activeGradingTarget.provider.createCompletion({
-      model: activeGradingTarget.model.id,
+    const response = await provider.createCompletion({
+      model: model.id,
       messages: [
         { role: 'system', content: core.GRADE_SYSTEM_PROMPT },
         { role: 'user', content: core.buildGradeUserMessage(req) },
