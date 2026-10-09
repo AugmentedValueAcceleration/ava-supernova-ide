@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { saveStepProgress, saveLessonComplete } from '../lib/learning-store';
-import { gradeOpenAnswer } from '../lib/api';
+import { getSidecar } from '../lib/sidecar';
 import { getLocale } from '../lib/i18n';
 import type { GradeResult } from '@ava/core/learning';
 
@@ -218,7 +218,10 @@ function StepCard({ step, lessonTitle, onDone }: { step: LessonStep; lessonTitle
     setGrading(true);
     setGrade(null);
     setGradeError(null);
-    const outcome = await gradeOpenAnswer({
+    // Graded on the model the user chose, by the sidecar, which is the only
+    // place holding both the selection and the keys.
+    const outcome = await getSidecar().gradeOpenAnswer({
+      stepId: step.id,
       kind: kind === 'code' ? 'code' : 'free_text',
       prompt: step.interaction.prompt,
       rubric: step.interaction.evaluation ?? '',

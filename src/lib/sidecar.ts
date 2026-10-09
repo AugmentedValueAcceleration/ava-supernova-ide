@@ -9,6 +9,7 @@
 import { Command, type Child } from '@tauri-apps/plugin-shell';
 import { resolveResource } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
+import type { GradeResult } from '@ava/core/learning';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,27 @@ type EventListener = (event: SidecarEvent) => void;
 
 // ─── Sidecar Manager ────────────────────────────────────────────────────────
 
+/** Why grading could not produce a verdict. `no_rubric` is a hole in the
+ *  COURSE and must never be shown to the learner as a failed answer. */
+export type GradeFailureReason = 'no_rubric' | 'empty_answer' | 'unreadable';
+
+export interface GradeOpenAnswerRequest {
+  /** Which step this verdict belongs to — replies are matched on it. */
+  stepId: string;
+  kind: 'free_text' | 'code';
+  /** What the step asked the learner to do. */
+  prompt: string;
+  /** The step's `interaction.evaluation`. Without it there is nothing to grade. */
+  rubric: string;
+  answer: string;
+  starter?: string;
+  lessonTitle?: string;
+  locale?: string;
+}
+
+export type GradeOpenAnswerOutcome =
+  | { ok: true; result: GradeResult }
+  | { ok: false; error: string; reason?: GradeFailureReason };
 export class SidecarManager {
   private child: Child | null = null;
   private listeners = new Map<string, Set<EventListener>>();
@@ -534,6 +556,60 @@ export class SidecarManager {
   async detectLocalModels(baseUrl: string, apiKey?: string): Promise<void> {
     await this.send({ cmd: 'detect_local_models', baseUrl, apiKey });
   }
+
+  /**
+   * Grade ONE open lesson answer, on the model the user CHOSE.
+   *
+   * The sidecar holds the provider registry and the keys, so this is where
+   * it has to run. It replaced a platform route that picked the model itself
+   * and could proxy Qwen keys only — so the dropdown was ignored and a
+   * learner on a DeepSeek or Mistral key could not be graded at all.
+   *
+   * Promise-shaped rather than fire-and-subscribe, because the player awaits
+   * one verdict for one step and matching replies by hand at every call site
+   * is how a late reply lands on the wrong step.
+   */
+  async gradeOpenAnswer(req: GradeOpenAnswerRequest): Promise<GradeOpenAnswerOutcome> {
+    return new Promise<GradeOpenAnswerOutcome>((resolve) => {
+      let settled = false;
+      const finish = (outcome: GradeOpenAnswerOutcome) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        this.off('open_answer_graded', listener);
+        resolve(outcome);
+      };
+
+      const listener = (ev: SidecarEvent) => {
+        const e = ev as unknown as {
+          stepId?: string;
+          ok?: boolean;
+          result?: GradeResult;
+          error?: string;
+          reason?: GradeFailureReason;
+        };
+        // Matched on stepId so a late reply from a step the learner has
+        // already left cannot be read as the verdict on this one.
+        if (e.stepId !== req.stepId) return;
+        finish(e.ok && e.result
+          ? { ok: true, result: e.result }
+          : { ok: false, error: e.error || 'Grading failed.', reason: e.reason });
+      };
+
+      // A player waiting on a reply that never comes is worse than a bad
+      // verdict: the learner cannot tell a hung request from a slow one, and
+      // the step has already taken their answer.
+      const timer = window.setTimeout(() => {
+        finish({ ok: false, error: 'Grading timed out. Your answer is untouched — try again.' });
+      }, 90000);
+
+      this.on('open_answer_graded', listener);
+      void this.send({ cmd: 'grade_open_answer', ...req }).catch((err) => {
+        finish({ ok: false, error: err instanceof Error ? err.message : 'Grading could not be sent.' });
+      });
+    });
+  }
+
 
   /**
    * Respond to a secret_request grant prompt. Either grants with the

@@ -561,6 +561,15 @@ async function pollVideoStatus(taskId, platformKey) {
 // ─── State ──────────────────────────────────────────────────────────────────
 
 let agent = null;
+/**
+ * The provider + model the user CHOSE, kept so a one-shot call that is not
+ * a chat turn (grading an open lesson answer) runs on the same model as
+ * everything else they do.
+ *
+ * Stashed at module level because the registry is local to handleInit, and
+ * grading arrives as its own command long afterwards.
+ */
+let activeGradingTarget = null;
 let conductor = null;
 let autoCoordinator = null;
 let conversation = null;
@@ -1726,6 +1735,9 @@ async function handleInit(data) {
       emitError(`No provider available. Set BYOK keys or connect your platform account.`);
       return;
     }
+
+    // Remember what the user is on, for one-shot calls outside the chat loop.
+    activeGradingTarget = { provider: resolved.provider, model: resolved.model };
 
     // Tools
     toolRegistry = new ToolRegistry();
@@ -3624,6 +3636,75 @@ function handleCancel() {
   }, 500);
 }
 
+/**
+ * Grade ONE open lesson answer, on the model the user chose.
+ *
+ * It runs here rather than against a platform route because this is the
+ * only place holding both the selection and the keys. A route had to pick
+ * the model itself and could proxy Qwen keys only, so the dropdown was
+ * ignored and a learner on a DeepSeek or Mistral key could not be graded at
+ * all. Operator's call, 9 Oct 2026: follow the selection, which also covers
+ * every BYOK provider.
+ *
+ * The prompt and the parser come from @ava/core, shared with the extension
+ * host, so a verdict means the same thing on both surfaces.
+ */
+async function handleGradeOpenAnswer(data) {
+  const stepId = data?.stepId ?? null;
+  const req = {
+    kind: data?.kind === 'code' ? 'code' : 'free_text',
+    prompt: String(data?.prompt ?? ''),
+    rubric: String(data?.rubric ?? ''),
+    answer: String(data?.answer ?? ''),
+    starter: data?.starter ? String(data.starter) : undefined,
+    lessonTitle: data?.lessonTitle ? String(data.lessonTitle) : undefined,
+    locale: data?.locale ? String(data.locale) : undefined,
+  };
+
+  const gradeable = core.checkGradeable(req);
+  if (!gradeable.ok) {
+    // A missing rubric is a hole in the COURSE and must never reach the
+    // learner as a failed answer.
+    emit(gradeable.reason === 'no_rubric'
+      ? { event: 'open_answer_graded', stepId, ok: false, reason: 'no_rubric', error: 'This step has no marking guide yet, so it cannot be graded.' }
+      : { event: 'open_answer_graded', stepId, ok: false, reason: 'empty_answer', error: 'Write an answer first.' });
+    return;
+  }
+
+  if (!activeGradingTarget) {
+    emit({ event: 'open_answer_graded', stepId, ok: false, error: 'No model is configured yet, so your answer cannot be graded.' });
+    return;
+  }
+
+  try {
+    const response = await activeGradingTarget.provider.createCompletion({
+      model: activeGradingTarget.model.id,
+      messages: [
+        { role: 'system', content: core.GRADE_SYSTEM_PROMPT },
+        { role: 'user', content: core.buildGradeUserMessage(req) },
+      ],
+      // Low, not zero. Two learners comparing notes on the same step must
+      // not get different verdicts; a dull phrasing is the cheaper price.
+      temperature: 0.2,
+      max_tokens: 700,
+      // No reasoning pass: a bounded judgement against a written rubric.
+      enable_thinking: false,
+    });
+    const raw = response?.choices?.[0]?.message?.content;
+    const result = core.parseGradeResult(typeof raw === 'string' ? raw : '');
+    if (!result) {
+      // The grader did not answer. Say exactly that rather than inventing a
+      // verdict, which would either mark a learner down for our failure or
+      // hand out mastery for one.
+      emit({ event: 'open_answer_graded', stepId, ok: false, reason: 'unreadable', error: 'Grading did not come back in a readable form. Your answer is untouched.' });
+      return;
+    }
+    emit({ event: 'open_answer_graded', stepId, ok: true, result });
+  } catch (err) {
+    emit({ event: 'open_answer_graded', stepId, ok: false, error: err?.message || 'Grading failed.' });
+  }
+}
+
 async function handleInterrupt() {
   // Soft interrupt — stop current generation, then have Ava check in
   if (currentAbort) {
@@ -4280,6 +4361,15 @@ rl.on('line', async (line) => {
       break;
     case 'detect_local_models':
       detectLocalModels(data).catch((err) => emit({ event: 'local_models_detected', models: [], error: err?.message || 'detect failed' }));
+      break;
+    // Grade one open lesson answer on the user's chosen model. Every path
+    // inside emits, so the player is never left waiting on a reply that
+    // never comes.
+    case 'grade_open_answer':
+      handleGradeOpenAnswer(data).catch((err) => emit({
+        event: 'open_answer_graded', stepId: data?.stepId ?? null, ok: false,
+        error: err?.message || 'Grading failed.',
+      }));
       break;
     case 'secret_grant_response':
       handleSecretGrantResponse(data);
