@@ -11391,10 +11391,17 @@ function PagerButton({ disabled, onClick, label }: { disabled: boolean; onClick:
   );
 }
 
-function CourseStat({ icon, label, sub }: { icon: string; label: string; sub: string }) {
+// A small stat block for the course-detail hero: bold value, quiet label.
+//
+// It carried an emoji in front of each figure. Operator, 9 Oct 2026: they read
+// as cheap — and emoji are the worst version of that, since they render in a
+// different family to everything around them and change shape per platform.
+// They were also doing nothing: the label under each number already says what
+// it is, so the glyph was decoration competing with the one thing worth
+// reading. The numbers carry it alone now.
+function CourseStat({ label, sub }: { label: string; sub: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 16, lineHeight: 1 }}>{icon}</span>
       <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{label}</span>
         <span style={{ fontSize: 10, color: '#6c7086', textTransform: 'uppercase', letterSpacing: 0.4 }}>{sub}</span>
@@ -11680,13 +11687,13 @@ export function LearningLibraryPage() {
 
             {/* Stats row */}
             <div style={{ display: 'flex', gap: 20, marginTop: 18, flexWrap: 'wrap' }}>
-              {detail.estimated_hours ? <CourseStat icon="⏱" label={`${detail.estimated_hours}h`} sub="estimated" /> : null}
-              <CourseStat icon="👥" label={String(detail.fork_count)} sub={`learner${detail.fork_count !== 1 ? 's' : ''}`} />
+              {detail.estimated_hours ? <CourseStat label={`${detail.estimated_hours}h`} sub="estimated" /> : null}
+              <CourseStat label={String(detail.fork_count)} sub={`learner${detail.fork_count !== 1 ? 's' : ''}`} />
               {/* Shown at zero too: an unrated course is a fact, and hiding
                   it gave those cards one fewer stat than their neighbours. */}
-              <CourseStat icon="⭐" label={`${avgRating}/5`} sub={ratingCount === 1 ? '1 rating' : `${ratingCount} ratings`} />
-              {moduleCount > 0 ? <CourseStat icon="📦" label={String(moduleCount)} sub={`module${moduleCount !== 1 ? 's' : ''}`} /> : null}
-              {lessonCount > 0 ? <CourseStat icon="📝" label={String(lessonCount)} sub={`lesson${lessonCount !== 1 ? 's' : ''}`} /> : null}
+              <CourseStat label={`${avgRating}/5`} sub={ratingCount === 1 ? '1 rating' : `${ratingCount} ratings`} />
+              {moduleCount > 0 ? <CourseStat label={String(moduleCount)} sub={`module${moduleCount !== 1 ? 's' : ''}`} /> : null}
+              {lessonCount > 0 ? <CourseStat label={String(lessonCount)} sub={`lesson${lessonCount !== 1 ? 's' : ''}`} /> : null}
             </div>
           </div>
 
