@@ -10832,8 +10832,13 @@ export function LearningPage() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 {([
+                  /* 'In progress' used to be "everything not active and not
+                     completed", which swallowed any new state. A course SAVED
+                     for later would have shown there, reading as one the
+                     learner started and gave up on. */
                   { key: 'active', label: t('learning.courses.active'), items: curricula.filter((c: any) => c.status === 'active') },
-                  { key: 'in_progress', label: t('learning.courses.in_progress'), items: curricula.filter((c: any) => c.status !== 'active' && c.status !== 'completed') },
+                  { key: 'in_progress', label: t('learning.courses.in_progress'), items: curricula.filter((c: any) => c.status === 'paused' || c.status === 'in_progress') },
+                  { key: 'not_started', label: t('learning.courses.saved'), items: curricula.filter((c: any) => c.status === 'not_started') },
                   { key: 'completed', label: t('learning.courses.completed'), items: curricula.filter((c: any) => c.status === 'completed') },
                 ] as const).filter(g => g.items.length > 0).map(group => (
                   <div key={group.key}>
@@ -11411,6 +11416,7 @@ export function LearningLibraryPage() {
   const [levelFilter, setLevelFilter] = useState('all');
   const [sort, setSort] = useState('popular');
   const [forking, setForking] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const paths: any[] = data?.paths || [];
   // Taxonomy order, not alphabetical: Using Ava first because those courses
@@ -11513,7 +11519,7 @@ export function LearningLibraryPage() {
     }
   };
 
-  const handleFork = async (id: string) => {
+  const handleFork = async (id: string, intent: 'start' | 'save' = 'start') => {
     setForking(true);
     try {
       // Local-first: the course content is public, so build the curriculum
@@ -11527,13 +11533,27 @@ export function LearningLibraryPage() {
           import('@ava/core/learning'),
           import('../lib/learning-store'),
         ]);
-        await addLocalCourse(libraryPathToCurriculum(d));
+        await addLocalCourse(libraryPathToCurriculum(d, undefined, intent));
         const key = getPlatformKey();
         if (key) {
-          apiFetch(`/learning/library/${id}/fork`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } }).catch(() => { /* analytics only */ });
+          // The intent rides along so a SAVE is not counted as a learner —
+          // "N learners" that includes bookmarks means neither.
+          apiFetch(`/learning/library/${id}/fork`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ intent }),
+          }).catch(() => { /* analytics only */ });
         }
-        // Jump to the Learning room — My Courses re-reads the local store on mount.
-        window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }));
+        // Starting jumps to the Learning room — My Courses re-reads the local
+        // store on mount. SAVING does not: someone parking a course for later
+        // is still browsing, and yanking them to another tab loses their place
+        // for no reason. The button confirms instead.
+        if (intent === 'save') {
+          setSaved(true);
+          window.setTimeout(() => setSaved(false), 2500);
+        } else {
+          window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'learning' }));
+        }
       }
     } catch { /* */ }
     setForking(false);
@@ -11707,6 +11727,25 @@ export function LearningLibraryPage() {
                 opacity: forking ? 0.7 : 1, transition: 'background 0.15s, opacity 0.15s',
               }}>
               {forking ? 'Starting...' : 'Start Learning'}
+            </button>
+            {/* Saving is the same fork into a different state, so someone who
+                finds a course they want in a month does not have to remember
+                where it was. It deliberately does NOT count as a learner. */}
+            <button
+              onClick={() => void handleFork(detail.id, 'save')}
+              disabled={forking}
+              onMouseEnter={(e) => { if (!forking) (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#a6adc8'; }}
+              style={{
+                marginLeft: 10,
+                padding: '11px 20px', borderRadius: 8, cursor: forking ? 'wait' : 'pointer',
+                border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                background: 'transparent',
+                color: '#a6adc8', fontSize: 14, fontWeight: 500,
+                opacity: forking ? 0.7 : 1, transition: 'color 0.15s, opacity 0.15s',
+              }}
+            >
+              {saved ? 'Saved' : t('learning.library.save_for_later')}
             </button>
 
             {/* Rating. The IDE had no way to rate anything — the stars existed
