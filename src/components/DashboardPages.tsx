@@ -1,3 +1,4 @@
+import { stripChangesSummary } from '@ava/core/changes-summary';
 import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTabTransition } from '../lib/useTabTransition';
 import { TabSpinner } from './TabSpinner';
@@ -6350,14 +6351,19 @@ export function AvaChatPage() {
                     {(() => {
                       // Ava's welcome line is re-resolved live so it follows a
                       // language change; every other message uses its stored text.
-                      const srcText = msg.welcome ? buildIdeWelcome() : msg.text;
+                      //
+                      // The <changes-summary> block is plumbing for verify_change,
+                      // not part of the answer, so it is dropped before display.
+                      // Display only — the stored message keeps it, and
+                      // verification still reads it from there.
+                      const srcText = stripChangesSummary(msg.welcome ? buildIdeWelcome() : msg.text);
                       const MASK = '\u2022\u2022\u2022\u2022\u2022\u2022';
                       const hasMask = srcText.includes(MASK);
                       if (!hasMask) {
                         return isAva || isError ? renderMarkdown(srcText) : srcText;
                       }
                       // Split text on mask sequences and render with inline eye toggles
-                      const parts = msg.text.split(MASK);
+                      const parts = srcText.split(MASK);
                       const reveals = inlineReveals[msg.id] || new Set<number>();
                       // Find original secret values for this message
                       const matchedSecretValues = secrets.map(s => s.value);
