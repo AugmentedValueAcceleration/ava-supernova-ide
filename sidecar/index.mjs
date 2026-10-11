@@ -345,7 +345,7 @@ async function handleAssetForgeGenerate(body) {
 
 // ── Design Studio — voice lane (Qwen3-TTS via the platform) ──
 // The webview can't reach the platform; it hands us { text, voice, language_type,
-// instructions } and we POST /api/generate-voice, then proxy the returned audio to
+// speech_rate, volume } and we POST /api/generate-voice, then proxy the audio to
 // a data: URL — the DashScope url is cross-origin with no CORS, which breaks the
 // webview's Web Audio decode (the waveform) and can block playback. Result comes
 // back as an `asset_forge_voice_result` event carrying the audio URL.
@@ -381,7 +381,10 @@ async function handleAssetForgeVoice(body, designRequestId, title) {
   try {
     const res = await fetch('https://avasupernova.com/api/generate-voice', {
       method: 'POST', headers,
-      body: JSON.stringify({ text: body.text, voice: body.voice, language_type: body.language_type, instructions: body.instructions }),
+      // speech_rate and volume, not `instructions`: this speech model
+      // ignores written direction entirely. Undefined fields drop out of
+      // the JSON, so the platform route only sends what it was given.
+      body: JSON.stringify({ text: body.text, voice: body.voice, language_type: body.language_type, speech_rate: body.speech_rate, volume: body.volume }),
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));

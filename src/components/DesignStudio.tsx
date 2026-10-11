@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type CSSProperties } from 'react';
 import { PenNib, Paperclip as PhPaperclip } from '@phosphor-icons/react';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
-import { TTS_VOICES, TTS_VOICE_EMOTIONS, TTS_VOICE_SPEEDS, voiceDeliveryInstruction } from '@ava/core/creative';
+import { TTS_VOICE_CATALOGUE, TTS_VOICES, TTS_VOICE_SPEEDS, TTS_VOICE_VOLUMES, voiceSpeechRate, voiceVolume } from '@ava/core/creative';
 // The credit table itself, not a copy of it. A price quoted in the inspector
 // that disagrees with the price charged is worse than quoting nothing.
 import { videoCreditCost } from '@ava/core/billing/credits';
@@ -562,6 +562,19 @@ const GROUPS: { labelKey: string; accent: string; items: { id: ViewId; soon?: bo
 // "Voice 'X' is not supported" — and Aria was the DEFAULT, so almost any
 // selection failed. Verified name by name against the API on 2026-08-28.
 const VOICES: string[] = [...TTS_VOICES];
+// 48 voices need more than a bare name to choose between, and they are grouped
+// because an English brand read and a Cantonese character voice should not sit
+// beside each other in one flat list.
+const GROUP_LABEL: Record<string, string> = {
+  neutral: 'Reads English straight',
+  accent: 'Character accent',
+  dialect: 'Chinese regional',
+};
+const VOICE_OPTIONS = TTS_VOICE_CATALOGUE.map(v => ({
+  value: v.id,
+  label: `${v.id} — ${v.style}`,
+  group: GROUP_LABEL[v.group],
+}));
 
 export function DesignStudio() {
   // Reactive active kit — re-read whenever the brand kit changes anywhere (the
@@ -619,13 +632,15 @@ export function DesignStudio() {
   // ── Voice lane (Qwen3-TTS via sidecar) ──
   const [voiceName, setVoiceName] = useState(VOICES[0]);
   const [voiceScript, setVoiceScript] = useState('');
-  const [voiceEmotion, setVoiceEmotion] = useState('neutral');
   // The API takes language_type and Ava can translate a read into any of
   // Qwen's ten languages. The extension had this control; the IDE did not.
   const [voiceLanguage, setVoiceLanguage] = useState('English');
-  // 'normal' is the no-op default — voiceDeliveryInstruction returns undefined
-  // for it, so we do not spend the model's attention telling it to do nothing.
+  // 'normal' omits the parameter entirely rather than sending a neutral
+  // number, so the voice keeps its own pace and its own default loudness.
+  // (The default volume measures 75, not 50 — sending a plausible 50 would
+  // have quietened every read while looking like it changed nothing.)
   const [voiceSpeed, setVoiceSpeed] = useState('normal');
+  const [voiceLoudness, setVoiceLoudness] = useState('normal');
   const [voiceSrc, setVoiceSrc] = useState<string | null>(null);
   const [voiceGenerating, setVoiceGenerating] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -847,7 +862,11 @@ export function DesignStudio() {
   // sidecar to synthesise, and the asset_forge_voice_result listener fulfils it.
   // Auto-saves the finished audio into creative/voice/ on success.
   const runVoiceGeneration = (
-    script: string, voice: string, language: string, instructions?: string,
+    script: string, voice: string, language: string,
+    // The two delivery parameters the speech model actually reads. Undefined
+    // means "leave it alone", which is not the same as sending a neutral
+    // number — the default volume is 75, not 50.
+    speechRate?: number, volume?: number,
     // The design tool call this read answers, when there is one. The sidecar
     // resolves it directly — see the note below.
     designRequestId?: string,
@@ -861,7 +880,7 @@ export function DesignStudio() {
       voiceResolverRef.current = resolve;
       setVoiceSrc(null); setVoiceError(null);
       setVoiceGenerating(true);
-      getSidecar().assetForgeVoice({ text: script, voice, language_type: language, instructions, designRequestId, title }).catch((e) => {
+      getSidecar().assetForgeVoice({ text: script, voice, language_type: language, speech_rate: speechRate, volume, designRequestId, title }).catch((e) => {
         voiceResolverRef.current = null;
         setVoiceGenerating(false);
         const err = e instanceof Error ? e.message : 'Voice generation failed';
@@ -1101,13 +1120,12 @@ export function DesignStudio() {
         const language = typeof args.language === 'string' && args.language.trim()
           ? args.language.trim() : voiceLanguage;
         setVoiceLanguage(language);
-        // Ava's own direction WINS. The dials are the fallback, so a read she
-        // has not directed still follows the panel instead of ignoring it —
-        // and two things never steer one dial at once.
-        const instructions = (typeof args.instructions === 'string' && args.instructions.trim())
-          ? args.instructions.trim()
-          : voiceDeliveryInstruction(voiceEmotion, voiceSpeed);
-        const out = await runVoiceGeneration(script, voice, language, instructions, m.requestId);
+        // Ava's own numbers WIN; the dials are the fallback, so a read she has
+        // not directed still follows the panel instead of ignoring it, and two
+        // things never steer one control at once.
+        const rate = typeof args.speech_rate === 'number' ? args.speech_rate : voiceSpeechRate(voiceSpeed);
+        const vol = typeof args.volume === 'number' ? args.volume : voiceVolume(voiceLoudness);
+        const out = await runVoiceGeneration(script, voice, language, rate, vol, m.requestId);
         if (out.ok) reply(true, { voice });
         else reply(false, undefined, out.error || 'Voice generation failed.');
         return;
@@ -1760,16 +1778,12 @@ export function DesignStudio() {
         <aside style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
             <Section title={t('dash.studio.voice.voice')}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                {VOICES.map(v => {
-                  const on = v === voiceName;
-                  return (
-                    <button key={v} onClick={() => setVoiceName(v)} title={v}
-                      style={{ padding: '8px 6px', borderRadius: 8, cursor: 'pointer', fontSize: 11.5, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : CARD_BORDER}`, background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'rgba(26,16,40,0.5)', color: on ? 'var(--accent)' : '#a6adc8' }}>{v}</button>
-                  );
-                })}
-              </div>
-              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 8 }}>Qwen3-TTS built-in voices. Placeholder names — the real roster lands with wiring.</p>
+              {/* A select, not the 3-wide button grid this used to be. Eleven
+                  names fitted in four rows; the full roster is forty-eight and
+                  would have been sixteen rows of truncated buttons. */}
+              <Select size="sm" style={{ width: '100%' }} value={voiceName} onChange={setVoiceName}
+                options={VOICE_OPTIONS} />
+              <p style={{ fontSize: 10.5, color: '#8b8398', marginTop: 8 }}>Every Qwen3-TTS voice, each verified against the API. Tone comes from the voice you pick.</p>
             </Section>
 
             <Section title={t('dash.studio.voice.language')}>
@@ -1783,30 +1797,40 @@ export function DesignStudio() {
               </div>
             </Section>
 
+            {/* What she actually said, beside the waveform of her saying it.
+                This was a read-only <textarea> whose placeholder read "Type the
+                line for Ava to speak" — so it invited typing and then ignored
+                it. Its own comment had already worked out why that was wrong
+                ("an editable box that can never submit is worse than none")
+                and shipped one anyway.
+                It is a TRANSCRIPT, so it looks like one: selectable text, no
+                input affordance, and an honest empty state before the first
+                read. The words matter here because the operator cuts the audio
+                by hand and wants them next to it. */}
             <Section title={t('dash.studio.voice.script')}>
-              {/* Read-only: a transcript of what she is voicing. It cannot be
-                  wired without a Generate button, and both surfaces removed
-                  theirs on purpose — "No Generate button — Ava generates now."
-                  An editable box that can never submit is worse than none. */}
-              <textarea value={voiceScript} readOnly
-                placeholder="Type the line for Ava to speak…"
-                rows={4}
-                style={{ width: '100%', resize: 'vertical', minHeight: 80, padding: '9px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5, outline: 'none', background: 'rgba(26,16,40,0.5)', color: '#cdd6f4', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box', fontFamily: 'inherit' }} />
+              <div style={{ width: '100%', minHeight: 56, padding: '9px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: 'rgba(26,16,40,0.5)', color: voiceScript ? '#cdd6f4' : '#8b8398', border: `1px solid ${CARD_BORDER}`, boxSizing: 'border-box', whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'text', fontStyle: voiceScript ? 'normal' : 'italic' }}>
+                {voiceScript || t('dash.studio.voice.script_empty')}
+              </div>
             </Section>
 
+            {/* Delivery — the two controls that are REAL.
+                There was an Emotion dial here, and both dials were turned into
+                an English sentence and sent as `instructions`. That worked on
+                qwen3-tts-instruct-flash. Qwen retired it, and the replacement
+                accepts `instructions` and ignores them — so both dials silently
+                did nothing. Emotion is gone rather than relabelled: tone has no
+                numeric equivalent here and comes from the VOICE above. Pace and
+                volume map to measured numeric parameters. See core/creative. */}
             <Section title={t('dash.studio.voice.delivery')}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
-                <span>{t('dash.studio.voice.emotion')}</span>
-                <Select size="sm" style={{ width: 130 }} value={voiceEmotion} onChange={setVoiceEmotion}
-                  options={TTS_VOICE_EMOTIONS.map(e => ({ value: e, label: t(`dash.studio.voice.emotion_${e}`) }))} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
                 <span>{t('dash.studio.voice.pace')}</span>
-                {/* Words, not numbers: the API takes `instructions` in plain
-                    language and has no numeric speed parameter, so "1.25×" could
-                    never have been sent as one. */}
                 <Select size="sm" style={{ width: 130 }} value={voiceSpeed} onChange={setVoiceSpeed}
                   options={TTS_VOICE_SPEEDS.map(v => ({ value: v, label: t(`dash.studio.voice.pace_${v}`) }))} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>
+                <span>{t('dash.studio.voice.volume')}</span>
+                <Select size="sm" style={{ width: 130 }} value={voiceLoudness} onChange={setVoiceLoudness}
+                  options={TTS_VOICE_VOLUMES.map(v => ({ value: v, label: t(`dash.studio.voice.vol_${v}`) }))} />
               </div>
             </Section>
 

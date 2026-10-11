@@ -682,7 +682,7 @@ export class SidecarManager {
    * `asset_forge_voice_result` event back ({ success, url, error }).
    */
   async assetForgeVoice(
-    body: { text: string; voice?: string; language_type?: string; instructions?: string; designRequestId?: string; title?: string },
+    body: { text: string; voice?: string; language_type?: string; speech_rate?: number; volume?: number; designRequestId?: string; title?: string },
   ): Promise<void> {
     // designRequestId + title travel WITH the job: the sidecar answers the
     // waiting design tool itself and echoes the title back, so neither the reply
