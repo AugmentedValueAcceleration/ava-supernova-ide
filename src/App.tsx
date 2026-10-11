@@ -11,6 +11,7 @@ import type { DashboardPageId } from './components/EditorArea';
 import BottomPanel from './components/BottomPanel';
 import { ensureSidecarLog } from './lib/sidecar-log';
 import { ensureSidecarRunning } from './lib/sidecar-boot';
+import { getSidecar } from './lib/sidecar';
 import StatusBar from './components/StatusBar';
 import WelcomeOverlay from './components/WelcomeOverlay';
 import UpdateChecker from './components/UpdateChecker';
@@ -142,6 +143,66 @@ export default function App() {
     if (saved) localStorage.setItem('ava-ide-project-folder', saved);
     return saved;
   });
+  /**
+   * What repo and branch the status bar shows.
+   *
+   * Re-read when the folder changes AND when the window regains focus, because
+   * the common case is switching branch in a terminal and tabbing back — if it
+   * only refreshed on folder change it would be stale exactly when it matters
+   * most. Null until the first answer; the bar renders nothing rather than a
+   * placeholder, since a confident wrong branch is what this replaced.
+   */
+  const [gitInfo, setGitInfo] = useState<{ repo: string | null; branch: string | null; isRepo: boolean } | null>(null);
+  const refreshGitInfo = useCallback(() => {
+    // Read the key rather than closing over state: the folder can change from
+    // several places and localStorage is the one value they all agree on.
+    let folder: string | null = null;
+    try { folder = localStorage.getItem('ava-ide-project-folder'); } catch { folder = null; }
+    return getSidecar().getGitInfo(folder)
+      .then((info) => { setGitInfo(info); return info; })
+      .catch(() => { setGitInfo(null); return null; });
+  }, []);
+
+  useEffect(() => {
+    // WAIT for the sidecar, then keep asking until it answers.
+    //
+    // The first version fired on mount and gave up. The sidecar takes up to
+    // 15s to initialise, the request times out at 6, and the only thing that
+    // retried was a window-focus listener — so the bar sat empty until the
+    // operator happened to click away and back. He timed it at about a
+    // minute, which is exactly what "no retry" looks like from the outside.
+    //
+    // `repo` is non-null even for a folder that is not a repo (it falls back
+    // to the folder name), so a null repo means the call genuinely failed.
+    // That makes this loop self-limiting rather than endless.
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = (delay: number) => {
+      if (cancelled) return;
+      if (!getSidecar().isReady) {
+        timer = setTimeout(() => attempt(delay), 400);
+        return;
+      }
+      void refreshGitInfo().then((info) => {
+        if (cancelled || (info && info.repo)) return;
+        // Back off, but keep trying — capped so a permanently broken sidecar
+        // costs one call every few seconds, not a spin.
+        timer = setTimeout(() => attempt(Math.min(delay * 2, 5000)), delay);
+      });
+    };
+    attempt(600);
+
+    const onFolder = () => { void refreshGitInfo(); };
+    window.addEventListener('ava-folder-changed', onFolder);
+    window.addEventListener('focus', onFolder);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('ava-folder-changed', onFolder);
+      window.removeEventListener('focus', onFolder);
+    };
+  }, [refreshGitInfo, projectFolder]);
+
   const handleOpenFolder = useCallback((path: string) => {
     setProjectFolder(path);
     save('projectFolder', path);
@@ -311,7 +372,13 @@ export default function App() {
         {sidebarPosition === 'right' && sidebar}
         {sidebarPosition === 'right' && activityBar}
       </div>
-      <StatusBar onToggleTerminal={toggleBottomPanel} mode={MODE_LABELS[currentMode] || 'Code'} onCycleMode={cycleMode} />
+      <StatusBar
+        onToggleTerminal={toggleBottomPanel}
+        mode={MODE_LABELS[currentMode] || 'Code'}
+        onCycleMode={cycleMode}
+        gitInfo={gitInfo}
+        activeFilePath={activeFilePath}
+      />
       <UpdateChecker />
       {showWelcome && (
         <WelcomeOverlay onComplete={(navigateTo) => {

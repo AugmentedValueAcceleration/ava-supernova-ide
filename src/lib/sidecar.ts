@@ -434,6 +434,24 @@ export class SidecarManager {
     });
   }
 
+  /**
+   * What repository is open, and which branch it is on.
+   *
+   * Falls back to a null answer on timeout rather than hanging, because the
+   * status bar must render something immediately; showing nothing beats
+   * showing a stale guess. The previous implementation WAS a guess — the
+   * literal string 'main', hardcoded, which read wrong on every other branch.
+   */
+  async getGitInfo(cwd?: string | null): Promise<{ repo: string | null; branch: string | null; isRepo: boolean; remote?: string | null; root?: string | null }> {
+    return this.requestHistory(
+      'git_info',
+      'git_info',
+      cwd ? { cwd } : {},
+      (e) => ({ repo: e.repo ?? null, branch: e.branch ?? null, isRepo: !!e.isRepo, remote: e.remote ?? null, root: e.root ?? null }),
+      { repo: null, branch: null, isRepo: false, remote: null, root: null },
+    );
+  }
+
   async listHistory(query?: string): Promise<Array<{ id: string; title: string; updatedAt: string; pinned?: boolean; projectPath?: string }>> {
     return this.requestHistory('list_history', 'history_list', query ? { query } : {}, (e) => e.conversations ?? [], []);
   }

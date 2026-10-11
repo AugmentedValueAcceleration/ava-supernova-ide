@@ -14,7 +14,8 @@
 import { createInterface } from 'node:readline';
 import { platform, homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename, resolve as resolvePath } from 'node:path';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
@@ -345,6 +346,84 @@ async function handleAssetForgeGenerate(body) {
 
 // ── Design Studio — voice lane (Qwen3-TTS via the platform) ──
 // The webview can't reach the platform; it hands us { text, voice, language_type,
+
+// ─── Git: what repo, which branch ─────────────────────────────────────
+//
+// The status bar used to print the literal string 'main'. It had never read
+// git, so it said "main" while the operator sat on `development` — a coding
+// tool stating the wrong branch with total confidence, which is worse than
+// stating nothing, because you believe it right up until you commit.
+//
+// Everything here degrades to a usable answer rather than throwing: a folder
+// that is not a repo still has a NAME, and the bar shows that with no branch
+// beside it.
+
+/** Run one git command in the project folder. Resolves null on any failure. */
+function gitRun(args, cwd) {
+  return new Promise((resolve) => {
+    execFile('git', args, { cwd, timeout: 4000, windowsHide: true }, (err, stdout) => {
+      resolve(err ? null : String(stdout || '').trim());
+    });
+  });
+}
+
+/**
+ * The repository name a person would recognise.
+ *
+ * Prefers the `origin` remote, because the operator asked for "the GitHub
+ * repo" and a checkout folder is often renamed or nested. Falls back to the
+ * folder name when there is no remote, which is still true and still useful.
+ */
+function repoNameFromRemote(remote) {
+  if (!remote) return null;
+  // git@github.com:Org/Repo.git  |  https://github.com/Org/Repo.git  |  .../Repo
+  const cleaned = remote.replace(/\.git$/i, '').replace(/\/+$/, '');
+  const tail = cleaned.split(/[/:]/).filter(Boolean).pop();
+  return tail || null;
+}
+
+async function handleGitInfo(requestedCwd) {
+  // The folder comes from the CALLER, the way every other command here takes
+  // its cwd (see the dashboard's `cwd: localStorage.getItem(...)` callers).
+  // The first version of this read globalThis.__avaProjectRoot instead, which
+  // is set once at init and never again — so after switching project it
+  // cheerfully reported the folder the sidecar had booted with. Same class of
+  // bug as the hardcoded 'main' it replaced: confident, and wrong.
+  //
+  // Same guard as the init path: resolve it, and refuse anything with '..'
+  // rather than letting a traversal pick the directory git runs in.
+  let root = globalThis.__avaProjectRoot || process.cwd();
+  if (typeof requestedCwd === 'string' && requestedCwd.trim() && requestedCwd !== '.' && requestedCwd !== '~') {
+    const candidate = resolvePath(requestedCwd.trim());
+    if (!candidate.includes('..')) root = candidate;
+  }
+  const name = basename(root) || root;
+
+  const inside = await gitRun(['rev-parse', '--is-inside-work-tree'], root);
+  if (inside !== 'true') {
+    emit({ event: 'git_info', repo: name, branch: null, isRepo: false, root });
+    return;
+  }
+
+  let branch = await gitRun(['rev-parse', '--abbrev-ref', 'HEAD'], root);
+  if (branch === 'HEAD') {
+    // Detached. Saying "HEAD" would be technically true and useless, so say
+    // what it actually is.
+    const sha = await gitRun(['rev-parse', '--short', 'HEAD'], root);
+    branch = sha ? `detached @ ${sha}` : 'detached';
+  }
+
+  const remote = await gitRun(['config', '--get', 'remote.origin.url'], root);
+  emit({
+    event: 'git_info',
+    repo: repoNameFromRemote(remote) || name,
+    branch: branch || null,
+    isRepo: true,
+    remote: remote || null,
+    root,
+  });
+}
+
 // speech_rate, volume } and we POST /api/generate-voice, then proxy the audio to
 // a data: URL — the DashScope url is cross-origin with no CORS, which breaks the
 // webview's Web Audio decode (the waveform) and can block playback. Result comes
@@ -4411,6 +4490,11 @@ rl.on('line', async (line) => {
       // an `asset_forge_video_result` with the finished clip URL back to the canvas.
       handleAssetForgeVideo(data.body || {}, data.designRequestId, data.title).catch((err) =>
         emit({ event: 'asset_forge_video_result', success: false, error: err && err.message ? err.message : 'Video generation failed' }));
+      break;
+    case 'git_info':
+      // The status bar asking what repo and branch it is looking at.
+      handleGitInfo(data.cwd).catch((err) =>
+        emit({ event: 'git_info', repo: null, branch: null, isRepo: false, error: err && err.message ? err.message : 'git lookup failed' }));
       break;
     case 'asset_forge_voice':
       // Design Studio → platform: Qwen3-TTS synthesis, then emit an
