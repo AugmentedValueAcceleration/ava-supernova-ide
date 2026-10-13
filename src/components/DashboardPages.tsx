@@ -3466,6 +3466,61 @@ export function AvaChatPage() {
   const modelMenuRef = useRef<HTMLDivElement>(null);
   // packsMenuRef removed with knowledge-pack feature in v0.59.2.
 
+  // ── Keeping the caret where the user thinks it is ────────────────────
+  //
+  // Operator, after losing a long reply: *"if i think im in there ava
+  // finishes and i type to reply thinking im in there only to see after a
+  // long message i was not"*. The worst kind of bug — silent, and it costs
+  // you the thing you just wrote.
+  //
+  // The extension at least re-focused when a turn ended; the IDE never did
+  // at all. Both now do, and both have the backstop below.
+  const wasStreamingRef = useRef(false);
+  useEffect(() => {
+    if (streaming) {
+      wasStreamingRef.current = true;
+    } else if (wasStreamingRef.current) {
+      wasStreamingRef.current = false;
+      // Next frame, not this one: the turn ending is the busiest render in
+      // the app, and a focus() issued mid-commit gets undone by whatever
+      // mounts straight after it.
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  }, [streaming]);
+
+  // TYPE-TO-FOCUS — a typed message must never land on the floor.
+  //
+  // Re-focusing at the end of a turn is not enough on its own: a long turn
+  // gives you every chance to click elsewhere first. So rather than chase
+  // whichever render stole the caret, make losing it harmless — press a
+  // printable key with the caret nowhere useful and it lands in the
+  // composer, that character included. Slack, Gmail and GitHub all do this.
+  //
+  // Deliberately narrow, so it never fights a real control: modifier combos
+  // are shortcuts rather than typing, and anything already in a field or a
+  // contenteditable is left alone.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key.length !== 1) return;            // printable characters only
+
+      const el = document.activeElement as HTMLElement | null;
+      if (el) {
+        const tag = el.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (el.isContentEditable) return;
+      }
+
+      const ta = textareaRef.current;
+      if (!ta || ta === el) return;
+      // Focus during keydown, so the browser delivers this very character
+      // into the composer rather than dropping it.
+      ta.focus();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   // ── Derived: available BYOK models ────────────────────────────────────────
   // ── BYOK models (reactive — updates when sidebar keys change) ────────────
   const [byokRefresh, setByokRefresh] = useState(0);
