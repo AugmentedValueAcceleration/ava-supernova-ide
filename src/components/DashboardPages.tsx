@@ -4617,6 +4617,15 @@ export function AvaChatPage() {
         setStatusText('');
         break;
 
+      case 'history_repaired':
+        // Mirrors the extension: a quiet line, not an error.
+        setMessages((prev) => [...prev, {
+          id: mkId(), role: 'system' as const,
+          text: t('conversation.repaired'),
+          timestamp: Date.now(),
+        }]);
+        break;
+
       case 'context_truncated':
         // A notice, never an error — same quiet line as a compression.
         setMessages((prev) => [...prev, {
