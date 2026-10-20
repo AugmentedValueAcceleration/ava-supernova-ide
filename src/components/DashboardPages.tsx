@@ -1,4 +1,5 @@
 import { stripChangesSummary } from '@ava/core/changes-summary';
+import { FactoryResetDialog } from './FactoryResetDialog';
 import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTabTransition } from '../lib/useTabTransition';
 import { TabSpinner } from './TabSpinner';
@@ -5106,6 +5107,26 @@ export function AvaChatPage() {
       return copy;
     });
   }, [model, mode]);
+
+  // ── Esc stops Ava ────────────────────────────────────────────────────
+  //
+  // Mirrors the extension. Esc is a HARD stop, not the soft interrupt the
+  // Stop button sends on a single click: reaching for Esc means "stop, now",
+  // not "pause and check in with me".
+  //
+  // Only while streaming, so Esc keeps its ordinary meaning (close this
+  // panel, cancel this edit) the rest of the time. Bubble phase, so anything
+  // in front of you that handles Esc gets it first.
+  useEffect(() => {
+    if (!streaming) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      hardStop();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [streaming, hardStop]);
 
   // Stop button: single click = soft interrupt, hold 800ms = hard stop
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -15645,6 +15666,7 @@ export function SettingsPage() {
   // step. Empty means the default, which projectsHomeFrom resolves — the input
   // shows that default as its placeholder so "empty" never looks like "unset
   // and broken".
+  const [resetOpen, setResetOpen] = useState(false);
   const [projectsHomeInput, setProjectsHomeInput] = useState<string>('');
   useEffect(() => { readProjectsHomeSetting().then(v => setProjectsHomeInput(v ?? '')).catch(() => {}); }, []);
   const [projectsHomeDefault, setProjectsHomeDefault] = useState('');
@@ -16147,6 +16169,33 @@ export function SettingsPage() {
 
         <div style={sLabel}>{t('dash.portability.export')}</div>
         <DataExportCard />
+
+        {/* Start over — mirrors the extension's Danger Zone. Deliberately not
+            gated on an account: a BYOK user who never signed in still needs a
+            way back to day one. */}
+        <div style={sLabel}>Start over</div>
+        <div style={{ borderRadius: 12, border: '1px solid rgba(243,139,168,0.3)',
+          background: '#1e1e2e', padding: 20, marginBottom: 16, display: 'flex',
+          alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#f38ba8', margin: 0 }}>
+              Factory reset
+            </p>
+            <p style={{ fontSize: 11, color: 'rgba(243,139,168,0.7)', margin: '2px 0 0' }}>
+              Choose what to erase and put Ava back to day one. You pick what goes —
+              nothing is assumed.
+            </p>
+          </div>
+          <button
+            onClick={() => setResetOpen(true)}
+            style={{ flexShrink: 0, borderRadius: 8, border: '1px solid rgba(243,139,168,0.4)',
+              background: 'transparent', color: '#f38ba8', padding: '8px 16px',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Choose what to erase
+          </button>
+        </div>
+        <FactoryResetDialog open={resetOpen} onClose={() => setResetOpen(false)} />
         </div>{/* /Privacy-1 */}
 
         {/* ── Group: Behavior (sec 4) ──────────────────────────── */}

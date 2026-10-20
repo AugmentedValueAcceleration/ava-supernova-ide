@@ -844,6 +844,48 @@ export class SidecarManager {
     });
   }
 
+  /** Measure what a factory reset would remove, so the dialog can say what it
+   *  costs BEFORE it costs it. The engine is core's — same one the extension
+   *  runs, so the two surfaces cannot disagree about what a reset means. */
+  async factoryResetScan(timeoutMs = 20000): Promise<{
+    sizes: { id: string; bytes: number; approximate: boolean; empty: boolean }[];
+    categories: { id: string; severity: 'ordinary' | 'permanent' | 'irreversible'; defaultSelected: boolean }[];
+    error?: string;
+  }> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v: any) => { if (done) return; done = true; this.offAny(handler); clearTimeout(timer); resolve(v); };
+      const handler = (event: SidecarEvent) => {
+        if (event.event === 'factory_reset_scanned') finish(event as any);
+      };
+      // A generous timeout on purpose: the scan walks real trees and the one
+      // it was written against was 19GB. Better a slow honest number than a
+      // fast wrong one.
+      const timer = setTimeout(() => finish({ sizes: [], categories: [], error: 'Scan timed out' }), timeoutMs);
+      this.onAny(handler);
+      this.send({ cmd: 'factory_reset_scan' }).catch(() => finish({ sizes: [], categories: [], error: 'Sidecar unavailable' }));
+    });
+  }
+
+  /** Do it. `clearedStateKeys` comes back because a sidecar cannot reach the
+   *  webview's localStorage — the UI finishes that half itself. */
+  async factoryResetExecute(categories: string[], timeoutMs = 600000): Promise<{
+    ok: boolean; removed?: number; bytesFreed?: number;
+    failed?: { path: string; reason: string }[];
+    clearedStateKeys?: string[]; error?: string;
+  }> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v: any) => { if (done) return; done = true; this.offAny(handler); clearTimeout(timer); resolve(v); };
+      const handler = (event: SidecarEvent) => {
+        if (event.event === 'factory_reset_done') finish(event as any);
+      };
+      const timer = setTimeout(() => finish({ ok: false, error: 'Reset timed out' }), timeoutMs);
+      this.onAny(handler);
+      this.send({ cmd: 'factory_reset_execute', categories }).catch(() => finish({ ok: false, error: 'Sidecar unavailable' }));
+    });
+  }
+
   /** Delete one memory by id + scope, through the MemoryManager (keeps the v3
    *  graph authoritative). Local-only — never touches the cloud. */
   async deleteMemory(id: string | number, scope: 'global' | 'project'): Promise<void> {

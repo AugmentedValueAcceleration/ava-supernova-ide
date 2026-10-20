@@ -18,7 +18,7 @@ import { join, dirname, basename, resolve as resolvePath } from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
-import { appendFile } from 'node:fs/promises';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
 
 // ─── Resolve @ava/core ──────────────────────────────────────────────────────
 // In monorepo: workspace link. Standalone: relative path fallback.
@@ -192,6 +192,11 @@ const {
   humaniseSlug,
   summariseCookingTime,
   AVA_HOME,
+  // Factory reset — the same engine the extension runs, so the two
+  // surfaces cannot disagree about what a reset means.
+  scanCategories,
+  executeReset,
+  resetCategories,
   PlatformMemorySync,
   ProviderHealthTracker,
   ResilientProvider,
@@ -1347,6 +1352,88 @@ async function captureDesktopContext() {
 }
 
 // ─── NDJSON I/O ─────────────────────────────────────────────────────────────
+
+/**
+ * Factory reset, IDE side.
+ *
+ * The engine is shared with the extension; what differs is where the host
+ * keeps its keys and settings. The extension has a secret store and
+ * globalState. The IDE has `~/.ava/config.json` and the webview's
+ * localStorage — and a sidecar cannot touch localStorage, so the keys to
+ * clear are handed back in the done event for the UI to finish the job.
+ */
+async function handleFactoryResetScan() {
+  try {
+    const sizes = await scanCategories(AVA_HOME, ACCOUNT_ROOT);
+    emit({
+      event: 'factory_reset_scanned',
+      sizes,
+      categories: resetCategories().map((c) => ({
+        id: c.id,
+        severity: c.severity,
+        defaultSelected: c.defaultSelected,
+      })),
+    });
+  } catch (err) {
+    emit({ event: 'factory_reset_scanned', sizes: [], categories: [], error: String(err?.message || err) });
+  }
+}
+
+async function handleFactoryResetExecute(categories) {
+  const clearedStateKeys = [];
+  const host = {
+    // The IDE's provider keys live in ~/.ava/config.json, not a secret store.
+    // Strip the matching field rather than deleting the file, so a key the
+    // reset was not asked to clear survives.
+    deleteSecret: async (key) => {
+      const field = String(key).split('.').pop();
+      const cfgPath = join(AVA_HOME, 'config.json');
+      let cfg;
+      try {
+        cfg = JSON.parse(await readFile(cfgPath, 'utf-8'));
+      } catch {
+        return; // no config, nothing to strip
+      }
+      let touched = false;
+      for (const k of Object.keys(cfg)) {
+        if (k === field || k.toLowerCase().includes(String(key).toLowerCase().split('.').pop())) {
+          delete cfg[k];
+          touched = true;
+        }
+      }
+      if (touched) await writeFile(cfgPath, JSON.stringify(cfg, null, 2), 'utf-8');
+    },
+    // A sidecar cannot reach localStorage. Collect and hand back.
+    clearStateKey: async (key) => { clearedStateKeys.push(key); },
+    disableSyncFirst: async () => {
+      // Rule 3: a reset the next sync undoes is worse than none.
+      const cfgPath = join(AVA_HOME, 'config.json');
+      try {
+        const cfg = JSON.parse(await readFile(cfgPath, 'utf-8'));
+        cfg.cloudSyncEnabled = false;
+        cfg.syncPrefs = {};
+        await writeFile(cfgPath, JSON.stringify(cfg, null, 2), 'utf-8');
+      } catch { /* no config means no sync to disable */ }
+    },
+    log: (m) => emit({ event: 'info', message: m }),
+  };
+
+  try {
+    const report = await executeReset(categories || [], host, AVA_HOME, ACCOUNT_ROOT);
+    emit({
+      event: 'factory_reset_done',
+      ok: report.failed.length === 0,
+      removed: report.removed.length,
+      failed: report.failed,
+      bytesFreed: report.bytesFreed,
+      secretsCleared: report.secretsCleared,
+      stateKeysCleared: report.stateKeysCleared,
+      clearedStateKeys,
+    });
+  } catch (err) {
+    emit({ event: 'factory_reset_done', ok: false, error: String(err?.message || err) });
+  }
+}
 
 function emit(event) {
   // Stamp the lane of the in-flight turn so the IDE's two chat surfaces (main
@@ -4463,6 +4550,12 @@ rl.on('line', async (line) => {
       break;
     case 'load_history':
       handleLoadHistory(data).catch((err) => emit({ event: 'history_loaded', id: data?.id ?? null, record: null, error: err?.message }));
+      break;
+    case 'factory_reset_scan':
+      handleFactoryResetScan().catch(() => {});
+      break;
+    case 'factory_reset_execute':
+      handleFactoryResetExecute(data.categories).catch(() => {});
       break;
     case 'delete_history':
       handleDeleteHistory(data).catch(() => {});
