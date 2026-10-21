@@ -1,4 +1,3 @@
-import { dataModeHeader } from './data-mode';
 
 const PLATFORM_URL = 'https://avasupernova.com/api';
 
@@ -93,12 +92,13 @@ export function disconnectAccount() {
   localStorage.removeItem('ava-ide-user-avatar');
   localStorage.removeItem('ava-ide-ai-avatar');
 
-  // Cloud-synced data caches
+  // Account caches. ('ava-ide-sync-prefs' is a leftover from the removed
+  // cloud sync — cleared so it does not linger. 'ava-ide-settings' is NOT
+  // cleared: it holds this machine's settings, which belong to no account.)
   localStorage.removeItem('ava-platform-balance');
   localStorage.removeItem('ava-ide-platform-models');
   localStorage.removeItem('ava-ide-session-stats');
   localStorage.removeItem('ava-ide-sync-prefs');
-  localStorage.removeItem('ava-ide-settings');
   localStorage.removeItem('ava-knowledge-packs');
   localStorage.removeItem('ava-support-unread');
 
@@ -150,8 +150,8 @@ export async function apiFetch(path: string, options?: RequestInit) {
   const key = getPlatformKey();
   if (!key) throw new Error('Not connected');
   // Data-mode header — server-side routes (generate-image, generate-music,
-  // render-video, ...) gate their cloud persistence on this. Derived from
-  // the binary cloud-sync toggle: off -> 'local', on -> 'both'.
+  // render-video, ...) skip keeping a copy when it says 'local', which it
+  // always does.
   const res = await fetch(`${PLATFORM_URL}${path}`, {
     ...options,
     headers: {
@@ -160,7 +160,9 @@ export async function apiFetch(path: string, options?: RequestInit) {
       'X-Ava-Platform': 'ide',
       'X-Ava-Device': getDeviceId(),
       'X-Ava-Timezone': localTimezone(),
-      'X-Ava-Data-Mode': dataModeHeader(),
+      // Ava is local-only: the platform must never keep a copy of what
+      // this request makes (generations, creative assets).
+      'X-Ava-Data-Mode': 'local',
       ...options?.headers,
     },
   });

@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { t } from '../lib/i18n';
-import { apiFetch, isConnected } from '../lib/api';
-import { cloudSyncEnabled } from '../lib/data-mode';
 
 /**
  * YOUR profile picture.
@@ -16,8 +14,8 @@ import { cloudSyncEnabled } from '../lib/data-mode';
  * It belongs with your name and your details, so it now renders inside the
  * general profile. Ava's style page is about her, and only her.
  *
- * Local first: the image is stored in localStorage and only reaches the server
- * if the account is connected AND cloud sync is on. Resized to 128px and
+ * Local only: the image is stored in localStorage and never leaves the
+ * machine. Resized to 128px and
  * re-encoded as JPEG first, because a full-resolution photo in localStorage is
  * how you quietly fill a 5MB quota with one file.
  */
@@ -26,23 +24,6 @@ const MAX_PX = 128;
 
 export function UserAvatarPanel({ fallbackName }: { fallbackName?: string | null }) {
   const [avatar, setAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
-
-  // Hydrate from the server, so a picture set on another machine shows here.
-  // This used to happen on the Personality page, which meant your avatar only
-  // arrived if you happened to open Ava's style settings first. It belongs
-  // with the thing that displays it.
-  useEffect(() => {
-    if (!isConnected() || !cloudSyncEnabled()) return;
-    let live = true;
-    apiFetch('/settings')
-      .then((data: { user_avatar?: string | null }) => {
-        if (!live || !data?.user_avatar) return;
-        setAvatar(data.user_avatar);
-        localStorage.setItem('ava-ide-user-avatar', data.user_avatar);
-      })
-      .catch(() => { /* the local copy stands */ });
-    return () => { live = false; };
-  }, []);
 
   const resize = useCallback((dataUri: string): Promise<string> => new Promise((resolve) => {
     const img = new Image();
@@ -73,18 +54,12 @@ export function UserAvatarPanel({ fallbackName }: { fallbackName?: string | null
     // Tell the rest of the app. Writing to storage and saying nothing meant
     // the chat kept showing the default until it happened to remount.
     try { window.dispatchEvent(new CustomEvent('ava-avatar-changed')); } catch { /* non-DOM */ }
-    if (isConnected() && cloudSyncEnabled()) {
-      apiFetch('/settings', { method: 'POST', body: JSON.stringify({ user_avatar: resized }) }).catch(() => {});
-    }
   }, [resize]);
 
   const remove = useCallback(() => {
     localStorage.removeItem('ava-ide-user-avatar');
     setAvatar('');
     try { window.dispatchEvent(new CustomEvent('ava-avatar-changed')); } catch { /* non-DOM */ }
-    if (isConnected() && cloudSyncEnabled()) {
-      apiFetch('/settings', { method: 'POST', body: JSON.stringify({ user_avatar: null }) }).catch(() => {});
-    }
   }, []);
 
   const pick = useCallback(() => {

@@ -82,7 +82,7 @@ export function SignInPanel({ onSignedIn, onSkipAccount }: SignInPanelProps) {
         Platform Account
       </div>
       <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>
-        Cloud sync across every device. 300 free credits/month.
+        Ava's models on your account. 300 free credits/month.
       </div>
 
       {error && (

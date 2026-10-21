@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { readDir } from '@tauri-apps/plugin-fs';
 import { loadHealthPlanIndex } from '../lib/health-plans-store';
+import { readLocalTasks } from '../lib/task-store';
 // The generation rail listens for `generation_progress` from the sidecar, which
 // holds creative jobs outside the canvas so they survive navigating away.
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
@@ -22,7 +23,7 @@ import {
   CaretRight as PhCaretRight,
 } from '@phosphor-icons/react';
 import type { ActivityItem, SidebarPosition } from '../App';
-import { getStoredEmail, getStoredTier, isConnected, disconnectAccount, apiFetch } from '../lib/api';
+import { getStoredEmail, getStoredTier, disconnectAccount, apiFetch } from '../lib/api';
 import { t, tt, useLocale, getLocale } from '../lib/i18n';
 import { SignInPanel } from './SignInPanel';
 import { localYmd } from '@ava/core/dates';
@@ -1802,30 +1803,22 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
     }).catch(() => {});
   }, []);
 
-  // Fetch task dates
+  // Task dates from the shared local store (~/.ava/tasks.json) — the same one
+  // the Tasks page and Ava write. Ava is local-only; tasks never come from the
+  // cloud.
   useEffect(() => {
-    if (!isConnected()) {
-      try {
-        const raw = localStorage.getItem('ava-ide-tasks');
-        if (raw) {
-          const tasks = JSON.parse(raw);
-          const dates = new Set<string>();
-          for (const t of (Array.isArray(tasks) ? tasks : tasks?.tasks || [])) {
-            if (t.due_date && t.status !== 'done' && !t.done) dates.add(t.due_date.slice(0, 10));
-          }
-          setTaskDates(dates);
+    const load = () => {
+      readLocalTasks().then((tasks) => {
+        const dates = new Set<string>();
+        for (const t of tasks) {
+          if (t.dueDate && t.status !== 'done') dates.add(t.dueDate.slice(0, 10));
         }
-      } catch { /* */ }
-      return;
-    }
-    apiFetch('/tasks?status=todo,in-progress').then((data: any) => {
-      const list = Array.isArray(data) ? data : data?.tasks || data?.data || [];
-      const dates = new Set<string>();
-      for (const t of list) {
-        if (t.due_date) dates.add(t.due_date.slice(0, 10));
-      }
-      setTaskDates(dates);
-    }).catch(() => {});
+        setTaskDates(dates);
+      }).catch(() => {});
+    };
+    load();
+    window.addEventListener('ava-tasks-changed', load);
+    return () => window.removeEventListener('ava-tasks-changed', load);
   }, [monthOffset]);
 
   const now = new Date();

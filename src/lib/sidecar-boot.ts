@@ -9,7 +9,6 @@
 
 import { getSidecar, type SidecarConfig } from './sidecar';
 import { getPlatformKey } from './api';
-import { cloudSyncEnabled } from './data-mode';
 import { resolveSidecarModel } from './chat-models';
 
 // This file used to keep its own byte-for-byte copy of chat-models.ts's
@@ -57,12 +56,6 @@ export function buildSidecarConfig(): SidecarConfig {
   const workStart = Number(ls('ava-ide-work-start')) || 9;
   const workEnd = Number(ls('ava-ide-work-end')) || 17;
 
-  let syncPrefs: Record<string, boolean> = {};
-  try { syncPrefs = JSON.parse(ls('ava-ide-sync-prefs') || '{}'); } catch { /* ignore */ }
-  const cloudAllowed = cloudSyncEnabled();
-  const generationLocalOnly = syncPrefs.generations === false || !cloudAllowed;
-  const learningLocalOnly = syncPrefs.learning === false || !cloudAllowed;
-
   const localBaseUrl = ls('ava-ide-local-baseurl') || '';
   const localModelName = ls('ava-ide-local-model') || '';
   const localApiKey = ls('ava-ide-local-apikey') || '';
@@ -92,8 +85,6 @@ export function buildSidecarConfig(): SidecarConfig {
     userEmail: ls('ava-ide-email') || undefined,
     userTier: ls('ava-ide-tier') || undefined,
     _devPlatformFallback: usePlatform && !!getPlatformKey(),
-    generationLocalOnly,
-    learningLocalOnly,
     local: localBlock,
     useLocalEmbeddings: ls('ava-ide-embeddings-enabled') === '1',
     embeddingModel: ls('ava-ide-embeddings-model') || undefined,

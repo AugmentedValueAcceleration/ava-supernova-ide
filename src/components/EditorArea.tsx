@@ -10,7 +10,6 @@ import {
   CreativeStudioPage,
   LibraryPage,
   PersonalityPage,
-  CloudSyncPage,
   BillingPage,
   SettingsPage,
   ConnectionsPage,
@@ -44,7 +43,6 @@ export type DashboardPageId =
   | 'library'
   | 'health'
   | 'personality'
-  | 'cloud-sync'
   | 'usage'
   | 'billing'
   | 'settings'
@@ -79,7 +77,6 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'library': '\uD83D\uDDBC\uFE0F',
   'health': '\uD83C\uDFCB\uFE0F',
   'personality': '\uD83C\uDFA8',
-  'cloud-sync': '\u2601\uFE0F',
   'usage': '\uD83D\uDCCA',
   'billing': '\uD83D\uDCB3',
   'settings': '\u2699\uFE0F',
@@ -107,7 +104,6 @@ const dashboardLabelKeys: Record<DashboardPageId, string> = {
   'library': 'dash.nav.library',
   'health': 'dash.nav.health',
   'personality': 'dash.nav.personality',
-  'cloud-sync': 'dash.nav.cloud_sync',
   'usage': 'dash.nav.usage',
   'billing': 'dash.nav.billing',
   'settings': 'dash.nav.settings',
@@ -134,7 +130,6 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'library': LibraryPage,
   'health': HealthPage,
   'personality': PersonalityPage,
-  'cloud-sync': CloudSyncPage,
   // 'usage' kept as a route so saved page state and any stray navigate
   // still open something real — it resolves to the History page, which
   // owns the Usage and Audit tabs now. UsagePage was a second component

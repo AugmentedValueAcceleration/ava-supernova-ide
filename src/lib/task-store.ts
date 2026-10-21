@@ -5,7 +5,7 @@
 // ~/.ava/users/<id>/tasks/tasks.json (or ~/.ava/tasks/tasks.json with no
 // account) and the per-workspace store at <workspace>/.ava/tasks.json. The IDE
 // reads/writes them directly via the Tauri fs plugin, so tasks work with NO
-// account and NO connection. Cloud sync is additive — opt-in — never required.
+// account and NO connection. Tasks never leave the machine.
 //
 // Store shape matches @ava/core's TaskManager: { version, lastModified, entries[] }.
 // The global store lives in a dedicated tasks/ subfolder (mirrors creative/) so

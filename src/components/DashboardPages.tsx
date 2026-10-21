@@ -121,12 +121,6 @@ import {
   type PlanTier as AvaPlanTier,
 } from '@ava/core/billing';
 import { IdePurchaseCard } from './_IdePurchaseCard';
-// Cloud-sync gate — every cloud write must check cloudSyncEnabled()
-// before calling apiFetch. Data is always saved locally; this only
-// governs the optional cloud copy. The binary "Cloud sync" toggle in
-// the chat header calls setCloudSync(); a single localStorage value is
-// the source of truth across the IDE.
-import { cloudSyncEnabled } from '../lib/data-mode';
 import { readAllLocalCreative, removeLocalCreative, renameLocalCreative, copyCreativeToProject, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
@@ -913,7 +907,6 @@ function CCWeatherWidget({ weather, loading, onRefresh }: { weather: WeatherData
 // ── Working Hours Clock ──────────────────────────────────────────────────
 
 function WorkingHoursClock() {
-  const connected = checkConnected();
   const [start, setStart] = useState<number>(() => {
     try { return Number(localStorage.getItem('ava-ide-work-start')) || 9; } catch { return 9; }
   });
@@ -923,25 +916,12 @@ function WorkingHoursClock() {
   const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
   const clockRef = useRef<SVGSVGElement>(null);
 
-  // Load from platform on mount (connected users)
-  useEffect(() => {
-    if (!connected) return;
-    apiFetch('/settings').then((data: any) => {
-      if (data?.work_start != null) { setStart(data.work_start); localStorage.setItem('ava-ide-work-start', String(data.work_start)); }
-      if (data?.work_end != null) { setEnd(data.work_end); localStorage.setItem('ava-ide-work-end', String(data.work_end)); }
-    }).catch(() => {});
-  }, [connected]);
-
   const save = useCallback((s: number, e: number) => {
     try {
       localStorage.setItem('ava-ide-work-start', String(s));
       localStorage.setItem('ava-ide-work-end', String(e));
       window.dispatchEvent(new CustomEvent('ava-working-hours-changed'));
     } catch {}
-    // Cloud sync only when Data Mode allows it.
-    if (checkConnected() && cloudSyncEnabled()) {
-      apiFetch('/settings', { method: 'POST', body: JSON.stringify({ work_start: s, work_end: e }) }).catch(() => {});
-    }
   }, []);
 
   const angleForHour = (h: number) => ((h / 24) * 360 - 90) * (Math.PI / 180);
@@ -1817,16 +1797,9 @@ function CCTasksWidget({ tasks, loading, onRefresh }: {
   }, [tasks, today]);
 
   const handleComplete = async (id: string) => {
-    // Local-first: toggle in the local store (the source the widget now reads).
-    if (!cloudSyncEnabled()) {
-      try { await toggleLocalTask(id); } catch { /* ignore */ }
-      onRefresh();
-      return;
-    }
-    try {
-      await apiFetch(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) });
-      onRefresh();
-    } catch { /* ignore */ }
+    // The local store is the only store — the source the widget reads.
+    try { await toggleLocalTask(id); } catch { /* ignore */ }
+    onRefresh();
   };
 
   return (
@@ -3099,9 +3072,8 @@ export function AvaChatPage() {
 
   // ── Local sidecar state ─────────────────────────────────────────────────
   // chatBackend selects where the chat runs — local sidecar (BYOK) vs the
-  // platform. Binary: the legacy 'both' value migrates to 'cloud' (it only
-  // ever differed for the data axis, which is now the separate cloud-sync
-  // toggle). The control lives in Settings.
+  // platform. Binary: the legacy 'both' value migrates to 'cloud'. The
+  // control lives in Settings.
   const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() => {
     const saved = localStorage.getItem('ava-ide-chat-backend');
     // Force local if not connected — Cloud needs a platform account
@@ -3110,7 +3082,6 @@ export function AvaChatPage() {
   });
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
-  // Cloud-sync toggle removed — Ava is local-first (cloudSyncEnabled() is hard-off).
   const [pendingConfirm, setPendingConfirm] = useState<{
     id: string;
     toolName: string;
@@ -3712,8 +3683,8 @@ export function AvaChatPage() {
 
   // ── Fetch user tasks when panel opens ───────────────────────────────────
   // Local-first: reads the SAME ~/.ava/tasks.json (+ workspace store) the CLI
-  // and extension use, via Tauri fs. Works with no account. Cloud sync is
-  // additive and opt-in, handled at the platform layer — never required here.
+  // and extension use, via Tauri fs. Works with no account; tasks never
+  // leave the machine.
   const fetchUserTasks = useCallback(async () => {
     try {
       const today = todayLocal();
@@ -4100,9 +4071,8 @@ export function AvaChatPage() {
   }, []);
 
   // ── Persist chat backend ─────────────────────────────────────────────────
-  // chatBackend (where the chat runs) is independent of cloud sync (data
-  // backup) — the two were previously conflated on one toggle. The
-  // chat-backend control now lives in Settings, which dispatches
+  // chatBackend is where the chat runs. The chat-backend control lives in
+  // Settings, which dispatches
   // 'ava-chat-backend-changed'; this component owns the state + persists it.
   useEffect(() => {
     try {
@@ -4160,19 +4130,6 @@ export function AvaChatPage() {
         const workStart = Number(localStorage.getItem('ava-ide-work-start')) || 9;
         const workEnd = Number(localStorage.getItem('ava-ide-work-end')) || 17;
 
-        // Data Mode + per-category sync prefs → localOnly flags passed
-        // into the sidecar. Same formula as the VS Code extension's
-        // setupAgent: the category pref OR the global Data Mode resolving
-        // to local means no cloud writes from the generator / learning
-        // tools. Mirrors the flags added in extension v0.48.4.
-        const idesSyncPrefs = (() => {
-          try { return JSON.parse(localStorage.getItem('ava-ide-sync-prefs') || '{}') as Record<string, boolean>; }
-          catch { return {}; }
-        })();
-        const idesCloudAllowed = cloudSyncEnabled();
-        const generationLocalOnly = idesSyncPrefs.generations === false || !idesCloudAllowed;
-        const learningLocalOnly = idesSyncPrefs.learning === false || !idesCloudAllowed;
-
         // Local / custom OpenAI-compatible provider (Ollama, LM Studio, vLLM).
         // Operator configures via Settings → Models → Local. Both fields
         // required to register; if either is missing we just don't pass it
@@ -4212,8 +4169,6 @@ export function AvaChatPage() {
           userEmail: localStorage.getItem('ava-ide-email') || undefined,
           userTier: localStorage.getItem('ava-ide-tier') || undefined,
           _devPlatformFallback: usePlatform && !!getPlatformKey(),
-          generationLocalOnly,
-          learningLocalOnly,
           local: localBlock,
           // Opt-in local semantic recall — mirror of the extension setting.
           useLocalEmbeddings: localStorage.getItem('ava-ide-embeddings-enabled') === '1',
@@ -5070,14 +5025,6 @@ export function AvaChatPage() {
     const sidecar = getSidecar();
     sidecar.cancel().catch(() => {
       sidecar.stop().then(() => {
-        // Same Data Mode resolution as the primary start() site above —
-        // kept inline here rather than lifted so the hard-stop fallback
-        // doesn't depend on closure state from outside this callback.
-        const fallbackSyncPrefs = (() => {
-          try { return JSON.parse(localStorage.getItem('ava-ide-sync-prefs') || '{}') as Record<string, boolean>; }
-          catch { return {}; }
-        })();
-        const fallbackCloudAllowed = cloudSyncEnabled();
         const useP = (() => { try { return localStorage.getItem('ava-ide-use-platform') !== '0'; } catch { return true; } })();
         sidecar.start({
           providers: {},
@@ -5088,8 +5035,6 @@ export function AvaChatPage() {
           permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
           autoMemory: true,
           _devPlatformFallback: useP,
-          generationLocalOnly: fallbackSyncPrefs.generations === false || !fallbackCloudAllowed,
-          learningLocalOnly: fallbackSyncPrefs.learning === false || !fallbackCloudAllowed,
           useLocalEmbeddings: localStorage.getItem('ava-ide-embeddings-enabled') === '1',
           embeddingModel: localStorage.getItem('ava-ide-embeddings-model') || undefined,
           embeddingBaseUrl: localStorage.getItem('ava-ide-embeddings-baseurl') || undefined,
@@ -5991,12 +5936,12 @@ export function AvaChatPage() {
           </span>
         </div>
 
-        {/* Right: cloud-sync toggle + tokens + new chat */}
+        {/* Right: sidecar status + tokens + new chat */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* Local sidecar status — read-only. Shown only when the chat
               backend is the local sidecar (set in Settings), so the
               operator can see at a glance whether the local model is
-              ready. Not a control — the Cloud sync toggle beside it is. */}
+              ready. Not a control. */}
           {chatBackend === 'local' && (() => {
             // "off" has two very different causes. Nothing to run on (no chat
             // key, no account) is the one worth naming — it is fixable, and
@@ -6035,8 +5980,6 @@ export function AvaChatPage() {
               </Tooltip>
             );
           })()}
-          {/* Cloud-sync toggle removed — Ava is local-first; nothing syncs
-              to the cloud (storage sunsets 1 Jul 2026). */}
 
           {/* Credit display — platform balance when signed in, or local
               session credit estimate (computed via creditsForTurn so the unit
@@ -9537,9 +9480,7 @@ export function TasksPage() {
 
   // No private persistence and no cloud merge any more. The store on disk is
   // the record; mirroring it into localStorage is what let the two copies
-  // disagree. The cloud merge was dead in any case — cloudSyncEnabled() has
-  // returned false since storage sunset, so every write below took the
-  // local-only branch and nothing was ever read back from /tasks.
+  // disagree. Ava is local-only; nothing is read from or written to a cloud.
 
   const stats = useMemo(() => {
     return {
@@ -9576,9 +9517,7 @@ export function TasksPage() {
   };
 
   // Every write goes through the shared store and then re-reads it, so this
-  // page and the right-hand panel cannot drift apart. The cloud branches that
-  // used to sit here were unreachable — cloudSyncEnabled() is false — and all
-  // they did was obscure which path actually ran.
+  // page and the right-hand panel cannot drift apart.
   const announceChanged = () => {
     try { window.dispatchEvent(new CustomEvent('ava-tasks-changed')); } catch { /* non-DOM */ }
   };
@@ -12543,12 +12482,6 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     return () => window.removeEventListener('ava-folder-changed', handler);
   }, []);
 
-  // Fetch files from the platform's creative_assets table — this is the
-  // same endpoint the VS Code extension uses. Previously the IDE pointed
-  // at `/library` which doesn't exist on the server (404 silently
-  // handled as empty list), so this page has been showing no cloud
-  // results for anyone. Switched to /creative-assets and wired the
-  // response shape accordingly.
   useEffect(() => {
     // Assets are local-first now — read the account-scoped creative gallery
     // (~/.ava/users/<id>/creative, shared with the extension), no cloud.
@@ -12585,50 +12518,11 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         .finally(() => { if (!cancelled) setLoading(false); });
       return () => { cancelled = true; };
     }
-    // Documents — still the platform creative_assets (docs / spreadsheets).
-    if (!connected) { setLoading(false); return; }
-    setLoading(true);
-    apiFetch('/creative-assets')
-      .then((data: unknown) => {
-        const d = data as { assets?: unknown[] } | undefined;
-        const items = Array.isArray(d?.assets) ? d!.assets : [];
-        setCloudFiles(items.map((f: any) => {
-          const rawKind = String(f.asset_type || f.type || 'image').toLowerCase();
-          // Filter axis (LibraryFileType) collapses every media kind to
-          // 'image' so the existing All / Images / Documents tab split
-          // keeps working unchanged.
-          const libraryType: LibraryFileType =
-            rawKind === 'spreadsheet' ? 'spreadsheet' :
-            rawKind === 'document' ? 'document' :
-            'image';
-          // mediaKind preserves the real asset_type so the thumbnail can
-          // pick the right element. Without this, music / voice / video
-          // rows all rendered as <img src="mp3 URL"> which the webview
-          // shows as a broken-image glyph.
-          const mediaKind: LibraryMediaKind =
-            rawKind === 'music' || rawKind === 'voice' || rawKind === 'video' ||
-            rawKind === 'image' || rawKind === 'document' ||
-            rawKind === 'spreadsheet' || rawKind === 'presentation'
-              ? (rawKind as LibraryMediaKind)
-              : 'image';
-          return {
-            id: f.id,
-            name: f.title || 'Untitled',
-            path: f.url || '',
-            folder: f.source || 'Creative Studio',
-            type: libraryType,
-            mediaKind,
-            size: 0,  // creative_assets schema doesn't carry size
-            modified: f.created_at || '',
-            url: f.url || f.thumbnail_url || '',
-            prompt: f.prompt || '',
-            source: 'cloud',
-          };
-        }));
-      })
-      .catch(() => setCloudFiles([]))
-      .finally(() => setLoading(false));
-  }, [connected, kind, reloadKey]);
+    // Documents come from the local scan below — Ava is local-only, so
+    // nothing is read from the platform's creative_assets.
+    setCloudFiles([]);
+    setLoading(false);
+  }, [kind, reloadKey]);
 
   // Local scan — independent of connection state (local files exist
   // whether or not the user is signed in). Re-runs whenever the
@@ -13285,11 +13179,7 @@ function LibraryPreviewModal({
     if (!confirmDelete) { setConfirmDelete(true); return; }
     setBusy('delete');
     try {
-      if (isCloud) {
-        if (!file.id) { showToast('Cloud asset has no id.'); return; }
-        await apiFetch(`/creative-assets/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
-        onDeleted(file.id, 'cloud');
-      } else if (pendingDelete) {
+      if (pendingDelete) {
         // A single format the user picked out of the Formats list.
         const abs = await siblingAbsPath(pendingDelete);
         if (abs) {
@@ -14256,7 +14146,7 @@ export function PersonalityPage() {
     { value: 'structured', label: t('dash.personality.style.structured'), desc: t('dash.personality.style.structured_desc') },
   ];
 
-  // Local-first: load from localStorage, then override with cloud if available
+  // Local only: Ava's style lives in localStorage and never leaves the machine.
   useEffect(() => {
     try {
       const local = localStorage.getItem('ava-ide-personality');
@@ -14268,43 +14158,14 @@ export function PersonalityPage() {
         if (p.description) setDescription(p.description);
       }
     } catch {}
-    if (!connected) { setLoading(false); return; }
-    apiFetch('/settings')
-      .then((data: any) => {
-        const p = data.personality || data;
-        if (p.tone) setTone(p.tone);
-        if (p.energy) setEnergy(p.energy);
-        if (p.style || p.communication_style) setStyle(p.style || p.communication_style);
-        if (p.description) setDescription(p.description);
-        // The user avatar rides on this same payload, but it is not this page's
-        // business any more — UserAvatarPanel hydrates itself from /settings so
-        // it is correct whether or not you ever open Ava's style page.
-        setLoading(false);
-      })
-      .catch(() => { setLoading(false); });
-  }, [connected]);
+    setLoading(false);
+  }, []);
 
   const handleSave = async () => {
     // Always save locally
     try { localStorage.setItem('ava-ide-personality', JSON.stringify({ tone, energy, style, description })); } catch {}
 
     setSaving(true);
-    // Cloud sync only when Data Mode permits it. Local mode keeps the
-    // localStorage save above but skips POST /settings.
-    if (connected && cloudSyncEnabled()) {
-      try {
-        await apiFetch('/settings', {
-          method: 'POST',
-          body: JSON.stringify({
-            personality: { name: 'Ava', pronouns: 'she/her', tone, energy, style, description },
-            personality_name: 'Ava',
-            pronouns: 'she/her', tone, energy,
-            communication_style: style,
-            description,
-          }),
-        });
-      } catch { /* local save stands */ }
-    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
     setSaving(false);
@@ -14315,16 +14176,7 @@ export function PersonalityPage() {
     setEnergy('enthusiastic');
     setStyle('conversational');
     setDescription('');
-    if (connected && cloudSyncEnabled()) {
-      try {
-        await apiFetch('/settings', {
-          method: 'POST',
-          body: JSON.stringify({
-            personality: { name: 'Ava', pronouns: 'she/her', tone: 'warm', energy: 'enthusiastic', style: 'conversational', description: '' },
-          }),
-        });
-      } catch { /* ignore */ }
-    }
+    try { localStorage.setItem('ava-ide-personality', JSON.stringify({ tone: 'warm', energy: 'enthusiastic', style: 'conversational', description: '' })); } catch {}
   };
 
   const toneLabel = TONES.find(t => t.value === tone)?.label?.toLowerCase() ?? tone;
@@ -14503,14 +14355,12 @@ export function PersonalityPage() {
   );
 }
 
-/* ===== 8. Cloud Sync ===== */
+/* ===== 8. Data export & backup ===== */
 /**
  * Data export / import — lives in Settings → Privacy.
  *
  * Self-contained: owns its own state and listens for the sidecar's
- * data_export_ready / data_imported events directly. It used to sit on the
- * CloudSyncPage, which is no longer reachable from the sidebar — so the card
- * was live in the bundle and invisible in the app.
+ * data_export_ready / data_imported events directly.
  *
  * The 11 types and all read/write logic come from core (CORE_DATA_TYPES); this
  * is only the picker.
@@ -14518,11 +14368,7 @@ export function PersonalityPage() {
 /**
  * Encrypted backup / readable export / restore — Settings -> Privacy.
  *
- * This card predates the per-type picker and used to live on CloudSyncPage,
- * which is no longer reachable from the sidebar. So ever since cloud sync left
- * the nav, there was NO way for a user to take a passphrase-locked backup or
- * restore one: the feature existed, was wired to the sidecar, and could not be
- * clicked. Moved here, next to the picker, where a user actually looks.
+ * Lives next to the per-type picker, where a user actually looks.
  */
 export function LocalBackupCard() {
   useLocale(); // re-render on locale change; `t` is a direct import
@@ -14822,378 +14668,6 @@ export function DataExportCard() {
         </div>
       )}
     </>
-  );
-}
-
-export function CloudSyncPage() {
-  useLocale();
-  const [authKey, setAuthKey] = useState(0);
-  useEffect(() => {
-    const handler = () => {
-      if (!checkConnected()) { setCounts({}); setSyncResults({}); setSyncingTypes(new Set()); }
-      setAuthKey(k => k + 1);
-    };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-  void authKey;
-  const connected = checkConnected();
-  const [syncingTypes, setSyncingTypes] = useState<Set<string>>(new Set());
-  const [syncResults, setSyncResults] = useState<Record<string, { success: boolean; count?: number; error?: string }>>({});
-
-
-
-  // Categories that default OFF — opt-in only. The user must explicitly
-  // enable cloud sync for these: shared learnings leave the device, and
-  // the health profile is sensitive body data.
-  const OPT_IN_ONLY = new Set(['shared', 'health_profile']);
-  const defaultEnabled = (key: string) => !OPT_IN_ONLY.has(key);
-
-  // Per-section sync toggles (local-first, persisted to localStorage)
-  const [syncPrefs, setSyncPrefs] = useState<Record<string, boolean>>(() => {
-    try { const raw = localStorage.getItem('ava-ide-sync-prefs'); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
-  });
-  const togglePref = (key: string) => {
-    setSyncPrefs(prev => {
-      const next = { ...prev, [key]: !(prev[key] ?? defaultEnabled(key)) };
-      try { localStorage.setItem('ava-ide-sync-prefs', JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
-  const isSyncEnabled = (key: string) => syncPrefs[key] ?? defaultEnabled(key);
-
-  const DATA_TYPES = [
-    { key: 'memory',      label: t('dash.sync.memory'),           icon: '\uD83E\uDDE0', description: t('dash.sync.memory_desc'),    endpoint: '/memories' },
-    { key: 'tasks',       label: t('dash.sync.tasks'),            icon: '\u2713',       description: t('dash.sync.tasks_desc'),     endpoint: '/tasks' },
-    // Journal is local-only \u2014 it never syncs to the cloud, so it's not listed here.
-    { key: 'learning',    label: t('dash.nav.learning'),         icon: '\uD83C\uDF93', description: t('dash.nav.learning_desc'),              endpoint: '/learning' },
-    { key: 'settings',    label: t('dash.sync.settings'),         icon: '\u2699',       description: t('dash.sync.settings_desc'),           endpoint: '/settings' },
-    { key: 'personality', label: t('dash.sync.personality'),      icon: '\uD83C\uDFAD', description: t('dash.sync.personality_desc'),       endpoint: '/settings' },
-    { key: 'health_profile', label: t('dash.sync.health_profile'), icon: '\uD83C\uDFCB\uFE0F', description: t('dash.sync.health_profile_desc'), endpoint: '/health/profile/sync' },
-  ];
-
-  const [counts, setCounts] = useState<Record<string, { local: number; cloud: number; lastSynced?: string }>>({});
-
-  useEffect(() => {
-    if (!connected) return;
-    const fetchCounts = async () => {
-      const results: Record<string, { local: number; cloud: number; lastSynced?: string }> = {};
-      for (const dt of DATA_TYPES) {
-        try {
-          if (dt.key === 'health_profile') {
-            // Health profile is local-first (Tauri fs), not an account
-            // collection — count it as 1 once a profile has been saved.
-            const { loadHealthProfile } = await import('../lib/health-store');
-            const local = await loadHealthProfile();
-            const cloud = await apiFetch(dt.endpoint);
-            results[dt.key] = {
-              local: local.updated_at ? 1 : 0,
-              cloud: cloud?.profile ? 1 : 0,
-              lastSynced: cloud?.updated_at || undefined,
-            };
-            continue;
-          }
-          const data = await apiFetch(dt.endpoint);
-          const count = Array.isArray(data) ? data.length : (data?.count || data?.total || (data ? 1 : 0));
-          results[dt.key] = { local: count, cloud: count, lastSynced: new Date().toISOString() };
-        } catch {
-          results[dt.key] = { local: 0, cloud: 0 };
-        }
-      }
-      setCounts(results);
-    };
-    fetchCounts();
-  }, [connected]);
-
-  const handlePush = async (key: string, endpoint: string) => {
-    if (!connected) return;
-    setSyncingTypes(prev => new Set(prev).add(key));
-    try {
-      if (key === 'health_profile') {
-        // Push the local-first health profile up to the cloud copy.
-        const { loadHealthProfile } = await import('../lib/health-store');
-        const profile = await loadHealthProfile();
-        await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ profile }) });
-        setSyncResults(prev => ({ ...prev, [key]: { success: true, count: 1 } }));
-        setCounts(prev => ({
-          ...prev,
-          [key]: { local: 1, cloud: 1, lastSynced: new Date().toISOString() },
-        }));
-      } else {
-        const data = await apiFetch(endpoint);
-        const count = Array.isArray(data) ? data.length : (data?.count || data?.total || 1);
-        setSyncResults(prev => ({ ...prev, [key]: { success: true, count } }));
-        setCounts(prev => ({
-          ...prev,
-          [key]: { ...prev[key], local: count, cloud: count, lastSynced: new Date().toISOString() },
-        }));
-      }
-    } catch (err: any) {
-      setSyncResults(prev => ({ ...prev, [key]: { success: false, error: err.message || 'Failed' } }));
-    }
-    setSyncingTypes(prev => {
-      const next = new Set(prev);
-      next.delete(key);
-      return next;
-    });
-  };
-
-  const handlePushAll = () => {
-    for (const dt of DATA_TYPES) {
-      if (!isSyncEnabled(dt.key)) continue; // Respect toggles
-      const c = counts[dt.key];
-      if (c && c.local > 0) {
-        handlePush(dt.key, dt.endpoint);
-      }
-    }
-  };
-
-  // GDPR Article 20 — full cloud-stored data export. Hits the platform
-  // /api/export-my-data endpoint directly (Tauri can fetch + write to
-  // disk without a host proxy). Pairs with the local audit-log export
-  // in the History → Audit tab — together the two give the user a
-  // complete picture of every byte the system holds about them.
-  const exportFullAccountData = async () => {
-    try {
-      // Was reading 'ava-platform-key' — wrong key. Canonical storage is
-      // 'ava-ide-platform-key' via getPlatformKey() / lib/api.
-      const platformKey = getPlatformKey();
-      if (!platformKey) {
-        alert('Connect a platform account first to export your cloud-stored data.');
-        return;
-      }
-      const res = await fetch('https://avasupernova.com/api/export-my-data', {
-        headers: { Authorization: `Bearer ${platformKey}` },
-      });
-      if (!res.ok) {
-        alert(`Export failed: ${res.status} ${res.statusText}`);
-        return;
-      }
-      const content = await res.text();
-      const datePart = todayLocal();
-      const filename = `ava-supernova-data-export-${datePart}.json`;
-      const [{ save }, fs] = await Promise.all([
-        import('@tauri-apps/plugin-dialog'),
-        import('@tauri-apps/plugin-fs'),
-      ]);
-      const target = await save({
-        defaultPath: filename,
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-      });
-      if (!target) return;
-      await fs.writeTextFile(target, content);
-    } catch (err) {
-      alert(`Export failed: ${err instanceof Error ? err.message : err}`);
-    }
-  };
-
-  return (
-    <div style={pageWrapper}>
-      <div style={{ width: '100%' }}>
-        <div style={{ marginBottom: 8 }}>
-          <div style={pageTitle}>{t('dash.sync.title')}</div>
-          <div style={pageSubtitle}>
-            {t('dash.sync.subtitle')}
-          </div>
-        </div>
-
-        {/* GDPR full-account export — now also the cloud SUNSET notice: the
-            platform stops storing user data on 1 Jul 2026, so this is the
-            last-chance path to pull anything still in the cloud. Amber warning. */}
-        {connected && (
-          <div style={{ ...card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.08)' }}>
-            <div style={{ flexShrink: 0, color: '#fbbf24', fontSize: 22 }}>⚠️</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#fbbf24', marginBottom: 2 }}>{t('dash.portability.download_all')}</div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24', lineHeight: 1.5, marginBottom: 2 }}>
-                {t('dash.portability.cloud_sunset')}
-              </div>
-              <div style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.5 }}>
-                {t('dash.portability.download_all_desc')}
-              </div>
-            </div>
-            <button
-              onClick={exportFullAccountData}
-              style={{
-                flexShrink: 0,
-                padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(245,158,11,0.4)',
-                background: 'rgba(245,158,11,0.15)', color: '#fbbf24', fontSize: 12, fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Download (.json)
-            </button>
-          </div>
-        )}
-
-        {!connected && (
-          <div style={{
-            background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.20)',
-            borderRadius: 10, padding: '12px 16px', fontSize: 12, color: '#f59e0b', marginBottom: 20,
-          }}>
-            {t('dash.sync.connect_to_sync')}
-          </div>
-        )}
-
-        {/* Data type rows */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {DATA_TYPES.map(({ key, label, icon, description, endpoint }) => {
-            const c = counts[key] || { local: 0, cloud: 0 };
-            const isSyncing = syncingTypes.has(key);
-            const result = syncResults[key];
-            const isUpToDate = c.local > 0 && c.local === c.cloud && c.lastSynced;
-            const lastSynced = c.lastSynced;
-
-            return (
-              <div key={key} style={{
-                background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10,
-                padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-                  {/* Sync toggle */}
-                  <button
-                    onClick={() => togglePref(key)}
-                    style={{
-                      width: 32, height: 18, borderRadius: 9, flexShrink: 0, position: 'relative', cursor: 'pointer', border: 'none',
-                      background: isSyncEnabled(key) ? 'var(--accent)' : 'rgba(49, 34, 68, 0.5)', transition: 'background 0.2s',
-                    }}
-                    title={isSyncEnabled(key) ? `Disable ${label} sync` : `Enable ${label} sync`}
-                  >
-                    <div style={{
-                      width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2,
-                      left: isSyncEnabled(key) ? 16 : 2, transition: 'left 0.2s',
-                    }} />
-                  </button>
-                  <span style={{ fontSize: 20, flexShrink: 0, width: 28, textAlign: 'center', opacity: isSyncEnabled(key) ? 1 : 0.3 }}>{icon}</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: '#cdd6f4' }}>{label}</span>
-                      {isUpToDate && (
-                        <span style={{
-                          fontSize: 10, color: '#34d399', background: 'rgba(52,211,153,0.10)',
-                          padding: '2px 8px', borderRadius: 4,
-                        }}>
-                          &#10003; Up to date
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                      <span style={{
-                        fontSize: 10, color: '#6c7086', background: 'rgba(49, 34, 68, 0.5)',
-                        padding: '2px 8px', borderRadius: 4,
-                      }}>
-                        Your device: {c.local}
-                      </span>
-                      <span style={{
-                        fontSize: 10, color: '#6c7086', background: 'rgba(49, 34, 68, 0.5)',
-                        padding: '2px 8px', borderRadius: 4,
-                      }}>
-                        Cloud: {c.cloud}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 11, color: '#6c7086', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {description}
-                      {lastSynced && (
-                        <span style={{ opacity: 0.6, marginLeft: 4 }}>
-                          &middot; Last synced {new Date(lastSynced).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 16 }}>
-                  {result && !isSyncing && (
-                    <span style={{ fontSize: 11, color: result.success ? '#34d399' : '#f87171' }}>
-                      {result.success ? `Synced ${result.count ?? 0}` : (result.error || 'Failed')}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => handlePush(key, endpoint)}
-                    disabled={!connected || isSyncing || c.local === 0 || !isSyncEnabled(key)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      background: 'var(--accent)', border: 'none', borderRadius: 8,
-                      padding: '7px 14px', fontSize: 12, fontWeight: 500, color: '#fff',
-                      cursor: 'pointer', opacity: (!connected || isSyncing || c.local === 0) ? 0.3 : 1,
-                      transition: 'opacity 0.15s',
-                    }}
-                    onMouseEnter={e => { if (connected && !isSyncing) (e.currentTarget as HTMLElement).style.background = '#9333ea'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--accent)'; }}
-                  >
-                    {isSyncing ? (
-                      <>
-                        <div style={{
-                          width: 12, height: 12, border: '2px solid rgba(255,255,255,0.3)',
-                          borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite',
-                        }} />
-                        Pushing...
-                      </>
-                    ) : isUpToDate ? (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4.5 12.75l6 6 9-13.5" />
-                        </svg>
-                        Synced
-                      </>
-                    ) : (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-                        </svg>
-                        {t('dash.sync.sync_now')}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Push All */}
-        {connected && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-            <button
-              onClick={handlePushAll}
-              disabled={syncingTypes.size > 0}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
-                borderRadius: 10, padding: '9px 18px', fontSize: 12, fontWeight: 500,
-                color: 'var(--accent)', cursor: 'pointer', opacity: syncingTypes.size > 0 ? 0.3 : 1,
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-              </svg>
-              Push All to Cloud
-            </button>
-          </div>
-        )}
-
-        {/* How it works */}
-        <div style={{
-          background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10,
-          padding: '16px 20px', marginTop: 28,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#cdd6f4', marginBottom: 8 }}>{t('dash.learning.how_it_works')}</div>
-          <ul style={{ margin: 0, paddingLeft: 16 }}>
-            {[
-              t('dash.sync.how1'),
-              t('dash.sync.how2'),
-              t('dash.sync.how3'),
-              t('dash.sync.how4'),
-            ].map((text, i) => (
-              <li key={i} style={{ fontSize: 11, color: '#6c7086', lineHeight: 1.8 }}>{text}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -15602,7 +15076,7 @@ function SemanticRecallSettings() {
 
 /** Settings control for chat-backend routing — where the chat runs:
  *  the local sidecar (your own API keys / BYOK) or the Ava platform.
- *  Independent of cloud sync (which is the data-backup axis). Persists
+ *  Persists
  *  to 'ava-ide-chat-backend' and broadcasts 'ava-chat-backend-changed'
  *  so the chat surface picks the change up live. */
 function ChatBackendSetting() {
@@ -15648,11 +15122,18 @@ function ChatBackendSetting() {
 }
 
 /* ===== 10. Settings ===== */
+// Settings provider id → its field in localStorage['ava-ide-byok']. The field
+// names are the sidebar key panel's and must not change, or saved keys are
+// orphaned (see Sidebar.tsx). MiniMax is retired and has no field.
+const BYOK_FIELD: Record<string, string> = {
+  deepseek: 'DeepSeek', kimi: 'Moonshot', glm: 'Zhipu', qwen: 'Qwen',
+  mistral: 'Mistral', tencent: 'Tencent', nvidia: 'NVIDIA',
+};
+
 export function SettingsPage() {
   useLocale();
   const defaultSettings = {
     autoMemory: true,
-    memoryLocalOnly: false,
     contributeSharedLearning: false,
     permissionMode: 'balanced',
     streamResponses: true,
@@ -15692,10 +15173,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     const handler = () => {
-      if (!checkConnected()) {
-        setSettings(defaultSettings);
-        setProviderKeys({});
-      }
+      // Settings and provider keys are local — signing out leaves them be.
       setAuthKey(k => k + 1);
     };
     window.addEventListener('ava-auth-changed', handler);
@@ -15704,7 +15182,13 @@ export function SettingsPage() {
   }, []);
   void authKey;
   const connected = checkConnected();
-  const [settings, setSettings] = useState<any>(defaultSettings);
+  // Saved locally in 'ava-ide-settings' — the same store the sidecar reads
+  // permissionMode from at boot. These used to save only to the cloud, behind
+  // a sync switch that was always off, so no change here ever stuck.
+  const [settings, setSettings] = useState<any>(() => {
+    try { return { ...defaultSettings, ...JSON.parse(localStorage.getItem('ava-ide-settings') || '{}') }; }
+    catch { return defaultSettings; }
+  });
   // Desktop permission level — same hook as the chat-bar pill, so changes
   // here propagate there and vice versa. Hook handles localStorage + sidecar
   // push internally.
@@ -15808,7 +15292,6 @@ export function SettingsPage() {
   const PROVIDERS = [
     { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4.1 Flash \u2014 1M context, multimodal, MIT open-weight' },
     { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.7 Code \u2014 agentic coding leader' },
-    { id: 'minimax', name: 'MiniMax', placeholder: 'sk-api-...', signupUrl: 'https://platform.minimax.io', description: 'M3 flagship, M2.7 standard' },
     { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5.3 \u2014 open-weights, 1M context, top-tier coding' },
     { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.7 Plus and 3.7 Max — vision, 1M context' },
     { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4 — European, vision' },
@@ -15822,18 +15305,21 @@ export function SettingsPage() {
   // Shared with the onboarding overlay so the two lists never drift.
   const LANGUAGES = languageOptions();
 
+  // Which providers have a key — read from 'ava-ide-byok', the one store the
+  // sidecar and the sidebar key panel both use.
   useEffect(() => {
-    if (!connected) return;
-    apiFetch('/settings')
-      .then((data: any) => {
-        if (data) {
-          setSettings((prev: any) => ({ ...prev, ...data }));
-          if (data.providerKeys) setProviderKeys(data.providerKeys);
-          // User avatar now loads on the Ava's Style (Personality) page.
-        }
-      })
-      .catch(() => {});
-  }, [connected]);
+    const read = () => {
+      try {
+        const keys: Record<string, string> = JSON.parse(localStorage.getItem('ava-ide-byok') || '{}');
+        const has: Record<string, boolean> = {};
+        for (const [id, field] of Object.entries(BYOK_FIELD)) has[id] = !!keys[field]?.trim();
+        setProviderKeys(has);
+      } catch { /* none saved */ }
+    };
+    read();
+    window.addEventListener('ava-byok-changed', read);
+    return () => window.removeEventListener('ava-byok-changed', read);
+  }, []);
 
   const saveImmediate = (key: string, value: any) => {
     const updated = { ...settings, [key]: value };
@@ -15845,27 +15331,26 @@ export function SettingsPage() {
       import('../lib/i18n').then(({ setLanguage }) => setLanguage(value)).catch(() => {});
       getSidecar().setLanguage(value).catch(() => { /* sidecar not up yet — boot reads the store */ });
     }
-    if (connected && cloudSyncEnabled()) {
-      apiFetch('/settings', {
-        method: 'POST',
-        body: JSON.stringify(updated),
-      }).catch(() => {});
-    }
+    try { localStorage.setItem('ava-ide-settings', JSON.stringify(updated)); } catch { /* storage unavailable */ }
+  };
+
+  const writeByok = (providerId: string, value: string | null) => {
+    const field = BYOK_FIELD[providerId];
+    if (!field) return;
+    try {
+      const keys: Record<string, string> = JSON.parse(localStorage.getItem('ava-ide-byok') || '{}');
+      if (value) keys[field] = value; else delete keys[field];
+      localStorage.setItem('ava-ide-byok', JSON.stringify(keys));
+    } catch { /* storage unavailable */ }
+    window.dispatchEvent(new CustomEvent('ava-byok-changed'));
   };
 
   const handleSaveProviderKey = (providerId: string) => {
     const key = providerInputs[providerId]?.trim();
     if (!key) return;
     setSavingProvider(providerId);
-    if (connected && cloudSyncEnabled()) {
-      // Provider keys never leave the device in Local mode. OS keychain
-      // on the extension holds the BYOK keys locally; mirroring to cloud
-      // is opt-in via Data Mode.
-      apiFetch('/settings/provider-key', {
-        method: 'POST',
-        body: JSON.stringify({ provider: providerId, apiKey: key }),
-      }).catch(() => {});
-    }
+    // Saved on this machine only, in the same store the sidebar writes.
+    writeByok(providerId, key);
     setProviderKeys(prev => ({ ...prev, [providerId]: true }));
     setProviderInputs(prev => ({ ...prev, [providerId]: '' }));
     setEditingProvider(null);
@@ -15873,12 +15358,7 @@ export function SettingsPage() {
   };
 
   const handleRemoveProviderKey = (providerId: string) => {
-    if (connected && cloudSyncEnabled()) {
-      apiFetch('/settings/provider-key', {
-        method: 'DELETE',
-        body: JSON.stringify({ provider: providerId }),
-      }).catch(() => {});
-    }
+    writeByok(providerId, null);
     setProviderKeys(prev => ({ ...prev, [providerId]: false }));
   };
 
@@ -16046,18 +15526,6 @@ export function SettingsPage() {
               </div>
             </div>
             <ToggleSwitch value={settings.autoMemory} onChange={v => saveImmediate('autoMemory', v)} />
-          </div>
-          <div style={divider} />
-          {/* Local Only */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', color: '#a6adc8' }}><PhLock size={18} weight="duotone" /></span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.settings.local_only')}</div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.settings.local_only_desc')}</div>
-              </div>
-            </div>
-            <ToggleSwitch value={settings.memoryLocalOnly} onChange={v => saveImmediate('memoryLocalOnly', v)} />
           </div>
           <div style={divider} />
           {/* Shared Learning */}
@@ -16335,9 +15803,7 @@ export function SettingsPage() {
         <div style={{ display: settingsTab === 'models' ? 'contents' : 'none' }}>
 
         {/* Chat backend — where the chat runs (local sidecar vs platform).
-            Independent of cloud sync; previously these shared one header
-            toggle, now separated so the IDE chat header mirrors the
-            extension. */}
+            Mirrors the extension. */}
         <div style={sLabel}>{t('dash.settings.section.chat_backend')}</div>
         <ChatBackendSetting />
 

@@ -13,7 +13,6 @@
 
 import { createInterface } from 'node:readline';
 import { platform, homedir } from 'node:os';
-import { createHash } from 'node:crypto';
 import { join, dirname, basename, resolve as resolvePath } from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -197,7 +196,6 @@ const {
   scanCategories,
   executeReset,
   resetCategories,
-  PlatformMemorySync,
   ProviderHealthTracker,
   ResilientProvider,
   Conductor,
@@ -290,12 +288,11 @@ async function handleAssetForgeGenerate(body) {
     emit({ event: 'asset_forge_result', success: false, error: 'Not connected. Add your account in Settings.' });
     return;
   }
-  // The platform still speaks the legacy data-mode vocabulary ('local' | 'both');
-  // generationLocalOnly is truthy when the user's Data Mode is local.
+  // Ava is local-only: 'local' tells the platform not to keep a copy.
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${platformKey}`,
-    'X-Ava-Data-Mode': state.generationLocalOnly ? 'local' : 'both',
+    'X-Ava-Data-Mode': 'local',
   };
   try {
     // 1) Generate — the reference image (the shape armature) guides the material.
@@ -460,7 +457,7 @@ async function handleAssetForgeVoice(body, designRequestId, title) {
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${platformKey}`,
-    'X-Ava-Data-Mode': state.generationLocalOnly ? 'local' : 'both',
+    'X-Ava-Data-Mode': 'local',
   };
   try {
     const res = await fetch('https://avasupernova.com/api/generate-voice', {
@@ -560,7 +557,7 @@ async function handleAssetForgeVideo(body, designRequestId, title) {
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${platformKey}`,
-    'X-Ava-Data-Mode': state.generationLocalOnly ? 'local' : 'both',
+    'X-Ava-Data-Mode': 'local',
   };
   try {
     // 1) Submit — the route accepts the job and returns a task_id.
@@ -1405,16 +1402,6 @@ async function handleFactoryResetExecute(categories) {
     },
     // A sidecar cannot reach localStorage. Collect and hand back.
     clearStateKey: async (key) => { clearedStateKeys.push(key); },
-    disableSyncFirst: async () => {
-      // Rule 3: a reset the next sync undoes is worse than none.
-      const cfgPath = join(AVA_HOME, 'config.json');
-      try {
-        const cfg = JSON.parse(await readFile(cfgPath, 'utf-8'));
-        cfg.cloudSyncEnabled = false;
-        cfg.syncPrefs = {};
-        await writeFile(cfgPath, JSON.stringify(cfg, null, 2), 'utf-8');
-      } catch { /* no config means no sync to disable */ }
-    },
     log: (m) => emit({ event: 'info', message: m }),
   };
 
@@ -2064,14 +2051,6 @@ async function handleInit(data) {
     globalThis.__avaAuditLog = auditLog;
 
     // Memory
-    let sync;
-    if (config.platformKey) {
-      const projectId = projectRoot
-        ? createHash('sha256').update(projectRoot).digest('hex').slice(0, 16)
-        : undefined;
-      sync = new PlatformMemorySync('https://avasupernova.com/api', config.platformKey, projectId);
-    }
-
     // Load memory in background — don't block init
     let memory = null;
     let projectInstructions = null;
@@ -2079,7 +2058,7 @@ async function handleInit(data) {
       memoryManager = new MemoryManager({
         // Memory is FLAT, local-only — one store per machine at ~/.ava/memory/,
         // the SAME store the extension + CLI use. (Account-scoping memory was
-        // pointless once cloud sync was removed, and it split the IDE off from
+        // pointless with no cloud, and it split the IDE off from
         // the extension's memory.)
         globalDir: AVA_HOME,
         projectRoot,
@@ -2440,15 +2419,6 @@ async function handleInit(data) {
         });
       },
       desktopAutomationSettings: config.desktopAutomationSettings || undefined,
-      // Creative asset cloud sync — gates generate_image / _music / _video /
-      // _voice tools' post-write upload. Same formula as learningLocalOnly
-      // in the VS Code extension: truthy when the user's Data Mode resolves
-      // to local or they've explicitly turned off generation sync. The IDE
-      // frontend computes this from its Data Mode state and passes it in
-      // via the init config so the sidecar doesn't need to know anything
-      // about localStorage / settings storage.
-      generationLocalOnly: !!config.generationLocalOnly,
-      learningLocalOnly: !!config.learningLocalOnly,
       clientSurface: 'ide',
     };
 

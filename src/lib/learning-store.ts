@@ -4,8 +4,7 @@
 // ~/.ava/learning.json — the SAME file the CLI and the extension use, the same
 // one @ava/core reads + writes. The IDE reads and writes it directly via the
 // Tauri fs plugin (mirroring shared-config.ts for config.json), so learning
-// works with NO account and NO connection. Cloud sync is additive — handled by
-// @ava/core when the user is signed in — never a requirement.
+// works with NO account and NO connection. It never leaves the machine.
 //
 // The curated *library catalogue* (/learning/library) stays remote on purpose:
 // that's a catalogue you browse and fork from, not your own data. Forking

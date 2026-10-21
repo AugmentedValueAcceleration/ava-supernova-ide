@@ -4,7 +4,7 @@
 
 A desktop application built with **Tauri v2** (Rust), **React 19**, and a **Node.js engine** running `@ava/core` locally. The full agent — 120+ tools, 7 modes, 24 specialist personas, 5-layer memory — with no browser and no VS Code required. And because it owns its whole stack, the IDE does the one thing the extension can't: **drive your entire machine.**
 
-> **Local-first by default.** The engine runs on your machine; your data stays there unless you turn on cloud sync.
+> **Local-only.** The engine runs on your machine and your data stays there. Nothing is synced to a cloud.
 
 ---
 
@@ -103,7 +103,7 @@ pnpm tauri dev
 - **Tauri v2** — Rust backend, native WebView frontend
 - **React 19** + **Vite 7** — UI and dev server
 - **@ava/core** — the agent engine (tools, personas, memory, providers)
-- **Supabase** — cloud database, auth, storage (for Cloud mode + opt-in sync)
+- **Supabase** — accounts and credits for signed-in users (no user data is synced)
 - **Catppuccin Mocha** — dark theme palette
 
 ---
