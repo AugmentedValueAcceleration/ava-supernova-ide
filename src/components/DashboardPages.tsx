@@ -2068,6 +2068,18 @@ type CcTab = 'daily' | 'briefing' | 'reflect' | 'health';
  *  session starts on Daily — see switchTab. */
 let lastCcTab: CcTab = 'daily';
 
+
+/** Another field has the caret — the composer must not take it.
+ *  Ava's question card, a confirmation's reason box, any input: if the
+ *  user is typing there, an automatic focus would pull them out mid-word.
+ *  (22 Oct 2026: "when she asks us something … we get kicked out of that
+ *  text box" — the end-of-turn refocus fired while they were answering.) */
+function anotherFieldHasFocus(composer: HTMLElement | null): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el || el === document.body || el === composer) return false;
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
+}
+
 export function CommandCentrePage() {
   const locale = useLocale();
   const hour = new Date().getHours();
@@ -3456,7 +3468,10 @@ export function AvaChatPage() {
       // Next frame, not this one: the turn ending is the busiest render in
       // the app, and a focus() issued mid-commit gets undone by whatever
       // mounts straight after it.
-      requestAnimationFrame(() => textareaRef.current?.focus());
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current;
+        if (ta && !anotherFieldHasFocus(ta)) ta.focus();
+      });
     }
   }, [streaming]);
 
@@ -4818,7 +4833,7 @@ export function AvaChatPage() {
         }
         setStreaming(false);
         setStatusText('');
-        textareaRef.current?.focus();
+        if (!anotherFieldHasFocus(textareaRef.current)) textareaRef.current?.focus();
 
         // Desktop mode: the trajectory may have minimized the IDE to reveal
         // the desktop (minimize_all). Bring it back when the task finishes —
