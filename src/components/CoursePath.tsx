@@ -81,6 +81,11 @@ export function CoursePath({ curriculum }: { curriculum: any | null }) {
     dragRef.current = { startX: e.clientX, startW: widthRef.current };
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
+      // A release OUTSIDE the panel never reaches this document, and the
+      // drag (with selection switched off page-wide) used to outlive it — so
+      // text could not be selected or copied anywhere until a reload (23 Oct
+      // 2026). Back over the panel with no button held means it was let go.
+      if (ev.buttons === 0) { onUp(); return; }
       // Panel sits on the right edge, so dragging left widens it.
       const delta = dragRef.current.startX - ev.clientX;
       const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragRef.current.startW + delta));
@@ -90,6 +95,7 @@ export function CoursePath({ curriculum }: { curriculum: any | null }) {
       dragRef.current = null;
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      window.removeEventListener('blur', onUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       try { localStorage.setItem(WIDTH_KEY, String(widthRef.current)); } catch { /* ignore */ }
@@ -98,6 +104,7 @@ export function CoursePath({ curriculum }: { curriculum: any | null }) {
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
+    window.addEventListener('blur', onUp);
   }, []);
 
   // The "current" lesson = first not-completed lesson in document order.

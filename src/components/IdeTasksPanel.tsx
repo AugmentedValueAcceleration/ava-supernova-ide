@@ -677,6 +677,11 @@ export default function IdeTasksPanel({
 
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
+      // A release OUTSIDE the panel never reaches this document, and the
+      // drag (with selection switched off page-wide) used to outlive it — so
+      // text could not be selected or copied anywhere until a reload (23 Oct
+      // 2026). Back over the panel with no button held means it was let go.
+      if (ev.buttons === 0) { onUp(); return; }
       const delta = dragRef.current.startX - ev.clientX;
       const next = Math.min(500, Math.max(200, dragRef.current.startW + delta));
       requestAnimationFrame(() => onWidthChange(next));
@@ -686,6 +691,7 @@ export default function IdeTasksPanel({
       dragRef.current = null;
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      window.removeEventListener('blur', onUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
@@ -694,6 +700,7 @@ export default function IdeTasksPanel({
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
+    window.addEventListener('blur', onUp);
   }, [width, onWidthChange]);
 
   return (
