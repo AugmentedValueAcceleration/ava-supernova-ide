@@ -35,16 +35,26 @@ console.log('[bundle] Sidecar bundled successfully.');
 const binDir = join(tauriDir, 'binaries');
 if (!existsSync(binDir)) mkdirSync(binDir, { recursive: true });
 
-const nodeVersion = '20.18.3';
+// Node 20 is end-of-life (Apr 2026) and missed the 21 Oct 2026 security release
+// (TLS hostname-check bypass, Brotli RCE, eMudhra certificate distrust). Keep
+// this on a patched release of a supported major.
+const nodeVersion = '24.22.1';
 const targets = {
   'x86_64-pc-windows-msvc': `https://nodejs.org/dist/v${nodeVersion}/win-x64/node.exe`,
 };
 
 for (const [triple, url] of Object.entries(targets)) {
   const outPath = join(binDir, `node-${triple}.exe`);
+  // Present is not the same as current. This used to skip on existence alone,
+  // so changing nodeVersion kept shipping whatever binary was already on disk.
   if (existsSync(outPath)) {
-    console.log(`[bundle] node-${triple}.exe already exists, skipping download.`);
-    continue;
+    let have = '';
+    try { have = execSync(`"${outPath}" --version`).toString().trim(); } catch { /* unreadable: replace it */ }
+    if (have === `v${nodeVersion}`) {
+      console.log(`[bundle] node-${triple}.exe is already v${nodeVersion}, skipping download.`);
+      continue;
+    }
+    console.log(`[bundle] node-${triple}.exe is ${have || 'unreadable'}, replacing with v${nodeVersion}.`);
   }
   console.log(`[bundle] Downloading node.exe for ${triple}...`);
   execSync(`curl -L -o "${outPath}" "${url}"`, { stdio: 'inherit' });
