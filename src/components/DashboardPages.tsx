@@ -16760,7 +16760,7 @@ export function SupportPage() {
                 <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.support.header_sub')}</div>
               </div>
             </div>
-            <div style={linkCard} onClick={() => openExternal('https://discord.gg/tuHZzUGxA6')}>
+            <div style={linkCard} onClick={() => openExternal('https://discord.gg/bbtnKMW4rf')}>
               <span style={{ fontSize: 24 }}>💬</span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Community</div>
