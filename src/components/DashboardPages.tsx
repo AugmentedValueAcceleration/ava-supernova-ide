@@ -16612,139 +16612,272 @@ export function RemoteDevicesPage() {
   );
 }
 
-/* ===== 13. Support (Live Chat) ===== */
-// Map ticket status -> label + IDE-palette colours. Unknown statuses fall back
-// to a neutral mauve chip so a new backend status never renders blank. Mirrors
-// the web dashboard's statusChip() so all three surfaces read identically.
-function supportStatusChip(status: string): { label: string; color: string; bg: string; border: string; dot: string } {
-  const s = (status || '').toLowerCase();
-  if (s === 'open' || s === 'active') return { label: 'Open', color: '#a6e3a1', bg: 'rgba(166,227,161,0.1)', border: 'rgba(166,227,161,0.3)', dot: '#a6e3a1' };
-  if (s === 'pending' || s === 'waiting') return { label: 'Waiting on us', color: '#fab387', bg: 'rgba(250,179,135,0.1)', border: 'rgba(250,179,135,0.3)', dot: '#fab387' };
-  if (s === 'resolved' || s === 'closed') return { label: 'Resolved', color: '#6c7086', bg: 'rgba(108,112,134,0.12)', border: 'rgba(108,112,134,0.3)', dot: '#6c7086' };
-  return { label: status || 'Open', color: 'var(--accent)', bg: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: 'color-mix(in srgb, var(--accent) 30%, transparent)', dot: 'var(--accent)' };
+/* ===== 13. Support (private tickets) ===== */
+// Support is ONE private ticket system, always answered by a person on the
+// team — there is no AI first reply, no triage, nothing in between. Discord is
+// the PUBLIC home for questions, bugs and ideas; a ticket is the PRIVATE route
+// (personal data, or anyone who simply prefers private). Every support screen
+// says so in one line. Mirrors the extension's support page, so the two
+// surfaces read the same: list → thread → reply / close, plus a new-ticket form.
+//
+// Strings use tt() with an English fallback — these keys are new and arrive in
+// the locales on the next translation run.
+
+const SUPPORT_DISCORD_URL = 'https://discord.gg/bbtnKMW4rf';
+const SUPPORT_SUBJECT_MAX = 200;
+const SUPPORT_MESSAGE_MAX = 10_000;
+// A human answers, so there is nothing to race for: a slow poll is plenty, and
+// it only runs while a ticket is open on screen.
+const SUPPORT_POLL_MS = 30_000;
+
+/** Opens a link in the system browser (Tauri opener), falling back to window.open. */
+function openSupportLink(url: string) {
+  import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => window.open(url, '_blank'));
 }
 
-// Intent-based ticket reasons (migration 317) — mirrors the web dashboard.
-// Evergreen: they describe what the user needs, not which feature.
-// Keys, not text — this is a module-level const, so resolved strings here would
-// evaluate once at import (before initLocale) and freeze in English.
-// supportCategoryMeta() resolves them at call time.
+// Map ticket status -> label + IDE-palette colours. 'waiting_on_you' is the
+// attention colour: the team has replied and the ball is in the user's court.
+// Unknown statuses fall back to a neutral accent chip so a new backend status
+// never renders blank.
+function supportStatusChip(status: string): { label: string; color: string; bg: string; border: string; dot: string } {
+  const s = (status || '').toLowerCase();
+  if (s === 'waiting_on_us') return { label: tt('dash.support.tk.status.waiting_on_us', 'Waiting on us'), color: '#89b4fa', bg: 'rgba(137,180,250,0.1)', border: 'rgba(137,180,250,0.3)', dot: '#89b4fa' };
+  if (s === 'waiting_on_you') return { label: tt('dash.support.tk.status.waiting_on_you', 'Waiting on you'), color: '#fab387', bg: 'rgba(250,179,135,0.12)', border: 'rgba(250,179,135,0.4)', dot: '#fab387' };
+  if (s === 'resolved') return { label: tt('dash.support.tk.status.resolved', 'Resolved'), color: '#a6e3a1', bg: 'rgba(166,227,161,0.1)', border: 'rgba(166,227,161,0.3)', dot: '#a6e3a1' };
+  if (s === 'closed') return { label: tt('dash.support.tk.status.closed', 'Closed'), color: '#6c7086', bg: 'rgba(108,112,134,0.12)', border: 'rgba(108,112,134,0.3)', dot: '#6c7086' };
+  return { label: status || '—', color: 'var(--accent)', bg: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: 'color-mix(in srgb, var(--accent) 30%, transparent)', dot: 'var(--accent)' };
+}
+
+// Ticket categories, in the order the server and the extension list them.
+// Keys + English fallbacks, not resolved text — this is a module-level const,
+// so t() results here would evaluate once at import (before initLocale) and
+// freeze in English. supportCategoryMeta() resolves them at call time.
 const SUPPORT_CATEGORIES = [
-  { slug: 'bug', icon: '🐞' },
-  { slug: 'question', icon: '❓' },
-  { slug: 'feature', icon: '✨' },
-  { slug: 'billing', icon: '💳' },
-  { slug: 'account', icon: '👤' },
-  { slug: 'feedback', icon: '💬' },
-  { slug: 'other', icon: '💭' },
+  { slug: 'question', icon: '❓', fallback: 'Question / how-to' },
+  { slug: 'bug', icon: '🐞', fallback: 'Bug report' },
+  { slug: 'feature', icon: '✨', fallback: 'Feature idea' },
+  { slug: 'account', icon: '👤', fallback: 'Account & login' },
+  { slug: 'billing', icon: '💳', fallback: 'Billing & credits' },
+  { slug: 'privacy', icon: '🔒', fallback: 'Privacy & my data' },
+  { slug: 'security', icon: '🛡️', fallback: 'Security report' },
+  { slug: 'other', icon: '💭', fallback: 'Something else' },
 ] as const;
 
-/** Category + its label/placeholder resolved at CALL time, so they follow the locale. */
+/** Category + its label resolved at CALL time, so it follows the locale. */
 function supportCategoryMeta(slug?: string | null) {
   const c = SUPPORT_CATEGORIES.find(x => x.slug === slug);
   if (!c) return null;
-  return {
-    ...c,
-    label: t(`dash.support.cat.${c.slug}`),
-    placeholder: t(`dash.support.cat.${c.slug}_ph`),
-  };
+  return { slug: c.slug, icon: c.icon, label: tt(`dash.support.tk.cat.${c.slug}`, c.fallback) };
 }
+
+/** apiFetch throws `API <status>: <body>`; the server's body is `{ error }`.
+ *  Show that message when there is one, a plain sentence when there is not. */
+function supportErrorText(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  const m = raw.match(/^API \d+: ([\s\S]*)$/);
+  if (m) {
+    try { const j = JSON.parse(m[1]); if (j?.error) return String(j.error); } catch { /* not JSON */ }
+  }
+  return tt('dash.support.tk.err_generic', 'Something went wrong. Please try again.');
+}
+
+function supportWhen(iso?: string | null, withTime = false): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return withTime
+    ? d.toLocaleString(getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' });
+}
+
+/** The one line every support screen carries: public → Discord, private → ticket. */
+function SupportDiscordLine({ signedIn }: { signedIn: boolean }) {
+  return (
+    <div style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.6 }}>
+      {tt('dash.support.tk.public_q', 'Public question?')}{' '}
+      <a
+        href={SUPPORT_DISCORD_URL}
+        onClick={e => { e.preventDefault(); openSupportLink(SUPPORT_DISCORD_URL); }}
+        style={{ color: 'var(--accent)', textDecoration: 'none', cursor: 'pointer', fontWeight: 600 }}
+      >{tt('dash.support.tk.ask_discord', 'Ask in our Discord.')}</a>
+      {signedIn && <>{' '}{tt('dash.support.tk.private_line', 'Private? Open a ticket here — only you and the team can see it.')}</>}
+    </div>
+  );
+}
+
+type SupportView = { kind: 'empty' } | { kind: 'new' } | { kind: 'ticket'; ref: string };
 
 export function SupportPage() {
   useLocale();
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [listLoaded, setListLoaded] = useState(false);
+  const [view, setView] = useState<SupportView>({ kind: 'empty' });
+  // Open ticket
+  const [ticket, setTicket] = useState<any | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [threadError, setThreadError] = useState<string | null>(null);
+  const [reply, setReply] = useState('');
+  const [busy, setBusy] = useState(false); // reply / close / reopen in flight
+  const [actionError, setActionError] = useState<string | null>(null);
+  // New-ticket form
+  const [newCategory, setNewCategory] = useState('');
+  const [newSubject, setNewSubject] = useState('');
+  const [newMessage, setNewMessage] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // The ticket currently on screen. Responses for any other ref are dropped,
+  // so clicking quickly between tickets never paints A's thread under B.
+  const shownRef = useRef<string | null>(null);
+  const activeRef = view.kind === 'ticket' ? view.ref : null;
+
   const [, setAuthKey] = useState(0);
   useEffect(() => {
     const handler = () => {
-      if (!checkConnected()) { setConversations([]); setMessages([]); setActiveConvId(null); setInput(''); }
+      if (!checkConnected()) {
+        shownRef.current = null;
+        setTickets([]); setListLoaded(false); setView({ kind: 'empty' });
+        setTicket(null); setMessages([]); setReply('');
+        setNewCategory(''); setNewSubject(''); setNewMessage('');
+      }
       setAuthKey(k => k + 1);
     };
     window.addEventListener('ava-auth-changed', handler);
     return () => window.removeEventListener('ava-auth-changed', handler);
   }, []);
+  // Signed out, or BYOK-only (no platform key): no ticket calls are made at all.
   const connected = checkConnected();
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string | null>(null);
-  const [input, setInput] = useState('');
-  const [, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [newCategory, setNewCategory] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load conversations on mount (and re-fetch on auth change)
-  useEffect(() => {
-    if (!connected) { setLoading(false); return; }
-    apiFetch('/support/conversations')
-      .then((data: any) => {
-        const convs = data?.conversations || [];
-        setConversations(convs);
-        // Update unread badge in sidebar
-        const unread = convs.reduce((sum: number, c: any) => sum + (c.unread_user || 0), 0);
-        try { localStorage.setItem('ava-support-unread', String(unread)); } catch { /* */ }
-      })
-      .catch(() => setConversations([]))
-      .finally(() => setLoading(false));
-  }, [connected]);
-
-  // Auto-scroll on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const loadMessages = useCallback(async (convId: string) => {
+  const refreshList = useCallback(async () => {
+    if (!checkConnected()) return;
     try {
-      const data: any = await apiFetch(`/support/conversations/${convId}/messages`);
-      setMessages(data?.messages || []);
-      setActiveConvId(convId);
-      // Mark as read
-      apiFetch(`/support/conversations/${convId}/read`, { method: 'POST' }).catch(() => {});
-    } catch { setMessages([]); }
+      const data: any = await apiFetch('/tickets');
+      const list: any[] = Array.isArray(data?.tickets) ? data.tickets : [];
+      setTickets(list);
+      // Sidebar badge + tick-engine nudge read this key.
+      const unread = typeof data?.unread === 'number'
+        ? data.unread
+        : list.reduce((sum: number, tk: any) => sum + (Number(tk.unread_user) || 0), 0);
+      try { localStorage.setItem('ava-support-unread', String(unread)); } catch { /* */ }
+    } catch { /* keep what we have */ }
+    finally { setListLoaded(true); }
   }, []);
 
-  // Poll for new messages every 10 seconds
-  useEffect(() => {
-    if (!activeConvId) return;
-    const interval = setInterval(() => {
-      apiFetch(`/support/conversations/${activeConvId}/messages`)
-        .then((data: any) => { if (data?.messages) setMessages(data.messages); })
-        .catch(() => {});
-    }, 10_000);
-    return () => clearInterval(interval);
-  }, [activeConvId]);
+  useEffect(() => { if (connected) refreshList(); }, [connected, refreshList]);
 
-  const handleSend = useCallback(async () => {
-    if (!input.trim() || sending) return;
-    const text = input.trim();
-    setInput('');
-    setSending(true);
+  /** Fetches a ticket's thread (the server marks it read). Returns the message
+   *  count, or -1 on failure. `quiet` = a background refresh: keep what is
+   *  shown on failure instead of replacing it with an error. */
+  const loadTicket = useCallback(async (ref: string, quiet = false): Promise<number> => {
     try {
-      if (activeConvId) {
-        await apiFetch(`/support/conversations/${activeConvId}/messages`, {
-          method: 'POST', body: JSON.stringify({ message: text }),
-        });
-        // Reload messages after a delay (Ava responds async)
-        setTimeout(() => loadMessages(activeConvId), 1500);
-      } else {
-        const data: any = await apiFetch('/support/conversations', {
-          method: 'POST', body: JSON.stringify({ message: text, platform: 'ide', category: newCategory }),
-        });
-        if (data?.conversation) {
-          setActiveConvId(data.conversation.id);
-          setNewCategory(null);
-          setTimeout(() => loadMessages(data.conversation.id), 1500);
-          // Refresh list
-          apiFetch('/support/conversations').then((d: any) => setConversations(d?.conversations || [])).catch(() => {});
-        }
-      }
-    } catch { /* */ }
-    setSending(false);
-  }, [input, sending, activeConvId, loadMessages, newCategory]);
+      const data: any = await apiFetch(`/tickets/${encodeURIComponent(ref)}`);
+      if (shownRef.current !== ref) return -1;
+      const msgs: any[] = Array.isArray(data?.messages) ? data.messages : [];
+      setTicket(data?.ticket || null);
+      setMessages(msgs);
+      setThreadError(null);
+      return msgs.length;
+    } catch (err) {
+      if (shownRef.current === ref && !quiet) setThreadError(supportErrorText(err));
+      return -1;
+    }
+  }, []);
+
+  const openTicket = useCallback((ref: string) => {
+    shownRef.current = ref;
+    setView({ kind: 'ticket', ref });
+    setTicket(null); setMessages([]); setThreadError(null);
+    setReply(''); setActionError(null);
+    setThreadLoading(true);
+    // Opening marks it read server-side, so refresh the list (and badge) after.
+    loadTicket(ref).then(n => { if (n >= 0) refreshList(); }).finally(() => {
+      if (shownRef.current === ref) setThreadLoading(false);
+    });
+  }, [loadTicket, refreshList]);
+
+  const startNew = useCallback(() => {
+    shownRef.current = null;
+    setView({ kind: 'new' });
+    setCreateError(null);
+  }, []);
+
+  // Background refresh while a ticket is open, so a team reply shows up
+  // without a click. The list is only re-fetched when the thread grew.
+  const countRef = useRef(0);
+  useEffect(() => { countRef.current = messages.length; }, [messages.length]);
+  useEffect(() => {
+    if (!activeRef) return;
+    const interval = setInterval(() => {
+      const before = countRef.current;
+      loadTicket(activeRef, true).then(n => { if (n > before) refreshList(); });
+    }, SUPPORT_POLL_MS);
+    return () => clearInterval(interval);
+  }, [activeRef, loadTicket, refreshList]);
+
+  // Scroll to the newest message when the thread grows (not on every poll).
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, activeRef]);
+
+  const handleReply = useCallback(async () => {
+    const text = reply.trim();
+    if (!activeRef || !text || busy) return;
+    setBusy(true); setActionError(null);
+    try {
+      const data: any = await apiFetch(`/tickets/${encodeURIComponent(activeRef)}/messages`, {
+        method: 'POST', body: JSON.stringify({ message: text }),
+      });
+      // Clear only once it is sent — a failed send keeps what they wrote.
+      setReply('');
+      if (data?.status) setTicket((prev: any) => (prev ? { ...prev, status: data.status } : prev));
+      await loadTicket(activeRef, true);
+      refreshList();
+    } catch (err) {
+      setActionError(supportErrorText(err));
+    }
+    setBusy(false);
+  }, [reply, busy, activeRef, loadTicket, refreshList]);
+
+  const handleStatus = useCallback(async (action: 'close' | 'reopen') => {
+    if (!activeRef || busy) return;
+    setBusy(true); setActionError(null);
+    try {
+      const data: any = await apiFetch(`/tickets/${encodeURIComponent(activeRef)}`, {
+        method: 'PATCH', body: JSON.stringify({ action }),
+      });
+      if (data?.status) setTicket((prev: any) => (prev ? { ...prev, status: data.status } : prev));
+      refreshList();
+    } catch (err) {
+      setActionError(supportErrorText(err));
+    }
+    setBusy(false);
+  }, [activeRef, busy, refreshList]);
+
+  const subjectTrim = newSubject.trim();
+  const messageTrim = newMessage.trim();
+  const canCreate = !!newCategory && !!subjectTrim && !!messageTrim
+    && subjectTrim.length <= SUPPORT_SUBJECT_MAX && messageTrim.length <= SUPPORT_MESSAGE_MAX && !creating;
+
+  const handleCreate = useCallback(async () => {
+    if (!canCreate) return;
+    setCreating(true); setCreateError(null);
+    try {
+      const data: any = await apiFetch('/tickets', {
+        method: 'POST',
+        body: JSON.stringify({ category: newCategory, subject: subjectTrim, message: messageTrim, source: 'ide' }),
+      });
+      setNewCategory(''); setNewSubject(''); setNewMessage('');
+      await refreshList();
+      const ref = data?.ticket?.ref_label;
+      if (ref) openTicket(ref); else setView({ kind: 'empty' });
+    } catch (err) {
+      setCreateError(supportErrorText(err));
+    }
+    setCreating(false);
+  }, [canCreate, newCategory, subjectTrim, messageTrim, refreshList, openTicket]);
 
   if (!connected) {
-    const openExternal = (url: string) => {
-      import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => window.open(url, '_blank'));
-    };
     const linkCard: React.CSSProperties = {
       ...card, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
     };
@@ -16752,19 +16885,25 @@ export function SupportPage() {
       <div style={pageWrapper}>
         <div style={{ maxWidth: 480, margin: '0 auto', padding: '40px 0' }}>
           <div style={{ fontSize: 28, marginBottom: 16, textAlign: 'center' }}>Need help?</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={linkCard} onClick={() => openExternal('https://github.com/AugmentedValueAcceleration/ava-supernova/issues')}>
-              <span style={{ fontSize: 24 }}>🐙</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>GitHub Issues</div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.support.header_sub')}</div>
-              </div>
+          <div style={{ ...card, padding: '16px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>
+              {tt('dash.support.tk.sign_in', 'Sign in to your Ava Supernova account to open a private ticket')}
             </div>
-            <div style={linkCard} onClick={() => openExternal('https://discord.gg/bbtnKMW4rf')}>
+            <SupportDiscordLine signedIn={false} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={linkCard} onClick={() => openSupportLink(SUPPORT_DISCORD_URL)}>
               <span style={{ fontSize: 24 }}>💬</span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Community</div>
                 <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Join the community for help and discussion</div>
+              </div>
+            </div>
+            <div style={linkCard} onClick={() => openSupportLink('https://github.com/AugmentedValueAcceleration/ava-supernova/issues')}>
+              <span style={{ fontSize: 24 }}>🐙</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>GitHub Issues</div>
+                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.support.header_sub')}</div>
               </div>
             </div>
             <div style={linkCard} onClick={() => window.dispatchEvent(new CustomEvent('ava-support-nav-docs'))}>
@@ -16775,192 +16914,271 @@ export function SupportPage() {
               </div>
             </div>
           </div>
-          <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: '#585b70' }}>
-            Connect your account for live chat support with the team
-          </div>
         </div>
       </div>
     );
   }
 
-  const activeConv = conversations.find((c: any) => c.id === activeConvId) || null;
-  const isNewTicket = !activeConvId && messages.length === 0;
+  const shown = ticket || tickets.find((tk: any) => tk.ref_label === activeRef) || null;
+  const shownStatus = String(shown?.status || '').toLowerCase();
+  const isClosed = shownStatus === 'closed';
+  const canReopen = shownStatus === 'closed' || shownStatus === 'resolved';
   const newCatMeta = supportCategoryMeta(newCategory);
+  const divider = '1px solid color-mix(in srgb, var(--accent) 12%, transparent)';
+  const fieldLabel: React.CSSProperties = { display: 'block', fontSize: 11, color: '#a6adc8', marginBottom: 6 };
+  const counter: React.CSSProperties = { marginTop: 4, fontSize: 10, color: '#6c7086', textAlign: 'right' };
+  const errorBox: React.CSSProperties = { borderRadius: 8, border: '1px solid rgba(243,139,168,0.3)', background: 'rgba(243,139,168,0.08)', color: '#f38ba8', padding: '8px 12px', fontSize: 12 };
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', borderRadius: 16, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
-      {/* ── Ticket list ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', width: 256, flexShrink: 0, flexDirection: 'column', borderRight: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(49,34,68,0.25)' }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '14px 16px' }}>
-          <span style={{ fontSize: 13, fontWeight: 300, color: '#cdd6f4' }}>{t('dash.support.tickets')}</span>
-          <button
-            onClick={() => setMenuOpen(o => !o)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'transparent', padding: '4px 10px', fontSize: 11, color: '#a6adc8', cursor: 'pointer' }}
-          >{t('dash.support.new')}</button>
-          {menuOpen && (
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', gap: 10 }}>
+      {/* Public → Discord, private → ticket. On every support screen. */}
+      <div style={{ borderRadius: 12, border: divider, background: 'rgba(49,34,68,0.25)', padding: '10px 16px' }}>
+        <SupportDiscordLine signedIn />
+      </div>
+
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', borderRadius: 16, border: divider }}>
+        {/* ── My tickets ──────────────────────────────────────────── */}
+        <div style={{ display: 'flex', width: 272, flexShrink: 0, flexDirection: 'column', borderRight: divider, background: 'rgba(49,34,68,0.25)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: divider, padding: '14px 16px' }}>
+            <span style={{ fontSize: 13, fontWeight: 300, color: '#cdd6f4' }}>{tt('dash.support.tk.my_tickets', 'My tickets')}</span>
+            <button
+              onClick={startNew}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: view.kind === 'new' ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent', padding: '4px 10px', fontSize: 11, color: '#a6adc8', cursor: 'pointer' }}
+            >{tt('dash.support.tk.new_btn', '+ New ticket')}</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+            {tickets.map((tk: any) => {
+              const chip = supportStatusChip(tk.status);
+              const cat = supportCategoryMeta(tk.category);
+              const active = activeRef === tk.ref_label;
+              const unread = Number(tk.unread_user) || 0;
+              return (
+                <button
+                  key={tk.id || tk.ref_label}
+                  onClick={() => openTicket(tk.ref_label)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left', marginBottom: 4, borderRadius: 12, cursor: 'pointer', padding: 12,
+                    border: active ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' : '1px solid transparent',
+                    background: active ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : 'transparent',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: '#6c7086', fontFamily: 'monospace', letterSpacing: 0.5 }}>{tk.ref_label}</span>
+                    {unread > 0 && (
+                      <span
+                        title={tt('dash.support.tk.unread', 'New reply from the team')}
+                        style={{ display: 'flex', height: 16, minWidth: 16, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--accent)', padding: '0 4px', fontSize: 8, fontWeight: 700, color: '#fff' }}
+                      >{unread}</span>
+                    )}
+                  </div>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: unread > 0 ? '#cdd6f4' : '#a6adc8', fontWeight: unread > 0 ? 600 : 400 }}>
+                    {tk.subject}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 6, fontSize: 10, color: '#6c7086' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: chip.color }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: chip.dot }} />
+                      {chip.label}
+                    </span>
+                    {cat && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, borderRadius: 4, border: divider, padding: '1px 5px' }}>
+                        <span>{cat.icon}</span>{cat.label}
+                      </span>
+                    )}
+                    <span style={{ marginLeft: 'auto' }}>{supportWhen(tk.last_message_at || tk.created_at)}</span>
+                  </div>
+                </button>
+              );
+            })}
+            {listLoaded && tickets.length === 0 && (
+              <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 11, color: '#6c7086' }}>{t('dash.support.none_yet')}</div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Right pane: ticket thread · new-ticket form · empty state ── */}
+        <div style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column', background: 'rgba(10,6,18,0.4)' }}>
+          {view.kind === 'ticket' && (
             <>
-              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-              <div style={{ position: 'absolute', right: 12, top: 48, zIndex: 50, width: 220, borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: '#1a1028', padding: 4, boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
-                <div style={{ padding: '6px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#6c7086' }}>{t('dash.support.pick_reason')}</div>
-                {SUPPORT_CATEGORIES.map(c => (
-                  <button
-                    key={c.slug}
-                    onClick={() => { setActiveConvId(null); setMessages([]); setNewCategory(c.slug); setMenuOpen(false); }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 10%, transparent)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                    style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10, borderRadius: 8, border: 'none', background: 'transparent', padding: '8px 10px', textAlign: 'left', fontSize: 12, color: '#a6adc8', cursor: 'pointer' }}
-                  >
-                    <span style={{ fontSize: 14 }}>{c.icon}</span>{t(`dash.support.cat.${c.slug}`)}
-                  </button>
-                ))}
+              {/* Header: subject, ref, category, status, Close / Reopen */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: divider, padding: '14px 20px' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: '#cdd6f4' }}>
+                    {shown?.subject || view.ref}
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 11, color: '#6c7086' }}>
+                    <span style={{ fontFamily: 'monospace' }}>{view.ref}</span>
+                    {shown?.created_at ? ` · ${tt('dash.support.tk.opened', 'Opened')} ${supportWhen(shown.created_at)}` : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 8 }}>
+                  {(() => { const m = supportCategoryMeta(shown?.category); return m ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 999, border: divider, background: 'rgba(49,34,68,0.5)', color: '#a6adc8', padding: '4px 12px', fontSize: 10 }}>
+                      <span>{m.icon}</span>{m.label}
+                    </span>
+                  ) : null; })()}
+                  {shown && (() => { const c = supportStatusChip(shown.status); return (
+                    <span style={{ borderRadius: 999, border: `1px solid ${c.border}`, background: c.bg, color: c.color, padding: '4px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{c.label}</span>
+                  ); })()}
+                  {shown && canReopen && (
+                    <button onClick={() => handleStatus('reopen')} disabled={busy} style={{ ...btnSecondary, padding: '4px 12px', fontSize: 11, opacity: busy ? 0.5 : 1 }}>
+                      {tt('dash.support.tk.reopen', 'Reopen')}
+                    </button>
+                  )}
+                  {shown && !isClosed && (
+                    <button onClick={() => handleStatus('close')} disabled={busy} style={{ ...btnSecondary, padding: '4px 12px', fontSize: 11, opacity: busy ? 0.5 : 1 }}>
+                      {tt('dash.support.tk.close', 'Close ticket')}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Thread — fills the space, scrolls internally */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+                {threadError ? (
+                  <div style={{ maxWidth: 480, margin: '40px auto 0', textAlign: 'center' }}>
+                    <div style={{ ...errorBox, marginBottom: 12 }}>{threadError}</div>
+                    <button onClick={() => openTicket(view.ref)} style={btnSecondary}>{tt('dash.support.tk.retry', 'Try again')}</button>
+                  </div>
+                ) : threadLoading && messages.length === 0 ? (
+                  <LoadingSpinner />
+                ) : (
+                  <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {messages.map((msg: any) => {
+                      const isUser = msg.sender === 'user';
+                      // 'ava' only exists in history from the old auto-reply era;
+                      // it renders as a team-side message, clearly labelled.
+                      const name = isUser
+                        ? (msg.sender_name || tt('dash.support.tk.you', 'You'))
+                        : msg.sender === 'ava'
+                          ? tt('dash.support.tk.ava_history', 'Ava (earlier auto-reply)')
+                          : (msg.sender_name || tt('dash.support.tk.team', 'Ava Supernova team'));
+                      return (
+                        <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+                          <div style={{
+                            maxWidth: '80%', borderRadius: 16, padding: '10px 14px',
+                            borderBottomRightRadius: isUser ? 4 : 16, borderBottomLeftRadius: isUser ? 16 : 4,
+                            background: isUser ? 'var(--accent)' : 'rgba(49,34,68,0.5)',
+                            border: isUser ? 'none' : divider,
+                            color: isUser ? '#fff' : '#a6adc8',
+                          }}>
+                            <div style={{ fontSize: 11, marginBottom: 4, color: isUser ? 'rgba(255,255,255,0.85)' : '#cdd6f4', fontWeight: 600 }}>{name}</div>
+                            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13, lineHeight: 1.6 }}>{msg.body}</div>
+                            <div style={{ marginTop: 4, fontSize: 9, opacity: 0.6 }}>{supportWhen(msg.created_at, true)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
+              </div>
+
+              {/* Reply box — always at the bottom */}
+              <div style={{ borderTop: divider, padding: 16 }}>
+                <div style={{ maxWidth: 640, margin: '0 auto' }}>
+                  {actionError && <div style={{ ...errorBox, marginBottom: 8 }}>{actionError}</div>}
+                  {isClosed ? (
+                    <div style={{ fontSize: 12, color: '#6c7086', textAlign: 'center' }}>
+                      {tt('dash.support.tk.closed_hint', 'This ticket is closed. Reopen it to reply.')}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+                      <textarea
+                        value={reply}
+                        onChange={e => setReply(e.target.value)}
+                        // Ctrl/Cmd+Enter sends; plain Enter is a new line — replies are often long.
+                        onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleReply(); } }}
+                        maxLength={SUPPORT_MESSAGE_MAX}
+                        disabled={!!threadError || (threadLoading && !shown)}
+                        placeholder={t('dash.support.reply_ph')}
+                        rows={3}
+                        style={{ flex: 1, resize: 'vertical', minHeight: 44, maxHeight: 240, borderRadius: 12, border: divider, background: 'rgba(10,6,18,0.8)', padding: '10px 16px', fontSize: 13, color: '#cdd6f4', outline: 'none', fontFamily: 'inherit' }}
+                      />
+                      <button
+                        onClick={handleReply}
+                        disabled={!reply.trim() || busy || !!threadError}
+                        style={{ flexShrink: 0, borderRadius: 12, border: 'none', background: 'var(--accent)', padding: '10px 20px', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', opacity: !reply.trim() || busy || threadError ? 0.3 : 1 }}
+                      >{busy ? t('dash.chat.sending') : tt('dash.support.tk.send_reply', 'Send reply')}</button>
+                    </div>
+                  )}
+                  <div style={{ marginTop: 6, fontSize: 10, color: '#6c7086', textAlign: 'center' }}>
+                    {tt('dash.support.tk.no_secrets', 'Never paste API keys or passwords — the team never needs them.')}
+                  </div>
+                </div>
               </div>
             </>
           )}
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
-          {conversations.map((conv: any) => {
-            const chip = supportStatusChip(conv.status);
-            const active = activeConvId === conv.id;
-            return (
-              <button
-                key={conv.id}
-                onClick={() => loadMessages(conv.id)}
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left', marginBottom: 4, borderRadius: 12, cursor: 'pointer', padding: 12,
-                  border: active ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' : '1px solid transparent',
-                  background: active ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : 'transparent',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#6c7086' }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: chip.dot }} />
-                    {chip.label}
-                  </span>
-                  {conv.unread_user > 0 && (
-                    <span style={{ display: 'flex', height: 16, minWidth: 16, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--accent)', padding: '0 4px', fontSize: 8, fontWeight: 700, color: '#fff' }}>{conv.unread_user}</span>
-                  )}
-                </div>
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: '#a6adc8' }}>
-                  {conv.summary || conv.lastMessage?.preview || 'New conversation'}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: 10, color: '#6c7086' }}>
-                  {supportCategoryMeta(conv.category) && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, borderRadius: 4, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '1px 5px' }}>
-                      <span>{supportCategoryMeta(conv.category)!.icon}</span>{supportCategoryMeta(conv.category)!.label}
-                    </span>
-                  )}
-                  <span>{new Date(conv.last_message_at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' })}</span>
-                </div>
-              </button>
-            );
-          })}
-          {conversations.length === 0 && (
-            <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 11, color: '#6c7086' }}>{t('dash.support.none_yet')}</div>
-          )}
-        </div>
-      </div>
 
-      {/* ── Conversation — unified shell: header · messages · composer ──
-          Composer is ALWAYS pinned to the bottom (real-chat behaviour); the
-          empty state is a centred hint inside the message area, not a control
-          floating in the void. Mirrors the web dashboard support page. */}
-      <div style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column', background: 'rgba(10,6,18,0.4)' }}>
-        {/* Header bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '14px 20px' }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: '#cdd6f4' }}>
-              {activeConv?.summary || (messages[0]?.body ? messages[0].body.slice(0, 60) : t('dash.support.new_ticket_title'))}
-            </div>
-            <div style={{ marginTop: 2, fontSize: 11, color: '#6c7086' }}>
-              {activeConv
-                ? `Opened ${new Date(activeConv.last_message_at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' })}${messages.some((m: any) => m.is_ava) ? ' · Ava is helping' : ''}`
-                : t('dash.support.ava_first')}
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 8 }}>
-            {(() => { const m = supportCategoryMeta(activeConv?.category) || (isNewTicket ? newCatMeta : null); return m ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 999, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(49,34,68,0.5)', color: '#a6adc8', padding: '4px 12px', fontSize: 10 }}>
-                <span>{m.icon}</span>{m.label}
-              </span>
-            ) : null; })()}
-            {activeConv && (() => { const c = supportStatusChip(activeConv.status); return (
-              <span style={{ borderRadius: 999, border: `1px solid ${c.border}`, background: c.bg, color: c.color, padding: '4px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{c.label}</span>
-            ); })()}
-          </div>
-        </div>
-
-        {/* Message area — fills the space, scrolls internally */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-          {messages.length > 0 ? (
-            <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {messages.map((msg: any) => {
-                const isUser = msg.sender_type === 'user';
-                const time = new Date(msg.created_at).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
-                return (
-                  <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-                    <div style={{
-                      maxWidth: '80%', borderRadius: 16, padding: '10px 14px',
-                      borderBottomRightRadius: isUser ? 4 : 16, borderBottomLeftRadius: isUser ? 16 : 4,
-                      background: isUser ? 'var(--accent)' : 'rgba(49,34,68,0.5)',
-                      border: isUser ? 'none' : '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-                      color: isUser ? '#fff' : '#a6adc8',
-                    }}>
-                      {!isUser && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <span style={{ fontSize: 11, color: '#cdd6f4' }}>{msg.sender_name}</span>
-                          {msg.is_ava && (
-                            <span style={{ borderRadius: 4, background: 'color-mix(in srgb, var(--accent) 15%, transparent)', padding: '1px 5px', fontSize: 8, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 1 }}>Ava</span>
-                          )}
-                        </div>
-                      )}
-                      <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.6 }}>{msg.body}</div>
-                      <div style={{ marginTop: 4, fontSize: 9, opacity: 0.5 }}>{time}</div>
-                    </div>
+          {view.kind === 'new' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 4 }}>{tt('dash.support.tk.new_title', 'New private ticket')}</div>
+                  <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>
+                    {tt('dash.support.tk.new_sub', 'Only you and the team can see it. A person on the team will reply here.')}
                   </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-          ) : (
-            <div style={{ display: 'flex', height: '100%', maxWidth: 480, margin: '0 auto', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20, fontSize: 26 }}>💬</div>
-              {newCatMeta ? (
-                <>
-                  <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>{newCatMeta.icon} {newCatMeta.label}</div>
-                  <div style={{ maxWidth: 360, fontSize: 13, color: '#6c7086', lineHeight: 1.6 }}>
-                    {t('dash.support.intro')}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>{t('dash.support.how_can_we_help')}</div>
-                  <div style={{ maxWidth: 360, fontSize: 13, color: '#6c7086', lineHeight: 1.6 }}>
-                    {t('dash.support.empty_hint')}
-                  </div>
-                </>
-              )}
+                </div>
+                <div>
+                  <label style={fieldLabel}>{tt('dash.support.tk.category', 'Category')} *</label>
+                  <CustomSelect
+                    value={newCategory}
+                    onChange={setNewCategory}
+                    placeholder={tt('dash.support.tk.pick_category', 'Pick a category…')}
+                    options={SUPPORT_CATEGORIES.map(c => { const m = supportCategoryMeta(c.slug)!; return { value: m.slug, label: `${m.icon}  ${m.label}` }; })}
+                    width="100%"
+                  />
+                </div>
+                <div>
+                  <label style={fieldLabel}>{tt('dash.support.tk.subject', 'Subject')} *</label>
+                  <input
+                    value={newSubject}
+                    onChange={e => setNewSubject(e.target.value)}
+                    maxLength={SUPPORT_SUBJECT_MAX}
+                    placeholder={newCatMeta ? newCatMeta.label : tt('dash.support.tk.subject_ph', 'A short summary')}
+                    style={inputStyle}
+                  />
+                  <div style={counter}>{newSubject.length}/{SUPPORT_SUBJECT_MAX}</div>
+                </div>
+                <div>
+                  <label style={fieldLabel}>{tt('dash.support.tk.message', 'Message')} *</label>
+                  <textarea
+                    value={newMessage}
+                    onChange={e => setNewMessage(e.target.value)}
+                    maxLength={SUPPORT_MESSAGE_MAX}
+                    rows={8}
+                    placeholder={tt('dash.support.tk.message_ph', "Tell us what's going on, and what you were doing when it happened.")}
+                    style={{ ...inputStyle, height: 'auto', minHeight: 160, padding: '10px 12px', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}
+                  />
+                  <div style={counter}>{newMessage.length.toLocaleString(getLocale())}/{SUPPORT_MESSAGE_MAX.toLocaleString(getLocale())}</div>
+                </div>
+                <div style={{ fontSize: 12, color: '#fab387', lineHeight: 1.6 }}>
+                  {tt('dash.support.tk.no_secrets', 'Never paste API keys or passwords — the team never needs them.')}
+                </div>
+                {createError && <div style={errorBox}>{createError}</div>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button onClick={() => setView({ kind: 'empty' })} disabled={creating} style={btnSecondary}>
+                    {tt('dash.support.tk.cancel', 'Cancel')}
+                  </button>
+                  <button onClick={handleCreate} disabled={!canCreate} style={{ ...btnPrimary, opacity: canCreate ? 1 : 0.4, cursor: canCreate ? 'pointer' : 'default' }}>
+                    {creating ? t('dash.chat.sending') : tt('dash.support.tk.open_ticket', 'Open ticket')}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
-        </div>
 
-        {/* Composer — always at the bottom */}
-        <div style={{ borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: 16 }}>
-          <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              disabled={isNewTicket && !newCategory}
-              placeholder={isNewTicket ? (newCatMeta ? newCatMeta.placeholder : t('dash.support.pick_reason_ph')) : t('dash.support.reply_ph')}
-              rows={1}
-              style={{ flex: 1, resize: 'none', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'rgba(10,6,18,0.8)', padding: '10px 16px', fontSize: 13, color: '#cdd6f4', outline: 'none', fontFamily: 'inherit', opacity: isNewTicket && !newCategory ? 0.5 : 1 }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || sending || (isNewTicket && !newCategory)}
-              style={{ flexShrink: 0, borderRadius: 12, border: 'none', background: 'var(--accent)', padding: '10px 20px', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', opacity: !input.trim() || sending || (isNewTicket && !newCategory) ? 0.3 : 1 }}
-            >{sending ? t('dash.chat.sending') : t('dash.support.send')}</button>
-          </div>
+          {view.kind === 'empty' && (
+            <div style={{ display: 'flex', flex: 1, maxWidth: 480, margin: '0 auto', padding: 20, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20, fontSize: 26 }}>🔒</div>
+              <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>{tt('dash.support.tk.empty_title', 'Private support tickets')}</div>
+              <div style={{ maxWidth: 360, fontSize: 13, color: '#6c7086', lineHeight: 1.6, marginBottom: 16 }}>
+                {tickets.length > 0
+                  ? tt('dash.support.tk.empty_pick', 'Pick a ticket on the left, or open a new one. A person on the team answers every ticket.')
+                  : tt('dash.support.tk.empty_none', 'Open a ticket and a person on the team will reply here. Only you and the team can see it.')}
+              </div>
+              <button onClick={startNew} style={btnPrimary}>{tt('dash.support.tk.new_btn', '+ New ticket')}</button>
+            </div>
+          )}
         </div>
       </div>
     </div>
