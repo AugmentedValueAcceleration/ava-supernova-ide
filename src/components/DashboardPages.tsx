@@ -2816,6 +2816,18 @@ export function AvaChatPage() {
   // [redactSecrets] only — reading `mode` there would be a stale snapshot).
   const modeRef = useRef(mode);
   useEffect(() => { modeRef.current = mode; }, [mode]);
+  // Code mode's Talk switch. On, she reads and discusses and changes nothing;
+  // off (Build), she codes as normal. A switch rather than a trip to the mode
+  // menu, because the operator flips between the two constantly (1 Nov 2026).
+  // The ref is for sendLocal, which has frozen deps.
+  const [talk, setTalk] = useState<boolean>(() => {
+    try { return localStorage.getItem('ava-ide-talk') === '1'; } catch { return false; }
+  });
+  const talkRef = useRef(talk);
+  useEffect(() => {
+    talkRef.current = talk;
+    try { localStorage.setItem('ava-ide-talk', talk ? '1' : '0'); } catch { /* */ }
+  }, [talk]);
   // Desktop permission level — shared with the Settings page via a hook
   // backed by localStorage + a window event. Either picker (chat-bar pill
   // or Settings page) updates both. 'watch' = approve the task once up
@@ -5328,7 +5340,7 @@ export function AvaChatPage() {
       const history = messages
         .filter(m => m.role === 'user' || m.role === 'ava')
         .map(m => ({ role: m.role === 'ava' ? 'assistant' : 'user', text: m.text }));
-      await sidecar.sendMessage(text, attachments, history);
+      await sidecar.sendMessage(text, attachments, history, undefined, undefined, undefined, undefined, modeRef.current === 'work' && talkRef.current);
     } catch (err: any) {
       setMessages((prev) => [...prev, {
         id: mkId(), role: 'error' as const,
@@ -7851,7 +7863,7 @@ export function AvaChatPage() {
                   !canChat
                     ? chatInactiveReason
                     : chatBackend === 'local'
-                      ? (sidecarReady ? currentMode.placeholder : t('dash.chat.starting_local'))
+                      ? (sidecarReady ? (mode === 'work' && talk ? tt('dash.chat.placeholder_talk', "Let's talk it through — I'll read, not change anything") : currentMode.placeholder) : t('dash.chat.starting_local'))
                       : currentMode.placeholder
                 }
                 disabled={!canChat}
@@ -7968,6 +7980,44 @@ export function AvaChatPage() {
                 </span>
               );
             })()}
+
+            {/* Talk | Build — Code mode only. Every other mode already decides
+                for itself whether it builds. Mirrors the extension's InputArea. */}
+            {mode === 'work' && (
+              <div
+                role="radiogroup"
+                aria-label={tt('dash.chat.talk_switch_aria', 'Talk or build')}
+                style={{
+                  display: 'flex', alignItems: 'center', height: 36, padding: 2, borderRadius: 8, flexShrink: 0,
+                  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                  background: 'color-mix(in srgb, var(--accent) 5%, transparent)',
+                }}
+              >
+                {([
+                  { on: true, label: tt('dash.chat.talk', 'Talk'), hint: tt('dash.chat.talk_hint', 'Talk it through — Ava reads and searches, but changes nothing') },
+                  { on: false, label: tt('dash.chat.build', 'Build'), hint: tt('dash.chat.build_hint', 'Build — Ava is free to edit files and run commands') },
+                ] as const).map((opt) => {
+                  const selected = talk === opt.on;
+                  return (
+                    <button
+                      key={opt.label}
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setTalk(opt.on)}
+                      title={opt.hint}
+                      style={{
+                        height: '100%', padding: '0 10px', borderRadius: 6, border: 'none',
+                        fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                        background: selected ? 'linear-gradient(135deg, var(--accent), #7c3aed)' : 'transparent',
+                        color: selected ? '#fff' : '#6c7086',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Send / Interrupt button */}
             {/* While she works you get BOTH buttons when there is text to

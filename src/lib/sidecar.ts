@@ -382,7 +382,7 @@ export class SidecarManager {
   /**
    * Send a chat message to the agent.
    */
-  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string, designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo', designPanel?: string): Promise<void> {
+  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string, designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo', designPanel?: string, talk?: boolean): Promise<void> {
     // For large attachments (images), write to temp files to avoid stdin buffer limits
     let processedAttachments = attachments;
     if (attachments?.length) {
@@ -405,7 +405,7 @@ export class SidecarManager {
         }
       }
     }
-    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined, surface, courseId, designRoom, designPanel });
+    await this.send({ cmd: 'message', content, attachments: processedAttachments?.length ? processedAttachments : undefined, history: history?.length ? history : undefined, surface, courseId, designRoom, designPanel, ...(talk ? { talk: true } : {}) });
   }
 
   // ── Conversation history (the shared ~/.ava/.../history/*.json files) ────────

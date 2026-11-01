@@ -186,6 +186,7 @@ const {
   getBrainstormModePrefix,
   getWriteModePrefix,
   getWorkModePrefix,
+  getWorkTalkPrefix,
   getSecurityModePrefix,
   HEALTH_PROFILE_FIELDS,
   humaniseSlug,
@@ -3204,7 +3205,12 @@ async function handleMessage(data) {
    * 2026-08-25 — it had run on the bare base prompt until then, being the
    * untagged default that nothing ever wrapped.
    */
-  const modePrefixFn = inRoom ? null : MODE_PREFIX_FN[currentMode];
+  // Code mode's Talk switch (1 Nov 2026): she reads and discusses, changes
+  // nothing. Only meaningful in work mode — every other mode decides for
+  // itself whether it builds. The Talk prefix carries its own tag, which is
+  // what core's tool gate reads.
+  const talk = !inRoom && currentMode === 'work' && data.talk === true;
+  const modePrefixFn = inRoom ? null : talk ? getWorkTalkPrefix : MODE_PREFIX_FN[currentMode];
 
   /**
    * What is open in the document workspace, if anything.
@@ -3428,12 +3434,15 @@ async function handleMessage(data) {
 
     // Check if conductor orchestration is needed (plan, teach, security, brainstorm modes)
     let conductorContext = null;
-    if (conductor && conductor.needsOrchestration(data.content, currentMode)) {
-      emit({ event: 'orchestration_start', mode: currentMode });
+    // Talk is read-only, so if the team is asked for it is the planning team —
+    // the work team carries a Builder. Mirrors the extension.
+    const teamMode = talk ? 'plan' : currentMode;
+    if (conductor && conductor.needsOrchestration(data.content, teamMode)) {
+      emit({ event: 'orchestration_start', mode: teamMode });
       try {
         conductorContext = await conductor.orchestrate(
           data.content,
-          currentMode,
+          teamMode,
           messages,
           (cEvent) => {
             emit({ event: 'conductor_event', ...cEvent });
