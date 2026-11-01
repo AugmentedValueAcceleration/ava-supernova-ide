@@ -14,7 +14,7 @@
 
 import { readTextFile, writeTextFile, mkdir, readDir, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 
 export type JournalAuthor = 'user' | 'ava';
 
@@ -112,7 +112,7 @@ function projectFolder(): string | null {
 
 // Account-scoped global journal — ~/.ava/users/<id>/journal when signed in (the
 // same files the extension + sidecar use), ~/.ava/journal for BYOK / no-account.
-const globalDir = async (): Promise<string> => `${await accountRoot()}/journal`;
+const globalDir = async (): Promise<string> => `${await dataRoot()}/journal`;
 const globalRel = async (date: string): Promise<string> => `${await globalDir()}/${date}.json`;
 
 async function projectDir(): Promise<string | null> {

@@ -1,19 +1,13 @@
 // IDE model dropdown — parity with the extension's ModelSelector.
 //
 // Behaviour:
-//   - Orchestrated section at the top: Supernova (polyglot, DeepSeek Flash coordinator)
-//     and Maestro (single conductor on Qwen 3.7 Plus). Both highlighted as
-//     Ava-orchestrated modes vs raw model picks.
-//   - Supernova is admin-only at preview while the DeepSeek partnership is
-//     pending. Non-admin users see it in the dropdown with an "In development"
-//     label and a disabled state (tooltip explains the gate).
-//   - Maestro (auto) is always available — has been operational for months.
-//   - Below that: raw model picks, sorted alphabetically by provider.
+//   - The fleets at the top (Maestro, Supernova, and Aurora / Longxiang when
+//     launched), each available once the user holds the keys it needs.
+//   - Below that: single models, sorted alphabetically by provider, each
+//     available once that provider's key is saved.
 //
-// Source of truth for model availability is the platform `/models` endpoint
-// (admin-gated server-side via validateAuth — admins get the full list with
-// admin_only models, non-admins get the filtered list). This component just
-// renders whatever is passed in.
+// The callers build the list from core's catalogue and the saved keys; this
+// component just renders whatever is passed in.
 
 import { useState, useRef, useEffect, useId } from 'react';
 import { t, useLocale } from '../lib/i18n';

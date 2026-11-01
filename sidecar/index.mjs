@@ -2063,14 +2063,10 @@ async function handleInit(data) {
     // suffix on globalThis so rebuilds on mode switch can re-append it
     // without losing it.
     let userInfoSuffix = '';
-    if (config.userName || config.userEmail) {
+    if (config.userName) {
       const msgs = conversation.getMessages();
       const sysMsgContent = msgs[0]?.role === 'system' ? msgs[0].content : '';
-      const userInfo = [
-        config.userName ? `Name: ${config.userName}` : null,
-        config.userEmail ? `Email: ${config.userEmail}` : null,
-        config.userTier ? `Plan: ${config.userTier}` : null,
-      ].filter(Boolean).join(' | ');
+      const userInfo = `Name: ${config.userName}`;
       userInfoSuffix = `\n\n[User: ${userInfo}]\nAddress the user by their name when appropriate.`;
       globalThis._systemPromptUserInfoSuffix = userInfoSuffix;
       conversation.setSystemPrompt(sysMsgContent + userInfoSuffix);

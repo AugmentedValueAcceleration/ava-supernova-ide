@@ -8,7 +8,8 @@
 // chat writes), so there's a single source of truth and no drift.
 
 import { getSidecar, type SidecarConfig } from './sidecar';
-import { getPlatformKey } from './api';
+import { getProviderKeys, PROVIDER_FIELDS, type ProviderField } from './provider-keys';
+import { ensureDataHome } from './data-root';
 import { resolveSidecarModel } from './chat-models';
 
 // This file used to keep its own byte-for-byte copy of chat-models.ts's
@@ -21,31 +22,22 @@ function ls(key: string): string | null {
 }
 
 function readByokProviders(): Record<string, { apiKey: string }> {
+  // Store field (Qwen, Moonshot, Zhipu…) → core provider id, from the one map
+  // in provider-keys.ts. Brave rides along: core's web search asks for it.
   const providers: Record<string, { apiKey: string }> = {};
-  try {
-    const raw = ls('ava-ide-byok');
-    if (raw) {
-      const keys: Record<string, string> = JSON.parse(raw);
-      // Store-field name (as saved by the Sidebar) → core provider id. Explicit
-      // for all nine so we don't lean on the lowercase fallback below; NVIDIA in
-      // particular would lowercase correctly by luck, not design.
-      const nameMap: Record<string, string> = {
-        DeepSeek: 'deepseek', Qwen: 'qwen', Moonshot: 'kimi', Zhipu: 'glm', Mistral: 'mistral',
-        Xiaomi: 'xiaomi', Tencent: 'tencent', NVIDIA: 'nvidia',
-      };
-      for (const [name, key] of Object.entries(keys)) {
-        if (key?.trim()) providers[nameMap[name] || name.toLowerCase()] = { apiKey: key.trim() };
-      }
-    }
-  } catch { /* ignore */ }
+  for (const [field, key] of Object.entries(getProviderKeys())) {
+    const id = PROVIDER_FIELDS[field as ProviderField];
+    if (id && key?.trim()) providers[id] = { apiKey: key.trim() };
+  }
   return providers;
 }
 
-/** True when there's a provider the sidecar can chat through (platform or BYOK). */
+/** True when there is something to chat through: a provider key (Brave is
+ *  search, not chat) or a local model. */
 export function hasChatCapability(): boolean {
-  const usePlatform = ls('ava-ide-use-platform') !== '0';
-  if (usePlatform && getPlatformKey()) return true;
-  return Object.keys(readByokProviders()).length > 0;
+  const chat = Object.keys(readByokProviders()).filter((id) => id !== 'brave');
+  if (chat.length > 0) return true;
+  return !!(ls('ava-ide-local-baseurl') && (ls('ava-ide-local-model') || (ls('ava-ide-local-models') || '[]') !== '[]'));
 }
 
 /** Build the sidecar init config from localStorage — mirrors AvaChatPage.startSidecar. */
@@ -66,11 +58,8 @@ export function buildSidecarConfig(): SidecarConfig {
     ? { baseUrl: localBaseUrl, modelName: localModelName, apiKey: localApiKey || undefined, modelLabel: localModelLabel || undefined, models: localModels.length ? localModels : undefined }
     : undefined;
 
-  const usePlatform = ls('ava-ide-use-platform') !== '0';
-
   return {
     providers,
-    platformKey: usePlatform ? (getPlatformKey() || undefined) : undefined,
     activeModel: resolveSidecarModel(model),
     cwd: ls('ava-ide-project-folder') || '.',
     mode,
@@ -81,10 +70,7 @@ export function buildSidecarConfig(): SidecarConfig {
     permissionMode: (ls('ava-ide-settings') ? JSON.parse(ls('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
     autoMemory: true,
     workingHours: { start: workStart, end: workEnd },
-    userName: ls('ava-ide-user-name') || ls('ava-ide-email')?.split('@')[0] || undefined,
-    userEmail: ls('ava-ide-email') || undefined,
-    userTier: ls('ava-ide-tier') || undefined,
-    _devPlatformFallback: usePlatform && !!getPlatformKey(),
+    userName: ls('ava-ide-user-name') || undefined,
     local: localBlock,
     useLocalEmbeddings: ls('ava-ide-embeddings-enabled') === '1',
     embeddingModel: ls('ava-ide-embeddings-model') || undefined,
@@ -102,6 +88,8 @@ export async function ensureSidecarRunning(): Promise<void> {
   if (!hasChatCapability()) return;
   booting = true;
   try {
+    // Account-era data must be home before the sidecar reads ~/.ava.
+    await ensureDataHome();
     await sc.start(buildSidecarConfig());
   } catch {
     // Failure surfaces via the sidecar 'error'/'close' event stream + Output panel.

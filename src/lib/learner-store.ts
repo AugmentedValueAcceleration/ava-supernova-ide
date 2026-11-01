@@ -9,11 +9,11 @@
 // learning-store.ts).
 
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 
 // Account-scoped — ~/.ava/users/<id>/learner.json when signed in (the same file
 // the extension + @ava/core use), ~/.ava/learner.json for BYOK/no-account.
-const learnerPath = async (): Promise<string> => `${await accountRoot()}/learner.json`;
+const learnerPath = async (): Promise<string> => `${await dataRoot()}/learner.json`;
 
 export interface LearnerSelfAchievement {
   title: string;
@@ -67,6 +67,6 @@ export async function readLearnerProfile(): Promise<LearnerProfile> {
 /** Persist the learner profile, stamping schema_version + updated_at. */
 export async function writeLearnerProfile(profile: LearnerProfile): Promise<void> {
   const next: LearnerProfile = { ...profile, schema_version: 1, updated_at: new Date().toISOString() };
-  await mkdir(await accountRoot(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+  await mkdir(await dataRoot(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
   await writeTextFile(await learnerPath(), JSON.stringify(next, null, 2), { baseDir: BaseDirectory.Home });
 }

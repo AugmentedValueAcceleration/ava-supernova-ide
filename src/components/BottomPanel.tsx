@@ -2,10 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { BottomTab } from '../App';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { ensureSidecarLog, getSidecarLog, subscribeSidecarLog, clearSidecarLog, type SidecarLogEntry, type SidecarLogLevel } from '../lib/sidecar-log';
-import { getPlatformKey, apiStreamUrl, fetchPlatformModels, getCachedModels, type PlatformModel } from '../lib/api';
-import { useModeAvailability, isModeListed, hasKeyFor, activeProviderSource, type ModeId } from '../lib/mode-availability';
+import { ALL_MODELS } from '@ava/core/models';
+import { useModeAvailability, isModeListed, hasKeyFor, type ModeId } from '../lib/mode-availability';
 import { t, useLocale } from '../lib/i18n';
-import { providerLabel } from '../lib/chat-models';
+import { providerLabel, resolveSidecarModel } from '../lib/chat-models';
 import ModelDropdown, { type IdeModelOption } from './ModelDropdown';
 
 // Tier + auth state are now sourced via useModeAvailability — see
@@ -68,121 +68,54 @@ function AvaCliPanel() {
   // Model selector state. Defaults to Maestro (auto) — matches the
   // extension's default. Persisted to localStorage so the choice survives
   // panel re-mounts.
+  // Rows carry `provider:id`; a pick stored as a bare id (or an account-era
+  // `-platform` id) is normalised to that so it still finds its row.
   const [activeModel, setActiveModel] = useState<string>(() => {
-    try { return localStorage.getItem('ava-ide-active-model') || 'auto'; } catch { return 'auto'; }
+    try { return resolveSidecarModel(localStorage.getItem('ava-ide-active-model') || 'auto'); } catch { return 'auto'; }
   });
-  const [platformModels, setPlatformModels] = useState<PlatformModel[]>(() => getCachedModels() || []);
-  // Mode availability — Aurora / Supernova / Maestro gated via the
-  // shared lib so this picker stays in lockstep with the dashboard
-  // chat picker. Hook handles ava-auth-changed / ava-byok-changed /
-  // ava-tier-changed internally.
+  // Mode availability — the fleets, gated via the shared lib so this picker
+  // stays in lockstep with the dashboard chat picker. The hook re-reads on
+  // ava-byok-changed.
   const { state: modeState, availability: modeAvailability } = useModeAvailability();
   const byokKeys = modeState.byok;
 
-  // Which wallet the list is drawn from — see activeProviderSource. Signing in
-  // or out changes the answer as much as the toggle does, so both events count.
-  const [providerSource, setProviderSource] = useState<'platform' | 'byok'>(activeProviderSource);
-  useEffect(() => {
-    const refresh = () => setProviderSource(activeProviderSource());
-    window.addEventListener('ava-ide-source-changed', refresh);
-    window.addEventListener('ava-auth-changed', refresh);
-    return () => {
-      window.removeEventListener('ava-ide-source-changed', refresh);
-      window.removeEventListener('ava-auth-changed', refresh);
-    };
-  }, []);
-
-  // Lazy-load the platform model list (1-hour cache inside fetchPlatformModels).
-  // Falls back silently when offline / unauthenticated — orchestrated modes
-  // still appear because they're injected client-side below.
-  useEffect(() => {
-    let cancelled = false;
-    fetchPlatformModels().then((m) => {
-      if (!cancelled && m) setPlatformModels(m);
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Build the dropdown's model list: orchestrated entries (Maestro always
-  // available, Supernova admin-gated to match v0.50.0 release notes — admin
-  // gets it active, everyone else sees "In development") + raw platform
-  // models (BYOK + managed) sourced from /api/models.
+  // Build the dropdown's model list: the fleets + every single model in
+  // core's catalogue, each available once the user holds that provider's key.
   const dropdownModels: IdeModelOption[] = useMemo(() => {
-    // Three orchestrated modes — gated identically to the dashboard
-    // chat picker via mode-availability lib. Plan path lights up
-    // Maestro for everyone, Aurora/Supernova for admins; BYOK path
-    // lights each one up the moment the right keys are present.
+    // The fleets — gated identically to the dashboard chat picker via the
+    // mode-availability lib: each lights up the moment its keys are present.
     // The fleets always accept images. Maestro and Aurora have vision-capable
     // coordinators outright; Supernova's (DeepSeek V4) is blind, but the vision
     // bridge describes the image and injects the description, so attaching
     // works from the user's side. Report EFFECTIVE capability, not the
     // coordinator's raw flag.
     const orchestrated: IdeModelOption[] = ([
-      { id: 'aurora',    name: 'Aurora',    provider: 'platform', available: modeAvailability.aurora,    supportsVision: true, modeId: 'aurora' as const },
-      { id: 'supernova', name: 'Supernova', provider: 'platform', available: modeAvailability.supernova, supportsVision: true, modeId: 'supernova' as const },
-      { id: 'auto',      name: 'Maestro',   provider: 'platform', available: modeAvailability.maestro,   supportsVision: true, modeId: 'maestro' as const },
-      // Longxiang's provider is 'kimi', not 'platform' — it is the one fleet
-      // with no managed path, and labelling it 'platform' would imply a plan
-      // could run it. Vision is genuine here: K3 and Qwen 3.7 Plus both see
-      // natively, so no bridge is involved.
-      { id: 'longxiang', name: 'Longxiang', provider: 'kimi',     available: modeAvailability.longxiang, supportsVision: true, modeId: 'longxiang' as const },
+      { id: 'aurora',    name: 'Aurora',    provider: 'fleet', available: modeAvailability.aurora,    supportsVision: true, modeId: 'aurora' as const },
+      { id: 'supernova', name: 'Supernova', provider: 'fleet', available: modeAvailability.supernova, supportsVision: true, modeId: 'supernova' as const },
+      { id: 'auto',      name: 'Maestro',   provider: 'fleet', available: modeAvailability.maestro,   supportsVision: true, modeId: 'maestro' as const },
+      // Vision is genuine here: K3 and Qwen 3.7 Plus both see natively, so no
+      // bridge is involved.
+      { id: 'longxiang', name: 'Longxiang', provider: 'fleet', available: modeAvailability.longxiang, supportsVision: true, modeId: 'longxiang' as const },
     ] satisfies (IdeModelOption & { modeId: ModeId })[])
       .filter((o) => isModeListed(o.modeId))
       .map(({ modeId: _modeId, ...rest }) => rest);
-    // Raw individual models, two lanes now:
-    //   section==='platform' — the single fleet models, opened to the account
-    //     tier (operator 2026-07-23). They run on CREDITS, so they light up the
-    //     moment a platform account is connected. The sidecar's provider
-    //     registry resolves a `-platform` id (or a bare id with no BYOK key) to
-    //     the platform provider automatically (provider-registry.findModel
-    //     bridges the -platform suffix), so no id rewriting is needed here — a
-    //     credit pick draws credits, and the SAME model with a BYOK key present
-    //     resolves to that key instead. Nothing to special-case in routing.
-    //   section==='byok' — the full BYOK lineup, usable with the provider key.
-    const signedIn = !!getPlatformKey();
-    // ONE entry per logical model. A fleet single can arrive as BOTH a bare
-    // byok row and a `-platform` credit row (Mistral does); keep one, preferring
-    // the BARE id, because the sidecar's provider registry resolves a bare id to
-    // the right wallet on its own — the user's key if present, else platform
-    // credits. A platform-only model (e.g. DeepSeek, whose sole row is
-    // `-platform`) keeps that id and lights up on a connected account.
-    const bySlug = new Map<string, PlatformModel>();
-    for (const m of platformModels) {
-      if (m.section !== 'byok' && m.section !== 'platform') continue;
-      const slug = m.id.replace(/-platform$/, '');
-      const existing = bySlug.get(slug);
-      if (!existing || (existing.section === 'platform' && m.section === 'byok')) {
-        bySlug.set(slug, m); // prefer the bare byok row over its -platform twin
-      }
-    }
-    // Which slugs the PLATFORM actually serves. On Platform these are the only
-    // singles a plan can run; everything else needs a key the plan does not
-    // supply, so offering it here is offering a row you can only fail at.
-    const platformServed = new Set(
-      platformModels.filter((m) => m.section === 'platform').map((m) => m.id.replace(/-platform$/, '')),
-    );
-
-    const raw: IdeModelOption[] = [...bySlug.values()]
-      .filter((m) => providerSource !== 'platform' || platformServed.has(m.id.replace(/-platform$/, '')))
-      .map((m) => ({
-        id: m.id,
-        name: m.name,
-        provider: m.provider,
-        // On Platform a served single runs on credits, so a connected account
-        // is the whole test. On API Key there is no plan behind it: the row is
-        // only real if the key is. This used to be a flat `true` for every BYOK
-        // row — correct while platform credits were always the fallback, and
-        // wrong the moment the platform is not in play.
-        available: providerSource === 'platform'
-          ? signedIn
-          : hasKeyFor(m.provider, byokKeys),
-        // The API already reports this per model; the picker just never read it.
-        supportsVision: m.supports_vision === true,
-      }));
+    // Single models straight from core's catalogue — the same list the
+    // sidecar's registry resolves against. Retired ids (hiddenFromPicker) still
+    // resolve for stored picks but are not offered.
+    const raw: IdeModelOption[] = Object.entries(ALL_MODELS).flatMap(([provider, models]) =>
+      models
+        .filter((m) => !m.disabled && !m.hiddenFromPicker)
+        .map((m) => ({
+          id: `${provider}:${m.id}`,
+          name: m.name,
+          provider,
+          available: hasKeyFor(provider, byokKeys),
+          supportsVision: m.supportsVision === true,
+        })));
     return [...orchestrated, ...raw];
-  }, [platformModels, modeAvailability, providerSource, byokKeys]);
+  }, [modeAvailability, byokKeys]);
   // Surface modeState so the orchestrated subtitles can explain unlock
-  // paths (e.g. "Add Mistral key" / "Connect or add DeepSeek + Qwen").
+  // paths (e.g. "Add Mistral key").
   // Read here so eslint sees it as used; ModelDropdown is the consumer.
   void modeState;
 
@@ -224,10 +157,10 @@ function AvaCliPanel() {
 
   // The chosen model has no key for its provider. Read off the SAME list the
   // dropdown renders, so the notice and the row cannot disagree. Fleets carry
-  // provider 'platform' and have their own gating — never this notice.
+  // provider 'fleet' and have their own gating — never this notice.
   const missingKeyProvider = (() => {
     const hit = dropdownModels.find((m) => m.id === activeModel);
-    if (!hit || hit.available || hit.provider === 'platform') return null;
+    if (!hit || hit.available || hit.provider === 'fleet') return null;
     return providerLabel(hit.provider);
   })();
 
@@ -317,63 +250,10 @@ function AvaCliPanel() {
         setBusy(false);
       }
     }
-    // Fallback: cloud API
+    // No sidecar — nothing to run the turn on. (The account-era fallback sent
+    // it to Ava's server on a platform key; there are no accounts now.)
     else {
-      appendLine({ type: 'ava', text: '' });
-      try {
-        const key = getPlatformKey();
-        if (!key) {
-          appendLine({ type: 'error', text: 'No platform key. Connect account or start local sidecar.' });
-          setBusy(false);
-          return;
-        }
-
-        const response = await fetch(apiStreamUrl('/chat'), {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            // Orchestrated modes ('auto' = Maestro, 'supernova') resolve
-            // server-side to the right coordinator. Raw model ids pass
-            // through untouched. Falls back to qwen3.5-flash only if no
-            // model has been picked yet (shouldn't happen — default is
-            // 'auto' from initial state).
-            model: activeModel || 'qwen3.5-flash',
-            messages: [{ role: 'user', content: trimmed }],
-          }),
-        });
-
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const json = await response.json();
-          const text = json.choices?.[0]?.message?.content || json.content || json.text || '';
-          updateLastAva(text || '(empty response)');
-        } else {
-          const reader = response.body?.getReader();
-          if (reader) {
-            const decoder = new TextDecoder();
-            let buffer = '';
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const sseLines = buffer.split('\n');
-              buffer = sseLines.pop() || '';
-              for (const line of sseLines) {
-                const t = line.trim();
-                if (t.startsWith('data: ') && t !== 'data: [DONE]') {
-                  try {
-                    const json = JSON.parse(t.slice(6));
-                    const c = json.choices?.[0]?.delta?.content || json.delta?.content || '';
-                    if (c) { currentResponse.current += c; updateLastAva(currentResponse.current); }
-                  } catch { /* */ }
-                }
-              }
-            }
-          }
-        }
-      } catch (err: any) {
-        appendLine({ type: 'error', text: err.message });
-      }
+      appendLine({ type: 'error', text: t('ide.cli.not_running') });
       setBusy(false);
       inputRef.current?.focus();
     }

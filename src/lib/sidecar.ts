@@ -2,7 +2,7 @@
  * Sidecar Manager — Spawns and communicates with the @ava/core Node.js sidecar.
  *
  * Uses @tauri-apps/plugin-shell to run a Node.js process that hosts the full
- * agent engine (120+ tools, personas, memory) locally. Communication is NDJSON
+ * agent engine (90+ tools, personas, memory) locally. Communication is NDJSON
  * over stdin (commands) / stdout (events).
  */
 
@@ -27,7 +27,6 @@ export interface DesktopAutomationSettings {
 
 export interface SidecarConfig {
   providers: Record<string, { apiKey: string; baseUrl?: string }>;
-  platformKey?: string;
   desktopAutomationSettings?: DesktopAutomationSettings;
   activeModel: string;
   cwd: string;

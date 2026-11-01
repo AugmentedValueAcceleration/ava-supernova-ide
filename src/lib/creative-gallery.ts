@@ -15,7 +15,7 @@
 import { writeFile, writeTextFile, readFile, readTextFile, mkdir, stat, BaseDirectory, remove } from '@tauri-apps/plugin-fs';
 import { homeDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 import { useEffect, useState, useCallback } from 'react';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ const TYPE_TO_EXT: Record<MediumKind, string> = {
 
 /** The creative dir relative to the home dir: ~/.ava/users/<id>/creative when
  *  signed in (shared with the extension), ~/.ava/creative for BYOK/no-account. */
-const creativeDir = async (): Promise<string> => `${await accountRoot()}/creative`;
+const creativeDir = async (): Promise<string> => `${await dataRoot()}/creative`;
 const metadataRel = async (): Promise<string> => `${await creativeDir()}/metadata.json`;
 
 /** metadata.json is the local gallery's source of truth. Each entry carries

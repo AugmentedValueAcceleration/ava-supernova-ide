@@ -1,7 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { initLocale, useLocale } from './lib/i18n';
-import { TickEngine } from './lib/tick-engine';
-import { refreshTier } from './lib/api';
 import TitleBar from './components/TitleBar';
 import { DashboardTopBar } from './components/DashboardTopBar';
 import ActivityBar from './components/ActivityBar';
@@ -13,7 +11,8 @@ import { ensureSidecarLog } from './lib/sidecar-log';
 import { ensureSidecarRunning } from './lib/sidecar-boot';
 import { getSidecar } from './lib/sidecar';
 import StatusBar from './components/StatusBar';
-import WelcomeOverlay from './components/WelcomeOverlay';
+import WelcomeOverlay, { ONBOARDED_KEY, hasModelKey, type OnboardingMode } from './components/WelcomeOverlay';
+import { hasChatCapability } from './lib/sidecar-boot';
 import UpdateChecker from './components/UpdateChecker';
 
 export type ActivityItem = 'explorer' | 'search' | 'git' | 'ava' | 'extensions' | 'debug' | 'dashboard';
@@ -31,10 +30,18 @@ function save(key: string, value: unknown) {
 }
 
 export default function App() {
-  // Show on every startup while the "show on startup" preference is on (default
-  // true) — for everyone, signed in or not. The overlay's checkbox + the
-  // Settings toggle write `ava-ide-welcome-on-startup`.
-  const [showWelcome, setShowWelcome] = useState(() => localStorage.getItem('ava-ide-welcome-on-startup') !== 'false');
+  // Onboarding (key-first, 1 Nov 2026), the same rule as the extension:
+  //   - never seen it, and never finished the old tour  → all four screens;
+  //   - used Ava before but has nothing to chat through → the key screen only,
+  //     once (a local model counts — they need no key);
+  //   - otherwise nothing. Settings can replay the full tour.
+  const [welcome, setWelcome] = useState<OnboardingMode | null>(() => {
+    try {
+      if (localStorage.getItem(ONBOARDED_KEY)) return null;
+      if (!localStorage.getItem('ava-ide-onboarded')) return 'full';
+      return hasModelKey() || hasChatCapability() ? null : 'key';
+    } catch { return 'full'; }
+  });
   const [activeActivity, setActiveActivity] = useState<ActivityItem>(() => load('activity', 'dashboard'));
   const [sidebarOpen, setSidebarOpen] = useState(() => load('sidebarOpen', true));
   const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => load('sidebarPos', 'left'));
@@ -250,18 +257,16 @@ export default function App() {
 
   // App-level sidecar boot — the sidecar is a singleton shared by every page, so
   // it must NOT be owned by the main chat alone. Ensure it's running from launch
-  // and whenever the account/keys change, regardless of which page is open. This
+  // and whenever the keys change, regardless of which page is open. This
   // is what makes the Design Studio work on a cold load / reload (previously the
   // sidecar only started on the main chat, so design chat found nothing running).
   useEffect(() => {
     let cancelled = false;
     const ensure = () => { if (!cancelled) ensureSidecarRunning().catch(() => {}); };
     ensure();
-    window.addEventListener('ava-auth-changed', ensure);
     window.addEventListener('ava-byok-changed', ensure);
     return () => {
       cancelled = true;
-      window.removeEventListener('ava-auth-changed', ensure);
       window.removeEventListener('ava-byok-changed', ensure);
     };
   }, []);
@@ -274,24 +279,9 @@ export default function App() {
 
   // Replay the welcome tour (from Settings) — non-destructive.
   useEffect(() => {
-    const handler = () => setShowWelcome(true);
+    const handler = () => setWelcome('full');
     window.addEventListener('ava-open-welcome', handler);
     return () => window.removeEventListener('ava-open-welcome', handler);
-  }, []);
-
-  // Re-fetch tier from the platform on launch and whenever the IDE
-  // window regains focus. Covers the common "upgraded on the website,
-  // come back to the IDE" flow without requiring a sign-out/sign-in.
-  useEffect(() => {
-    void refreshTier();
-    const onFocus = () => { void refreshTier(); };
-    const onVisible = () => { if (document.visibilityState === 'visible') void refreshTier(); };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
   }, []);
 
   const cycleMode = useCallback(() => {
@@ -322,32 +312,6 @@ export default function App() {
       collapsed={!sidebarOpen}
     />
   );
-
-  // ── Tick Engine — background awareness ──────────────────────────────
-  const tickRef = useRef<TickEngine | null>(null);
-  useEffect(() => {
-    if (!tickRef.current) tickRef.current = new TickEngine();
-    const interval = setInterval(async () => {
-      if (!tickRef.current) return;
-      const result = await tickRef.current.tick({
-        getCreditBalance: () => {
-          try {
-            const bal = localStorage.getItem('ava-platform-balance');
-            if (bal) { const p = JSON.parse(bal); return { used: p.used, limit: p.limit }; }
-          } catch { /* */ }
-          return null;
-        },
-        getSupportUnread: () => {
-          try { return Number(localStorage.getItem('ava-support-unread') || 0); } catch { return 0; }
-        },
-      });
-      for (const event of result.events) {
-        // Dispatch as custom event for toast/notification display
-        window.dispatchEvent(new CustomEvent('ava-tick-event', { detail: event }));
-      }
-    }, 120_000); // Every 2 minutes
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -380,9 +344,9 @@ export default function App() {
         activeFilePath={activeFilePath}
       />
       <UpdateChecker />
-      {showWelcome && (
-        <WelcomeOverlay onComplete={(navigateTo) => {
-          setShowWelcome(false);
+      {welcome && (
+        <WelcomeOverlay mode={welcome} onComplete={(navigateTo) => {
+          setWelcome(null);
           if (navigateTo) {
             setDashboardPage(navigateTo as DashboardPageId);
             save('dashPage', navigateTo);

@@ -3,9 +3,8 @@ import { t } from './i18n';
 // Single source of truth for the 4 orchestrated modes —
 // Aurora, Supernova, Maestro, Longxiang — and what unlocks them.
 //
-// Plans surface only these 4 modes (no raw individual models). BYOK
-// surface gets the same 4 modes plus raw models per the user's keys.
-// Each mode is gated by the fleet of provider keys it actually needs:
+// Each mode is gated by the fleet of provider keys it actually needs, and
+// the picker also lists the single models the user's keys reach:
 //
 //   Maestro   → Qwen-only fleet (Qwen 3.7 Plus + 3.5 Flash light tier).
 //   Supernova → DeepSeek + Qwen ensemble (DeepSeek Flash takes the
@@ -15,44 +14,17 @@ import { t } from './i18n';
 //   Aurora    → Mistral-only EU stack (Medium 3.5 lead + Small 4
 //               workhorse + Large 3 reserve).
 //
-// All four modes are public (admin gate retired). Any signed-in
-// platform user gets all four; BYOK users unlock each mode the
-// moment they have the relevant keys. Orchestration is the product and
-// is universally available — BYOK does not unlock it, it adds the option
-// to bypass it and drive a single model instead.
+// Every mode unlocks the moment the user has the keys its fleet needs (no
+// accounts, 1 Nov 2026).
 
 import { useEffect, useState } from 'react';
-import { getPlatformKey } from './api';
-
-/**
- * Which wallet is actually live right now.
- *
- * TWO conditions, and both matter:
- *
- *  - The toggle. On API Key, sidecar-boot withholds the platform key outright,
- *    so a fleet genuinely cannot run on credits; a picker offering one was
- *    promising something the runtime would refuse.
- *  - Being signed in. The stored flag DEFAULTS to Platform, and the toggle
- *    that would change it only renders for a connected account — so a
- *    signed-out user is stuck on a setting they cannot see or reach. Without
- *    this second condition they'd be shown a platform-only list with nothing
- *    on it and no way out. No account means API Key, whatever the flag says.
- *
- * Everything that asks "platform or BYOK?" asks it here.
- */
-export function activeProviderSource(): 'platform' | 'byok' {
-  if (!getPlatformKey()) return 'byok';
-  try { return localStorage.getItem('ava-ide-use-platform') !== '0' ? 'platform' : 'byok'; }
-  catch { return 'platform'; }
-}
+import { keyedFields } from './provider-keys';
 
 //   Longxiang → open-weights Kimi/Qwen/DeepSeek stack (K3 lead + Builder,
 //               Qwen 3.7 Plus mid-tier + vision, DeepSeek Flash volume).
 //               Gated by LONGXIANG_LIVE below, then available exactly like
-//               the other three: platform connection OR the BYOK keys
-//               (moonshot + qwen + deepseek). It was BYOK-only before
-//               launch and the comment outlived that — the gate on line
-//               ~121 has read `platformConnected || byok` since it shipped.
+//               the other three: once the keys are there (moonshot + qwen +
+//               deepseek).
 
 export type ModeId = 'maestro' | 'supernova' | 'aurora' | 'longxiang';
 
@@ -95,8 +67,6 @@ export interface ByokKeys {
 }
 
 export interface ModeAvailabilityState {
-  platformConnected: boolean;
-  isAdmin: boolean;
   byok: ByokKeys;
 }
 
@@ -119,18 +89,14 @@ const EMPTY_BYOK: ByokKeys = {
   nvidia: false,
 };
 
-// BYOK key store uses PascalCase provider names (matches BYOK_MODELS
-// fallback in DashboardPages.tsx). We normalise to lowercase booleans
-// so callers don't have to remember which casing each provider uses.
+// The key store uses PascalCase provider names (provider-keys.ts). We
+// normalise to lowercase booleans so callers don't have to remember which
+// casing each provider uses.
 export function readByokKeys(): ByokKeys {
   try {
-    const raw = localStorage.getItem('ava-ide-byok');
-    if (!raw) return EMPTY_BYOK;
-    const stored = JSON.parse(raw) as Record<string, string>;
-    const has = (provider: string) => {
-      const v = stored[provider];
-      return !!(v && v.trim());
-    };
+    const stored = keyedFields();
+    if (stored.size === 0) return EMPTY_BYOK;
+    const has = (provider: string) => stored.has(provider);
     return {
       qwen: has('Qwen'),
       deepseek: has('DeepSeek'),
@@ -165,28 +131,16 @@ export function hasKeyFor(provider: string, keys: ByokKeys): boolean {
   return k ? keys[k] : true;
 }
 
-export function readTier(): string {
-  try { return localStorage.getItem('ava-ide-tier') || 'free'; } catch { return 'free'; }
-}
-
-// The rule. Plan path lights up all three orchestrated modes for any
-// signed-in platform user (admin gate retired 2026-04-30 with the
-// public Aurora + Supernova launch — partnership conversations on
-// DeepSeek and Mistral resolved enough to ship). BYOK path lights up
-// the mode whenever the relevant fleet of keys is present. The two
-// paths are an OR — a plan user with their own Mistral key gets
-// Aurora the same way; isAdmin is no longer load-bearing.
-// Longxiang follows the SAME rule as every other fleet — a signed-in plan
-// runs it on credits, BYOK unlocks it once all three keys are present. The
-// only extra condition is the launch flag, which is about whether the fleet
-// has shipped, not about who may use it.
+// The rule: a mode is available once the user holds the keys its fleet
+// needs. The only extra condition is the launch flag, which is about whether
+// the fleet has shipped, not about who may use it.
 export function getModeAvailability(state: ModeAvailabilityState): ModeAvailability {
-  const { platformConnected, byok } = state;
+  const { byok } = state;
   return {
-    maestro:   platformConnected || byok.qwen,
-    supernova: platformConnected || (byok.qwen && byok.deepseek),
-    aurora:    AURORA_LIVE && (platformConnected || byok.mistral),
-    longxiang: LONGXIANG_LIVE && (platformConnected || (byok.moonshot && byok.qwen && byok.deepseek)),
+    maestro:   byok.qwen,
+    supernova: byok.qwen && byok.deepseek,
+    aurora:    AURORA_LIVE && byok.mistral,
+    longxiang: LONGXIANG_LIVE && byok.moonshot && byok.qwen && byok.deepseek,
   };
 }
 
@@ -208,12 +162,8 @@ export function isModeListed(mode: ModeId): boolean {
   return true;
 }
 
-// Reactive hook — recomputes when the user signs in/out, switches
-// tier, flips the source toggle, or adds/removes a BYOK key. The events it
-// listens to are already dispatched elsewhere (sign-in.ts emits
-// ava-auth-changed, Sidebar emits ava-byok-changed and
-// ava-ide-source-changed, lib/api.ts emits ava-tier-changed). Sidebar writes
-// every keystroke, so CLEARING a key field lands here like any other change.
+// Reactive hook — recomputes when a key is added or removed
+// (provider-keys.ts dispatches ava-byok-changed on every save).
 export function useModeAvailability(): {
   state: ModeAvailabilityState;
   availability: ModeAvailability;
@@ -222,43 +172,28 @@ export function useModeAvailability(): {
 
   useEffect(() => {
     const refresh = () => setTick(t => t + 1);
-    window.addEventListener('ava-auth-changed', refresh);
-    window.addEventListener('ava-tier-changed', refresh);
     window.addEventListener('ava-byok-changed', refresh);
-    window.addEventListener('ava-ide-source-changed', refresh);
-    window.addEventListener('storage', refresh);
-    return () => {
-      window.removeEventListener('ava-auth-changed', refresh);
-      window.removeEventListener('ava-tier-changed', refresh);
-      window.removeEventListener('ava-byok-changed', refresh);
-      window.removeEventListener('ava-ide-source-changed', refresh);
-      window.removeEventListener('storage', refresh);
-    };
+    return () => window.removeEventListener('ava-byok-changed', refresh);
   }, []);
 
   // tick is read here so the hook re-runs on every refresh event
   // without us needing to thread the value through.
   void tick;
 
-  const state: ModeAvailabilityState = {
-    platformConnected: activeProviderSource() === 'platform',
-    isAdmin: readTier() === 'admin',
-    byok: readByokKeys(),
-  };
+  const state: ModeAvailabilityState = { byok: readByokKeys() };
   return { state, availability: getModeAvailability(state) };
 }
 
-// "Coming soon" copy depends on whether the user could unlock the mode
-// via BYOK or just hasn't connected. Surfaced in mode subtitles.
+// Subtitle copy: what an unlocked mode is, or which key a locked one still
+// needs.
 export function modeSubtitle(mode: ModeId, av: ModeAvailability, state: ModeAvailabilityState): string {
   if (av[mode]) {
-    if (mode === 'maestro')   return t(state.platformConnected ? 'dash.model.sub.maestro_best'   : 'dash.model.sub.byok_qwen');
-    if (mode === 'supernova') return t(state.platformConnected ? 'dash.model.sub.supernova_poly' : 'dash.model.sub.byok_ds_qwen');
-    if (mode === 'aurora')    return t(state.platformConnected ? 'dash.model.sub.aurora_eu'      : 'dash.model.sub.byok_mistral');
-    if (mode === 'longxiang') return t(state.platformConnected ? 'dash.model.sub.longxiang_open' : 'dash.model.sub.byok_longxiang');
+    if (mode === 'maestro')   return t('dash.model.sub.maestro_best');
+    if (mode === 'supernova') return t('dash.model.sub.supernova_poly');
+    if (mode === 'aurora')    return t('dash.model.sub.aurora_eu');
+    if (mode === 'longxiang') return t('dash.model.sub.longxiang_open');
   }
-  // Locked — explain the unlock path. Admin gate retired 2026-04-30,
-  // so locked = not-signed-in AND missing the BYOK keys for this mode.
+  // Locked — name the key(s) still missing.
   if (mode === 'supernova') {
     if (state.byok.qwen && !state.byok.deepseek) return t('dash.model.sub.add_deepseek');
     if (state.byok.deepseek && !state.byok.qwen) return t('dash.model.sub.add_qwen');

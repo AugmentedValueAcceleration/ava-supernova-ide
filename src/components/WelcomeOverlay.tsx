@@ -1,140 +1,116 @@
-// First-run welcome — adaptive, immersive, for-everyone. Mirrors the extension
-// dashboard's WelcomeOnboarding (same steps/paths/copy), in the IDE's idiom.
-// Opens with "What brings you to Ava?" and tailors the tour, then reveals the
-// breadth; keeps the IDE-only consent, desktop-automation and work-hours steps.
-// Shows on every startup while the "show on startup" preference is on.
-// Shared data: ../onboarding/flow. Copy: onboarding.* (core i18n, via t()).
+// Onboarding — rebuilt key-first (BYOK plan, agreed 1 Nov 2026). The same four
+// screens as the extension's WelcomeOnboarding, in the IDE's idiom:
+//
+// Welcome (what Ava is + consent) → Your key (tested before it is saved) →
+// About you (name + what brings you here) → Ready (one first thing to try).
+// Ava has no accounts, so a working key is the only way in, and this is where
+// it is set up. `mode: 'key'` shows only the key screen — for people who used
+// Ava before this existed and have no key yet.
+//
+// The feature tour, work hours and the desktop intro moved out (tips as you go,
+// Settings, the first time that mode opens). Paths: ../onboarding/flow (shared
+// with the extension). Copy: onboarding.* / onb.* in core i18n.
 
-import { useState, useCallback, useEffect } from 'react';
-import { SignInPanel } from './SignInPanel';
-import type { SignInAccount } from '../lib/sign-in';
+import { useState, useEffect, useCallback } from 'react';
 import { t, useLocale, getLocale, languageOptions, setLanguage } from '../lib/i18n';
 import { Select } from './Select';
-import { PATHS, MODES, BREADTH, stepsFor, pathById, type Destination, type OnboardingPath } from '../onboarding/flow';
+import { PATHS, pathById, type Destination, type OnboardingPath } from '../onboarding/flow';
+import { getProviderKeys, testAndSaveProviderKey, type ProviderField } from '../lib/provider-keys';
+import type { KeyTestResult } from '../lib/oneshot';
+import { loadGeneralProfile, saveGeneralProfile } from '../lib/health-store';
+
+export type OnboardingMode = 'full' | 'key';
 
 interface Props {
+  mode: OnboardingMode;
+  /** Done or skipped. `navigateTo` is a dashboard page id. */
   onComplete: (navigateTo?: string) => void;
 }
 
-const PROVIDERS = [
-  { id: 'Qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...' },
-  { id: 'DeepSeek', name: 'DeepSeek', placeholder: 'sk-...' },
-  { id: 'Moonshot', name: 'Kimi (Moonshot)', placeholder: 'sk-...' },
-  { id: 'Zhipu', name: 'Zhipu AI (GLM)', placeholder: '...' },
-  { id: 'Mistral', name: 'Mistral', placeholder: '...' },
-];
+/** Set once the new onboarding has been seen (finished or skipped). */
+export const ONBOARDED_KEY = 'ava-ide-onboarded-v2';
+const CONSENT_KEY = 'ava-ide-consent-accepted';
 
-const STEPS = stepsFor('ide'); // consent, identity, path, tailored, breadth, connect, desktop, hours, ready
+type Step = 'welcome' | 'key' | 'about' | 'ready';
 const ACCENT = 'var(--accent)';
 
 const DEST_PAGE: Record<Destination, string> = {
   chat: 'ava-chat', journal: 'journal', learning: 'learning', health: 'health', home: 'command-centre',
 };
 
-// House button — the chat "New Chat" pill: translucent purple, purple border + text.
+/**
+ * Where each provider hands out keys. Every link was checked against the
+ * provider's own docs on 1 Nov 2026 (international sites; all need a login).
+ * Same list as the extension.
+ */
+const QWEN_KEY_URL = 'https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key';
+const OTHER_PROVIDERS: { field: ProviderField; id: string; name: string; url: string; note: string }[] = [
+  { field: 'DeepSeek', id: 'deepseek', name: 'DeepSeek', url: 'https://platform.deepseek.com/api_keys', note: 'Coding and reasoning — Supernova runs on it.' },
+  { field: 'Mistral', id: 'mistral', name: 'Mistral', url: 'https://console.mistral.ai/api-keys', note: 'European models — Aurora runs on them.' },
+  { field: 'Moonshot', id: 'kimi', name: 'Kimi (Moonshot)', url: 'https://platform.kimi.ai/console/api-keys', note: 'Long context — Longxiang runs on it.' },
+  { field: 'Zhipu', id: 'glm', name: 'GLM (Z.ai)', url: 'https://z.ai/manage-apikey/apikey-list', note: 'Open-weights coding models.' },
+  { field: 'Tencent', id: 'tencent', name: 'Tencent TokenHub (Hunyuan)', url: 'https://console.tencentcloud.com/tokenhub/apikey', note: 'Pick the Singapore region before creating the key.' },
+  { field: 'NVIDIA', id: 'nvidia', name: 'NVIDIA', url: 'https://build.nvidia.com/settings/api-keys', note: 'Keys start with nvapi-.' },
+  { field: 'MiniMax', id: 'minimax', name: 'MiniMax', url: 'https://platform.minimax.io/console/keys', note: 'MiniMax M3 — reads images too, 1M context.' },
+  { field: 'Xiaomi', id: 'xiaomi', name: 'Xiaomi MiMo', url: 'https://platform.xiaomimimo.com/#/console/api-keys', note: 'Use a pay-as-you-go key (sk-), not a Token Plan key.' },
+];
+const BRAVE_URL = 'https://api-dashboard.search.brave.com/app/keys';
+
+/** A key that can run a model — Brave is search, not chat. */
+export function hasModelKey(): boolean {
+  return Object.entries(getProviderKeys()).some(([field, v]) => field !== 'Brave' && !!v?.trim());
+}
+
+async function openExternal(url: string): Promise<void> {
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener');
+    await openUrl(url);
+  } catch {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
+// House button — the chat "New Chat" pill: translucent accent, accent border + text.
 function btnStyle(disabled?: boolean): React.CSSProperties {
   return {
-    padding: '8px 22px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+    padding: '8px 22px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: disabled ? 'default' : 'pointer',
     background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: ACCENT,
-    opacity: disabled ? 0.4 : 1, transition: 'background 0.15s',
+    opacity: disabled ? 0.4 : 1, transition: 'background 0.15s', flexShrink: 0,
   };
 }
 const btnHover = {
-  onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 20%, transparent)'; },
+  onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 20%, transparent)'; },
   onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 10%, transparent)'; },
 };
+const inputStyle: React.CSSProperties = {
+  flex: 1, minWidth: 0, height: 36, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
+  borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#cdd6f4', outline: 'none',
+};
+const card: React.CSSProperties = { borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', padding: 16 };
 
-export default function WelcomeOverlay({ onComplete }: Props) {
+export default function WelcomeOverlay({ mode, onComplete }: Props) {
   useLocale();
+  const steps: Step[] = mode === 'key' ? ['key'] : ['welcome', 'key', 'about', 'ready'];
+  const alreadyAccepted = (() => { try { return !!localStorage.getItem(CONSENT_KEY); } catch { return false; } })();
   const [idx, setIdx] = useState(0);
-  const [consentChecked, setConsentChecked] = useState(false);
+  const [agreed, setAgreed] = useState(alreadyAccepted);
+  const [name, setName] = useState(() => { try { return localStorage.getItem('ava-ide-user-name') || ''; } catch { return ''; } });
   const [pathId, setPathId] = useState<string | null>(null);
-  // Seed from an existing platform login on mount so the connect step shows
-  // "Connected ✓ / Signed in as …" instead of the sign-in buttons when the
-  // user is already signed in. Mirrors isConnected() — platform-key presence
-  // is the connected signal; email + name pre-fill from their cached values.
-  const [platformStatus, setPlatformStatus] = useState<'idle' | 'valid'>(() => {
-    try { return localStorage.getItem('ava-ide-platform-key') ? 'valid' : 'idle'; } catch { return 'idle'; }
-  });
-  const [platformEmail, setPlatformEmail] = useState(() => {
-    try { return localStorage.getItem('ava-ide-email') || ''; } catch { return ''; }
-  });
-  const [userName, setUserName] = useState(() => {
-    try { return localStorage.getItem('ava-ide-user-name') || ''; } catch { return ''; }
-  });
-  const [byokProvider, setByokProvider] = useState('Qwen');
-  const [byokKey, setByokKey] = useState('');
-  const [byokSaved, setByokSaved] = useState(false);
-  const [workStart, setWorkStart] = useState(9);
-  const [workEnd, setWorkEnd] = useState(17);
-  const [welcomeOnStartup, setWelcomeOnStartup] = useState(() => localStorage.getItem('ava-ide-welcome-on-startup') !== 'false');
-
-  const step = STEPS[idx]?.id ?? 'ready';
+  // Re-render when a key lands, so Next unlocks.
+  const [, setKeysTick] = useState(0);
+  useEffect(() => {
+    const refresh = () => setKeysTick((n) => n + 1);
+    window.addEventListener('ava-byok-changed', refresh);
+    return () => window.removeEventListener('ava-byok-changed', refresh);
+  }, []);
+  const step = steps[idx];
   const path = pathId ? pathById(pathId) : undefined;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') finish(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathId]);
-
-  const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`;
-  const inputStyle: React.CSSProperties = {
-    width: '100%', height: 38, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-    borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#cdd6f4', outline: 'none',
-  };
-
-  const recordConsent = useCallback(() => {
-    const timestamp = new Date().toISOString();
-    localStorage.setItem('ava-ide-consent-accepted', timestamp);
-    const key = localStorage.getItem('ava-ide-platform-key');
-    if (key) {
-      fetch('https://avasupernova.com/api/consent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'X-Ava-Platform': 'ide' },
-        body: JSON.stringify({ platform: 'ide', appVersion: '1.0.0', acceptedAt: timestamp, termsVersion: '1.0', privacyVersion: '1.0' }),
-      }).catch(() => { /* non-critical */ });
-    }
-  }, []);
-
-  const handleSignedIn = useCallback((account: SignInAccount) => {
-    setPlatformStatus('valid');
-    setPlatformEmail(account.email || '');
-    if (account.name && !userName) {
-      setUserName(account.name);
-      try { localStorage.setItem('ava-ide-user-name', account.name); } catch { /* non-fatal */ }
-    }
-  }, [userName]);
-
-  const handleSaveByok = useCallback(() => {
-    if (!byokKey.trim()) return;
-    try {
-      const existing = JSON.parse(localStorage.getItem('ava-ide-byok') || '{}');
-      existing[byokProvider] = byokKey.trim();
-      localStorage.setItem('ava-ide-byok', JSON.stringify(existing));
-      window.dispatchEvent(new CustomEvent('ava-byok-changed'));
-      setByokSaved(true);
-    } catch { /* non-fatal */ }
-  }, [byokProvider, byokKey]);
-
-  const handleWorkHours = useCallback((s: number, e: number) => {
-    setWorkStart(s); setWorkEnd(e);
-    localStorage.setItem('ava-ide-work-start', String(s));
-    localStorage.setItem('ava-ide-work-end', String(e));
-  }, []);
-
-  const toggleStartup = (v: boolean) => {
-    setWelcomeOnStartup(v);
-    try { localStorage.setItem('ava-ide-welcome-on-startup', v ? 'true' : 'false'); } catch { /* non-fatal */ }
-  };
-
   const finish = useCallback((navigateTo?: string) => {
-    localStorage.setItem('ava-ide-onboarded', 'true');
-    // Persist the picked mode to the key the chat actually reads
-    // (ava-ide-chat-mode) using the canonical mode id, and notify listeners.
+    try { localStorage.setItem(ONBOARDED_KEY, new Date().toISOString()); } catch { /* non-fatal */ }
     const p = pathId ? pathById(pathId) : undefined;
     if (p) {
+      // The chat reads ava-ide-chat-mode; the canonical mode id goes there.
       try {
         localStorage.setItem('ava-ide-chat-mode', p.recommendedMode);
         window.dispatchEvent(new CustomEvent('ava-mode-changed'));
@@ -143,75 +119,81 @@ export default function WelcomeOverlay({ onComplete }: Props) {
     onComplete(navigateTo);
   }, [onComplete, pathId]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && step !== 'welcome') finish(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [finish, step]);
+
+  /** The name lives in two places the IDE reads: the greeting / sidecar
+   *  (localStorage) and the general profile on disk (shared with the extension). */
+  const saveName = async (value: string) => {
+    const v = value.trim();
+    try {
+      if (v) localStorage.setItem('ava-ide-user-name', v);
+      else localStorage.removeItem('ava-ide-user-name');
+      window.dispatchEvent(new CustomEvent('ava-ide-name-changed'));
+    } catch { /* non-fatal */ }
+    try {
+      const g = await loadGeneralProfile();
+      if ((g.display_name ?? '') !== v) await saveGeneralProfile({ ...g, display_name: v || null });
+    } catch { /* the greeting still has it */ }
+  };
+
   const next = () => {
-    if (step === 'consent') recordConsent();
-    setIdx((i) => Math.min(i + 1, STEPS.length - 1));
+    if (step === 'welcome' && agreed && !alreadyAccepted) {
+      try { localStorage.setItem(CONSENT_KEY, new Date().toISOString()); } catch { /* non-fatal */ }
+    }
+    if (step === 'about') void saveName(name);
+    if (idx === steps.length - 1) { finish(); return; }
+    setIdx((i) => i + 1);
   };
   const back = () => setIdx((i) => Math.max(i - 1, 0));
-  const choosePath = (p: OnboardingPath) => { setPathId(p.id); setIdx((i) => Math.min(i + 1, STEPS.length - 1)); };
+  const canNext = step === 'welcome' ? agreed : step === 'key' ? hasModelKey() : true;
   const launch = () => finish(path ? DEST_PAGE[path.destination] : undefined);
 
-  const canNext = (step !== 'consent' || consentChecked) && (step !== 'path' || !!pathId);
-
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} role="dialog" aria-modal="true">
       <div style={{
-        width: 'min(1100px, 94vw)', height: 'min(760px, 92vh)', display: 'flex', flexDirection: 'column',
+        width: 'min(980px, 94vw)', height: 'min(760px, 92vh)', display: 'flex', flexDirection: 'column',
         background: 'linear-gradient(160deg, #1a1020 0%, #120c1a 100%)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-        borderRadius: 16, boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
+        borderRadius: 16, boxShadow: '0 30px 80px rgba(0,0,0,0.6)', overflow: 'hidden',
       }}>
-        {/* Top bar: progress + skip */}
+        {/* Top bar: progress, language, skip */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          {STEPS.map((s, i) => (
-            <span key={s.id} style={{ height: 5, width: i === idx ? 28 : 8, borderRadius: 999, background: i <= idx ? ACCENT : 'rgba(255,255,255,0.15)', transition: 'all 0.2s' }} />
+          {steps.length > 1 && steps.map((s, i) => (
+            <span key={s} style={{ height: 5, width: i === idx ? 28 : 8, borderRadius: 999, background: i <= idx ? ACCENT : 'rgba(255,255,255,0.15)', transition: 'all 0.2s' }} />
           ))}
           <div style={{ flex: 1 }} />
-          {/* Language picker, present from the first screen so the whole tour —
-              and everything after — is in the user's language. The sidecar isn't
-              running yet during onboarding, so setLanguage (persist + UI) is
-              enough; boot reads the stored value. */}
-          <Select
-            value={getLocale()}
-            onChange={(v) => setLanguage(v)}
-            options={languageOptions()}
-            size="sm"
-            title={t('dash.settings.language')}
-            menuZIndex={10001}
-          />
-          {step !== 'consent' && <button onClick={() => finish()} style={{ background: 'none', border: 'none', color: '#6c7086', fontSize: 12, cursor: 'pointer' }}>{t('onboarding.skip')}</button>}
-        </div>
-
-        {/* Scrollable content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', minHeight: 0 }}>
-          {step === 'consent' && <ConsentStep checked={consentChecked} onCheck={setConsentChecked} />}
-          {step === 'identity' && <IdentityStep />}
-          {step === 'path' && <PathStep selected={pathId} onPick={choosePath} />}
-          {step === 'tailored' && path && <TailoredStep path={path} />}
-          {step === 'breadth' && <BreadthStep />}
-          {step === 'connect' && (
-            <ConnectStep
-              platformStatus={platformStatus} platformEmail={platformEmail} userName={userName} setUserName={setUserName}
-              byokProvider={byokProvider} setByokProvider={setByokProvider} byokKey={byokKey} setByokKey={setByokKey}
-              byokSaved={byokSaved} setByokSaved={setByokSaved} onSignedIn={handleSignedIn} onSaveByok={handleSaveByok} inputStyle={inputStyle}
-            />
+          {/* Language first, so everything after is in the user's language. The
+              sidecar isn't running yet, so setLanguage (persist + UI) is enough;
+              boot reads the stored value. */}
+          <Select value={getLocale()} onChange={(v) => setLanguage(v)} options={languageOptions()} size="sm" title={t('dash.settings.language')} menuZIndex={10001} />
+          {step !== 'welcome' && (
+            <button onClick={() => finish()} style={{ background: 'none', border: 'none', color: '#6c7086', fontSize: 12, cursor: 'pointer' }}>
+              {step === 'key' ? t('onb.key.later') : t('onboarding.skip')}
+            </button>
           )}
-          {step === 'desktop' && <DesktopStep />}
-          {step === 'hours' && <HoursStep workStart={workStart} workEnd={workEnd} onChange={handleWorkHours} fmt={fmt} inputStyle={inputStyle} />}
-          {step === 'ready' && <ReadyStep path={path} onFinish={finish} />}
         </div>
 
-        {/* Footer nav */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', minHeight: 0 }}>
+          {step === 'welcome' && <WelcomeStep agreed={agreed} onAgree={setAgreed} alreadyAccepted={alreadyAccepted} />}
+          {step === 'key' && <KeyStep onLocalModel={() => finish('settings')} />}
+          {step === 'about' && <AboutStep name={name} onName={setName} selected={pathId} onPick={(p) => setPathId(p.id)} />}
+          {step === 'ready' && <ReadyStep path={path} />}
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <button onClick={back} disabled={idx === 0} style={btnStyle(idx === 0)} {...btnHover}>{t('onboarding.back')}</button>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#6c7086', cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={welcomeOnStartup} onChange={(e) => toggleStartup(e.target.checked)} />
-            {t('onboarding.show_on_startup')}
-          </label>
+          {steps.length > 1 && (
+            <button onClick={back} disabled={idx === 0} style={btnStyle(idx === 0)} {...btnHover}>{t('onboarding.back')}</button>
+          )}
           <div style={{ flex: 1 }} />
           {step === 'ready' ? (
             <button onClick={launch} style={btnStyle()} {...btnHover}>{t('onboarding.ready.go')}</button>
           ) : (
-            <button onClick={next} disabled={!canNext} style={btnStyle(!canNext)} {...btnHover}>{step === 'consent' ? t('onboarding.agree') : t('onboarding.next')}</button>
+            <button onClick={next} disabled={!canNext} style={btnStyle(!canNext)} {...btnHover}>
+              {mode === 'key' ? t('onb.done') : t('onboarding.next')}
+            </button>
           )}
         </div>
       </div>
@@ -219,46 +201,165 @@ export default function WelcomeOverlay({ onComplete }: Props) {
   );
 }
 
-// ── Steps ─────────────────────────────────────────────────────────────────────
+// ── 1. Welcome ───────────────────────────────────────────────────────────────
 
-function ConsentStep({ checked, onCheck }: { checked: boolean; onCheck: (v: boolean) => void }) {
-  const bullets = ['onboarding.consent.local', 'onboarding.consent.sync', 'onboarding.consent.train', 'onboarding.consent.keys', 'onboarding.consent.track'];
-  return (
-    <div style={{ maxWidth: 560, margin: '0 auto' }}>
-      <h2 style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4', marginBottom: 6, textAlign: 'center' }}>{t('onboarding.consent.title')}</h2>
-      <p style={{ fontSize: 12, color: '#6c7086', textAlign: 'center', marginBottom: 20 }}>{t('onboarding.consent.body')}</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-        {bullets.map((b) => (
-          <div key={b} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: '#a6adc8' }}>
-            <span style={{ color: '#a6e3a1' }}>✓</span>{t(b)}
-          </div>
-        ))}
-      </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#cdd6f4', cursor: 'pointer' }}>
-        <input type="checkbox" checked={checked} onChange={(e) => onCheck(e.target.checked)} />
-        {t('onboarding.consent.agree')}
-      </label>
-    </div>
-  );
-}
-
-function IdentityStep() {
+function WelcomeStep({ agreed, onAgree, alreadyAccepted }: { agreed: boolean; onAgree: (v: boolean) => void; alreadyAccepted: boolean }) {
+  const link: React.CSSProperties = { textDecoration: 'underline', cursor: 'pointer', color: '#cdd6f4' };
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', maxWidth: 640, margin: '0 auto' }}>
-      <div style={{ width: 88, height: 88, borderRadius: '50%', marginBottom: 24, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, background: 'linear-gradient(135deg, var(--accent), #6366f1)', border: `1px solid ${ACCENT}55` }}>
+      <div style={{ width: 96, height: 96, borderRadius: '50%', marginBottom: 24, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, background: 'linear-gradient(135deg, var(--accent), #6366f1)', border: '1px solid color-mix(in srgb, var(--accent) 33%, transparent)' }}>
         <img src="/ava-avatar.jpeg" alt="Ava" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
       </div>
       <h1 style={{ fontSize: 34, fontWeight: 600, color: '#cdd6f4', marginBottom: 16 }}>{t('onboarding.identity.title')}</h1>
-      <p style={{ fontSize: 15, lineHeight: 1.6, color: '#a6adc8' }}>{t('onboarding.identity.body')}</p>
+      <p style={{ fontSize: 15, lineHeight: 1.6, color: '#a6adc8', marginBottom: 8 }}>{t('onboarding.identity.body')}</p>
+      <p style={{ fontSize: 13, lineHeight: 1.6, color: '#6c7086', marginBottom: 32 }}>{t('onb.welcome.tagline')}</p>
+      {!alreadyAccepted && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#a6adc8', cursor: 'pointer', userSelect: 'none' }}>
+          <input type="checkbox" checked={agreed} onChange={(e) => onAgree(e.target.checked)} />
+          <span>
+            {t('onb.welcome.agree')}{' '}
+            <a style={link} onClick={(e) => { e.preventDefault(); void openExternal('https://avasupernova.com/terms'); }}>{t('dash.support.terms')}</a>
+            {' '}{t('onb.welcome.and')}{' '}
+            <a style={link} onClick={(e) => { e.preventDefault(); void openExternal('https://avasupernova.com/privacy'); }}>{t('dash.support.privacy')}</a>
+          </span>
+        </label>
+      )}
     </div>
   );
 }
 
-function PathStep({ selected, onPick }: { selected: string | null; onPick: (p: OnboardingPath) => void }) {
+// ── 2. Your key ──────────────────────────────────────────────────────────────
+
+/** One paste box: Test & save, then the verdict in plain words. */
+function KeyBox({ field, placeholder }: { field: ProviderField; placeholder: string }) {
+  useLocale();
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<KeyTestResult | null>(null);
+  const saved = !!getProviderKeys()[field];
+
+  const test = async () => {
+    if (!value.trim() || busy) return;
+    setBusy(true);
+    try {
+      const r = await testAndSaveProviderKey(field, value);
+      setResult(r);
+      if (r.status !== 'invalid') setValue('');
+    } catch (err) {
+      setResult({ status: 'invalid', message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const colour = result?.status === 'invalid' ? '#f38ba8' : result?.status === 'unverified' ? '#f9e2af' : '#a6e3a1';
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="password"
+          value={value}
+          onChange={(e) => { setValue(e.target.value); if (result) setResult(null); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') void test(); }}
+          placeholder={saved ? t('onb.key.saved_placeholder') : placeholder}
+          style={inputStyle}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <button onClick={() => { void test(); }} disabled={!value.trim() || busy} style={btnStyle(!value.trim() || busy)} {...btnHover}>
+          {busy ? t('onb.key.testing') : t('onb.key.test')}
+        </button>
+      </div>
+      {(result || saved) && (
+        <p style={{ marginTop: 6, fontSize: 12, color: colour }}>
+          {result && result.status !== 'valid' ? result.message : t('onb.key.works')}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LinkButton({ url, label }: { url: string; label: string }) {
+  return (
+    <button onClick={() => { void openExternal(url); }} style={{ flexShrink: 0, fontSize: 12, color: ACCENT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+      {label} ↗
+    </button>
+  );
+}
+
+function KeyStep({ onLocalModel }: { onLocalModel: () => void }) {
+  const [showOthers, setShowOthers] = useState(false);
+  return (
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
+      <h2 style={{ fontSize: 24, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('onb.key.title')}</h2>
+      <p style={{ fontSize: 13, color: '#6c7086', marginBottom: 24 }}>{t('onb.key.subtitle_ide')}</p>
+
+      {/* Qwen first: one key covers chat, images, voice and video. */}
+      <div style={{ ...card, borderColor: 'color-mix(in srgb, var(--accent) 40%, transparent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', padding: 20, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>Qwen (Alibaba Model Studio)</span>
+            <span style={{ borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: ACCENT, background: 'color-mix(in srgb, var(--accent) 15%, transparent)' }}>{t('onb.key.recommended')}</span>
+          </div>
+          <LinkButton url={QWEN_KEY_URL} label={t('onb.key.get_qwen')} />
+        </div>
+        <p style={{ fontSize: 12, color: '#a6adc8', marginBottom: 12 }}>{t('onb.key.qwen_desc')}</p>
+        <KeyBox field="Qwen" placeholder="sk-…" />
+        <p style={{ marginTop: 8, fontSize: 11, color: '#6c7086' }}>{t('onb.key.singapore')}</p>
+      </div>
+
+      {/* Every other provider, each with its own key page. */}
+      <button onClick={() => setShowOthers((v) => !v)} style={{ fontSize: 12, color: '#a6adc8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
+        {showOthers ? '▾' : '▸'} {t('onb.key.others')}
+      </button>
+      {showOthers && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          {OTHER_PROVIDERS.map((p) => (
+            <div key={p.id} style={card}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{p.name}</span>
+                <LinkButton url={p.url} label={t('onb.key.get')} />
+              </div>
+              <p style={{ fontSize: 11, color: '#6c7086', marginBottom: 8 }}>{t(`onb.key.note.${p.id}`)}</p>
+              <KeyBox field={p.field} placeholder={t('onb.key.paste')} />
+            </div>
+          ))}
+          <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{t('onb.key.local')}</span>
+              <p style={{ fontSize: 11, color: '#6c7086', margin: '2px 0 0' }}>{t('onb.key.local_desc')}</p>
+            </div>
+            <button onClick={onLocalModel} style={btnStyle()} {...btnHover}>{t('onb.key.local_cta')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Web search: optional. DuckDuckGo works without any key. */}
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 2 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>Brave Search <span style={{ fontSize: 11, fontWeight: 400, color: '#6c7086' }}>· {t('onb.key.optional')}</span></span>
+          <LinkButton url={BRAVE_URL} label={t('onb.key.get')} />
+        </div>
+        <p style={{ fontSize: 11, color: '#6c7086', marginBottom: 8 }}>{t('onb.key.brave_desc')}</p>
+        <KeyBox field="Brave" placeholder={t('onb.key.paste')} />
+      </div>
+    </div>
+  );
+}
+
+// ── 3. About you ─────────────────────────────────────────────────────────────
+
+function AboutStep({ name, onName, selected, onPick }: { name: string; onName: (v: string) => void; selected: string | null; onPick: (p: OnboardingPath) => void }) {
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
-      <h2 style={{ fontSize: 24, fontWeight: 600, color: '#cdd6f4', textAlign: 'center', marginBottom: 4 }}>{t('onboarding.path.title')}</h2>
-      <p style={{ fontSize: 13, color: '#6c7086', textAlign: 'center', marginBottom: 24 }}>{t('onboarding.path.subtitle')}</p>
+      <h2 style={{ fontSize: 24, fontWeight: 600, color: '#cdd6f4', textAlign: 'center', marginBottom: 4 }}>{t('onb.about.title')}</h2>
+      <p style={{ fontSize: 13, color: '#6c7086', textAlign: 'center', marginBottom: 20 }}>{t('onb.about.subtitle')}</p>
+      <label style={{ display: 'block', maxWidth: 360, margin: '0 auto 32px' }}>
+        <span style={{ display: 'block', fontSize: 12, color: '#a6adc8', marginBottom: 6 }}>{t('onb.about.name')}</span>
+        <input value={name} onChange={(e) => onName(e.target.value)} maxLength={40}
+          placeholder={t('general.profile.display_name_placeholder')} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+      </label>
+      <p style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', textAlign: 'center', marginBottom: 12 }}>{t('onboarding.path.title')}</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {PATHS.map((p) => (
           <button key={p.id} onClick={() => onPick(p)} style={{
@@ -277,178 +378,23 @@ function PathStep({ selected, onPick }: { selected: string | null; onPick: (p: O
   );
 }
 
-function TailoredStep({ path }: { path: OnboardingPath }) {
-  return (
-    <div style={{ maxWidth: 600, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-        <span style={{ fontSize: 28 }}>{path.icon}</span>
-        <h2 style={{ fontSize: 24, fontWeight: 600, color: '#cdd6f4' }}>{t(path.labelKey)}</h2>
-      </div>
-      <p style={{ fontSize: 13, color: '#6c7086', marginBottom: 24 }}>{t('onboarding.tailored.heading')}</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {path.tailoredKeys.map((base) => (
-          <div key={base} style={{ padding: 16, borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>{t(`${base}.title`)}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086' }}>{t('onboarding.try_this')}</span>
-              <code style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: ACCENT }}>{t(`${base}.example`)}</code>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// ── 4. Ready ─────────────────────────────────────────────────────────────────
 
-function BreadthStep() {
+function ReadyStep({ path }: { path: OnboardingPath | undefined }) {
+  // One suggested first thing for their path — the first of its examples.
+  const first = path?.tailoredKeys[0];
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto' }}>
-      <h2 style={{ fontSize: 24, fontWeight: 600, color: '#cdd6f4', textAlign: 'center', marginBottom: 4 }}>{t('onboarding.breadth.title')}</h2>
-      <p style={{ fontSize: 13, color: '#6c7086', textAlign: 'center', marginBottom: 24 }}>{t('onboarding.breadth.subtitle')}</p>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', marginBottom: 8 }}>{t('onboarding.breadth.group.modes')}</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-          {MODES.map((m) => (
-            <div key={m.id} style={{ padding: 10, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <code style={{ fontSize: 12, color: ACCENT }}>{m.prefix}</code>
-              <span style={{ fontSize: 12, color: '#a6adc8' }}>{t(m.labelKey)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      {BREADTH.filter((g) => g.surfaces.includes('ide')).map((g) => (
-        <div key={g.titleKey} style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c7086', marginBottom: 8 }}>{t(g.titleKey)}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {g.items.map((it) => (
-              <div key={it.labelKey} style={{ padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <span style={{ fontSize: 18 }}>{it.icon}</span>
-                <span>
-                  <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#cdd6f4' }}>{t(it.labelKey)}</span>
-                  <span style={{ display: 'block', fontSize: 11, color: '#6c7086' }}>{t(it.blurbKey)}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ConnectStep(props: {
-  platformStatus: 'idle' | 'valid'; platformEmail: string; userName: string; setUserName: (v: string) => void;
-  byokProvider: string; setByokProvider: (v: string) => void; byokKey: string; setByokKey: (v: string) => void;
-  byokSaved: boolean; setByokSaved: (v: boolean) => void; onSignedIn: (a: SignInAccount) => void; onSaveByok: () => void;
-  inputStyle: React.CSSProperties;
-}) {
-  const { platformStatus, platformEmail, userName, setUserName, byokProvider, setByokProvider, byokKey, setByokKey, byokSaved, setByokSaved, onSignedIn, onSaveByok, inputStyle } = props;
-  return (
-    <div style={{ maxWidth: 680, margin: '0 auto' }}>
-      <h2 style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4', textAlign: 'center', marginBottom: 4 }}>{t('onboarding.connect.title')}</h2>
-      <p style={{ fontSize: 12, color: '#6c7086', textAlign: 'center', marginBottom: 20 }}>{t('onboarding.connect.subtitle')}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {platformStatus === 'valid' ? (
-          <div style={{ background: 'rgba(166, 227, 161, 0.08)', border: '1px solid rgba(166, 227, 161, 0.3)', borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#a6e3a1', marginBottom: 4 }}>Connected ✓</div>
-            <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>{platformEmail ? `Signed in as ${platformEmail}` : 'Signed in'}</div>
-            <input type="text" placeholder="Your name" value={userName}
-              onChange={(e) => { setUserName(e.target.value); if (e.target.value.trim()) localStorage.setItem('ava-ide-user-name', e.target.value.trim()); }}
-              style={{ ...inputStyle, height: 34, fontSize: 12 }} />
-          </div>
-        ) : (
-          <SignInPanel onSignedIn={onSignedIn} onSkipAccount={() => { /* BYOK column is right there */ }} />
-        )}
-        <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#a6e3a1', marginBottom: 4 }}>BYOK — No Account</div>
-          <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 12 }}>Your keys, full local AI</div>
-          <select value={byokProvider} onChange={(e) => { setByokProvider(e.target.value); setByokSaved(false); }} style={{ ...inputStyle, height: 34, fontSize: 12, marginBottom: 8, appearance: 'auto' as React.CSSProperties['appearance'] }}>
-            {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <input type="text" value={byokKey} onChange={(e) => { setByokKey(e.target.value); setByokSaved(false); }} placeholder={PROVIDERS.find((p) => p.id === byokProvider)?.placeholder} style={{ ...inputStyle, height: 34, fontSize: 12, marginBottom: 8 }} />
-          <button onClick={onSaveByok} disabled={!byokKey.trim()} style={{ width: '100%', height: 32, borderRadius: 6, border: 'none', background: '#a6e3a1', color: '#11111b', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: !byokKey.trim() ? 0.4 : 1 }}>
-            {byokSaved ? 'Saved!' : 'Save Key'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DesktopStep() {
-  const cards = [
-    { icon: '📸', titleKey: 'onboarding.desktop.see.title', bodyKey: 'onboarding.desktop.see.body' },
-    { icon: '🖱️', titleKey: 'onboarding.desktop.drive.title', bodyKey: 'onboarding.desktop.drive.body' },
-    { icon: '🌐', titleKey: 'onboarding.desktop.browse.title', bodyKey: 'onboarding.desktop.browse.body' },
-    { icon: '🛑', titleKey: 'onboarding.desktop.control.title', bodyKey: 'onboarding.desktop.control.body' },
-  ];
-  return (
-    <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center' }}>
-      <div style={{ fontSize: 34, marginBottom: 12 }}>🖥️</div>
-      <h2 style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>{t('onboarding.desktop.title')}</h2>
-      <p style={{ fontSize: 13, color: '#6c7086', marginBottom: 20 }}>{t('onboarding.desktop.body')}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, textAlign: 'left', marginBottom: 16 }}>
-        {cards.map((c) => (
-          <div key={c.titleKey} style={{ padding: 14, borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ fontSize: 20, marginBottom: 6 }}>{c.icon}</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t(c.titleKey)}</div>
-            <div style={{ fontSize: 11, color: '#6c7086' }}>{t(c.bodyKey)}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: 12, color: '#a6e3a1', background: 'rgba(166,227,161,0.08)', border: '1px solid rgba(166,227,161,0.2)', borderRadius: 8, padding: '8px 12px' }}>{t('onboarding.desktop.note')}</div>
-    </div>
-  );
-}
-
-function HoursStep({ workStart, workEnd, onChange, fmt, inputStyle }: { workStart: number; workEnd: number; onChange: (s: number, e: number) => void; fmt: (h: number) => string; inputStyle: React.CSSProperties }) {
-  return (
-    <div style={{ textAlign: 'center', maxWidth: 480, margin: '0 auto' }}>
-      <h2 style={{ fontSize: 22, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>{t('onboarding.hours.title')}</h2>
-      <p style={{ fontSize: 13, color: '#6c7086', marginBottom: 24 }}>{t('onboarding.hours.body')}</p>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
-        <div>
-          <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{t('onboarding.hours.start')}</div>
-          <select value={workStart} onChange={(e) => onChange(Number(e.target.value), workEnd)} style={{ ...inputStyle, width: 100, height: 38, textAlign: 'center', appearance: 'auto' as React.CSSProperties['appearance'] }}>
-            {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{fmt(i)}</option>)}
-          </select>
-        </div>
-        <span style={{ fontSize: 20, color: '#585b70', marginTop: 16 }}>—</span>
-        <div>
-          <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{t('onboarding.hours.end')}</div>
-          <select value={workEnd} onChange={(e) => onChange(workStart, Number(e.target.value))} style={{ ...inputStyle, width: 100, height: 38, textAlign: 'center', appearance: 'auto' as React.CSSProperties['appearance'] }}>
-            {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{fmt(i)}</option>)}
-          </select>
-        </div>
-      </div>
-      <div style={{ fontSize: 12, color: ACCENT, fontWeight: 500 }}>{fmt(workStart)} — {fmt(workEnd)}</div>
-      <div style={{ fontSize: 10, color: '#585b70', marginTop: 4 }}>{t('onboarding.hours.note')}</div>
-    </div>
-  );
-}
-
-function ReadyStep({ path, onFinish }: { path: OnboardingPath | undefined; onFinish: (nav?: string) => void }) {
-  const pathLabel = path ? t(path.labelKey) : t('onboarding.path.explore.label');
-  const cards = [
-    { label: t('onboarding.ready.docs'), icon: '📘', nav: 'documentation' },
-    { label: t('onboarding.ready.create'), icon: '🎨', nav: 'creative-studio' },
-    { label: t('onboarding.ready.settings'), icon: '⚙️', nav: 'settings' },
-  ];
-  return (
-    <div style={{ textAlign: 'center', maxWidth: 600, margin: '0 auto' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', maxWidth: 640, margin: '0 auto' }}>
       <div style={{ fontSize: 40, marginBottom: 16 }}>🚀</div>
-      <h2 style={{ fontSize: 26, fontWeight: 600, color: '#cdd6f4', marginBottom: 12 }}>{t('onboarding.ready.title')}</h2>
-      <p style={{ fontSize: 13, color: '#6c7086', marginBottom: 28 }}>{t('onboarding.ready.body').replace('{path}', pathLabel)}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-        {cards.map((c) => (
-          <button key={c.nav} onClick={() => onFinish(c.nav)} style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10, padding: '16px 8px', cursor: 'pointer', transition: 'border-color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 40%, transparent)')}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)')}>
-            <div style={{ fontSize: 24, marginBottom: 6 }}>{c.icon}</div>
-            <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500 }}>{c.label}</div>
-          </button>
-        ))}
-      </div>
+      <h2 style={{ fontSize: 28, fontWeight: 600, color: '#cdd6f4', marginBottom: 12 }}>{t('onboarding.ready.title')}</h2>
+      {first ? (
+        <>
+          <p style={{ fontSize: 13, color: '#a6adc8', marginBottom: 16 }}>{t('onb.ready.try')}</p>
+          <code style={{ fontSize: 13, padding: '8px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: ACCENT }}>{t(`${first}.example`)}</code>
+        </>
+      ) : (
+        <p style={{ fontSize: 13, color: '#a6adc8' }}>{t('onb.ready.any')}</p>
+      )}
     </div>
   );
 }

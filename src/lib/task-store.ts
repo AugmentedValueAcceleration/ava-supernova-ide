@@ -13,7 +13,7 @@
 
 import { readTextFile, writeTextFile, mkdir, remove, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { join, homeDir } from '@tauri-apps/api/path';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 
 /** A subtask within a task. */
 export interface LocalSubtask { id: string; title: string; done: boolean }
@@ -103,12 +103,12 @@ function parseEntries(raw: string): LocalTask[] {
 
 /** Home-relative path to the account-scoped global task file. */
 async function globalRel(): Promise<string> {
-  return `${await accountRoot()}/tasks/tasks.json`;
+  return `${await dataRoot()}/tasks/tasks.json`;
 }
 
 /** One-time move of a legacy flat <root>/tasks.json into <root>/tasks/. */
 async function migrateGlobal(): Promise<void> {
-  const root = await accountRoot();
+  const root = await dataRoot();
   const oldRel = `${root}/tasks.json`;
   const newRel = `${root}/tasks/tasks.json`;
   try {
@@ -134,7 +134,7 @@ async function readGlobal(): Promise<LocalTask[]> {
 }
 
 async function writeGlobal(entries: LocalTask[]): Promise<void> {
-  const root = await accountRoot();
+  const root = await dataRoot();
   const rel = await globalRel();
   let store: TaskStore = emptyStore();
   try {
@@ -335,5 +335,5 @@ export async function markLocalReminderFired(id: string): Promise<void> {
 
 /** Absolute path to the account-scoped tasks folder (for the open-folder button). */
 export async function tasksFolderPath(): Promise<string> {
-  return join(await homeDir(), `${await accountRoot()}/tasks`);
+  return join(await homeDir(), `${await dataRoot()}/tasks`);
 }

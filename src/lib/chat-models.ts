@@ -2,11 +2,11 @@
 //
 // The main chat (AvaChatPage) and the focused rooms (Health / Learning) all
 // pick from the SAME model list and push the SAME sidecar ids, so they can't
-// drift. Single source for the data is @ava/core/models + the user's BYOK keys
-// in localStorage['ava-ide-byok']; the sidecar mapping mirrors AvaChatPage's
-// SIDECAR_MODEL_MAP exactly.
+// drift. Single source for the data is @ava/core/models + the user's saved
+// keys (lib/provider-keys.ts).
 
 import { ALL_MODELS } from '@ava/core/models';
+import { keyedFields } from './provider-keys';
 
 /** Picker id → the id the sidecar's resolver expects. Orchestrated modes pass
  *  through unprefixed; everything else gets its provider prefix. */
@@ -15,14 +15,6 @@ export const SIDECAR_MODEL_MAP: Record<string, string> = {
   supernova: 'supernova',
   aurora: 'aurora',
   longxiang: 'longxiang',
-  'qwen3.7-plus': 'platform:qwen3.7-plus',
-  'kimi-k3': 'kimi:kimi-k3',
-  'kimi-k2.7-code': 'kimi:kimi-k2.7-code',
-  'kimi-k2.6': 'kimi:kimi-k2.6',
-  'qwen3.5-omni-flash': 'platform:qwen3.5-omni-flash',
-  'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
-  'qwen3.5-plus': 'platform:qwen3.5-plus',
-  'qwen3.5-flash': 'platform:qwen-flash',
   // DeepSeek retires `deepseek-chat`/`deepseek-reasoner` upstream on 2026-07-24.
   // Keep the old picker ids mapped so a stored preference still resolves, but
   // point them at the V4 tier each one used to mean (chat → non-thinking Flash,
@@ -39,22 +31,23 @@ export const SIDECAR_MODEL_MAP: Record<string, string> = {
 const ORCHESTRATED_IDS = new Set(['auto', 'supernova', 'aurora', 'longxiang']);
 
 export function resolveSidecarModel(model: string): string {
-  // Orchestrated fleet ids pass through unprefixed. The fallback branch used to
-  // spell the list out inline, which meant a new fleet silently resolved to
-  // `platform:<fleet>` — a model id that does not exist, and for Longxiang a
-  // managed path that will never exist.
-  return SIDECAR_MODEL_MAP[model]
-    || (ORCHESTRATED_IDS.has(model) ? model : `platform:${model}`);
+  // Fleets pass through unprefixed; a model id gets the provider that owns it
+  // in core's catalogue, so it runs on the user's own key for that provider.
+  // (It used to fall back to `platform:<id>` — the account-era managed models.)
+  if (SIDECAR_MODEL_MAP[model]) return SIDECAR_MODEL_MAP[model];
+  if (ORCHESTRATED_IDS.has(model) || model.includes(':')) return model;
+  // Account-era stored picks were `<id>-platform`; the same model on the
+  // user's own key is the id without the suffix.
+  const bare = model.replace(/-platform$/, '');
+  for (const [provider, models] of Object.entries(ALL_MODELS)) {
+    if (models.some((m) => m.id === bare)) return `${provider}:${bare}`;
+  }
+  return bare;
 }
 
-/** Providers the user holds a BYOK key for (store-name keys: Qwen, Moonshot…). */
+/** Providers the user holds a key for (store-name keys: Qwen, Moonshot…). */
 export function getKeyedProviders(): Set<string> {
-  try {
-    const raw = localStorage.getItem('ava-ide-byok');
-    if (!raw) return new Set<string>();
-    const keys: Record<string, string> = JSON.parse(raw);
-    return new Set(Object.entries(keys).filter(([, v]) => v && v.trim()).map(([k]) => k));
-  } catch { return new Set<string>(); }
+  return keyedFields();
 }
 
 export interface ModelCatalogueGroup {
@@ -80,15 +73,13 @@ export function providerLabel(id: string): string {
 /** Build the per-provider catalogue — alphabetical providers, models sorted by
  *  name, availability per BYOK key. Identical logic to AvaChatPage.MODEL_CATALOGUE. */
 export function buildModelCatalogue(keyedProviders: Set<string>): ModelCatalogueGroup[] {
-  // provider id → the field name its key is stored under in `ava-ide-byok`.
+  // provider id → the field its key is stored under (provider-keys.ts).
   // `available` is derived from this, so a provider MISSING here is permanently
-  // unavailable no matter what key the user holds. It was stuck at five, which
-  // silently locked Xiaomi / Tencent / NVIDIA out of BYOK entirely —
-  // their models stayed greyed out even with a valid key pasted in. Must stay in
-  // step with the Sidebar's provider list (same store keys).
+  // unavailable no matter what key the user holds. It was stuck at five once,
+  // which silently locked Xiaomi / Tencent / NVIDIA out entirely.
   const STORE: Record<string, string> = {
     deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', mistral: 'Mistral',
-    xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA',
+    minimax: 'MiniMax', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA',
   };
   return Object.entries(ALL_MODELS)
     .map(([id, models]) => ({

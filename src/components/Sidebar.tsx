@@ -17,15 +17,15 @@ import {
   Brain as PhMemory,
   ChartLineUp as PhHistory,
   GearSix as PhAccount,
+  Heart as PhHeart,
   Question as PhHelp,
   ArrowsLeftRight as PhFlip,
   CaretLeft as PhCaretLeft,
   CaretRight as PhCaretRight,
 } from '@phosphor-icons/react';
 import type { ActivityItem, SidebarPosition } from '../App';
-import { getStoredEmail, getStoredTier, disconnectAccount, apiFetch } from '../lib/api';
-import { t, tt, useLocale, getLocale } from '../lib/i18n';
-import { SignInPanel } from './SignInPanel';
+import { getProviderKeys, testAndSaveProviderKey, setProviderKey, type ProviderField } from '../lib/provider-keys';
+import { t, useLocale, getLocale } from '../lib/i18n';
 import { localYmd } from '@ava/core/dates';
 
 type PhIconType = React.ComponentType<{ size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone' }>;
@@ -921,343 +921,255 @@ function DebugPanel() {
   );
 }
 
-/* ---------- Auth + BYOK Section ---------- */
-function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
-  useLocale(); // re-render on locale change; `t` is a direct import
-  const [platformKey, setPlatformKey] = useState(() => {
-    try { return localStorage.getItem('ava-ide-platform-key') || ''; } catch { return ''; }
-  });
-  const [email, setEmail] = useState(() => getStoredEmail() || '');
-  /**
-   * The avatar, in state and SUBSCRIBED — not read from localStorage mid-render.
-   *
-   * It was `localStorage.getItem('ava-ide-user-avatar')` inside the JSX, which
-   * only re-reads when the sidebar happens to re-render for some other reason.
-   * Set a picture on the profile page and the sidebar kept the default outline
-   * until something unrelated moved. UserAvatarPanel dispatches
-   * 'ava-avatar-changed' precisely so this does not happen, and DashboardPages
-   * already listens for it — the sidebar simply never did.
-   */
-  const [avatar, setAvatar] = useState<string>(() => {
-    try { return localStorage.getItem('ava-ide-user-avatar') || ''; } catch { return ''; }
-  });
-  const [tier, setTier] = useState(() => getStoredTier() || 'free');
-  const [showConnect, setShowConnect] = useState(false);
-  const [showKeys, setShowKeys] = useState(false);
-  const [usePlatform, setUsePlatform] = useState(() => {
-    try { return localStorage.getItem('ava-ide-use-platform') !== '0'; } catch { return true; }
-  });
+/* ---------- You + Support Ava + API keys ---------- */
+// There are no accounts (1 Nov 2026): this is your picture and name from this
+// machine, the donation link where the sign-in used to be, and your keys.
+// Mirrors the extension's NavSidebar footer + SidebarApiKeys.
+const SUPPORT_AVA_URL = 'https://avasupernova.com/support-ava';
 
-  // Re-read account state whenever sign-in/out fires anywhere — e.g. the
-  // onboarding overlay's own SignInPanel. Without this the sidebar holds the
-  // stale logged-out state it read on mount, so onboarding login looks ignored.
+async function openExternal(url: string): Promise<void> {
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener');
+    await openUrl(url);
+  } catch {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
+function useLocalIdentity(): { name: string; avatar: string } {
+  // Both SUBSCRIBED, not read mid-render: the profile page dispatches
+  // 'ava-avatar-changed' and 'ava-ide-name-changed' precisely so this updates.
+  const read = () => {
+    try {
+      return {
+        name: (localStorage.getItem('ava-ide-user-name') || '').trim(),
+        avatar: localStorage.getItem('ava-ide-user-avatar') || '',
+      };
+    } catch { return { name: '', avatar: '' }; }
+  };
+  const [who, setWho] = useState(read);
   useEffect(() => {
-    const refresh = () => {
-      try {
-        setPlatformKey(localStorage.getItem('ava-ide-platform-key') || '');
-        setEmail(getStoredEmail() || '');
-        setTier(getStoredTier() || 'free');
-        setAvatar(localStorage.getItem('ava-ide-user-avatar') || '');
-      } catch { /* non-fatal */ }
-    };
-    const refreshAvatar = () => {
-      try { setAvatar(localStorage.getItem('ava-ide-user-avatar') || ''); } catch { /* storage off */ }
-    };
-    window.addEventListener('ava-auth-changed', refresh);
-    // Signing in pulls an avatar down from the account and disconnect clears
-    // it, so auth refreshes this too — same pairing the chat uses.
-    window.addEventListener('ava-avatar-changed', refreshAvatar);
+    const refresh = () => setWho(read());
+    window.addEventListener('ava-avatar-changed', refresh);
+    window.addEventListener('ava-ide-name-changed', refresh);
     return () => {
-      window.removeEventListener('ava-auth-changed', refresh);
-      window.removeEventListener('ava-avatar-changed', refreshAvatar);
+      window.removeEventListener('ava-avatar-changed', refresh);
+      window.removeEventListener('ava-ide-name-changed', refresh);
     };
   }, []);
+  return who;
+}
 
-  const isConnected = platformKey.startsWith('sk-ava-');
-
-  /**
-   * Back-fill the email when we are connected but do not have one.
-   *
-   * It is written at sign-in (lib/sign-in.ts) and only if that response carried
-   * it, so anyone who signed in before that line existed — or through a path
-   * that returned no account — has a platform key and no email, forever. There
-   * was nothing to fill it in afterwards, and the panel fell back to showing a
-   * fragment of the API KEY where the user's address belongs.
-   *
-   * /account-info returns it, and the dashboard already calls that endpoint, so
-   * this is one extra request on the rare boot where the value is missing
-   * rather than a new round trip for everyone.
-   */
-  useEffect(() => {
-    if (!isConnected || email) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiFetch('/account-info');
-        const addr = typeof res?.email === 'string' ? res.email : '';
-        if (cancelled || !addr) return;
-        try { localStorage.setItem('ava-ide-email', addr); } catch { /* storage full/disabled */ }
-        setEmail(addr);
-      } catch { /* offline, or the key is no longer valid — leave the placeholder */ }
-    })();
-    return () => { cancelled = true; };
-  }, [isConnected, email]);
-
-  // Collapsed rail: just the avatar (or initial) at the bottom of the
-  // narrow nav. Mirrors the extension NavSidebar's collapsed footer.
-  if (collapsed) {
-    const initial = (email || 'A')[0].toUpperCase();
+function SupportAvaButton({ compact = false }: { compact?: boolean }) {
+  useLocale();
+  if (compact) {
     return (
-      <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', width: '100%', display: 'flex', justifyContent: 'center' }}>
-        <Tooltip content={isConnected ? `${email || tt('dash.settings.connected', 'Signed in')} (${tier})` : 'Not connected — expand sidebar to sign in'} placement="top">
-          <div
-            style={{
-              width: 32, height: 32, borderRadius: '50%',
-              background: isConnected ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'rgba(49,34,68,0.5)',
-              color: isConnected ? '#cba6f7' : '#6c7086',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 600, userSelect: 'none',
-              overflow: 'hidden',
-            }}
-          >
-            {/* The comment above this block always said "the avatar (or
-                initial)" and it only ever rendered the initial, so collapsing
-                the sidebar threw the picture away. */}
-            {avatar
-              ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : initial}
-          </div>
-        </Tooltip>
+      <Tooltip content={t('dash.nav.support_ava')} placement="top">
+        <button
+          type="button"
+          onClick={() => { void openExternal(SUPPORT_AVA_URL); }}
+          aria-label={t('dash.nav.support_ava')}
+          style={{
+            width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
+            background: 'color-mix(in srgb, var(--accent) 18%, transparent)', color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <PhHeart size={14} weight="fill" />
+        </button>
+      </Tooltip>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { void openExternal(SUPPORT_AVA_URL); }}
+        style={{
+          width: '100%', padding: '7px 0', borderRadius: 8,
+          border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+          background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
+          color: 'var(--accent)', fontSize: 12, fontWeight: 600,
+          cursor: 'pointer', transition: 'background 0.15s',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 26%, transparent)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 18%, transparent)'; }}
+      >
+        <PhHeart size={12} weight="fill" />
+        {t('dash.nav.support_ava')}
+      </button>
+      <div style={{ fontSize: 10, color: '#6c7086', textAlign: 'center', marginTop: 6, marginBottom: 8 }}>
+        {t('dash.nav.support_ava_hint')}
+      </div>
+    </>
+  );
+}
+
+function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
+  useLocale(); // re-render on locale change; `t` is a direct import
+  const { name, avatar } = useLocalIdentity();
+
+  // Collapsed rail: the avatar (or initial) and the heart, at the bottom of
+  // the narrow nav. Mirrors the extension NavSidebar's collapsed footer.
+  if (collapsed) {
+    return (
+      <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+        {(avatar || name) && (
+          <Tooltip content={name || ''} placement="top">
+            <div
+              style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: 'color-mix(in srgb, var(--accent) 25%, transparent)', color: '#cba6f7',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 600, userSelect: 'none', overflow: 'hidden',
+              }}
+            >
+              {avatar
+                ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : name[0]?.toUpperCase()}
+            </div>
+          </Tooltip>
+        )}
+        <SupportAvaButton compact />
       </div>
     );
   }
 
-  // The BYOK providers Ava actually supports — mirrors the extension's
-  // Settings PROVIDERS list. This was stuck at five, and because
-  // buildModelCatalogue() derives `available` from the same set, Xiaomi,
-  // Tencent and NVIDIA could never be used with a BYOK key at all: you could
-  // hold a valid key and the models stayed greyed out. (MiniMax is deliberately
-  // absent — it is retired, and Anthropic likewise.)
-  //
-  // `key` is the localStorage field in `ava-ide-byok` and MUST NOT change for
-  // the original five, or existing saved keys are orphaned. `label` is display
-  // only, and matches the extension's wording.
-  const providers: Array<{ key: string; label: string }> = [
-    { key: 'DeepSeek', label: 'DeepSeek' },
-    { key: 'Moonshot', label: 'Kimi (Moonshot)' },
-    { key: 'Zhipu', label: 'GLM (Zhipu AI)' },
-    { key: 'Qwen', label: 'Qwen (Alibaba)' },
-    { key: 'Mistral', label: 'Mistral AI' },
-    { key: 'Xiaomi', label: 'Xiaomi (MiMo)' },
-    { key: 'Tencent', label: 'Tencent Hunyuan' },
-    { key: 'NVIDIA', label: 'NVIDIA' },
-  ];
-  const [keys, setKeys] = useState<Record<string, string>>(() => {
-    try { const s = localStorage.getItem('ava-ide-byok'); return s ? JSON.parse(s) : {}; }
-    catch { return {}; }
-  });
-
-  const saveKey = (provider: string, value: string) => {
-    const next = { ...keys, [provider]: value };
-    setKeys(next);
-    try { localStorage.setItem('ava-ide-byok', JSON.stringify(next)); } catch { /* */ }
-    window.dispatchEvent(new CustomEvent('ava-byok-changed'));
-  };
-
-  const tierColors: Record<string, string> = {
-    free: '#a6adc8', pro: 'var(--accent)', ultra: '#f9e2af', enterprise: '#89b4fa', admin: '#f38ba8',
-  };
-
-  // OAuth sign-in completed via SignInPanel — it persists the key to
-  // localStorage + ~/.ava/config.json and dispatches `ava-auth-changed`
-  // itself, so we just refresh our visible state and close the panel.
-  const handleSignedIn = useCallback((account: { email?: string; tier?: string; name?: string }) => {
-    try {
-      const stored = localStorage.getItem('ava-ide-platform-key') || '';
-      setPlatformKey(stored);
-    } catch { /* non-fatal */ }
-    if (account.email) setEmail(account.email);
-    if (account.tier) setTier(account.tier);
-    setShowConnect(false);
-  }, [setPlatformKey, setEmail, setTier]);
-
-  const handleDisconnect = () => {
-    disconnectAccount();
-    setPlatformKey('');
-    setEmail('');
-    setTier('free');
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', height: 28, background: 'rgba(49, 34, 68, 0.5)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-    borderRadius: 4, padding: '0 8px', fontSize: 12, color: '#cdd6f4', outline: 'none',
-  };
-
   return (
     <div style={{ borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', padding: '10px 12px' }}>
-      {isConnected ? (
-        <>
-          {/* Connected state */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            {(() => {
-              const av = avatar;
-              return (
-                <div style={{
-                  width: 24, height: 24, borderRadius: '50%',
-                  background: av ? 'transparent' : 'linear-gradient(135deg, var(--accent), #6366f1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  overflow: 'hidden',
-                }}>
-                  {av ? (
-                    <img src={av} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
-                  )}
-                </div>
-              );
-            })()}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {/* NEVER the platform key. It used to fall back to
-                    platformKey.slice(0, 12), which put a live credential
-                    fragment in the sidebar where the account address belongs —
-                    visible in every screenshot and screen share. The effect
-                    above fetches the real address; until it lands, say what the
-                    row IS rather than showing something that merely fills it. */}
-                {email || tt('dash.settings.connected', 'Signed in')}
-              </div>
-              <span style={{ fontSize: 9, fontWeight: 600, color: tierColors[tier] || '#a6e3a1', background: `${tierColors[tier] || '#a6e3a1'}18`, padding: '1px 6px', borderRadius: 3, textTransform: 'capitalize' as const }}>
-                {tier}
-              </span>
-            </div>
-            <button
-              onClick={handleDisconnect}
-              style={{ background: 'transparent', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 4, padding: '3px 8px', fontSize: 10, color: '#6c7086', cursor: 'pointer' }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#f38ba8'; e.currentTarget.style.color = '#f38ba8'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; e.currentTarget.style.color = '#6c7086'; }}
-            >
-              {t('dash.settings.disconnect')}
-            </button>
+      {(avatar || name) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <div style={{
+            width: 24, height: 24, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+            background: avatar ? 'transparent' : 'linear-gradient(135deg, var(--accent), #6366f1)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 600,
+          }}>
+            {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : name[0]?.toUpperCase()}
           </div>
-
-          {/* Platform / API Key toggle */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-            {[{ key: 'Platform', labelKey: 'dash.auth.platform' }, { key: 'API Key', labelKey: 'dash.auth.api_key' }].map(({ key, labelKey }) => {
-              const active = key === 'Platform' ? usePlatform : !usePlatform;
-              return (
-                <button key={key} onClick={() => {
-                  const next = key === 'Platform';
-                  setUsePlatform(next);
-                  try { localStorage.setItem('ava-ide-use-platform', next ? '1' : '0'); } catch { /* */ }
-                  // The sidecar learns this from buildSidecarConfig, which
-                  // withholds the platform key outright on API Key — so this
-                  // one line is the whole switch, and there is no second copy
-                  // of it to keep in step.
-                  // Re-init the sidecar so routing actually switches — mirrors the
-                  // extension's set_provider_source -> session re-init. BYOK ('0')
-                  // withholds the platform key so the persona team runs on the
-                  // user's own model.
-                  window.dispatchEvent(new Event('ava-ide-source-changed'));
-                }}
-                  /* House button style — the chat's "New Chat" pill: translucent
-                     accent fill, accent border + text. Selected sits at 18%/40%,
-                     unselected transparent with a muted border, so the pair still
-                     reads as one segmented control. Was solid-accent + white vs
-                     flat grey, which matched nothing else. */
-                  onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}
-                  onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                  style={{
-                    flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                    transition: 'background 0.15s',
-                    background: active ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
-                    border: active
-                      ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)'
-                      : '1px solid var(--border, #2a2440)',
-                    color: active ? 'var(--accent)' : '#6c7086',
-                  }}>
-                  {t(labelKey)}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      ) : (
-        <>
-          {!showConnect ? (
-            <>
-              {/* House button — the chat's New Chat pill (translucent accent
-                  fill, accent border + text), at the same 18% / 40% weights the
-                  Platform / API Key toggle uses for its selected state. Was
-                  solid accent with white text, which nothing else in either
-                  sidebar does. */}
-              <button
-                onClick={() => setShowConnect(true)}
-                style={{
-                  width: '100%', padding: '7px 0', borderRadius: 8,
-                  border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
-                  background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
-                  color: 'var(--accent)', fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer', marginBottom: 6, transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 26%, transparent)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 18%, transparent)'; }}
-              >
-                {t('dash.auth.connect')}
-              </button>
-              <div style={{ fontSize: 10, color: '#6c7086', textAlign: 'center', marginBottom: 8 }}>
-                {t('dash.auth.byok_hint')}
-              </div>
-            </>
-          ) : (
-            <div style={{ marginBottom: 8 }}>
-              <SignInPanel
-                onSignedIn={handleSignedIn}
-                onSkipAccount={() => setShowConnect(false)}
-              />
-              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                <button onClick={() => setShowConnect(false)}
-                  style={{ flex: 1, padding: '5px 0', borderRadius: 4, border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', background: 'transparent', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}>
-                  {t('dash.support.cancel')}
-                </button>
-              </div>
+          {name && (
+            <div style={{ flex: 1, minWidth: 0, fontSize: 11, color: '#cdd6f4', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {name}
             </div>
           )}
-        </>
+        </div>
       )}
+      <SupportAvaButton />
+      <SidebarApiKeys />
+    </div>
+  );
+}
 
-      {/* API Keys (BYOK) — always available */}
+/* ---------- API keys ---------- */
+// The providers here are the same set (and wording) as the extension's sidebar.
+// Keys live in the OS keychain (lib/provider-keys.ts); the sidebar never shows
+// one back — a saved key reads "Saved — paste to replace", with Remove beside it.
+// Every pasted key is TESTED against its provider before it is saved.
+const SIDEBAR_PROVIDERS: Array<{ key: ProviderField; label: string; placeholder: string }> = [
+  { key: 'DeepSeek', label: 'DeepSeek', placeholder: 'sk-...' },
+  { key: 'Moonshot', label: 'Kimi (Moonshot)', placeholder: 'sk-...' },
+  { key: 'Zhipu', label: 'GLM (Zhipu AI)', placeholder: '...' },
+  { key: 'Qwen', label: 'Qwen (Alibaba)', placeholder: 'sk-...' },
+  { key: 'Mistral', label: 'Mistral AI', placeholder: '...' },
+  { key: 'Xiaomi', label: 'Xiaomi (MiMo)', placeholder: '...' },
+  { key: 'Tencent', label: 'Tencent Hunyuan', placeholder: '...' },
+  { key: 'NVIDIA', label: 'NVIDIA', placeholder: 'nvapi-...' },
+];
+
+function SidebarApiKeys() {
+  useLocale();
+  const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState<Record<string, string>>(getProviderKeys);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState<Record<string, { kind: 'testing' | 'ok' | 'bad'; text: string }>>({});
+  useEffect(() => {
+    const refresh = () => setSaved(getProviderKeys());
+    window.addEventListener('ava-byok-changed', refresh);
+    return () => window.removeEventListener('ava-byok-changed', refresh);
+  }, []);
+
+  const saveKey = async (field: ProviderField) => {
+    const value = drafts[field]?.trim();
+    if (!value) return;
+    setDrafts((d) => ({ ...d, [field]: '' }));
+    setStatus((st) => ({ ...st, [field]: { kind: 'testing', text: t('onb.key.testing') } }));
+    try {
+      const r = await testAndSaveProviderKey(field, value);
+      setStatus((st) => ({
+        ...st,
+        [field]: r.status === 'invalid'
+          ? { kind: 'bad', text: r.message || '' }
+          : { kind: 'ok', text: t('onb.key.works') },
+      }));
+    } catch (err) {
+      setStatus((st) => ({ ...st, [field]: { kind: 'bad', text: err instanceof Error ? err.message : String(err) } }));
+    }
+  };
+
+  const configured = SIDEBAR_PROVIDERS.filter((p) => saved[p.key]).length;
+
+  return (
+    <>
       <button
-        onClick={() => setShowKeys(!showKeys)}
+        onClick={() => setOpen(!open)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', background: 'transparent', border: 'none', color: '#6c7086', fontSize: 11, cursor: 'pointer' }}
         onMouseEnter={(e) => { e.currentTarget.style.color = '#cdd6f4'; }}
         onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; }}
       >
-        <span style={{ fontWeight: 600 }}>{t('dash.settings.section.api_keys')}</span>
+        <span style={{ fontWeight: 600 }}>
+          {t('dash.settings.section.api_keys')}
+          {configured > 0 && <span style={{ marginLeft: 6, fontWeight: 400, color: 'var(--accent)' }}>{configured}</span>}
+        </span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: showKeys ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
 
-      {showKeys && (
+      {open && (
         <div style={{ paddingTop: 6 }}>
-          {providers.map((p) => (
-            <div key={p.key} style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 2 }}>{p.label}</div>
-              <input type="password" placeholder={`${p.label} API key`} value={keys[p.key] || ''}
-                onChange={(e) => saveKey(p.key, e.target.value)}
-                style={{ ...inputStyle, height: 24, fontSize: 11 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
-              />
-            </div>
-          ))}
+          {SIDEBAR_PROVIDERS.map((p) => {
+            const isSet = !!saved[p.key];
+            const st = status[p.key];
+            return (
+              <div key={p.key} style={{ marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <span style={{ fontSize: 10, color: '#6c7086' }}>{p.label}</span>
+                  {isSet && (
+                    <button
+                      onClick={() => { void setProviderKey(p.key, '').catch(() => {}); setStatus((s2) => ({ ...s2, [p.key]: undefined as never })); }}
+                      style={{ background: 'transparent', border: 'none', padding: 0, fontSize: 9, color: '#6c7086', cursor: 'pointer' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = '#f38ba8'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = '#6c7086'; }}
+                    >
+                      {t('dash.settings.remove')}
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  value={drafts[p.key] ?? ''}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [p.key]: e.target.value }))}
+                  onBlur={() => { void saveKey(p.key); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void saveKey(p.key); } }}
+                  placeholder={isSet ? t('dash.settings.key_saved') : p.placeholder}
+                  style={{
+                    width: '100%', height: 24, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 4, padding: '0 8px',
+                    fontSize: 11, color: '#cdd6f4', outline: 'none',
+                    border: `1px solid ${isSet ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
+                  }}
+                />
+                {st && (
+                  <div style={{ fontSize: 9.5, marginTop: 2, color: st.kind === 'bad' ? '#f38ba8' : st.kind === 'ok' ? '#a6e3a1' : '#6c7086' }}>
+                    {st.text}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1318,18 +1230,12 @@ const NAV_ITEMS: { id: string; Icon: PhIconType; labelKey: string; descKey: stri
   { id: 'creative-studio', Icon: PhCreative, labelKey: 'dash.nav.creative_studio', descKey: 'dash.nav.creative_studio_desc', earlyAccess: true },
   { id: 'memory',          Icon: PhMemory,   labelKey: 'dash.nav.memory',          descKey: 'dash.nav.memory_desc' },
   { id: 'chat-history',    Icon: PhHistory,  labelKey: 'dash.nav.usage_history',   descKey: 'dash.nav.history_desc' },
-  { id: 'account',         Icon: PhAccount,  labelKey: 'dash.nav.account',         descKey: 'dash.nav.account_desc' },
+  { id: 'account',         Icon: PhAccount,  labelKey: 'dash.nav.settings',        descKey: 'dash.nav.settings_desc' },
   { id: 'help',            Icon: PhHelp,     labelKey: 'dash.nav.help',            descKey: 'dash.nav.help_desc' },
 ];
 
 function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { onDashboardSelect?: (page: string) => void; activePage?: string | null; collapsed?: boolean }) {
   useLocale();
-  const [, setAuthVersion] = useState(0);
-  useEffect(() => {
-    const handler = () => setAuthVersion(v => v + 1);
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
 
   // ── Collapsed icons-only rail ─────────────────────────────────────
   // Mirrors the extension NavSidebar's collapsed mode: 9 stacked icon
@@ -1359,21 +1265,12 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
                 onMouseOut={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#a6adc8'; } }}
               >
                 <item.Icon size={20} weight="duotone" />
-                {item.id === 'help' && (() => {
-                  try {
-                    const count = Number(localStorage.getItem('ava-support-unread') || 0);
-                    if (count > 0) return (
-                      <span style={{ position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
-                    );
-                  } catch { /* */ }
-                  return null;
-                })()}
               </button>
               </Tooltip>
             );
           })}
         </div>
-        {/* Auth shows as a single avatar at the bottom of the rail */}
+        {/* You + Support Ava at the bottom of the rail */}
         <AuthSection collapsed />
       </div>
     );
@@ -1401,15 +1298,6 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
             >
               <span style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative', color: isActive ? '#cba6f7' : '#a6adc8' }}>
                 <item.Icon size={20} weight="duotone" />
-                {item.id === 'help' && (() => {
-                  try {
-                    const count = Number(localStorage.getItem('ava-support-unread') || 0);
-                    if (count > 0) return (
-                      <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 14, height: 14, borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
-                    );
-                  } catch { /* */ }
-                  return null;
-                })()}
               </span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1423,10 +1311,9 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
         })}
       </div>
 
-      {/* Auth section moved out of this panel — now renders below the
+      {/* The footer (you, Support Ava, keys) renders below the
           SidebarCalendar in the main Sidebar return so the calendar sits
-          directly under the nav items and the account / billing footer
-          anchors the very bottom of the rail. */}
+          directly under the nav items. */}
     </div>
   );
 }

@@ -19,12 +19,12 @@
 import { readTextFile, writeTextFile, mkdir, readDir, remove, BaseDirectory } from '@tauri-apps/plugin-fs';
 // session-types, NOT the ./health barrel — the barrel pulls in node-store.js.
 import type { GymSession } from '@ava/core/health/session-types';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 
 /** Account-scoped, exactly like plans — ~/.ava/users/<id>/health/sessions when
  *  signed in (the same files the extension writes), ~/.ava/health/sessions for
  *  BYOK / no-account. */
-const sessionsDir = async (): Promise<string> => `${await accountRoot()}/health/sessions`;
+const sessionsDir = async (): Promise<string> => `${await dataRoot()}/health/sessions`;
 const sessionFile = async (id: string): Promise<string> => `${await sessionsDir()}/${id}.json`;
 
 /** Summary rows for a range, newest first — the shape core's list() returns. */

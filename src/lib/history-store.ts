@@ -15,9 +15,9 @@ import {
   deriveConversationSurface,
   type ConversationSurface,
 } from '@ava/core/history/conversation-title';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 
-const historyDir = async (): Promise<string> => `${await accountRoot()}/history`;
+const historyDir = async (): Promise<string> => `${await dataRoot()}/history`;
 
 export type { ConversationSurface };
 

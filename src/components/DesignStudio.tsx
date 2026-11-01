@@ -2,9 +2,6 @@ import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type
 import { PenNib, Paperclip as PhPaperclip } from '@phosphor-icons/react';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { TTS_VOICE_CATALOGUE, TTS_VOICES, TTS_VOICE_SPEEDS, TTS_VOICE_VOLUMES, voiceSpeechRate, voiceVolume } from '@ava/core/creative';
-// The credit table itself, not a copy of it. A price quoted in the inspector
-// that disagrees with the price charged is worse than quoting nothing.
-import { videoCreditCost } from '@ava/core/billing/credits';
 import { logDiag } from '../lib/sidecar-log';
 import { RoomModelPicker } from './RoomModelPicker';
 import { Select } from './Select';
@@ -21,7 +18,6 @@ import { loadFont, registerWordmarkFonts } from '../lib/asset-forge/logo/pipelin
 import { renderMark, renderElements, type MarkSpec, type MarkStyle } from '../lib/asset-forge/logo/mark-primitives';
 import type { LogoBrief, LogoSystem, LogoVariant } from '../lib/asset-forge/logo/types';
 import { useCreativeGallery } from '../lib/creative-gallery';
-import { apiFetch, isConnected } from '../lib/api';
 import { t } from '../lib/i18n';
 
 /**
@@ -518,9 +514,6 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
   );
 }
 
-/** '1080p' | '720p' | '480p' -> the SR number the credit table is keyed on. */
-const wanSr = (r: string): number => (r === '1080p' ? 1080 : r === '480p' ? 480 : 720);
-
 type ViewId = 'icon' | 'iconset' | 'appicon' | 'logo' | 'badge' | 'avatar' | 'banner' | 'hero' | 'ogimage' | 'illustration' | 'pattern' | 'gamekit' | 'gamepiece' | 'canvas' | 'image' | 'video' | 'voice' | 'brandkit';
 /** The same ids at runtime, so a restored tab can be validated. Keep in step
  *  with ViewId above — an id missing here silently reopens on Icon. */
@@ -723,22 +716,6 @@ export function DesignStudio() {
   // Register the bundled wordmark fonts (from bytes) when the Logo room opens, so
   // the font picker previews each name in its own typeface.
   useEffect(() => { if (view === 'logo') void registerWordmarkFonts(); }, [view]);
-
-  // Live credit balance for the top bar (platform users only).
-  const [credit, setCredit] = useState<{ remaining: number; limit: number } | null>(null);
-  useEffect(() => {
-    if (!isConnected()) { setCredit(null); return; }
-    apiFetch('/usage/summary').then((res: any) => {
-      if (!res?.period) return;
-      const freeUsed = res.period.free_credits_used || 0;
-      const freeLimit = res.period.free_credits_limit || 0;
-      const subUsed = res.period.credits_used || 0;
-      const subLimit = res.period.credits_limit || 0;
-      const limit = res.isUnlimited ? Number.POSITIVE_INFINITY : freeLimit + subLimit;
-      const used = freeUsed + subUsed;
-      setCredit({ remaining: Math.max(0, limit - used), limit });
-    }).catch(() => {});
-  }, []);
 
   // A generated result belongs to one (shape × material × colour); invalidate.
   useEffect(() => { setGenResult(null); setGenError(null); }, [shapeId, materialId, color]);
@@ -1034,7 +1011,7 @@ export function DesignStudio() {
         setView('icon'); setShapeId(resolved.id); if (matArg) setMaterialId(matArg.id);
         setColor(col); if (typeof args.size === 'number') setGenSize(args.size);
         const out = await runGeneration(resolved, look, col);
-        if (out.ok) reply(true, { label: resolved.label, material: artDir ? 'custom-direction' : mat.label, credits: 20 });
+        if (out.ok) reply(true, { label: resolved.label, material: artDir ? 'custom-direction' : mat.label });
         else reply(false, undefined, out.error || 'Generation failed.');
         return;
       }
@@ -1055,7 +1032,7 @@ export function DesignStudio() {
           if (out.ok && out.dataUrl) { made++; saveToLibrary(out.dataUrl, `${resolved.label}-${mat.label}`.toLowerCase().replace(/\s+/g, '-'), 'icon'); }
           else failed.push(resolved.label);
         }
-        reply(true, { made, failed, credits: made * 20 });
+        reply(true, { made, failed });
         return;
       }
       if (m.command === 'brand_kit') {
@@ -1096,7 +1073,7 @@ export function DesignStudio() {
         const out = await runVideoGeneration(prompt, dur, wanRes, m.requestId);
         // The sidecar has already answered this request; a second reply is a
         // harmless no-op there, and it covers the paths that never reach it.
-        if (out.ok) reply(true, { duration: Number(dur), credits: videoCreditCost(wanSr(resArg), Number(dur)) });
+        if (out.ok) reply(true, { duration: Number(dur) });
         else reply(false, undefined, out.error || 'Video generation failed.');
         return;
       }
@@ -1369,15 +1346,10 @@ export function DesignStudio() {
 
       {/* CENTRE — the stage. The dock overlays the lower part when expanded. */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative', paddingBottom: DOCK_COLLAPSED }}>
-        {/* TOP BAR — model picker + credit balance */}
+        {/* TOP BAR — model picker */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 24px', borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
           <RoomModelPicker />
           <div style={{ flex: 1 }} />
-          {credit && (credit.limit >= 999_999_999 || !Number.isFinite(credit.limit)
-            ? <span style={{ fontSize: 11, opacity: 0.5, fontFamily: 'monospace', color: '#6c7086' }}>∞ credits</span>
-            : credit.limit > 0
-              ? <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'monospace', color: '#a6e3a1' }} title={`${credit.remaining.toLocaleString()} of ${credit.limit.toLocaleString()} credits remaining`}>{credit.remaining.toLocaleString()} left</span>
-              : null)}
         </div>
 
         {view === 'icon' ? (
@@ -1751,9 +1723,7 @@ export function DesignStudio() {
                 <Select size="sm" style={{ width: 118 }} value={videoDuration} onChange={setVideoDuration}
                   options={[5, 10, 15, 30].map(secs => ({
                     value: String(secs),
-                    // The price belongs ON the choice — video is charged by the
-                    // second, so picking 30 over 5 is a six-fold decision.
-                    label: `${secs}s · ${videoCreditCost(wanSr(videoResolution), secs)} cr`,
+                    label: `${secs}s`,
                   }))} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#a6adc8', padding: '5px 0' }}>

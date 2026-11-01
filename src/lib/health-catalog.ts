@@ -9,7 +9,6 @@
 // shared message-types file, so they're defined here alongside the
 // fetchers that produce them.
 
-import { getPlatformKey } from './api';
 import { getLocale } from './i18n';
 import type { HealthProfile, HealthDailyLog } from './health-store';
 
@@ -293,13 +292,11 @@ interface HealthRequestOptions {
   timeoutMs?: number;
 }
 
-/** Call a health endpoint. Anonymous-capable — attaches the Bearer
- *  token only when an account is connected, plus the device id for
+/** Call a health endpoint. Public — no key, only the device id for
  *  anonymous attribution. Bounded by a timeout (a bare unbounded
  *  fetch is the class of bug that stalled chat init). On a non-2xx
  *  response the server's `error` message is surfaced. */
 async function healthRequest<T>(path: string, opts: HealthRequestOptions = {}): Promise<T> {
-  const key = getPlatformKey();
   const dev = deviceId();
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), opts.timeoutMs ?? HEALTH_TIMEOUT_MS);
@@ -311,7 +308,6 @@ async function healthRequest<T>(path: string, opts: HealthRequestOptions = {}): 
         'Content-Type': 'application/json',
         'X-Ava-Platform': 'ide',
         ...(dev ? { 'X-Ava-Device': dev } : {}),
-        ...(key ? { Authorization: `Bearer ${key}` } : {}),
       },
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });

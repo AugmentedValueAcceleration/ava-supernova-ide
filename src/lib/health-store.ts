@@ -9,13 +9,13 @@
 // the separate, opt-in `health_profile` sync category.
 
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 
 // Account-scoped paths — ~/.ava/users/<id>/... when signed in (the same files
 // the extension reads/writes), ~/.ava/... for BYOK / no-account.
-const healthDir = async (): Promise<string> => `${await accountRoot()}/health`;
+const healthDir = async (): Promise<string> => `${await dataRoot()}/health`;
 const profilePath = async (): Promise<string> => `${await healthDir()}/profile.json`;
-const generalProfilePath = async (): Promise<string> => `${await accountRoot()}/general.json`;
+const generalProfilePath = async (): Promise<string> => `${await dataRoot()}/general.json`;
 const planPath = async (date: string): Promise<string> => `${await healthDir()}/plan-${date}.json`;
 
 // ── Types — mirror of the extension's health profile / plan shapes ────────
@@ -241,7 +241,7 @@ export async function loadGeneralProfile(): Promise<GeneralProfile> {
 /** Persist the GeneralProfile to ~/.ava/general.json, stamping updated_at. */
 export async function saveGeneralProfile(profile: GeneralProfile): Promise<void> {
   const next: GeneralProfile = { ...profile, schema_version: 1, updated_at: new Date().toISOString() };
-  await mkdir(await accountRoot(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+  await mkdir(await dataRoot(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
   await writeTextFile(await generalProfilePath(), JSON.stringify(next, null, 2), { baseDir: BaseDirectory.Home });
 }
 

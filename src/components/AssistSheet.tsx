@@ -17,7 +17,7 @@
 import { useState } from 'react';
 import type { HealthPlan, HealthPlanDay, HealthPlanType } from '../lib/health-plans-store';
 import type { HealthProfile } from '../lib/health-store';
-import { getPlatformKey } from '../lib/api';
+import { getProviderKey } from '../lib/provider-keys';
 import { t } from '../lib/i18n';
 import { localYmd } from '@ava/core/dates';
 
@@ -52,17 +52,15 @@ export function dayDate(plan: HealthPlan, day: HealthPlanDay): string | null {
 export interface DayProposal {
   day: HealthPlanDay;
   note: string;
-  credits: number;
   unverifiable: string[];
 }
 
 /**
  * Ask the platform for a proposed day.
  *
- * Mirrors the extension's `generate_health_day`: a platform account spends
- * credits, and a BYOK key spends nothing but must be sent, because without
- * either there is nothing to run the request on and saying so up front beats a
- * server round-trip that fails.
+ * Mirrors the extension's `generate_health_day`: it runs on the user's own
+ * Qwen key, like the draft generators. Without one there is nothing to run the
+ * request on, and saying so up front beats a server round-trip that fails.
  *
  * It PROPOSES — the reply is a day the operator accepts or discards, never a
  * write.
@@ -72,16 +70,16 @@ export async function askForDay(opts: {
   day: HealthPlanDay;
   profile: HealthProfile | null;
   instruction: string;
-  byokKey?: string | null;
 }): Promise<DayProposal> {
-  const platformKey = getPlatformKey();
-  const byokKey = opts.byokKey ?? null;
-  if (!platformKey && !byokKey) {
+  const byokKey = getProviderKey('qwen');
+  if (!byokKey) {
     throw new Error(t('health.assist.needs_account'));
   }
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (platformKey) headers.Authorization = `Bearer ${platformKey}`;
-  if (!platformKey && byokKey) headers['X-BYOK-Key'] = byokKey;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-BYOK-Provider': 'qwen',
+    'X-BYOK-Key': byokKey,
+  };
 
   const res = await fetch('https://avasupernova.com/api/health/generate/day', {
     method: 'POST',
@@ -94,7 +92,7 @@ export async function askForDay(opts: {
       week: Math.floor((opts.day.day_index - 1) / 7) + 1,
       instruction: opts.instruction,
       date: dayDate(opts.plan, opts.day),
-      ...(byokKey && !platformKey ? { providerApiKey: byokKey } : {}),
+      providerApiKey: byokKey,
     }),
   });
   const data = await res.json().catch(() => ({} as Record<string, unknown>));
@@ -105,12 +103,11 @@ export async function askForDay(opts: {
     const d = data as { error?: string; detail?: string };
     throw new Error([d.error || `HTTP ${res.status}`, d.detail].filter(Boolean).join(' — '));
   }
-  const d = data as { day?: HealthPlanDay; note?: string; credits_charged?: number; unverifiable_allergens?: string[] };
+  const d = data as { day?: HealthPlanDay; note?: string; unverifiable_allergens?: string[] };
   if (!d.day) throw new Error(`HTTP ${res.status}`);
   return {
     day: d.day,
     note: d.note ?? '',
-    credits: d.credits_charged ?? 0,
     unverifiable: d.unverifiable_allergens ?? [],
   };
 }

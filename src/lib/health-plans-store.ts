@@ -12,11 +12,11 @@ import type { HealthProfile } from './health-store';
 // plan file, so two surfaces describing the same field differently corrupts
 // the record rather than merely disagreeing.
 import type { PlanMealMeta, PlanExerciseMeta } from '@ava/core/health/types';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 
 // Account-scoped plans dir — ~/.ava/users/<id>/health/plans when signed in (the
 // same files the extension writes), ~/.ava/health/plans for BYOK / no-account.
-const plansDir = async (): Promise<string> => `${await accountRoot()}/health/plans`;
+const plansDir = async (): Promise<string> => `${await dataRoot()}/health/plans`;
 const planFile = async (id: string): Promise<string> => `${await plansDir()}/${id}.json`;
 
 // ── Types — mirror of the extension's HealthPlan shapes ───────────────

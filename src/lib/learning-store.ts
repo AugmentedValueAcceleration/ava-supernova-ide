@@ -11,13 +11,13 @@
 // copies a course into this local store.
 
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs';
-import { accountRoot } from './account-scope';
+import { dataRoot } from './data-root';
 
 // Account-scoped path — ~/.ava/users/<id>/learning.json when signed in (the SAME
 // file the extension + @ava/core write), ~/.ava/learning.json for BYOK/no-account.
 // Previously this read the flat ~/.ava/learning.json, so a signed-in user's
 // courses (written to the scoped dir by Ava) never showed up in the IDE.
-const learningPath = async (): Promise<string> => `${await accountRoot()}/learning.json`;
+const learningPath = async (): Promise<string> => `${await dataRoot()}/learning.json`;
 
 // The store is loosely typed — it's the same JSON @ava/core owns; we only
 // touch the fields the player needs.
@@ -57,7 +57,7 @@ async function writeLocalCurriculums(curriculums: any[]): Promise<void> {
     store = JSON.parse(await readTextFile(path, { baseDir: BaseDirectory.Home }));
   } catch { /* fresh store */ }
   store.curriculums = curriculums;
-  await mkdir(await accountRoot(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+  await mkdir(await dataRoot(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
   await writeTextFile(path, JSON.stringify(store, null, 2), { baseDir: BaseDirectory.Home });
 }
 
