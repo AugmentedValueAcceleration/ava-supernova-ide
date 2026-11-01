@@ -159,7 +159,6 @@ const {
   Conversation,
   ToolRegistry,
   ProviderRegistry,
-  PlatformProvider,
   GenericProvider,
   listOpenAICompatibleModels,
   MemoryManager,
@@ -228,7 +227,49 @@ const {
   createEmbeddingServiceFromConfig,
   loadMachineRules,
   appendMachineRule,
+  // No accounts (1 Nov 2026): Design Studio runs on the user's own Qwen key,
+  // straight to DashScope; the matte runs on this machine.
+  qwenImage,
+  qwenTts,
+  wanSubmit,
+  wanWait,
+  removeWhiteBackground,
+  testProviderKey,
+  mergeAccountFolders,
 } = core;
+
+// ── One-shot jobs ────────────────────────────────────────────────────────────
+// `node sidecar --oneshot` reads ONE JSON command on stdin, writes ONE JSON line
+// to stdout and exits. The IDE needs two things before a chat sidecar can exist
+// — someone with no key yet never starts one:
+//   - merge_account_folders: bring account-era ~/.ava/users/<id>/ data up into
+//     ~/.ava, once, before any screen reads it (core mergeAccountFolders — the
+//     same helper the extension runs).
+//   - test_provider_key: test a pasted key before it is saved. The key comes in
+//     on stdin, never argv, so it is not visible in the process list.
+if (process.argv.includes('--oneshot')) {
+  const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+  try {
+    const line = await new Promise((resolve) => {
+      const r = createInterface({ input: process.stdin, terminal: false });
+      r.once('line', (l) => { resolve(l); r.close(); });
+      r.once('close', () => resolve(''));
+    });
+    const job = JSON.parse(line || '{}');
+    if (job.cmd === 'merge_account_folders') {
+      const report = await mergeAccountFolders(AVA_HOME, { preferredAccount: job.preferredAccount || undefined });
+      out({ ok: true, report });
+    } else if (job.cmd === 'test_provider_key') {
+      const result = await testProviderKey(String(job.provider || ''), String(job.apiKey || ''));
+      out({ ok: true, result });
+    } else {
+      out({ ok: false, error: `Unknown one-shot command: ${job.cmd}` });
+    }
+  } catch (err) {
+    out({ ok: false, error: err instanceof Error ? err.message : String(err) });
+  }
+  process.exit(0);
+}
 
 // Install the dataset capture consumer once at sidecar boot. No-op for
 // any user who hasn't opted in via ~/.ava/datasets/config.json — defaults
@@ -277,78 +318,58 @@ function handleCreativeUserAction(data) {
 
 // ── Design Studio — shape-as-dial generation (mirror of the extension's
 // DashboardPanel.handleAssetForgeGenerate) ──────────────────────────────────
-// The webview can't reach the platform (CSP/no key), so the Design Studio hands
-// us the armature + art-director prompt and we run the two-hop pipeline: Qwen
-// image-edit (reference-guided) → server matte (white-threshold → transparent).
-// The matte is non-fatal — on failure we return the raw generated URL so the
-// result is still usable. Result comes back as an `asset_forge_result` event.
-async function handleAssetForgeGenerate(body) {
+// The canvas hands us the armature + art-director prompt and we run the two-hop
+// pipeline on the user's OWN Qwen key: Qwen image (edit when there is a
+// reference image) → matte ON THIS MACHINE (white → transparent). The matte is
+// non-fatal — on failure we return the raw generated URL so the result is still
+// usable. Result comes back as an `asset_forge_result` event.
+function qwenKeyFromState() {
   const state = globalThis._sharedState || {};
-  const platformKey = state.platformKey;
-  if (!platformKey) {
-    emit({ event: 'asset_forge_result', success: false, error: 'Not connected. Add your account in Settings.' });
+  return state.qwenApiKey || undefined;
+}
+
+/** Bytes of an image: a data: URL or a remote one. */
+async function imageBytes(url) {
+  if (url.startsWith('data:')) {
+    const comma = url.indexOf(',');
+    return new Uint8Array(Buffer.from(url.slice(comma + 1), 'base64'));
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not download the image (${res.status})`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+async function handleAssetForgeGenerate(body) {
+  const apiKey = qwenKeyFromState();
+  if (!apiKey) {
+    emit({ event: 'asset_forge_result', success: false, error: 'Design Studio needs your Qwen key — add it in Settings.' });
     return;
   }
-  // Ava is local-only: 'local' tells the platform not to keep a copy.
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${platformKey}`,
-    'X-Ava-Data-Mode': 'local',
-  };
   try {
     // 1) Generate — the reference image (the shape armature) guides the material.
-    const genRes = await fetch('https://avasupernova.com/api/asset-forge/image', {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        engine: 'qwen', prompt: body.prompt, referenceImage: body.referenceImage,
-        size: body.size || '1024*1024', negativePrompt: body.negativePrompt,
-      }),
+    const gen = await qwenImage(apiKey, {
+      prompt: body.prompt, referenceImage: body.referenceImage,
+      size: body.size || '1024*1024', negativePrompt: body.negativePrompt,
     });
-    if (!genRes.ok) {
-      const e = await genRes.json().catch(() => ({}));
-      emit({ event: 'asset_forge_result', success: false, error: e.error || `Generation failed (${genRes.status})` });
-      return;
-    }
-    const gen = await genRes.json();
-    if (!gen.url) {
-      emit({ event: 'asset_forge_result', success: false, error: 'No image returned' });
-      return;
-    }
-    // 2) Matte on the server — icon lane only. Free-form images (matte === false)
-    // skip it: a hero / banner / illustration must keep its background, not get
-    // cut out. Non-fatal: on failure return the raw generated URL.
+    // 2) Bring it home as a data: URL — the webview's fetch is CSP-restricted to
+    // same-origin, so it can't pull the raw Qwen URL's bytes itself. Icon lane
+    // only: matte here. Free-form images (matte === false) keep their
+    // background — a hero / banner / illustration must not get cut out.
     let dataUrl = gen.url;
-    if (body.matte !== false) {
-      try {
-        const bgRes = await fetch('https://avasupernova.com/api/asset-forge/remove-bg', {
-          method: 'POST', headers, body: JSON.stringify({ imageUrl: gen.url }),
-        });
-        if (bgRes.ok) {
-          const bg = await bgRes.json();
-          if (bg.dataUrl) dataUrl = bg.dataUrl;
-        }
-      } catch { /* keep the raw url */ }
-    } else {
-      // Free-form image: no matte, but proxy the cross-origin image to a data:
-      // URL so the webview can persist it — its fetch is CSP-restricted to
-      // same-origin, so it can't pull the raw Qwen URL's bytes itself.
-      try {
-        const imgRes = await fetch(gen.url);
-        if (imgRes.ok) {
-          const buf = Buffer.from(await imgRes.arrayBuffer());
-          const mime = imgRes.headers.get('content-type') || 'image/png';
-          dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
-        }
-      } catch { /* fall back to the raw url */ }
-    }
+    try {
+      const bytes = await imageBytes(gen.url);
+      if (body.matte !== false) {
+        const { png } = await removeWhiteBackground(bytes);
+        dataUrl = `data:image/png;base64,${png.toString('base64')}`;
+      } else {
+        dataUrl = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
+      }
+    } catch { /* keep the raw url */ }
     emit({ event: 'asset_forge_result', success: true, dataUrl, rawUrl: gen.url });
   } catch (err) {
     emit({ event: 'asset_forge_result', success: false, error: err instanceof Error ? err.message : 'Generation failed' });
   }
 }
-
-// ── Design Studio — voice lane (Qwen3-TTS via the platform) ──
-// The webview can't reach the platform; it hands us { text, voice, language_type,
 
 // ─── Git: what repo, which branch ─────────────────────────────────────
 //
@@ -427,13 +448,12 @@ async function handleGitInfo(requestedCwd) {
   });
 }
 
-// speech_rate, volume } and we POST /api/generate-voice, then proxy the audio to
+// speech_rate, volume } and we call Qwen3-TTS on the user's own Qwen key, then proxy the audio to
 // a data: URL — the DashScope url is cross-origin with no CORS, which breaks the
 // webview's Web Audio decode (the waveform) and can block playback. Result comes
 // back as an `asset_forge_voice_result` event carrying the audio URL.
 async function handleAssetForgeVoice(body, designRequestId, title) {
-  const state = globalThis._sharedState || {};
-  const platformKey = state.platformKey;
+  const apiKey = qwenKeyFromState();
   // Answer the waiting design tool from HERE, and register the read so it shows
   // in the sidebar rail. Voice is synchronous, so the window in which the canvas
   // could unmount is seconds rather than minutes \u2014 but it is the identical
@@ -449,34 +469,19 @@ async function handleAssetForgeVoice(body, designRequestId, title) {
     pendingDesignTools.delete(designRequestId);
     pending.resolve(r);
   };
-  if (!platformKey) {
-    emit({ event: 'asset_forge_voice_result', success: false, error: 'Not connected. Add your account in Settings.' });
-    gm?.fail(jobId, 'Not connected. Add your account in Settings.');
-    answer({ ok: false, error: 'Not connected. Add your account in Settings.' });
+  if (!apiKey) {
+    emit({ event: 'asset_forge_voice_result', success: false, error: 'Design Studio needs your Qwen key — add it in Settings.' });
+    gm?.fail(jobId, 'Design Studio needs your Qwen key — add it in Settings.');
+    answer({ ok: false, error: 'Design Studio needs your Qwen key — add it in Settings.' });
     return;
   }
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${platformKey}`,
-    'X-Ava-Data-Mode': 'local',
-  };
   try {
-    const res = await fetch('https://avasupernova.com/api/generate-voice', {
-      method: 'POST', headers,
-      // speech_rate and volume, not `instructions`: this speech model
-      // ignores written direction entirely. Undefined fields drop out of
-      // the JSON, so the platform route only sends what it was given.
-      body: JSON.stringify({ text: body.text, voice: body.voice, language_type: body.language_type, speech_rate: body.speech_rate, volume: body.volume }),
+    // speech_rate and volume, not `instructions`: this speech model
+    // ignores written direction entirely. Unset fields are not sent.
+    const data = await qwenTts(apiKey, {
+      text: body.text, voice: body.voice, language: body.language_type,
+      speechRate: body.speech_rate, volume: body.volume,
     });
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({}));
-      const msg = e.error || `Voice generation failed (${res.status})`;
-      emit({ event: 'asset_forge_voice_result', success: false, error: msg });
-      gm?.fail(jobId, msg);
-      answer({ ok: false, error: msg });
-      return;
-    }
-    const data = await res.json();
     if (!data.url) {
       emit({ event: 'asset_forge_voice_result', success: false, error: 'No audio returned' });
       gm?.fail(jobId, 'No audio returned');
@@ -498,7 +503,10 @@ async function handleAssetForgeVoice(body, designRequestId, title) {
     }
     emit({ event: 'asset_forge_voice_result', success: true, url: audioUrl });
   } catch (err) {
-    emit({ event: 'asset_forge_voice_result', success: false, error: err instanceof Error ? err.message : 'Voice generation failed' });
+    const msg = err instanceof Error ? err.message : 'Voice generation failed';
+    emit({ event: 'asset_forge_voice_result', success: false, error: msg });
+    gm?.fail(jobId, msg);
+    answer({ ok: false, error: msg });
   }
 }
 
@@ -517,13 +525,12 @@ async function proxyMediaToDataUrl(url, fallbackMime) {
 }
 
 // ── Design Studio — video lane (mirror of handleAssetForgeGenerate for Wan 2.5) ──
-// The webview can't reach the platform, so it hands us { prompt, duration,
-// resolution } and we run the async pipeline: submit to /api/generate-video (→
-// task_id), then poll /status until the clip is ready. The host has no
-// serverless timeout so polling here is fine. Result comes back as an
+// The canvas hands us { prompt, duration, resolution } and we run the async
+// pipeline on the user's own Qwen key: submit to Wan (→ task id), then poll
+// until the clip is ready. The host has no serverless timeout so polling here
+// is fine. Result comes back as an
 // `asset_forge_video_result` event carrying the finished clip URL.
 async function handleAssetForgeVideo(body, designRequestId, title) {
-  const state = globalThis._sharedState || {};
   // Answer the waiting design tool from HERE. It used to travel back through
   // the canvas, and in the extension that cost a real clip: the canvas parks a
   // resolver in a ref, a ref does not survive a remount, and a video takes
@@ -548,50 +555,25 @@ async function handleAssetForgeVideo(body, designRequestId, title) {
     pendingDesignTools.delete(designRequestId);
     pending.resolve(r);
   };
-  const platformKey = state.platformKey;
-  if (!platformKey) {
-    emit({ event: 'asset_forge_video_result', success: false, error: 'Not connected. Add your account in Settings.' });
-    gm?.fail(jobId, 'Not connected. Add your account in Settings.');
-    answer({ ok: false, error: 'Not connected. Add your account in Settings.' });
+  const apiKey = qwenKeyFromState();
+  if (!apiKey) {
+    emit({ event: 'asset_forge_video_result', success: false, error: 'Design Studio needs your Qwen key — add it in Settings.' });
+    gm?.fail(jobId, 'Design Studio needs your Qwen key — add it in Settings.');
+    answer({ ok: false, error: 'Design Studio needs your Qwen key — add it in Settings.' });
     return;
   }
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${platformKey}`,
-    'X-Ava-Data-Mode': 'local',
-  };
   try {
-    // 1) Submit — the route accepts the job and returns a task_id.
-    const submitRes = await fetch('https://avasupernova.com/api/generate-video', {
-      method: 'POST', headers,
-      body: JSON.stringify({ prompt: body.prompt, duration: body.duration, resolution: body.resolution }),
+    // 1) Submit — DashScope accepts the job and hands back a task id.
+    const { taskId } = await wanSubmit(apiKey, {
+      prompt: body.prompt, duration: body.duration, resolution: body.resolution, aspect: body.aspect,
     });
-    if (!submitRes.ok) {
-      const e = await submitRes.json().catch(() => ({}));
-      const msg = e.error || `Video generation failed (${submitRes.status})`;
-      emit({ event: 'asset_forge_video_result', success: false, error: msg });
-      gm?.fail(jobId, msg);
-      answer({ ok: false, error: msg });
-      return;
-    }
-    const data = await submitRes.json();
-    if (data.url) {
-      emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(data.url, 'video/mp4'), prompt: body.prompt, title });
-      gm?.complete(jobId, { url: data.url });
-      answer({ ok: true, data: { duration: Number(body.duration) || undefined } });
-      return;
-    }
-    if (!data.task_id) {
-      emit({ event: 'asset_forge_video_result', success: false, error: 'No task_id returned' });
-      gm?.fail(jobId, 'No task_id returned');
-      answer({ ok: false, error: 'No task_id returned' });
-      return;
-    }
     // Accepted and queued at Wan. The bar advances on STAGE, never on a guessed
     // percentage — the status endpoint reports a state and no number.
     gm?.update(jobId, { status: 'generating', progress: 35 });
-    // 2) Poll until terminal, then hand back the finished clip URL.
-    const final = await pollVideoStatus(String(data.task_id), platformKey);
+    // 2) Poll until terminal (5s, backing off to 15s; generous ceiling).
+    const final = await wanWait(apiKey, taskId, { ceilingMs: VIDEO_POLL_CEILING_MS })
+      .then((url) => ({ success: true, url }))
+      .catch((e) => ({ success: false, error: e instanceof Error ? e.message : String(e) }));
     if (final.success) {
       // prompt + title ride along so the canvas can save to the gallery from
       // the EVENT. The IDE's gallery write is front-end (Tauri fs) so it cannot
@@ -612,35 +594,6 @@ async function handleAssetForgeVideo(body, designRequestId, title) {
     gm?.fail(jobId, msg);
     answer({ ok: false, error: msg });
   }
-}
-
-/**
- * Poll the async video status route until the job finishes. 5s cadence, ~8-min
- * ceiling — mirror of the extension's DashboardPanel.pollVideoStatus. Transient
- * poll failures are tolerated; only an explicit `failed` status or the timeout
- * ends the loop.
- */
-async function pollVideoStatus(taskId, platformKey) {
-  const statusUrl = `https://avasupernova.com/api/generate-video/status/${encodeURIComponent(taskId)}`;
-  // Generous ceiling, backing-off cadence: 5s while the clip might genuinely be
-  // about to land, 15s once we are plainly waiting. That is FEWER requests
-  // across a 25-minute render than the old loop made across an 8-minute one.
-  const started = Date.now();
-  while (Date.now() - started < VIDEO_POLL_CEILING_MS) {
-    await new Promise((r) => setTimeout(
-      r, Date.now() - started < VIDEO_POLL_FAST_WINDOW_MS ? 5000 : 15000));
-    try {
-      const res = await fetch(statusUrl, { headers: { 'Authorization': `Bearer ${platformKey}` } });
-      if (!res.ok) continue; // transient — keep polling
-      const data = await res.json();
-      if (data?.status === 'success' && data?.url) return { success: true, url: data.url };
-      if (data?.status === 'failed') return { success: false, error: data?.error || 'Video generation failed' };
-      // status === 'processing' — keep going
-    } catch {
-      // transient network blip — keep polling until the ceiling
-    }
-  }
-  return { success: false, error: 'Video generation timed out' };
 }
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -873,7 +826,6 @@ const pendingDesignTools = new Map();
  * when wan2.5 made 5 and 10 second clips and nothing else.
  */
 const VIDEO_POLL_CEILING_MS = 45 * 60 * 1000;
-const VIDEO_POLL_FAST_WINDOW_MS = 2 * 60 * 1000;
 let designReqSeq = 0;
 
 // ─── Secret working set ─────────────────────────────────────────────────────
@@ -1362,7 +1314,7 @@ async function captureDesktopContext() {
  */
 async function handleFactoryResetScan() {
   try {
-    const sizes = await scanCategories(AVA_HOME, ACCOUNT_ROOT);
+    const sizes = await scanCategories(AVA_HOME, AVA_HOME);
     emit({
       event: 'factory_reset_scanned',
       sizes,
@@ -1407,7 +1359,7 @@ async function handleFactoryResetExecute(categories) {
   };
 
   try {
-    const report = await executeReset(categories || [], host, AVA_HOME, ACCOUNT_ROOT);
+    const report = await executeReset(categories || [], host, AVA_HOME, AVA_HOME);
     emit({
       event: 'factory_reset_done',
       ok: report.failed.length === 0,
@@ -1437,25 +1389,9 @@ function emitError(message) {
   emit({ event: 'error', message });
 }
 
-// ── Account-scoped data root ─────────────────────────────────────────────────
-// All per-account data (health, memory, journal, tasks) lives under
-// ~/.ava/users/<id>/ so the sidecar reads AND writes the SAME files as the
-// extension and the IDE webview — one source of truth per account on a machine.
-// Resolved once at startup from the platform key; falls back to AVA_HOME (BYOK /
-// no account) so local-only users keep the flat layout. Machine assets (models,
-// bin, the shared config, backups) stay at AVA_HOME, not here.
-let ACCOUNT_ROOT = AVA_HOME;
-async function resolveAccountRoot(platformKey) {
-  if (!platformKey) return;
-  try {
-    const res = await fetch('https://avasupernova.com/api/account-info', {
-      headers: { Authorization: `Bearer ${platformKey}`, 'User-Agent': 'ava-ide-sidecar' },
-    });
-    if (!res.ok) return;
-    const d = await res.json();
-    if (d?.id) ACCOUNT_ROOT = join(AVA_HOME, 'users', String(d.id));
-  } catch { /* keep AVA_HOME — local-only fallback */ }
-}
+// Every user's data lives in ~/.ava itself (no accounts, 1 Nov 2026). Account-era
+// ~/.ava/users/<id>/ folders are merged up into it by the IDE's one-shot job
+// (see --oneshot above) before this process is ever started.
 
 /** Compact summary of the local health + general profiles for the Health Room
  *  prefix (mirrors the extension's getHealthProfileSummary). Body basics come
@@ -1465,8 +1401,8 @@ function getHealthProfileSummary() {
   try {
     let p = null;
     let g = null;
-    try { p = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'health', 'profile.json'), 'utf-8')); } catch { /* none */ }
-    try { g = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'general.json'), 'utf-8')); } catch { /* none */ }
+    try { p = JSON.parse(readFileSync(join(AVA_HOME, 'health', 'profile.json'), 'utf-8')); } catch { /* none */ }
+    try { g = JSON.parse(readFileSync(join(AVA_HOME, 'general.json'), 'utf-8')); } catch { /* none */ }
     const sex = g?.sex ?? p?.body?.sex;
     const dob = g?.date_of_birth ?? p?.body?.date_of_birth;
     const heightCm = g?.height_cm ?? p?.body?.height_cm;
@@ -1516,7 +1452,7 @@ function getHealthProfileSummary() {
  *  instead of only building new ones. Returns undefined when there are none. */
 function getHealthPlansSummary() {
   try {
-    const dir = join(ACCOUNT_ROOT, 'health', 'plans');
+    const dir = join(AVA_HOME, 'health', 'plans');
     let files;
     try { files = readdirSync(dir).filter((f) => f.endsWith('.json')); } catch { return undefined; }
     const lines = [];
@@ -1558,7 +1494,7 @@ function getHealthPlansSummary() {
  */
 function getTrainingLogSummary() {
   try {
-    const dir = join(ACCOUNT_ROOT, 'health', 'sessions');
+    const dir = join(AVA_HOME, 'health', 'sessions');
     let files;
     try { files = readdirSync(dir).filter((f) => f.endsWith('.json')); } catch { return undefined; }
     const sessions = [];
@@ -1586,10 +1522,10 @@ function getLearningContext() {
   try {
     if (typeof formatLearnerContext !== 'function') return undefined;
     let store;
-    try { store = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'learning.json'), 'utf-8')); } catch { return undefined; }
+    try { store = JSON.parse(readFileSync(join(AVA_HOME, 'learning.json'), 'utf-8')); } catch { return undefined; }
     let selfSkills = [];
     try {
-      const learner = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'learner.json'), 'utf-8'));
+      const learner = JSON.parse(readFileSync(join(AVA_HOME, 'learner.json'), 'utf-8'));
       if (Array.isArray(learner?.self?.skills)) selfSkills = learner.self.skills;
     } catch { /* no learner profile yet */ }
     return formatLearnerContext(store, selfSkills);
@@ -1602,8 +1538,8 @@ function getLearningContext() {
 // Mirror of the extension's AvaViewProvider flow. The card payload + save both
 // resolve the field shape from the shared core HEALTH_PROFILE_FIELDS registry,
 // so "what Ava asks", "what the card renders", and "where it saves" never drift.
-const generalProfilePath = () => join(ACCOUNT_ROOT, 'general.json');
-const healthProfilePath = () => join(ACCOUNT_ROOT, 'health', 'profile.json');
+const generalProfilePath = () => join(AVA_HOME, 'general.json');
+const healthProfilePath = () => join(AVA_HOME, 'health', 'profile.json');
 
 function readJsonFile(path) {
   try { return JSON.parse(readFileSync(path, 'utf-8')); } catch { return null; }
@@ -1714,14 +1650,14 @@ function applyProfileField(field, rawValue) {
       const g = readJsonFile(generalProfilePath()) ?? emptyGeneralProfile();
       setByPath(g, def.path, value);
       g.updated_at = new Date().toISOString();
-      mkdirSync(ACCOUNT_ROOT, { recursive: true });
+      mkdirSync(AVA_HOME, { recursive: true });
       writeFileSync(generalProfilePath(), JSON.stringify(g, null, 2), 'utf-8');
       emit({ event: 'general_profile_saved', profile: g });
     } else {
       const h = readJsonFile(healthProfilePath()) ?? emptyHealthProfileObj();
       setByPath(h, def.path, value);
       h.updated_at = new Date().toISOString();
-      mkdirSync(join(ACCOUNT_ROOT, 'health'), { recursive: true });
+      mkdirSync(join(AVA_HOME, 'health'), { recursive: true });
       writeFileSync(healthProfilePath(), JSON.stringify(h, null, 2), 'utf-8');
       emit({ event: 'health_profile_saved', profile: h });
     }
@@ -1847,40 +1783,15 @@ async function handleInit(data) {
       }
     }
 
-    // Register platform provider when user has a platform key.
-    //
-    // No source check here on purpose: buildSidecarConfig already withholds the
-    // key entirely on API Key mode (`platformKey: usePlatform ? ... : undefined`),
-    // so an absent key IS the source decision arriving. A second gate reading
-    // the same fact from a different place is how the two drift.
-    if (config.platformKey) {
-      try {
-        const platformProvider = new PlatformProvider({ apiKey: config.platformKey });
-        providerRegistry.registerCustom('platform', platformProvider);
-        emit({ event: 'info', message: `Platform provider registered, models: ${platformProvider.listModels().map(m => m.id).join(', ')}` });
-      } catch (err) {
-        emit({ event: 'info', message: `Platform provider error: ${err.message}` });
-      }
-    }
-
-    // Resolve model — try BYOK first, then fall back to platform
-    let activeModel = config.activeModel || 'platform:qwen3.5-flash';
+    // Resolve the model. Every model runs on the user's own keys (or a local
+    // model); `platform:` ids left over from the account era resolve onto those
+    // keys in core.
+    let activeModel = config.activeModel || 'auto';
     emit({ event: 'info', message: `Resolving model: ${activeModel}` });
     let resolved = providerRegistry.resolveModel(activeModel);
 
-    // If BYOK model not found, try platform models
-    if (!resolved && config.platformKey) {
-      // Omni entries dropped — no catalogue defines them, so they could only
-      // ever fall through. Real fallbacks only.
-      const platformFallbacks = ['platform:qwen3.5-flash', 'platform:qwen3.5-plus'];
-      for (const fb of platformFallbacks) {
-        resolved = providerRegistry.resolveModel(fb);
-        if (resolved) { activeModel = fb; break; }
-      }
-    }
-
     if (!resolved) {
-      emitError(`No provider available. Set BYOK keys or connect your platform account.`);
+      emitError('No model available — add a provider key in Settings, or point Ava at a local model.');
       return;
     }
 
@@ -2039,9 +1950,6 @@ async function handleInit(data) {
     } catch {
       // Optional dep — sidecar still works without persistence.
     }
-    // Resolve the account-scoped health root before any health read/write, so
-    // the sidecar shares the extension + webview's per-account files.
-    await resolveAccountRoot(config.platformKey);
     toolRegistry.setAuditCallback((entry) => {
       auditLog.push(entry);
       if (auditLog.length > 500) auditLog.shift();
@@ -2076,10 +1984,10 @@ async function handleInit(data) {
     }
     emit({ event: 'info', message: 'Memory manager created' });
 
-    // Conversation history — account-scoped (ACCOUNT_ROOT/history), byte-identical
+    // Conversation history — ~/.ava/history, byte-identical
     // to the extension's HistoryManager so the files are cross-surface compatible.
     try {
-      historyManager = new HistoryManager(projectRoot, ACCOUNT_ROOT);
+      historyManager = new HistoryManager(projectRoot, AVA_HOME);
       await historyManager.init();
     } catch {
       historyManager = null;
@@ -2210,14 +2118,14 @@ async function handleInit(data) {
     }
 
     // Journal manager (local-first, stored in ~/.ava/journal/)
-    journalManager = new JournalManager({ globalDir: ACCOUNT_ROOT, projectRoot: cwd });
+    journalManager = new JournalManager({ globalDir: AVA_HOME, projectRoot: cwd });
 
     // Task manager — required so AutoCoordinator's TaskExecutor can pick up
     // session tasks created by todo_write and dispatch a Builder per task.
     // Tasks live in a dedicated tasks/ subfolder (mirrors creative/) so the
     // panel's open-folder button has a clean target; migrate any legacy file.
-    migrateGlobalTasksToSubfolder(ACCOUNT_ROOT);
-    taskManager = new TaskManager({ globalDir: join(ACCOUNT_ROOT, 'tasks'), projectRoot: cwd });
+    migrateGlobalTasksToSubfolder(AVA_HOME);
+    taskManager = new TaskManager({ globalDir: join(AVA_HOME, 'tasks'), projectRoot: cwd });
 
     // Project indexer
     let projectIndexer = null;
@@ -2233,22 +2141,22 @@ async function handleInit(data) {
       // Machine-global dir (AVA_HOME) — lets record_machine_rule persist a
       // standing rule to <AVA_HOME>/Decisions/machine-rules.md.
       globalDir: AVA_HOME,
-      // Creative Studio library root — account-scoped, outside any project, and
+      // Creative Studio library root — outside any project, and
       // the SAME folder the extension writes to (see src/lib/creative-gallery.ts).
       // browse_library reads this so Studio assets are visible to Ava; without
       // it she only ever saw project files and would offer to regenerate things
       // the user already owned.
-      creativeDir: join(ACCOUNT_ROOT, 'creative'),
+      creativeDir: join(AVA_HOME, 'creative'),
       journalManager,
       taskManager,
       // Surface-injected health plan store — Node-fs impl pointed at
       // ~/.ava/health/plans/*.json, the same files the renderer's
       // Tauri-fs store reads/writes. See COMMAND_PALETTE_PLAN.md §10.
-      healthPlanStore: new NodeHealthPlanStore({ baseDir: join(ACCOUNT_ROOT, 'health', 'plans') }),
+      healthPlanStore: new NodeHealthPlanStore({ baseDir: join(AVA_HOME, 'health', 'plans') }),
       // Server-side plan generation — health_plan_create calls this when no
-      // inline days are passed. Hits /api/health/generate/plan, which charges
-      // the flat per-plan fee (single 5 credits/week, combined 10/week),
-      // builds the whole plan from the exercise/recipe library, and returns days.
+      // inline days are passed. Hits /api/health/generate/plan on the user's
+      // own key, which builds the whole plan from the exercise/recipe library
+      // and returns days.
       generateHealthPlanDays: async (i) => {
         // WHICH MODEL, AND WHOSE KEY.
         //
@@ -2268,11 +2176,9 @@ async function handleInit(data) {
         // while their key sat right there in settings.
         const configKey = Object.keys(config.providers || {})
           .find((k) => (providerMap[k] || k) === providerName) || providerName;
-        const byokKey = providerName === 'platform'
-          ? undefined
-          : config.providers?.[configKey]?.apiKey || undefined;
-        if (!config.platformKey && !byokKey) {
-          throw new Error('Sign in to your Ava account, or add your own provider key, to generate a plan.');
+        const byokKey = config.providers?.[configKey]?.apiKey || undefined;
+        if (!byokKey) {
+          throw new Error('Add a provider key in Settings to generate a plan.');
         }
         // Send the profile as an OBJECT. It used to be JSON.stringify'd and cut
         // at 1500 characters, which routinely truncated mid-object — so the
@@ -2283,17 +2189,15 @@ async function handleInit(data) {
         // computed from body + goal. The conditions never reach the model.
         let profile = null;
         try {
-          profile = JSON.parse(readFileSync(join(ACCOUNT_ROOT, 'health', 'profile.json'), 'utf-8'));
+          profile = JSON.parse(readFileSync(join(AVA_HOME, 'health', 'profile.json'), 'utf-8'));
         } catch { /* no local profile — the server handles its absence */ }
-        const headers = { 'Content-Type': 'application/json' };
-        if (config.platformKey) headers.Authorization = `Bearer ${config.platformKey}`;
-        // No account at all — authenticate as BYOK instead. The header pair is
-        // what the route's door accepts; the body still carries the model so
-        // the provider is resolved from it rather than assumed.
-        if (!config.platformKey && byokKey) {
-          headers['X-BYOK-Provider'] = providerName;
-          headers['X-BYOK-Key'] = byokKey;
-        }
+        // The user's own key. The header pair is what the route's door accepts;
+        // the body still carries the model so the provider is resolved from it.
+        const headers = {
+          'Content-Type': 'application/json',
+          'X-BYOK-Provider': providerName,
+          'X-BYOK-Key': byokKey,
+        };
         const res = await fetch('https://avasupernova.com/api/health/generate/plan', {
           method: 'POST',
           headers,
@@ -2319,7 +2223,7 @@ async function handleInit(data) {
           emit({ event: 'info', message: `[health] plan generation failed (${res.status}): ${msg}` });
           throw new Error(msg);
         }
-        return { days: data.days ?? [], credits_charged: data.credits_charged ?? 0 };
+        return { days: data.days ?? [] };
       },
       // Design Studio control — the Design Architect's tools (design_find_shape,
       // design_generate_icon, …) drive the open Design Studio canvas through this
@@ -2365,7 +2269,13 @@ async function handleInit(data) {
         });
       },
       projectIndexer,
-      platformKey: config.platformKey,
+      // Any saved key by provider id — core asks for 'brave' (web search) and
+      // the specialist tools for whichever provider they run on. glm is saved
+      // as glm and registered as zhipu, so both names find it.
+      getProviderKey: (p) => {
+        const id = p === 'zhipu' ? 'glm' : p;
+        return config.providers?.[id]?.apiKey || undefined;
+      },
       qwenApiKey: config.providers?.qwen?.apiKey || process.env.QWEN_API_KEY,
       minimaxApiKey: config.providers?.minimax?.apiKey || process.env.MINIMAX_API_KEY,
       kimiApiKey: config.providers?.kimi?.apiKey || process.env.KIMI_API_KEY,
@@ -2424,8 +2334,7 @@ async function handleInit(data) {
     };
 
     // Memory Agent — curates briefs instead of raw memory dumps
-    const qwenFlash = providerRegistry.resolveModel('platform:qwen3.5-flash')
-      || providerRegistry.resolveModel('qwen:qwen3.5-flash');
+    const qwenFlash = providerRegistry.resolveModel('qwen:qwen3.5-flash');
     if (qwenFlash && memoryManager) {
       memoryAgentInstance = new MemoryAgent({
         memoryManager,
@@ -2499,21 +2408,19 @@ async function handleInit(data) {
 
     // Auto Mode — detect available providers
     const availableProviders = new Set();
-    if (config.platformKey) availableProviders.add('platform');
     if (sharedState.qwenApiKey) availableProviders.add('qwen');
     if (sharedState.minimaxApiKey) availableProviders.add('minimax');
     if (config.providers?.kimi?.apiKey || process.env.KIMI_API_KEY) availableProviders.add('kimi');
     if (config.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY) availableProviders.add('deepseek');
 
-    // Use static create() — picks Kimi K2.5 for platform, best available for BYOK
-    if (availableProviders.size > 1 || availableProviders.has('platform')) {
+    // Use static create() — the best coordinator the user's keys reach
+    if (availableProviders.size > 1) {
       autoCoordinator = AutoCoordinator.create({
         providerRegistry,
         toolRegistry,
         cwd,
         sharedState,
         availableProviders,
-        platformKey: config.platformKey,
       });
     }
 
@@ -4238,7 +4145,6 @@ async function handleSetModel(data) {
     // was correct, which is why it went unnoticed on this side.
     if (isRoutingMode(data.model)) {
       const availableProviders = new Set();
-      if (sharedState.platformKey) availableProviders.add('platform');
       if (sharedState.qwenApiKey) availableProviders.add('qwen');
       if (sharedState.minimaxApiKey) availableProviders.add('minimax');
       if (sharedState.kimiApiKey) availableProviders.add('kimi');
@@ -4258,13 +4164,10 @@ async function handleSetModel(data) {
       let preferredCoordinatorId;
       if (data.model === 'aurora') {
         const tries = [
-          'platform:mistral-medium-3.5-platform',
           'mistral:mistral-medium-3.5',
           'mistral-medium-3.5',
-          'platform:mistral-large-3-platform',
           'mistral:mistral-large-3',
           'mistral-large-3',
-          'platform:mistral-small-4-platform',
           'mistral:mistral-small-4',
           'mistral-small-4',
         ];
@@ -4275,15 +4178,13 @@ async function handleSetModel(data) {
           }
         }
       } else if (data.model === 'supernova') {
-        preferredCoordinatorId = 'platform:deepseek-flash-platform';
+        // The user's own DeepSeek key — the same pin as the extension.
+        preferredCoordinatorId = 'deepseek:deepseek-flash';
       } else if (data.model === 'longxiang') {
-        // Kimi K3 holds both the coordinator and Builder seats. Platform id
-        // first, then BYOK — same shape as Aurora's chain above, and the same
-        // reason: first resolvable wins so a missing key degrades instead of
-        // failing. /api/chat resolves the 'longxiang' alias to the bare
-        // `kimi-k3` upstream id, so these must be the ids the registry
-        // actually holds, not the alias.
-        const tries = ['platform:kimi-k3-platform', 'kimi:kimi-k3', 'kimi-k3'];
+        // Kimi K3 holds both the coordinator and Builder seats — same shape as
+        // Aurora's chain above: first resolvable wins, so a missing key
+        // degrades instead of failing. These are the ids the registry holds.
+        const tries = ['kimi:kimi-k3', 'kimi-k3'];
         for (const id of tries) {
           if (providerRegistry.resolveModel(id)) {
             preferredCoordinatorId = id;
@@ -4298,7 +4199,6 @@ async function handleSetModel(data) {
         cwd,
         sharedState,
         availableProviders,
-        platformKey: sharedState.platformKey,
         mode: data.model,
         preferredCoordinatorId,
       });
@@ -4319,11 +4219,7 @@ async function handleSetModel(data) {
     }
 
     // Specific model — resolve and switch
-    let resolved = providerRegistry.resolveModel(data.model);
-    if (!resolved) {
-      // Try platform fallback
-      resolved = providerRegistry.resolveModel(`platform:${data.model.split(':').pop()}`);
-    }
+    const resolved = providerRegistry.resolveModel(data.model);
     if (!resolved) { emitError(`Model not found: ${data.model}`); return; }
 
     sharedState.activeModelId = resolved.model.id;
@@ -4552,13 +4448,13 @@ rl.on('line', async (line) => {
       handleCreativeUserAction(data);
       break;
     case 'asset_forge_generate':
-      // Design Studio → platform: run the shape-as-dial pipeline (Qwen edit +
-      // server matte) and emit an `asset_forge_result` back to the canvas.
+      // Design Studio: run the shape-as-dial pipeline on the user's Qwen key
+      // (Qwen image + local matte) and emit an `asset_forge_result` back to the canvas.
       handleAssetForgeGenerate(data.body || {}).catch((err) =>
         emit({ event: 'asset_forge_result', success: false, error: err && err.message ? err.message : 'Generation failed' }));
       break;
     case 'asset_forge_video':
-      // Design Studio → platform: submit a Wan 2.5 job + poll status, then emit
+      // Design Studio: submit a Wan job on the user's Qwen key + poll, then emit
       // an `asset_forge_video_result` with the finished clip URL back to the canvas.
       handleAssetForgeVideo(data.body || {}, data.designRequestId, data.title).catch((err) =>
         emit({ event: 'asset_forge_video_result', success: false, error: err && err.message ? err.message : 'Video generation failed' }));
@@ -4569,7 +4465,7 @@ rl.on('line', async (line) => {
         emit({ event: 'git_info', repo: null, branch: null, isRepo: false, error: err && err.message ? err.message : 'git lookup failed' }));
       break;
     case 'asset_forge_voice':
-      // Design Studio → platform: Qwen3-TTS synthesis, then emit an
+      // Design Studio: Qwen3-TTS on the user's Qwen key, then emit an
       // `asset_forge_voice_result` with the finished audio back to the canvas.
       handleAssetForgeVoice(data.body || {}, data.designRequestId, data.title).catch((err) =>
         emit({ event: 'asset_forge_voice_result', success: false, error: err && err.message ? err.message : 'Voice generation failed' }));
@@ -4646,9 +4542,7 @@ rl.on('line', async (line) => {
       // Sidecar produces the opaque envelope; the IDE runs the Tauri save
       // dialog (mirrors export_audit_log).
       try {
-        // ACCOUNT_ROOT is where a signed-in user's memory/tasks/history actually
-        // live. Passing AVA_HOME alone backed up the root — the wrong account.
-        const envelope = await exportEncryptedBackup(AVA_HOME, data?.passphrase ?? '', { source: 'ide', scopedDir: ACCOUNT_ROOT });
+        const envelope = await exportEncryptedBackup(AVA_HOME, data?.passphrase ?? '', { source: 'ide', scopedDir: AVA_HOME });
         emit({ event: 'backup_ready', envelope });
       } catch (err) {
         emitError(`Backup failed: ${err && err.message ? err.message : err}`);
@@ -4658,7 +4552,7 @@ rl.on('line', async (line) => {
     case 'export_readable': {
       // Plain JSON snapshot so the user can SEE what's on their machine.
       try {
-        const bundle = await gatherBundle(AVA_HOME, { source: 'ide', scopedDir: ACCOUNT_ROOT });
+        const bundle = await gatherBundle(AVA_HOME, { source: 'ide', scopedDir: AVA_HOME });
         emit({ event: 'readable_ready', json: JSON.stringify(bundle, null, 2) });
       } catch (err) {
         emitError(`Readable export failed: ${err && err.message ? err.message : err}`);
@@ -4673,7 +4567,7 @@ rl.on('line', async (line) => {
       // Per-type export. Sidecar formats the bytes; the IDE runs the native
       // save dialog (mirrors export_backup / export_audit_log).
       try {
-        const roots = { avaHome: AVA_HOME, scopedDir: ACCOUNT_ROOT };
+        const roots = { avaHome: AVA_HOME, scopedDir: AVA_HOME };
         const types = (Array.isArray(data?.types) ? data.types : [data?.dataType]).filter(Boolean);
         const files = [];
         for (const t of types) {
@@ -4689,7 +4583,7 @@ rl.on('line', async (line) => {
     }
     case 'import_data': {
       try {
-        const roots = { avaHome: AVA_HOME, scopedDir: ACCOUNT_ROOT };
+        const roots = { avaHome: AVA_HOME, scopedDir: AVA_HOME };
         const count = await importDataType(data?.dataType, data?.content ?? '', roots);
         emit({ event: 'data_imported', ok: true, dataType: data?.dataType, count });
       } catch (err) {
@@ -4704,7 +4598,7 @@ rl.on('line', async (line) => {
     case 'import_backup': {
       // Restore an encrypted .ava-backup into ~/.ava (safe-merge by default).
       try {
-        const { result } = await importEncryptedBackup(AVA_HOME, data?.content ?? '', data?.passphrase ?? '', { overwrite: !!data?.overwrite, scopedDir: ACCOUNT_ROOT });
+        const { result } = await importEncryptedBackup(AVA_HOME, data?.content ?? '', data?.passphrase ?? '', { overwrite: !!data?.overwrite, scopedDir: AVA_HOME });
         emit({ event: 'backup_imported', ok: true, written: result.written, skipped: result.skipped });
       } catch (err) {
         emit({ event: 'backup_imported', ok: false, message: err && err.message ? err.message : String(err) });
