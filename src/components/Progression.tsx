@@ -62,11 +62,7 @@ export function Progression() {
       try { setAvatar(localStorage.getItem('ava-ide-user-avatar') || ''); } catch { /* storage off */ }
     };
     window.addEventListener('ava-avatar-changed', refresh);
-    window.addEventListener('ava-auth-changed', refresh);
-    return () => {
-      window.removeEventListener('ava-avatar-changed', refresh);
-      window.removeEventListener('ava-auth-changed', refresh);
-    };
+    return () => window.removeEventListener('ava-avatar-changed', refresh);
   }, []);
   const [draft, setDraft] = useState<LearnerProfile | null>(null);
 

@@ -1,6 +1,6 @@
 // Local-first conversation history for the IDE — READ side.
 //
-// Conversations live in the SAME account-scoped files the extension + CLI +
+// Conversations live in the SAME files the extension + CLI +
 // @ava/core's HistoryManager write: ~/.ava/users/<id>/history/<id>.json (or
 // ~/.ava/history for BYOK/no-account). The IDE sidecar writes them; this reads
 // them directly via the Tauri fs plugin — the same reliable, network-free path

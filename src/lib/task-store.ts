@@ -1,7 +1,7 @@
 // Local-first task store for the IDE.
 //
 // Personal tasks live in the SAME files @ava/core's TaskManager owns and the
-// extension reads: the account-scoped global store at
+// extension reads: the global store at
 // ~/.ava/users/<id>/tasks/tasks.json (or ~/.ava/tasks/tasks.json with no
 // account) and the per-workspace store at <workspace>/.ava/tasks.json. The IDE
 // reads/writes them directly via the Tauri fs plugin, so tasks work with NO
@@ -101,7 +101,7 @@ function parseEntries(raw: string): LocalTask[] {
 
 // ── Global store (~/.ava/users/<id>/tasks/tasks.json) ───────────────────────
 
-/** Home-relative path to the account-scoped global task file. */
+/** Home-relative path to the global task file. */
 async function globalRel(): Promise<string> {
   return `${await dataRoot()}/tasks/tasks.json`;
 }
@@ -333,7 +333,7 @@ export async function markLocalReminderFired(id: string): Promise<void> {
   await mutateTask(id, (t) => { t.reminderFiredAt = new Date().toISOString(); });
 }
 
-/** Absolute path to the account-scoped tasks folder (for the open-folder button). */
+/** Absolute path to the tasks folder (for the open-folder button). */
 export async function tasksFolderPath(): Promise<string> {
   return join(await homeDir(), `${await dataRoot()}/tasks`);
 }

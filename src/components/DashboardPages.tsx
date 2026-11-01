@@ -7,9 +7,9 @@ import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { ALL_MODELS, PLATFORM_MODELS } from '@ava/core/models';
+import { ALL_MODELS } from '@ava/core/models';
 import { ALL_SCAFFOLD_TAGS } from '@ava/core/mode-tags';
-import { providerLabel } from '../lib/chat-models';
+import { providerLabel, resolveSidecarModel } from '../lib/chat-models';
 import { APP_VERSION } from '../version';
 // Phosphor icons (duotone weight) — distinctive layered fill that reads
 // as a crafted product instead of a generic SaaS dashboard. Same author
@@ -28,14 +28,12 @@ import {
   NotePencil as PhNote,
   CaretRight as PhCaretRight,
   BookOpen as PhBook,
-  Key as PhKey,
   Lock as PhLock,
   Brain as PhBrain,
   GraduationCap as PhGraduationCap,
   ArrowsClockwise as PhArrowsClockwise,
   Lightbulb as PhLightbulb,
   TestTube as PhTestTube,
-  CreditCard as PhCreditCard,
   Link as PhLink,
   CloudSun as PhWeather,
   Clock as PhClock,
@@ -58,8 +56,11 @@ import { DesignStudioLazy } from './DesignStudio.lazy';
 import { toolStatusLabel } from '../lib/tool-label';
 import { t, tt, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
-import { apiFetch, getPlatformKey, isConnected as checkConnected, disconnectAccount, trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, updateDisplayName, refreshDisplayName, type SessionStats } from '../lib/api';
-import { useModeAvailability, modeSubtitle, isModeListed, activeProviderSource } from '../lib/mode-availability';
+import { trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
+import { keyedFields, getProviderKeys, testAndSaveProviderKey, setProviderKey, type ProviderField } from '../lib/provider-keys';
+import { buildSidecarConfig, hasChatCapability } from '../lib/sidecar-boot';
+import { ensureDataHome } from '../lib/data-root';
+import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
 import type { MonthUsage } from '../lib/usage-history';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 // The dependency-free leaf, so this renderer and the sidecar agree on what
@@ -109,25 +110,12 @@ import {
   type AvaMode as DCAvaMode,
   type DatasetName as DCDatasetName,
 } from '../lib/dataset-config';
-// Canonical plan + top-up data + website redirect helpers.
-// Browser-safe subpath so we don't drag node-side tool code into the Tauri
-// renderer bundle. One source of truth across web, extension, and IDE —
-// any pricing change on the website automatically flows through here.
-import {
-  PLANS,
-  CREDIT_TOPUPS,
-  dashboardBillingUrl,
-  creditsForTurn,
-  type PlanTier as AvaPlanTier,
-} from '@ava/core/billing';
-import { IdePurchaseCard } from './_IdePurchaseCard';
 import { readAllLocalCreative, removeLocalCreative, renameLocalCreative, copyCreativeToProject, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
 import { GeneralProfilePage, requestHealthRoomTab } from './HealthPage';
 import { MessageFeedback } from './MessageFeedback';
 import { todayLocal } from '@ava/core/dates';
-import { isRoutingMode } from '@ava/core/routing-modes';
 
 /**
  * Catalogue provider id -> the name its key is stored under in localStorage.
@@ -140,7 +128,7 @@ import { isRoutingMode } from '@ava/core/routing-modes';
  * NVIDIA key.
  */
 const BYOK_STORE_NAMES: Record<string, string> = {
-  deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu',
+  deepseek: 'DeepSeek', kimi: 'Moonshot', qwen: 'Qwen', zhipu: 'Zhipu', minimax: 'MiniMax',
   mistral: 'Mistral', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA',
 };
 
@@ -356,23 +344,6 @@ function LoadingSpinner() {
   );
 }
 
-function NotConnectedBanner() {
-  return (
-    <div style={{
-      ...card, textAlign: 'center', borderColor: 'color-mix(in srgb, var(--accent) 30%, transparent)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '32px 20px',
-    }}>
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" />
-        <polyline points="10 17 15 12 10 7" />
-        <line x1="15" y1="12" x2="3" y2="12" />
-      </svg>
-      <div style={{ fontSize: 15, fontWeight: 500, color: '#cdd6f4' }}>{t('dash.cc.connect_title')}</div>
-      <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.cc.connect_hint')}</div>
-    </div>
-  );
-}
-
 function ErrorBanner({ message }: { message: string }) {
   return (
     <div style={{ ...card, borderColor: 'rgba(243,139,168,0.3)', textAlign: 'center' }}>
@@ -383,45 +354,28 @@ function ErrorBanner({ message }: { message: string }) {
 
 /* ComingSoonBanner removed — no longer used */
 
-/* ===== Generic data hook ===== */
-function useApiData<T>(path: string, defaultValue: T): { data: T; loading: boolean; error: string; refetch: () => void } {
+/* ===== Public data hook ===== */
+// Content the website serves to anyone (the course library) — no key, no
+// account. It used to take the platform key and return nothing without one.
+function usePublicData<T>(path: string, defaultValue: T): { data: T; loading: boolean; error: string; refetch: () => void } {
   const [data, setData] = useState<T>(defaultValue);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const fetch_ = useCallback(() => {
-    if (!checkConnected()) { setData(defaultValue); setLoading(false); return; }
     setLoading(true);
     setError('');
-    apiFetch(path)
-      .then((d) => { setData(d); setLoading(false); })
-      .catch((e) => { setError(e.message || 'Failed to load'); setLoading(false); });
+    fetch(`${PUBLIC_API}${path}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setData(await res.json());
+        setLoading(false);
+      })
+      .catch((e: unknown) => { setError(e instanceof Error ? e.message : 'Failed to load'); setLoading(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
-
-  // Reset to default when auth changes (logout clears connection)
-  useEffect(() => {
-    const handler = () => {
-      if (!checkConnected()) { setData(defaultValue); setError(''); }
-      else fetch_();
-    };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetch_]);
-
-  // Refresh on chat-turn end. The chat handler dispatches
-  // 'ava-usage-refresh' after every stream completes, so usage / balance /
-  // tasks / journal panels mounted via useApiData stay in sync with what
-  // the server has actually charged. Without this hook the dashboard only
-  // refreshes on mount and the operator sees a frozen snapshot.
-  useEffect(() => {
-    const handler = () => { if (checkConnected()) fetch_(); };
-    window.addEventListener('ava-usage-refresh', handler);
-    return () => window.removeEventListener('ava-usage-refresh', handler);
-  }, [fetch_]);
 
   return { data, loading, error, refetch: fetch_ };
 }
@@ -1107,7 +1061,7 @@ const SHARE_ICONS: Record<string, string> = {
  * which is exactly what the share buttons (and "Open in Browser") did. External
  * links have to go through the opener plugin. The window.open fallback is for
  * running the renderer in a plain browser during development, where the Tauri
- * transport is undefined and openUrl throws. Same pattern as lib/sign-in.ts.
+ * transport is undefined and openUrl throws.
  */
 async function openExternal(url: string): Promise<void> {
   try {
@@ -1157,7 +1111,7 @@ function shareTargets(title: string, url: string): ShareTarget[] {
     //   { key: 'mu', label: 'mu.social', url: `https://mu.social/intent/compose?text=${withLink}` },
     // NOT /sharing/share-offsite — that 302s to the legacy /shareArticle/ page,
     // which is why it misbehaved. feed/?shareActive=true is LinkedIn's current
-    // composer, and it survives the sign-in redirect with the URL intact.
+    // composer, with the URL intact.
     { key: 'linkedin', label: 'LinkedIn', url: `https://www.linkedin.com/feed/?shareActive=true&shareUrl=${u}` },
     { key: 'reddit', label: 'Reddit', url: `https://reddit.com/submit?url=${u}&title=${ti}` },
     { key: 'hn', label: 'Hacker News', url: `https://news.ycombinator.com/submitlink?u=${u}&t=${ti}` },
@@ -2104,15 +2058,6 @@ export function CommandCentrePage() {
   const workStart = Number(typeof localStorage !== 'undefined' ? localStorage.getItem('ava-ide-work-start') : null) || 9;
   const workEnd = Number(typeof localStorage !== 'undefined' ? localStorage.getItem('ava-ide-work-end') : null) || 17;
 
-  // Re-render on auth changes (login/logout)
-  const [authRefresh, setAuthRefresh] = useState(0);
-  useEffect(() => {
-    const handler = () => setAuthRefresh(n => n + 1);
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-  void authRefresh;
-
   // Audit trust-nudges for the daily lens — request the lightweight findings
   // from the shared engine and listen for the sidecar's reply. Rendered only
   // when there's something worth flagging, so the log staying clean is silent.
@@ -2130,58 +2075,31 @@ export function CommandCentrePage() {
     return () => { cancelled = true; };
   }, []);
 
-  const connected = checkConnected();
   const dateStr = new Date().toLocaleDateString(getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   // ── Editable display name ────────────────────────────────────────────
   // Source-of-truth for what Ava calls the user. `ava-ide-user-name` is
   // the same key used by the chat panel's seeded welcome (line ~1997)
-  // and the trajectory event payload (line ~2692), so editing it here
-  // updates the greeting everywhere. Falls back to the email local-part
-  // when no custom name has been set.
-  const resolveUserName = (): string => {
-    const stored = (localStorage.getItem('ava-ide-user-name') ?? '').trim();
-    if (stored) return stored;
-    return (localStorage.getItem('ava-ide-email')?.split('@')[0] ?? '').trim();
-  };
+  // and the trajectory event payload, so editing it here updates the
+  // greeting everywhere.
+  const resolveUserName = (): string => (localStorage.getItem('ava-ide-user-name') ?? '').trim();
   const [userName, setUserName] = useState<string>(resolveUserName);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [nameHover, setNameHover] = useState(false);
   useEffect(() => {
     const refresh = () => setUserName(resolveUserName());
-    window.addEventListener('ava-auth-changed', refresh);
     window.addEventListener('ava-ide-name-changed', refresh);
-    // On mount, pull the name from the platform if signed in. The
-    // helper writes localStorage + dispatches the event when the value
-    // changes, which the listener above already picks up — keeps the
-    // sync flow single-direction at this surface.
-    refreshDisplayName().catch(() => { /* offline / not signed in is fine */ });
-    return () => {
-      window.removeEventListener('ava-auth-changed', refresh);
-      window.removeEventListener('ava-ide-name-changed', refresh);
-    };
+    return () => window.removeEventListener('ava-ide-name-changed', refresh);
   }, []);
   const saveUserName = () => {
     const next = nameInput.trim();
     if (next) {
       localStorage.setItem('ava-ide-user-name', next);
       setUserName(next);
-      // Push to the platform so the extension / companion / dashboard
-      // pick up the same name on their next refresh. Fire-and-forget;
-      // local-first means the UI commits the change regardless. Failure
-      // (network down, API error, not signed in) is silent — local
-      // value still applies on this surface.
-      updateDisplayName(next).catch(() => { /* local-first */ });
     } else {
-      // Empty input clears the custom name; greeting falls back to email prefix.
       localStorage.removeItem('ava-ide-user-name');
-      setUserName((localStorage.getItem('ava-ide-email')?.split('@')[0] ?? '').trim());
-      // Don't push empties to the platform — the API rejects them and
-      // there's no clear-name path yet. Leaving the platform record at
-      // its previous value is acceptable; the local greeting is what
-      // matters here, other surfaces will keep showing the platform
-      // value until the user picks a new name on this surface.
+      setUserName('');
     }
     window.dispatchEvent(new CustomEvent('ava-ide-name-changed'));
     setEditingName(false);
@@ -2283,10 +2201,7 @@ export function CommandCentrePage() {
       }).catch(() => { if (!cancelled) setJournalLoading(false); });
     };
     load();
-    // Re-read once the account id resolves (fresh sign-in) so the
-    // account-scoped journal isn't missed on first paint.
-    window.addEventListener('ava-auth-changed', load);
-    return () => { cancelled = true; window.removeEventListener('ava-auth-changed', load); };
+    return () => { cancelled = true; };
   }, []);
   // Learning is local-first — read the shared ~/.ava/learning.json (no account needed).
   const [curriculums, setCurriculums] = useState<LearningCurriculum[]>([]);
@@ -2467,24 +2382,6 @@ export function CommandCentrePage() {
         </div>
 
 
-        {!connected && (
-          <div style={{
-            ...card, padding: '16px 20px', marginBottom: 16,
-            background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(99,102,241,0.05))',
-            border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ color: '#f9e2af' }}><PhKey size={26} weight="duotone" /></div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('dash.cc.byok_mode')}</div>
-                <div style={{ fontSize: 11, color: '#6c7086' }}>
-                  {t('dash.cc.byok_desc')}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── Tab nav ───────────────────────────────────────────────── */}
         <div style={{
           display: 'flex', gap: 4, marginBottom: 20,
@@ -2590,33 +2487,6 @@ export function AvaChatPage() {
   // The const block below was the IDE pack catalogue — kept here as a
   // tombstone comment since it was the only IDE-side reference.
 
-  // ── Sidecar model mapping (single source of truth) ─────────────────────────
-  const SIDECAR_MODEL_MAP: Record<string, string> = {
-    // Orchestrated modes — the sidecar handles these by id, no provider prefix.
-    // Without this row, the fallback in setModel adds `platform:` (or worse,
-    // `qwen:` on the init path) and the resolver dies trying to find a model
-    // literally called 'supernova', then silently degrades to qwen3.5-flash.
-    'auto': 'auto',
-    'supernova': 'supernova',
-    'aurora': 'aurora',
-    'qwen3.7-plus': 'platform:qwen3.7-plus',
-    'kimi-k3': 'kimi:kimi-k3',
-    'kimi-k2.7-code': 'kimi:kimi-k2.7-code',
-    'kimi-k2.6': 'kimi:kimi-k2.6',
-    'qwen3.5-omni-flash': 'platform:qwen3.5-omni-flash',
-    'qwen3.5-omni-plus': 'platform:qwen3.5-omni-plus',
-    'qwen3.5-plus': 'platform:qwen3.5-plus',
-    'qwen3.5-flash': 'platform:qwen-flash',
-    // `deepseek-chat`/`deepseek-reasoner` retire upstream 2026-07-24 — old
-    // picker ids stay mapped, pointed at the V4 tier each one meant.
-    'deepseek-chat': 'deepseek:deepseek-flash',
-    'deepseek-reasoner': 'deepseek:deepseek-flash',
-    'deepseek-flash': 'deepseek:deepseek-flash',
-    'moonshot-v1-128k': 'kimi:moonshot-v1-128k',
-    'glm-4-plus': 'zhipu:glm-4-plus',
-    'mistral-large': 'mistral:mistral-large-3',
-  };
-
   // ── Mode definitions ───────────────────────────────────────────────────────
   const MODES: { id: AvaMode; label: string; icon: string; prefix: string; placeholder: string }[] = [
     { id: 'work', label: t('mode.work'), icon: '>>', prefix: '', placeholder: t('mode.work.placeholder') },
@@ -2703,29 +2573,6 @@ export function AvaChatPage() {
   };
 
   // ── State ──────────────────────────────────────────────────────────────────
-  // Re-render on auth changes — reset to local-first state on logout
-  const [authRefreshChat, setAuthRefreshChat] = useState(0);
-  useEffect(() => {
-    const handler = () => {
-      setAuthRefreshChat(n => n + 1);
-      if (!checkConnected()) {
-        // Clear cloud state — snap back to local-first
-        setCreditBalance(null);
-        setUsageWarning({ level: 'none', message: '' });
-        setChatBackend('local');
-        setMessages([{ id: `msg-reset-${Date.now()}`, role: 'ava' as const, text: buildIdeWelcome(), timestamp: Date.now(), welcome: true }]);
-        setConversationTitle(t('dash.chat.new_chat'));
-        setSecrets([]);
-        setTokenCount(0);
-        setContextPercent(0);
-      }
-    };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-  void authRefreshChat;
-  const connected = checkConnected();
-
   // Build the dynamic welcome at first-mount so the seeded message
   // reflects the operator's actual time-of-day and name. Mirrors the
   // extension chat panel's buildSeededWelcome — first-person from Ava,
@@ -2734,7 +2581,7 @@ export function AvaChatPage() {
   // Resolved live (via t() + getLocale) so a language change re-renders the
   // welcome message in the new language — see the `welcome` flag on ChatMessage.
   const buildIdeWelcome = (): string => {
-    const userName = (localStorage.getItem('ava-ide-user-name') ?? localStorage.getItem('ava-ide-email')?.split('@')[0] ?? '').trim() || null;
+    const userName = (localStorage.getItem('ava-ide-user-name') ?? '').trim() || null;
     const now = new Date();
     const h = now.getHours();
     const day = now.toLocaleDateString(getLocale(), { weekday: 'long' });
@@ -2790,12 +2637,6 @@ export function AvaChatPage() {
   }, []);
   const [model, setModel] = useState<string>(() => {
     const stored = localStorage.getItem('ava-ide-chat-model') || 'auto';
-    // Migration: MiniMax is reserved for Creative Studio — never as chat coordinator.
-    // Reset any stuck MiniMax value so the sidecar resolver picks the right Qwen fallback.
-    if (stored.toLowerCase().includes('minimax')) {
-      localStorage.setItem('ava-ide-chat-model', 'auto');
-      return 'auto';
-    }
     // Migration: pre-fix builds wrote `qwen:supernova` / `qwen:auto` because
     // the init fallback prefixed every bare orchestrator id with `qwen:`.
     // Resolve to the real orchestrated mode so AutoCoordinator picks up.
@@ -2859,32 +2700,13 @@ export function AvaChatPage() {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   // packsMenuOpen removed with knowledge-pack feature in v0.59.2.
-  // Tier read for Supernova admin gating in the model dropdown. Mirrors
-  // the extension's account?.tier === 'admin' check. Listens to the
-  // 'ava-tier-changed' event so the gate flips when the user signs in
-  // or refreshes their account info without a panel re-mount.
-  // Unified mode-availability hook — single source of truth for the
-  // 3 orchestrated modes (Aurora / Supernova / Maestro). Recomputes on
-  // ava-auth-changed (sign in/out), ava-byok-changed (key add/remove),
-  // and ava-tier-changed (admin promotion). Tier-gating, platform-key
-  // detection, and BYOK-key detection all flow through this hook —
-  // see lib/mode-availability.ts.
+  // The fleets — single source of truth in lib/mode-availability.ts;
+  // recomputes when a key is added or removed.
   const { state: modeState, availability: modeAvailability } = useModeAvailability();
   // Knowledge-pack enabled state removed in v0.59.2. localStorage key
   // 'ava-knowledge-packs' from prior installs is harmless if it lingers.
-  const [tokenCount, setTokenCount] = useState(0);
-  // Platform credit balance — combined free + subscription pool. The shape
-  // {used, limit} survives the rename from the old token-system state for
-  // tick-engine localStorage compatibility, but the values are credits.
-  const [creditBalance, setCreditBalance] = useState<{ used: number; limit: number } | null>(null);
-  // First-load gates. Mirror the extension's chat panel — locks the chat
-  // surface while the account fetch is still in flight on a connected
-  // session so users don't see a half-populated state (Free → Pro flash,
-  // empty conversations list that reads as "no chats" before localStorage
-  // is drained). Both flip false in one sweep when their respective
-  // signals resolve. Local-only / no-account paths skip both gates by
-  // initialising false (see effect below).
-  const [accountLoading, setAccountLoading] = useState<boolean>(() => !!getPlatformKey());
+  // First-load gate — locks the chat surface while the conversation list is
+  // still loading, so an empty list never reads as "no chats".
   const [historyLoading, setHistoryLoading] = useState<boolean>(true);
   const [conversationTitle, setConversationTitle] = useState(t('dash.chat.new_chat'));
   // Tracks which saved conversation (by id) is currently rendered in the
@@ -3032,78 +2854,9 @@ export function AvaChatPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentConvId]);
 
-  // ── Platform credit balance fetch ───────────────────────────────────────
-  // Mirrors the extension's read shim (Usage.tsx in extension/dashboard-ui):
-  // reads credits_* first, falls back to tokens_* for any stale account-info
-  // cache from before the platform's credit-redesign hotfix shipped.
-  // Combines the free pool + subscription pool into one balance bar — same
-  // unified view the extension uses so users don't have to mentally add the
-  // two pools together.
-  const fetchBalance = useCallback(async () => {
-    const key = getPlatformKey();
-    if (!key) {
-      // No platform key — there's nothing to wait on. Drop the gate so
-      // BYOK / local-only users aren't stuck at the loading banner.
-      setAccountLoading(false);
-      return;
-    }
-    try {
-      const res = await apiFetch('/account-info');
-      if (!res?.usage) {
-        setAccountLoading(false);
-        return;
-      }
-      const u = res.usage as Record<string, unknown>;
-      const freeUsed  = Number(u.free_credits_used  ?? u.free_tokens_used  ?? 0);
-      const freeLimit = Number(u.free_credits_limit ?? u.free_tokens_limit ?? 300);
-      const subUsed   = Number(u.credits_used       ?? u.tokens_used       ?? 0);
-      const subLimit  = Number(u.credits_limit      ?? u.tokens_limit      ?? 0);
-      const totalUsed  = freeUsed + subUsed;
-      const totalLimit = freeLimit + subLimit;
-      // Reconcile via max() on `used`. The platform's chat route runs
-      // increment_credits inside Vercel's after() — strictly post-stream-
-      // close. The fetchBalance triggered by the 'done' event will
-      // usually beat that commit, returning a pre-charge value. Without
-      // max() the displayed balance would roll backwards from the
-      // optimistic bump applied in the 'usage' / 'done' handlers.
-      // Once the server's after() commits, the next refresh comes back
-      // higher and replaces the optimistic value cleanly.
-      setCreditBalance((prev) => {
-        const used = prev && prev.used > totalUsed ? prev.used : totalUsed;
-        return { used, limit: totalLimit };
-      });
-      // Mirror to localStorage so the App-level tick engine can fire
-      // low-credit warnings without needing the dashboard mounted.
-      try {
-        localStorage.setItem('ava-platform-balance', JSON.stringify({ used: totalUsed, limit: totalLimit }));
-      } catch { /* quota / disabled — non-fatal */ }
-    } catch { /* non-fatal */ }
-    finally { setAccountLoading(false); }
-  }, []);
-
-  useEffect(() => { fetchBalance(); }, [fetchBalance]);
-  // Refresh balance when streaming ends
-  useEffect(() => { if (!streaming) fetchBalance(); }, [streaming, fetchBalance]);
-  // Also subscribe to the global 'ava-usage-refresh' signal — covers the
-  // case where streaming flips false → true → false within the same render
-  // batch and the streaming-ends effect doesn't fire, plus keeps balance
-  // in sync with anywhere else that dispatches the event.
-  useEffect(() => {
-    const handler = () => { fetchBalance(); };
-    window.addEventListener('ava-usage-refresh', handler);
-    return () => window.removeEventListener('ava-usage-refresh', handler);
-  }, [fetchBalance]);
-
   // ── Local sidecar state ─────────────────────────────────────────────────
-  // chatBackend selects where the chat runs — local sidecar (BYOK) vs the
-  // platform. Binary: the legacy 'both' value migrates to 'cloud'. The
-  // control lives in Settings.
-  const [chatBackend, setChatBackend] = useState<'local' | 'cloud'>(() => {
-    const saved = localStorage.getItem('ava-ide-chat-backend');
-    // Force local if not connected — Cloud needs a platform account
-    if (!checkConnected()) return 'local';
-    return saved === 'local' ? 'local' : 'cloud';
-  });
+  // The chat always runs on the local sidecar, on the user's own keys or a
+  // local model (there are no accounts, 1 Nov 2026).
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
   const [pendingConfirm, setPendingConfirm] = useState<{
@@ -3132,20 +2885,6 @@ export function AvaChatPage() {
     reason: string;
   } | null>(null);
   const [secretGrantInput, setSecretGrantInput] = useState('');
-
-  // ── Usage warning state ──────────────────────────────────────────────
-  const [usageWarning, setUsageWarning] = useState<{ level: string; message: string }>({ level: 'none', message: '' });
-  const fetchUsageWarning = useCallback(async () => {
-    if (!checkConnected()) return;
-    try {
-      const res = await apiFetch('/account-info');
-      if (res?.warning && res.warning !== 'none') {
-        setUsageWarning({ level: res.warning, message: res.warning_message || '' });
-      } else {
-        setUsageWarning({ level: 'none', message: '' });
-      }
-    } catch { /* silent */ }
-  }, []);
 
   // ── Secret Vault state ────────────────────────────────────────────────
   const [secrets, setSecrets] = useState<{ id: string; label: string; value: string }[]>([]);
@@ -3313,14 +3052,8 @@ export function AvaChatPage() {
     const refresh = () => {
       try { setChatUserAvatar(localStorage.getItem('ava-ide-user-avatar') || ''); } catch { /* storage off */ }
     };
-    // Auth too: signing in pulls the avatar down from the account, and
-    // disconnect clears it.
     window.addEventListener('ava-avatar-changed', refresh);
-    window.addEventListener('ava-auth-changed', refresh);
-    return () => {
-      window.removeEventListener('ava-avatar-changed', refresh);
-      window.removeEventListener('ava-auth-changed', refresh);
-    };
+    return () => window.removeEventListener('ava-avatar-changed', refresh);
   }, []);
   // Ava's avatar is brand-locked — sourced from
   // packages/core/assets/ava-avatar.jpeg (copied to public/). The
@@ -3524,23 +3257,10 @@ export function AvaChatPage() {
   // ── BYOK models (reactive — updates when sidebar keys change) ────────────
   const [byokRefresh, setByokRefresh] = useState(0);
 
-  // Which wallet the picker draws from — see activeProviderSource. Signing in
-  // or out changes the answer as much as the toggle does, so both events count.
-  const [providerSource, setProviderSource] = useState<'platform' | 'byok'>(activeProviderSource);
-  useEffect(() => {
-    const refresh = () => setProviderSource(activeProviderSource());
-    window.addEventListener('ava-ide-source-changed', refresh);
-    window.addEventListener('ava-auth-changed', refresh);
-    return () => {
-      window.removeEventListener('ava-ide-source-changed', refresh);
-      window.removeEventListener('ava-auth-changed', refresh);
-    };
-  }, []);
   useEffect(() => {
     const handler = () => setByokRefresh(n => n + 1);
-    window.addEventListener('storage', handler);
     window.addEventListener('ava-byok-changed', handler);
-    return () => { window.removeEventListener('storage', handler); window.removeEventListener('ava-byok-changed', handler); };
+    return () => window.removeEventListener('ava-byok-changed', handler);
   }, []);
 
   // Forward working hours changes to sidecar (zero tokens — only fires on pin drag)
@@ -3556,77 +3276,33 @@ export function AvaChatPage() {
     return () => window.removeEventListener('ava-working-hours-changed', handler);
   }, []);
 
-  const byokModels = useMemo(() => {
-    void byokRefresh; // trigger recalc
-    try {
-      const raw = localStorage.getItem('ava-ide-byok');
-      if (!raw) return [];
-      const keys: Record<string, string> = JSON.parse(raw);
-      const result: { id: string; name: string; provider: string }[] = [];
-      for (const [provider, key] of Object.entries(keys)) {
-        if (key && key.trim()) {
-          const models = BYOK_MODELS[provider] || [];
-          models.forEach((m) => result.push({ ...m, provider }));
-        }
-      }
-      return result;
-    } catch { return []; }
-  }, [byokRefresh]);
-
   // Providers the user has a key for — drives which catalogue models are live.
   const keyedProviders = useMemo(() => {
     void byokRefresh;
-    try {
-      const raw = localStorage.getItem('ava-ide-byok');
-      if (!raw) return new Set<string>();
-      const keys: Record<string, string> = JSON.parse(raw);
-      return new Set(Object.entries(keys).filter(([, v]) => v && v.trim()).map(([k]) => k));
-    } catch { return new Set<string>(); }
+    return keyedFields();
   }, [byokRefresh]);
+
+  // Every model the user's keys reach (store-field name → models).
+  const byokModels = useMemo(() => {
+    const result: { id: string; name: string; provider: string }[] = [];
+    for (const [store, models] of Object.entries(BYOK_MODELS)) {
+      if (keyedProviders.has(store)) models.forEach((m) => result.push({ ...m, provider: store }));
+    }
+    return result;
+  }, [keyedProviders, BYOK_MODELS]);
 
   // Full picker catalogue — mirrors the extension's ModelSelector exactly:
   // providers alphabetical by label, models sorted by name, extension display
   // labels (Kimi / GLM, not Moonshot / Zhipu), availability per BYOK key.
   const MODEL_CATALOGUE = useMemo(() => {
     const STORE = BYOK_STORE_NAMES;
-    // A model is live if you hold that provider's key, OR your PLAN serves it.
-    //
-    // Platform models are not a section. Signing in simply makes the models
-    // your plan drives ACTIVE under their own provider heading — DeepSeek V4
-    // Pro under DEEPSEEK, Kimi K3 under KIMI — exactly as the extension does.
-    // GLM stays greyed because no plan serves it.
-    //
-    // Availability is PER MODEL, not per group. The plan serves Qwen 3.7 Plus
-    // but not Qwen3 Coder Flash, so a group-level flag would light up models
-    // the plan cannot actually drive.
-    //
-    // Ids are matched with the `-platform` disambiguator stripped: the managed
-    // entry for deepseek-flash is deepseek-flash-platform, while qwen3.7-plus
-    // carries no suffix at all.
-    const planServes = new Set(
-      connected
-        ? PLATFORM_MODELS
-            .filter((m) => !m.disabled && !m.hiddenFromPicker)
-            .map((m) => m.id.replace(/-platform$/, ''))
-        : [],
-    );
-
-    // THE SOURCE TOGGLE DECIDES WHAT IS ON OFFER.
-    //
-    // On Platform a plan reaches the fleets and the singles the platform also
-    // serves — DeepSeek, Qwen, Kimi, Mistral. It cannot reach GLM, Xiaomi,
-    // Tencent or NVIDIA, so listing those was offering rows you could only
-    // fail at. They are one toggle away, which is where they belong.
-    //
-    // On API Key the whole catalogue shows, and availability stops being a
-    // plan question: without the key there is nothing behind the row.
+    // A model is live once you hold that provider's key.
     return Object.entries(ALL_MODELS)
       .map(([id, models]) => {
         const hasKey = STORE[id] ? keyedProviders.has(STORE[id]) : false;
         const entries = models
           .filter((m) => !m.disabled && !m.hiddenFromPicker)
-          .filter((m) => providerSource !== 'platform' || planServes.has(m.id))
-          .map((m) => ({ id: m.id, name: m.name, available: providerSource === 'platform' ? planServes.has(m.id) : hasKey }))
+          .map((m) => ({ id: m.id, name: m.name, available: hasKey }))
           .sort((a, b) => (a.available === b.available ? a.name.localeCompare(b.name) : a.available ? -1 : 1));
         return {
           id,
@@ -3637,7 +3313,7 @@ export function AvaChatPage() {
       })
       .filter((g) => g.models.length > 0)
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [keyedProviders, connected, providerSource]);
+  }, [keyedProviders]);
 
   // The chosen model has no key for its provider. Derived from the SAME
   // catalogue the picker renders, so the notice and the row can never disagree
@@ -3652,24 +3328,13 @@ export function AvaChatPage() {
   }, [MODEL_CATALOGUE, model]);
 
   // ── Derived: can the user actually chat? ────────────────────────────────
-  const hasByokKeys = byokModels.length > 0;
-  // First-load gate — locks the chat input while account or history are
-  // still loading. Mirrors the extension chat panel.
-  const dataLoading = accountLoading || historyLoading;
-  const canChat = !dataLoading && (chatBackend === 'local' ? (hasByokKeys || connected) : connected);
+  // A provider key, or a local model. byokRefresh re-reads it when keys change.
+  const hasByokKeys = useMemo(() => { void byokRefresh; return hasChatCapability(); }, [byokRefresh]);
+  const dataLoading = historyLoading;
+  const canChat = !dataLoading && hasByokKeys;
   const chatInactiveReason = dataLoading
-    ? (accountLoading && historyLoading
-        ? 'Loading your account and chat history…'
-        : accountLoading
-          ? 'Loading your account…'
-          : 'Loading your chat history…')
-    : !canChat
-      ? (!connected && !hasByokKeys
-        ? t('dash.chat.inactive_no_keys')
-        : chatBackend === 'cloud' && !connected
-          ? t('dash.chat.inactive_no_cloud')
-          : '')
-      : '';
+    ? 'Loading your chat history…'
+    : !canChat ? t('dash.chat.inactive_no_keys') : '';
 
   // ── Persist model & mode ──────────────────────────────────────────────────
   useEffect(() => {
@@ -3809,12 +3474,12 @@ export function AvaChatPage() {
 
   const handleOpenTasksFolder = useCallback(async () => {
     try {
-      const [{ openPath }, { mkdir, BaseDirectory }, { accountRoot }] = await Promise.all([
+      const [{ openPath }, { mkdir, BaseDirectory }, { dataRoot }] = await Promise.all([
         import('@tauri-apps/plugin-opener'),
         import('@tauri-apps/plugin-fs'),
-        import('../lib/account-scope'),
+        import('../lib/data-root'),
       ]);
-      await mkdir(`${await accountRoot()}/tasks`, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+      await mkdir(`${await dataRoot()}/tasks`, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
       await openPath(await tasksFolderPath());
     } catch (e) { console.warn('[tasks] open folder failed', e); }
   }, []);
@@ -3987,11 +3652,6 @@ export function AvaChatPage() {
   // Switching conversation is a fresh landing, not a new message.
   useEffect(() => { hasLandedRef.current = false; }, [currentConvId]);
 
-  // ── Usage warning check (on mount + after messages change while not streaming) ──
-  useEffect(() => {
-    if (!streaming) fetchUsageWarning();
-  }, [messages.length, streaming, fetchUsageWarning]);
-
   // ── Close dropdowns on outside click ──────────────────────────────────────
   useEffect(() => {
     if (!modeMenuOpen && !modelMenuOpen) return;
@@ -4097,26 +3757,6 @@ export function AvaChatPage() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // ── Persist chat backend ─────────────────────────────────────────────────
-  // chatBackend is where the chat runs. The chat-backend control lives in
-  // Settings, which dispatches
-  // 'ava-chat-backend-changed'; this component owns the state + persists it.
-  useEffect(() => {
-    try {
-      localStorage.setItem('ava-ide-chat-backend', chatBackend);
-    } catch { /* */ }
-  }, [chatBackend]);
-
-  // Honour chat-backend changes made from the Settings page.
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const next = (e as CustomEvent<{ backend: 'local' | 'cloud' }>).detail?.backend;
-      if (next === 'local' || next === 'cloud') setChatBackend(next);
-    };
-    window.addEventListener('ava-chat-backend-changed', handler);
-    return () => window.removeEventListener('ava-chat-backend-changed', handler);
-  }, []);
-
   // Ref to hold the latest event handler — set synchronously, never null after mount
   const sidecarEventRef = useRef<(event: SidecarEvent) => void>(() => {});
 
@@ -4135,73 +3775,12 @@ export function AvaChatPage() {
     const startSidecar = async () => {
       setSidecarStatus('starting');
       try {
-        // Build config from localStorage BYOK keys
-        const providers: Record<string, { apiKey: string }> = {};
-        try {
-          const raw = localStorage.getItem('ava-ide-byok');
-          if (raw) {
-            const keys: Record<string, string> = JSON.parse(raw);
-            const nameMap: Record<string, string> = { DeepSeek: 'deepseek', Qwen: 'qwen', Moonshot: 'kimi', Zhipu: 'glm', Mistral: 'mistral' };
-            for (const [name, key] of Object.entries(keys)) {
-              if (key?.trim()) {
-                const mapped = nameMap[name] || name.toLowerCase();
-                providers[mapped] = { apiKey: key.trim() };
-              }
-            }
-          }
-        } catch { /* */ }
-
-        const modelMap = SIDECAR_MODEL_MAP;
-
-        // Read working hours from localStorage
-        const workStart = Number(localStorage.getItem('ava-ide-work-start')) || 9;
-        const workEnd = Number(localStorage.getItem('ava-ide-work-end')) || 17;
-
-        // Local / custom OpenAI-compatible provider (Ollama, LM Studio, vLLM).
-        // Operator configures via Settings → Models → Local. Both fields
-        // required to register; if either is missing we just don't pass it
-        // and the sidecar skips registration cleanly.
-        const localBaseUrl = localStorage.getItem('ava-ide-local-baseurl') || '';
-        const localModelName = localStorage.getItem('ava-ide-local-model') || '';
-        const localApiKey = localStorage.getItem('ava-ide-local-apikey') || '';
-        const localModelLabel = localStorage.getItem('ava-ide-local-label') || '';
-        let localModels: string[] = [];
-        try { const v = JSON.parse(localStorage.getItem('ava-ide-local-models') || '[]'); if (Array.isArray(v)) localModels = v; } catch { /* ignore */ }
-        const localBlock = (localBaseUrl && (localModels.length > 0 || localModelName))
-          ? { baseUrl: localBaseUrl, modelName: localModelName, apiKey: localApiKey || undefined, modelLabel: localModelLabel || undefined, models: localModels.length ? localModels : undefined }
-          : undefined;
-
-        // BYOK toggle: when the user has flipped to their own keys, withhold the
-        // platform key so the sidecar coordinator runs BYOK (hasPlatform false)
-        // and the whole persona team pins to their chosen model. Mirror of the
-        // extension's provider-source gate.
-        const usePlatform = (() => {
-          try { return localStorage.getItem('ava-ide-use-platform') !== '0'; } catch { return true; }
-        })();
-        const config: SidecarConfig = {
-          providers,
-          platformKey: usePlatform ? (getPlatformKey() || undefined) : undefined,
-          // Sidecar resolves bare 'auto'/'supernova' via AutoCoordinator; raw
-          // model ids without a known mapping get a `platform:` prefix so the
-          // ProviderRegistry resolver can find them. Never silently coerce
-          // to `qwen:` — that produces nonsense ids like `qwen:supernova` and
-          // makes the resolver fall back to qwen3.5-flash without warning.
-          activeModel: modelMap[model] || (isRoutingMode(model) ? model : `platform:${model}`),
-          cwd: localStorage.getItem('ava-ide-project-folder') || '.',
-          mode,
-          permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
-          autoMemory: true,
-          workingHours: { start: workStart, end: workEnd },
-          userName: localStorage.getItem('ava-ide-user-name') || localStorage.getItem('ava-ide-email')?.split('@')[0] || undefined,
-          userEmail: localStorage.getItem('ava-ide-email') || undefined,
-          userTier: localStorage.getItem('ava-ide-tier') || undefined,
-          _devPlatformFallback: usePlatform && !!getPlatformKey(),
-          local: localBlock,
-          // Opt-in local semantic recall — mirror of the extension setting.
-          useLocalEmbeddings: localStorage.getItem('ava-ide-embeddings-enabled') === '1',
-          embeddingModel: localStorage.getItem('ava-ide-embeddings-model') || undefined,
-          embeddingBaseUrl: localStorage.getItem('ava-ide-embeddings-baseurl') || undefined,
-        } as SidecarConfig;
+        // The shared builder (lib/sidecar-boot.ts) — every saved key, the
+        // local model, embeddings. This page used to keep its own copy that
+        // knew five providers, so a MiniMax / Xiaomi / Tencent / NVIDIA key
+        // never reached the sidecar from here. Model and mode are this page's.
+        await ensureDataHome();
+        const config: SidecarConfig = { ...buildSidecarConfig(), activeModel: resolveSidecarModel(model), mode };
 
         await sidecar.start(config);
 
@@ -4258,14 +3837,15 @@ export function AvaChatPage() {
     };
     window.addEventListener('ava-folder-changed', onFolderChanged);
 
-    // Platform/BYOK toggle flipped — full re-init so availableProviders +
-    // platformKey are rebuilt and routing actually switches source.
-    const onSourceChanged = () => {
+    // The sidecar restarted elsewhere (a key was added or removed — App
+    // restarts it so the new key registers). Our handler lives on the
+    // manager and survives the restart; only the ready flag needs setting.
+    const onReady = () => {
       if (cancelled) return;
-      setSidecarReady(false);
-      sidecar.stop().catch(() => {}).finally(() => { if (!cancelled) startSidecar(); });
+      setSidecarReady(true);
+      setSidecarStatus('ready');
     };
-    window.addEventListener('ava-ide-source-changed', onSourceChanged);
+    sidecar.on('ready', onReady);
 
     return () => {
       cancelled = true;
@@ -4273,7 +3853,7 @@ export function AvaChatPage() {
       if ((sidecar as any).__avaHandler) sidecar.offAny((sidecar as any).__avaHandler);
       window.removeEventListener('ava-clear-memory', onClearMemory);
       window.removeEventListener('ava-folder-changed', onFolderChanged);
-      window.removeEventListener('ava-ide-source-changed', onSourceChanged);
+      sidecar.off('ready', onReady);
       // Do NOT stop the sidecar on a canChat change. A transient connectivity blip
       // flips canChat false for a moment; killing the sidecar here (an intentional
       // stop the manager won't auto-respawn) is precisely what left the design chat
@@ -4359,9 +3939,7 @@ export function AvaChatPage() {
       // Same orchestrated-id passthrough as init: 'auto' / 'supernova' /
       // 'aurora' must not get a provider prefix or the sidecar's
       // AutoCoordinator handler misses them.
-      sidecar.setModel(
-        SIDECAR_MODEL_MAP[model] || (isRoutingMode(model) ? model : `platform:${model}`),
-      ).catch(() => {});
+      sidecar.setModel(resolveSidecarModel(model)).catch(() => {});
     }
     if (mode !== prevModeRef.current) {
       const previousMode = prevModeRef.current;
@@ -4796,25 +4374,6 @@ export function AvaChatPage() {
 
       case 'usage':
         if (event.usage) {
-          // Convert raw token usage to credits per turn so the session
-          // counter speaks the same unit as the platform billing UI.
-          // creditsForTurn applies bracket scaling + per-model multipliers
-          // identical to the server-side metering, so the local count is a
-          // faithful estimate of what the turn would actually charge.
-          const { credits } = creditsForTurn('chat_turn', {
-            inputTokens: event.usage.prompt_tokens || 0,
-            outputTokens: event.usage.completion_tokens || 0,
-            model,
-          });
-          setTokenCount((prev) => prev + credits);
-          // Optimistic balance bump — the platform's chat route runs
-          // increment_credits inside Vercel's after() so it commits
-          // strictly after the response closes. The post-`done`
-          // /account-info refetch races that commit and usually wins,
-          // returning the pre-charge value. Bumping the displayed used
-          // here keeps the bar moving in sync with the turn; fetchBalance
-          // reconciles via max() once the server catches up.
-          setCreditBalance((prev) => prev ? { ...prev, used: prev.used + credits } : prev);
           trackTokenUsage(event.usage, model);
           usageEventFiredThisTurn.current = true;
         }
@@ -4856,42 +4415,8 @@ export function AvaChatPage() {
           win.unminimize().then(() => win.setFocus()).catch(() => {});
         }
 
-        // Fallback per-session token estimate when no 'usage' event fired
-        // this turn (provider didn't include usage in stream chunks). A
-        // crude 4-chars-per-token approximation keeps the session counter
-        // moving so the user has *some* signal. Real billing is server-side
-        // via /account-info — this is purely the local session display.
-        if (!usageEventFiredThisTurn.current) {
-          const last = (event.content as string) || '';
-          if (last) {
-            const estOutput = Math.max(1, Math.ceil(last.length / 4));
-            const { credits } = creditsForTurn('chat_turn', {
-              inputTokens: 0,
-              outputTokens: estOutput,
-              model,
-            });
-            setTokenCount((prev) => prev + credits);
-            // Same optimistic bump as the 'usage' branch — covers
-            // providers that don't emit a usage chunk so the balance
-            // bar still moves on every turn.
-            setCreditBalance((prev) => prev ? { ...prev, used: prev.used + credits } : prev);
-          }
-        }
-
-        // Refresh server-side usage / balance views (Usage page, account
-        // balance bar, etc). useApiData hooks listen for this event and
-        // refetch their endpoints — without this they only fetch on mount
-        // and the dashboard shows a frozen snapshot of usage.
+        // Refresh the local usage views (Usage page) — they listen for this.
         window.dispatchEvent(new CustomEvent('ava-usage-refresh'));
-        // Second pulse a few seconds later so the authoritative server
-        // value lands once Vercel's after() has finished committing
-        // increment_credits. Without this, the optimistic bar stays at
-        // its predicted value indefinitely if the user doesn't navigate
-        // away — fetchBalance's max() reconciliation needs a fresh
-        // server read to converge.
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('ava-usage-refresh'));
-        }, 2500);
 
         // Mode transition: if switch_mode was approved, start new run in target mode
         if (pendingModeTransitionRef.current) {
@@ -5007,7 +4532,6 @@ export function AvaChatPage() {
     ]);
     setConversationTitle(t('dash.chat.new_chat'));
     setCurrentConvId(null);
-    setTokenCount(0);
     setContextPercent(0);
     resetSessionStats();
     // Move completed session tasks to history, clear session
@@ -5052,20 +4576,10 @@ export function AvaChatPage() {
     const sidecar = getSidecar();
     sidecar.cancel().catch(() => {
       sidecar.stop().then(() => {
-        const useP = (() => { try { return localStorage.getItem('ava-ide-use-platform') !== '0'; } catch { return true; } })();
-        sidecar.start({
-          providers: {},
-          platformKey: useP ? (getPlatformKey() || undefined) : undefined,
-          activeModel: `platform:${model}`,
-          cwd: localStorage.getItem('ava-ide-project-folder') || '.',
-          mode,
-          permissionMode: (localStorage.getItem('ava-ide-settings') ? JSON.parse(localStorage.getItem('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
-          autoMemory: true,
-          _devPlatformFallback: useP,
-          useLocalEmbeddings: localStorage.getItem('ava-ide-embeddings-enabled') === '1',
-          embeddingModel: localStorage.getItem('ava-ide-embeddings-model') || undefined,
-          embeddingBaseUrl: localStorage.getItem('ava-ide-embeddings-baseurl') || undefined,
-        } as SidecarConfig).catch(() => {});
+        // The same config as a normal start. This used to restart with
+        // `providers: {}`, so after a hard stop only the platform key could
+        // run anything and a BYOK user was left with a dead chat.
+        sidecar.start({ ...buildSidecarConfig(), activeModel: resolveSidecarModel(model), mode }).catch(() => {});
       }).catch(() => {});
     });
     setPendingConfirm(null);
@@ -5351,256 +4865,6 @@ export function AvaChatPage() {
     }
   }, []);
 
-  /* ── Cloud SSE fallback — disabled, all messages go through sidecar ──
-  const _sendCloud_disabled = useCallback(async (_text: string, allMessages: ChatMessage[]) => {
-    if (!connected) {
-      setMessages((prev) => [...prev, {
-        id: mkId(), role: 'error' as const,
-        text: t('dash.chat.not_connected'),
-        timestamp: Date.now(),
-      }]);
-      return;
-    }
-
-    setStreaming(true);
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    const modeInfo = MODES.find((m) => m.id === mode)!;
-
-    // Build API messages, applying mode prefix
-    const apiMessages = allMessages.map((m) => ({
-      role: m.role === 'user' ? 'user' : m.role === 'ava' ? 'assistant' : 'user',
-      content: m.text,
-    }));
-    if (modeInfo.prefix && apiMessages.length > 0) {
-      const last = apiMessages[apiMessages.length - 1];
-      apiMessages[apiMessages.length - 1] = { ...last, content: modeInfo.prefix + last.content };
-    }
-
-    const avaMsg: ChatMessage = { id: mkId(), role: 'ava', text: '', timestamp: Date.now(), toolCalls: [] };
-    setMessages((prev) => [...prev, avaMsg]);
-
-    try {
-      const key = getPlatformKey();
-      const response = await fetch(apiStreamUrl('/chat'), {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Ava-Platform': 'ide', 'X-Ava-Device': localStorage.getItem('ava-ide-device-id') || '' },
-        body: JSON.stringify({ model, messages: apiMessages }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        setMessages((prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          if (last && last.role === 'ava') {
-            copy[copy.length - 1] = { ...last, text: `Error: ${response.status} -- ${errText}`, role: 'error' };
-          }
-          return copy;
-        });
-        setStreaming(false);
-        abortRef.current = null;
-        return;
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-
-      // ── JSON response (non-streaming) ────────────────────────────────
-      if (contentType.includes('application/json')) {
-        const json = await response.json();
-        const text = json.choices?.[0]?.message?.content
-          || json.choices?.[0]?.delta?.content
-          || json.content
-          || json.text
-          || json.response
-          || (typeof json === 'string' ? json : '');
-
-        if (json.error) {
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            if (last && last.role === 'ava') {
-              copy[copy.length - 1] = { ...last, text: `Error: ${json.error.message || json.error}`, role: 'error' };
-            }
-            return copy;
-          });
-        } else if (text) {
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            if (last && last.role === 'ava') {
-              copy[copy.length - 1] = { ...last, text };
-            }
-            return copy;
-          });
-        }
-
-        if (json.usage) {
-          const { credits } = creditsForTurn('chat_turn', {
-            inputTokens: json.usage.prompt_tokens || 0,
-            outputTokens: json.usage.completion_tokens || 0,
-            model,
-          });
-          setTokenCount((prev) => prev + credits);
-          trackTokenUsage(json.usage, model);
-        }
-        trackMessage(model);
-      }
-      // ── SSE streaming response ───────────────────────────────────────
-      else {
-        const reader = response.body?.getReader();
-        if (!reader) {
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            if (last && last.role === 'ava') {
-              copy[copy.length - 1] = { ...last, text: t('dash.chat.no_stream'), role: 'error' };
-            }
-            return copy;
-          });
-          setStreaming(false);
-          abortRef.current = null;
-          return;
-        }
-
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let sessionTokens = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
-            if (trimmedLine === 'data: [DONE]') continue;
-
-            if (trimmedLine.startsWith('data: ')) {
-              try {
-                const json = JSON.parse(trimmedLine.slice(6));
-
-                if (json.choices?.[0]?.delta?.tool_calls || json.tool_calls) {
-                  const toolCalls = json.choices?.[0]?.delta?.tool_calls || json.tool_calls || [];
-                  for (const tc of toolCalls) {
-                    if (tc.function?.name) {
-                      setMessages((prev) => {
-                        const copy = [...prev];
-                        const last = copy[copy.length - 1];
-                        if (last && last.role === 'ava') {
-                          const existing = last.toolCalls || [];
-                          copy[copy.length - 1] = {
-                            ...last,
-                            toolCalls: [...existing, { name: tc.function.name, status: 'running' }],
-                          };
-                        }
-                        return copy;
-                      });
-                    }
-                  }
-                  continue;
-                }
-
-                if (json.usage) {
-                  const { credits } = creditsForTurn('chat_turn', {
-                    inputTokens: json.usage.prompt_tokens || 0,
-                    outputTokens: json.usage.completion_tokens || 0,
-                    model,
-                  });
-                  sessionTokens += credits;
-                  setTokenCount(sessionTokens);
-                  trackTokenUsage(json.usage, model);
-                  if (json.usage.prompt_tokens && json.usage.completion_tokens) {
-                    const total = json.usage.prompt_tokens + json.usage.completion_tokens;
-                    // Use model's actual context window for percentage
-                    const MODEL_CTX: Record<string, number> = {
-                      'qwen3.7-plus': 1048576, 'qwen3.8-max': 1048576,
-                      // 3.7 Max retired 2026-08-09 and rolls forward to 3.8 Max.
-                      // Kept so a session that started before the rollforward
-                      // still reports its context rather than hitting a default.
-                      'qwen3.7-max': 1048576,
-                      'kimi-k3': 1000000, 'kimi-k2.7-code': 256000, 'kimi-k2.6': 262144,
-                      'MiniMax-M3': 1048576, 'MiniMax-M2.7': 204800, 'MiniMax-M2.7-highspeed': 204800,
-                      'qwen3.5-omni-flash': 262144, 'qwen3.5-omni-plus': 262144, 'qwen3.5-plus': 1048576,
-                      // DeepSeek V4 is 1M context — the 131072 here was V3-era and
-                      // made the context meter read ~8x fuller than reality.
-                      'qwen3.5-flash': 262144, 'qwen3.7-flash': 1000000, 'qwen3-coder-next': 256000, 'qwen3-coder-flash': 1000000, 'deepseek-flash': 1000000, 'deepseek-flash': 1000000,
-                      'glm-5.3': 1000000, 'glm-5.3-flash': 1000000,
-                      'hy3': 262144,
-                      'nvidia/nemotron-3-ultra-550b-a55b': 1000000,
-                      // Lightning is also 1M. Missing here it fell to the
-                      // 131072 default below and the context meter would have
-                      // read ~8x fuller than reality — the same fault the
-                      // DeepSeek note above records.
-                      'nvidia/nemotron-3.5-lightning-30b-a3b': 1000000,
-                    };
-                    const ctxWindow = MODEL_CTX[model] || 131072;
-                    setContextPercent(Math.min(100, Math.round((total / ctxWindow) * 100)));
-                  }
-                }
-
-                const content = json.choices?.[0]?.delta?.content
-                  || json.delta?.content
-                  || json.content
-                  || json.text
-                  || '';
-                if (content) {
-                  setMessages((prev) => {
-                    const copy = [...prev];
-                    const last = copy[copy.length - 1];
-                    if (last && last.role === 'ava') {
-                      copy[copy.length - 1] = { ...last, text: last.text + content };
-                    }
-                    return copy;
-                  });
-                }
-
-                if (json.error) {
-                  setMessages((prev) => {
-                    const copy = [...prev];
-                    const last = copy[copy.length - 1];
-                    if (last && last.role === 'ava') {
-                      copy[copy.length - 1] = { ...last, text: `Error: ${json.error.message || json.error}`, role: 'error' };
-                    }
-                    return copy;
-                  });
-                }
-              } catch {
-                // Non-JSON SSE line
-              }
-            }
-          }
-        }
-      }
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        setMessages((prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          if (last && last.role === 'ava' && !last.text) {
-            copy[copy.length - 1] = { ...last, text: t('dash.chat.cancelled'), role: 'system' };
-          }
-          return copy;
-        });
-      } else {
-        setMessages((prev) => [...prev, {
-          id: mkId(), role: 'error' as const,
-          text: t('dash.chat.connection_error').replace('{msg}', err.message || t('dash.chat.unknown_error')),
-          timestamp: Date.now(),
-        }]);
-      }
-    }
-
-    setStreaming(false);
-    abortRef.current = null;
-    textareaRef.current?.focus();
-  }, [mode, model, connected]); */
 
   /**
    * Send WHILE SHE IS WORKING. The message queues and she folds it in at the
@@ -5825,7 +5089,7 @@ export function AvaChatPage() {
               }}
             >
               <span style={{
-                width: 7, height: 7, borderRadius: '50%', background: connected ? '#a6e3a1' : '#6c7086',
+                width: 7, height: 7, borderRadius: '50%', background: sidecarStatus === 'ready' ? '#a6e3a1' : '#6c7086',
                 flexShrink: 0,
               }} />
               {activeModelName}
@@ -5965,15 +5229,13 @@ export function AvaChatPage() {
 
         {/* Right: sidecar status + tokens + new chat */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Local sidecar status — read-only. Shown only when the chat
-              backend is the local sidecar (set in Settings), so the
-              operator can see at a glance whether the local model is
-              ready. Not a control. */}
-          {chatBackend === 'local' && (() => {
+          {/* Sidecar status — read-only, so the operator can see at a glance
+              whether Ava is ready. Not a control. */}
+          {(() => {
             // "off" has two very different causes. Nothing to run on (no chat
-            // key, no account) is the one worth naming — it is fixable, and
+            // key, no local model) is the one worth naming — it is fixable, and
             // the old label made it look like a switch you had turned down.
-            const noKey = sidecarStatus === 'off' && !hasByokKeys && !connected;
+            const noKey = sidecarStatus === 'off' && !hasByokKeys;
             const tone = sidecarStatus === 'ready' ? '#a6e3a1'
               : sidecarStatus === 'starting' ? '#eab308'
               : sidecarStatus === 'error' ? '#ef4444'
@@ -6007,30 +5269,6 @@ export function AvaChatPage() {
               </Tooltip>
             );
           })()}
-
-          {/* Credit display — platform balance when signed in, or local
-              session credit estimate (computed via creditsForTurn so the unit
-              matches platform billing) when running standalone. */}
-          {creditBalance && connected ? (() => {
-            const isAdmin = creditBalance.limit >= 999_999_999;
-            if (isAdmin) return (
-              <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', opacity: 0.5 }} title={`Unlimited credits — ${tokenCount.toLocaleString()} used this session`}>
-                ∞ {tokenCount > 0 ? `· ${tokenCount.toLocaleString()} session` : 'credits'}
-              </span>
-            );
-            const remaining = Math.max(0, creditBalance.limit - creditBalance.used);
-            const pct = creditBalance.limit > 0 ? (creditBalance.used / creditBalance.limit) * 100 : 0;
-            const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
-            return (
-              <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color }} title={`${remaining.toLocaleString()} of ${creditBalance.limit.toLocaleString()} credits remaining (${Math.round(pct)}% used)`}>
-                {remaining.toLocaleString()} left
-              </span>
-            );
-          })() : (
-            <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace' }} title={`${tokenCount.toLocaleString()} credits used this session`}>
-              {tokenCount > 0 ? `${tokenCount.toLocaleString()} credits` : '0 credits'}
-            </span>
-          )}
 
           {/* Context usage indicator moved to the top of the chat area
               as a horizontal ContextBar (mirroring the VSCode extension's
@@ -6110,25 +5348,6 @@ export function AvaChatPage() {
         </div>
       </div>
 
-      {/* ── Credit usage bar ───────────────────────────────────────────── */}
-      {creditBalance && connected && creditBalance.limit > 0 && creditBalance.limit < 999_999_999 && (() => {
-        const remaining = Math.max(0, creditBalance.limit - creditBalance.used);
-        const pct = Math.max(0, Math.min(100, (remaining / creditBalance.limit) * 100));
-        const color = pct <= 5 ? '#ef4444' : pct <= 20 ? '#eab308' : 'var(--accent)';
-        return (
-          <div style={{ padding: '0 16px 6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ flex: 1, height: 4, borderRadius: 4, overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
-                <div style={{ width: `${pct}%`, height: '100%', borderRadius: 4, background: color, transition: 'width 0.5s' }} />
-              </div>
-              <span style={{ fontSize: 9, fontFamily: 'monospace', color, opacity: pct <= 20 ? 0.9 : 0.4, flexShrink: 0 }}>
-                {remaining.toLocaleString()} left
-              </span>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* First-load takeover — full-area spinner replaces the previous
           thin banner, which was too easy to miss. The chat surface
           stays empty-looking until data arrives; the spinner makes
@@ -6157,11 +5376,7 @@ export function AvaChatPage() {
             }}
           />
           <div style={{ fontSize: 12, color: '#a6adc8' }}>
-            {accountLoading && historyLoading
-              ? 'Loading your account and chat history…'
-              : accountLoading
-                ? 'Loading your account…'
-                : 'Loading your chat history…'}
+            {'Loading your chat history…'}
           </div>
           <style>{`
             @keyframes avaSpin { to { transform: rotate(360deg); } }
@@ -7550,20 +6765,6 @@ export function AvaChatPage() {
             )}
           </div>
 
-          {/* Usage warning banner — top of the composer, below the header, so a
-             credit / quota notice never inflates the input box height. */}
-          {usageWarning.level !== 'none' && usageWarning.message && (
-            <div style={{
-              marginBottom: 8, padding: '6px 10px', borderRadius: 8, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6,
-              background: usageWarning.level === 'exhausted' ? 'rgba(239,68,68,0.12)' : usageWarning.level === 'critical' ? 'rgba(249,115,22,0.12)' : 'rgba(234,179,8,0.08)',
-              color: usageWarning.level === 'exhausted' ? '#f38ba8' : usageWarning.level === 'critical' ? '#fab387' : '#f9e2af',
-              border: `1px solid ${usageWarning.level === 'exhausted' ? 'rgba(239,68,68,0.2)' : usageWarning.level === 'critical' ? 'rgba(249,115,22,0.2)' : 'rgba(234,179,8,0.15)'}`,
-            }}>
-              <span>{usageWarning.level === 'exhausted' ? '⛔' : usageWarning.level === 'critical' ? '⚠' : '○'}</span>
-              <span style={{ flex: 1 }}>{usageWarning.message}</span>
-            </div>
-          )}
-
           {/* Desktop Automation control deck — a purpose-built surface for
              driving the machine: trust posture, always-visible permission
              meaning, quick-starts, and the kill-switch. Stacks above the input
@@ -7862,9 +7063,7 @@ export function AvaChatPage() {
                 placeholder={
                   !canChat
                     ? chatInactiveReason
-                    : chatBackend === 'local'
-                      ? (sidecarReady ? (mode === 'work' && talk ? tt('dash.chat.placeholder_talk', "Let's talk it through — I'll read, not change anything") : currentMode.placeholder) : t('dash.chat.starting_local'))
-                      : currentMode.placeholder
+                    : (sidecarReady ? (mode === 'work' && talk ? tt('dash.chat.placeholder_talk', "Let's talk it through — I'll read, not change anything") : currentMode.placeholder) : t('dash.chat.starting_local'))
                 }
                 disabled={!canChat}
                 rows={1}
@@ -7963,24 +7162,6 @@ export function AvaChatPage() {
             </button>
             </Tooltip>
 
-            {/* Credit balance in input bar */}
-            {connected && creditBalance && (() => {
-              const isAdmin = creditBalance.limit >= 999_999_999;
-              if (isAdmin) return (
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#6c7086', opacity: 0.5, flexShrink: 0 }} title={`Unlimited credits — ${tokenCount.toLocaleString()} used this session`}>
-                  {tokenCount > 0 ? `∞ · ${tokenCount.toLocaleString()}` : '∞'}
-                </span>
-              );
-              const remaining = Math.max(0, creditBalance.limit - creditBalance.used);
-              const pct = creditBalance.limit > 0 ? (creditBalance.used / creditBalance.limit) * 100 : 0;
-              const color = pct >= 95 ? '#ef4444' : pct >= 80 ? '#eab308' : '#a6e3a1';
-              return (
-                <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color, flexShrink: 0 }} title={`${remaining.toLocaleString()} credits remaining`}>
-                  {remaining.toLocaleString()}
-                </span>
-              );
-            })()}
-
             {/* Talk | Build — Code mode only. Every other mode already decides
                 for itself whether it builds. Mirrors the extension's InputArea. */}
             {mode === 'work' && (
@@ -8064,7 +7245,7 @@ export function AvaChatPage() {
             ) : (
               <button
                 onClick={send}
-                disabled={!canChat || !input.trim() || (chatBackend === 'local' ? !sidecarReady : !connected)}
+                disabled={!canChat || !input.trim() || !sidecarReady}
                 style={{
                   width: 36, height: 36, borderRadius: 8, flexShrink: 0,
                   border: canChat && input.trim() ? '1px solid color-mix(in srgb, var(--accent) 50%, transparent)' : '1px solid color-mix(in srgb, var(--accent) 8%, transparent)',
@@ -8181,12 +7362,9 @@ export function AvaChatPage() {
               { id: 'kimi-k3', label: 'Kimi K3', note: 'Moonshot frontier model. 1M context.' },
               { id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code', note: 'Agentic coding leader.' },
             ]).map(opt => {
-              // Every Kimi model is BYOK-only — was a hardcoded equality check
-              // against K2.7 Code, which silently enabled K3 for everyone the
-              // moment it was added here.
-              const isByokOnly = opt.id.startsWith('kimi-');
-              const hasKey = byokModels.some(m => m.id === opt.id);
-              const enabled = !isByokOnly || hasKey;
+              // Each needs its key: Maestro the Qwen key, a single model its
+              // own provider's.
+              const enabled = opt.id === 'auto' ? modeAvailability.maestro : byokModels.some(m => m.id === opt.id);
               return (
                 <button
                   key={opt.id}
@@ -8211,7 +7389,7 @@ export function AvaChatPage() {
                     <span style={{ fontSize: 10, color: '#6c7086' }}>{opt.note}</span>
                   </div>
                   <span style={{ fontSize: 10, color: enabled ? 'var(--accent)' : '#6c7086', flexShrink: 0, marginLeft: 12 }}>
-                    {enabled ? 'Switch →' : (isByokOnly ? 'BYOK key needed' : '')}
+                    {enabled ? 'Switch →' : 'Key needed'}
                   </span>
                 </button>
               );
@@ -8328,7 +7506,6 @@ function coreMsgsToChatMsgs(messages: any[]): any[] {
 
 export function ChatHistoryPage() {
   useLocale();
-  const connected = checkConnected();
   const [conversations, setConversations] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   // Opens on Conversations, unless something handed us a tab on the way in —
@@ -8364,14 +7541,12 @@ export function ChatHistoryPage() {
     await renameHistoryConversation(id, t);
     setConversations((prev: any[]) => prev.map((c) => (c.id === id ? { ...c, title: t } : c)));
   };
-  const { data: usage } = useApiData<any>('/usage/summary', null);
 
   // ── Local usage — the live month plus every completed one ──────────────
   //
   // No account involved. getSessionStats() counts the current calendar month
   // (api.ts), usage-history keeps the months that have closed. This is the
-  // only usage figure that means anything to someone running on their own
-  // keys: the credit blocks below describe a plan they do not have.
+  // only usage figure there is: everyone runs on their own keys.
   const [localSession, setLocalSession] = useState<SessionStats>(getSessionStats);
   const [localHistory, setLocalHistory] = useState<MonthUsage[]>([]);
   useEffect(() => {
@@ -8475,7 +7650,7 @@ export function ChatHistoryPage() {
   }, []);
   useEffect(() => { if (activeTab === 'audit') loadHistoryAudit(); }, [activeTab, loadHistoryAudit]);
 
-  // List conversations by reading the shared account-scoped history files
+  // List conversations by reading the shared history files
   // DIRECTLY via Tauri fs (the SAME files the extension + CLI + sidecar write) —
   // the reliable, network-free path learning/journal use. No sidecar round-trip.
   // Re-fetches on tab-activate + window focus so new/incoming convos show up.
@@ -8538,35 +7713,6 @@ export function ChatHistoryPage() {
       }));
     } catch { /* */ }
   };
-
-  // Usage analytics
-  const period = usage?.period || {};
-  const totals = usage?.totals || {};
-  const freeUsed = period.free_credits_used || 0;
-  const freeLimit = period.free_credits_limit || 300;
-  const subUsed = period.credits_used || 0;
-  const subLimit = period.credits_limit || 0;
-  const isUnlimited = usage?.isUnlimited || false;
-  const hasSub = subLimit > 0 && (usage?.tier || 'free') !== 'free';
-  const balanceUsed = hasSub ? subUsed : freeUsed;
-  const balanceLimit = hasSub ? subLimit : freeLimit;
-  const balanceRemaining = Math.max(0, balanceLimit - balanceUsed);
-  const remainPct = isUnlimited ? 100 : (balanceLimit > 0 ? Math.min((balanceRemaining / balanceLimit) * 100, 100) : 0);
-  const daily: any[] = usage?.daily || [];
-  // Read shim mirrors extension Usage.tsx: prefer `credits` fields when the
-  // server has rolled out the credit-redesign columns, fall back to legacy
-  // `tokens` for stale account-info caches. One source of truth means we
-  // can keep the bar chart accurate through the rollout window without
-  // double-rendering.
-  const dailyValue = (d: any) => Number(d?.credits ?? d?.tokens ?? 0);
-  const maxDaily = daily.length > 0 ? Math.max(...daily.map(dailyValue)) : 1;
-  const today = todayLocal();
-  const models: any[] = usage?.models || [];
-  const modelValue = (m: any) => Number(m?.total_credits ?? m?.total_tokens ?? 0);
-  const maxModelTokens = models.length > 0 ? Math.max(...models.map(modelValue)) : 1;
-  const monthValue = Number(totals?.credits ?? totals?.tokens ?? 0);
-  const monthRequests = Number(totals?.requests ?? 0);
-  const monthAvg = monthRequests > 0 ? Math.round(monthValue / monthRequests) : 0;
 
   const tabStyle = (active: boolean) => ({
     padding: '6px 12px', fontSize: 12, fontWeight: 500 as const, cursor: 'pointer' as const,
@@ -8699,130 +7845,6 @@ export function ChatHistoryPage() {
               )}
             </div>
 
-            {/* Credit Balance */}
-            {connected && usage && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>{t('dash.usage.credit_balance')}</div>
-                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '16px 20px' }}>
-                  {isUnlimited ? (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
-                        <span style={{ color: '#a6adc8' }}>{t('dash.usage.admin')}</span>
-                        <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{t('dash.usage.unlimited')}</span>
-                      </div>
-                      <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
-                        <div style={{ width: '100%', height: '100%', borderRadius: 6, background: 'linear-gradient(90deg, var(--accent), #6366f1)' }} />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                        <span style={{ color: '#a6adc8' }}>{t('dash.usage.credits_remaining')}</span>
-                        <span style={{ color: '#cdd6f4', fontWeight: 600 }}>{balanceRemaining.toLocaleString()}</span>
-                      </div>
-                      <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
-                        <div style={{
-                          width: `${remainPct}%`, height: '100%', borderRadius: 6,
-                          background: remainPct < 10 ? '#f87171' : remainPct < 30 ? '#f59e0b' : 'linear-gradient(90deg, var(--accent), #6366f1)',
-                          transition: 'width 0.5s',
-                        }} />
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#585b70', marginTop: 4 }}>
-                        <span>{t('dash.usage.n_used', { n: balanceUsed.toLocaleString() })}</span>
-                        <span>{t('dash.usage.n_limit', { n: balanceLimit.toLocaleString() })}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Overview Stats */}
-            {connected && usage && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>{t('dash.usage.overview')}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                  {[
-                    { label: t('dash.usage.credits_this_month'), value: monthValue.toLocaleString() },
-                    { label: t('dash.usage.requests'),           value: String(monthRequests) },
-                    { label: t('dash.usage.active_days'),        value: String(totals.active_days || 0) },
-                    { label: t('dash.usage.avg_request'),      value: monthAvg.toLocaleString() },
-                  ].map(s => (
-                    <div key={s.label} style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10, padding: '14px 16px' }}>
-                      <div style={{ fontSize: 10, color: '#6c7086', marginBottom: 6 }}>{s.label}</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: '#cdd6f4' }}>{s.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Daily Usage Chart */}
-            {connected && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>{t('dash.usage.daily_usage')}</div>
-                {daily.length > 0 ? (
-                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '16px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80 }}>
-                    {daily.map((d: any) => {
-                      const v = dailyValue(d);
-                      const h = maxDaily > 0 ? Math.max(2, (v / maxDaily) * 80) : 2;
-                      const isToday = d.date === today;
-                      return (
-                        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} title={t('dash.usage.daily_tooltip', { date: d.date, credits: formatTokens(v) })}>
-                          <div style={{
-                            width: '100%', height: h, borderRadius: 3,
-                            background: isToday ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 30%, transparent)',
-                          }} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                    <span style={{ fontSize: 9, color: '#585b70' }}>{daily[0]?.date?.slice(5)}</span>
-                    <span style={{ fontSize: 9, color: '#585b70' }}>{daily[daily.length - 1]?.date?.slice(5)}</span>
-                  </div>
-                </div>
-                ) : (
-                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.usage.no_usage_period')}</div>
-                </div>
-                )}
-              </div>
-            )}
-
-            {/* Most Used Models */}
-            {connected && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 8 }}>{t('dash.usage.most_used_models')}</div>
-                {models.length > 0 ? (
-                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {models.slice(0, 5).map((m: any) => {
-                    const v = modelValue(m);
-                    return (
-                      <div key={m.model}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                          <span style={{ color: '#cdd6f4', fontWeight: 500 }}>{m.model}</span>
-                          <span style={{ color: '#6c7086' }}>{t('dash.usage.model_credits_req', { credits: formatTokens(v), req: m.request_count })}</span>
-                        </div>
-                        <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
-                          <div style={{ width: `${(v / maxModelTokens) * 100}%`, height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, var(--accent), #6366f1)' }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                ) : (
-                <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.usage.no_usage_period')}</div>
-                </div>
-                )}
-              </div>
-            )}
-
-            {/* No "connect to see analytics" dead end. The tab now shows your
-                own tokens and spend without an account; the credit blocks above
-                are simply absent when there is no plan to report on. */}
           </>
         )}
 
@@ -11534,7 +10556,7 @@ export function LearningLibraryPage() {
   useLocale();
   const { data, loading, refetch } = // limit=100: the shelf and subject rows are derived from what we hold, so a
   // short page would silently drop entire shelves out of the filter.
-  useApiData<{ paths: any[]; total: number }>('/learning/library?limit=100', { paths: [], total: 0 });
+  usePublicData<{ paths: any[]; total: number }>('/learning/library?limit=100', { paths: [], total: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [search, setSearch] = useState('');
@@ -11676,8 +10698,7 @@ export function LearningLibraryPage() {
     try {
       // Local-first: the course content is public, so build the curriculum
       // locally and write it to the local store — BYOK / not-signed-in users
-      // can start library courses too. Server fork (learner count) is a
-      // best-effort extra when signed in. No account gate.
+      // can start library courses too. No account gate.
       const res = await fetch(`https://avasupernova.com/api/learning/library/${id}`);
       const d = await res.json();
       if (d?.title) {
@@ -11686,16 +10707,6 @@ export function LearningLibraryPage() {
           import('../lib/learning-store'),
         ]);
         await addLocalCourse(libraryPathToCurriculum(d, undefined, intent));
-        const key = getPlatformKey();
-        if (key) {
-          // The intent rides along so a SAVE is not counted as a learner —
-          // "N learners" that includes bookmarks means neither.
-          apiFetch(`/learning/library/${id}/fork`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ intent }),
-          }).catch(() => { /* analytics only */ });
-        }
         // Starting jumps to the Learning room — My Courses re-reads the local
         // store on mount. SAVING does not: someone parking a course for later
         // is still browsing, and yanking them to another tab loses their place
@@ -12467,17 +11478,10 @@ function DocumentGroupCard({
 
 function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   useLocale();
-  const [, setAuthKey] = useState(0);
-  useEffect(() => {
-    const handler = () => { if (!checkConnected()) { setCloudFiles([]); setSelectedFile(null); } setAuthKey(k => k + 1); };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-  const connected = checkConnected();
   const [cloudFiles, setCloudFiles] = useState<LibraryFile[]>([]);
   const [localFiles, setLocalFiles] = useState<LibraryFile[]>([]);
   // Manual reload trigger. The two sources below each listen to their own
-  // inputs (connected/kind, projectFolder), so neither notices a new asset
+  // inputs (kind, projectFolder), so neither notices a new asset
   // written by Creative Studio or a file dropped into the project.
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -12506,16 +11510,16 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   };
   const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
 
-  // Open the account-scoped local creative folder in the OS file explorer.
+  // Open the local creative folder in the OS file explorer.
   const openCreativeFolder = async () => {
     try {
-      const [{ homeDir, join }, { mkdir, BaseDirectory }, { accountRoot }, { openPath }] = await Promise.all([
+      const [{ homeDir, join }, { mkdir, BaseDirectory }, { dataRoot }, { openPath }] = await Promise.all([
         import('@tauri-apps/api/path'),
         import('@tauri-apps/plugin-fs'),
-        import('../lib/account-scope'),
+        import('../lib/data-root'),
         import('@tauri-apps/plugin-opener'),
       ]);
-      const rel = `${await accountRoot()}/creative`;
+      const rel = `${await dataRoot()}/creative`;
       await mkdir(rel, { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
       await openPath(await join(await homeDir(), rel));
     } catch (e) {
@@ -12548,7 +11552,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   }, []);
 
   useEffect(() => {
-    // Assets are local-first now — read the account-scoped creative gallery
+    // Assets are local-first now — read the creative gallery
     // (~/.ava/users/<id>/creative, shared with the extension), no cloud.
     // Voice/audio hidden: image + video only.
     if (kind === 'assets') {
@@ -12850,18 +11854,6 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>
             <div style={{ fontSize: 13 }}>{t('dash.library.scanning')}</div>
-          </div>
-        ) : filtered.length === 0 && !connected ? (
-          /* Signed out AND nothing on disk. The order matters: this used to
-             sit in FRONT of the file list, so a signed-out window scanned the
-             project, found the documents, and then showed "connect your
-             account" instead of them. The scan was already deliberately
-             connection-independent — "local files exist whether or not the
-             user is signed in" — and the render quietly disagreed. */
-          <div style={{ ...card, textAlign: 'center', padding: 60 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDDBC\uFE0F'}</div>
-            <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>{t('dash.library.connect')}</div>
-            <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.library.empty')}</div>
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
@@ -14168,17 +13160,6 @@ function NewDocumentModal({
 /* ===== 8. Personality ===== */
 export function PersonalityPage() {
   useLocale();
-  const [authKey, setAuthKey] = useState(0);
-  useEffect(() => {
-    const handler = () => {
-      if (!checkConnected()) { setTone('warm'); setEnergy('enthusiastic'); setStyle('conversational'); setDescription(''); }
-      setAuthKey(k => k + 1);
-    };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-  void authKey;
-  const connected = checkConnected();
   const [tone, setTone] = useState('warm');
   const [energy, setEnergy] = useState('enthusiastic');
   const [style, setStyle] = useState('conversational');
@@ -14274,8 +13255,6 @@ export function PersonalityPage() {
             {t('dash.personality.subtitle')}
           </div>
         </div>
-
-        {!connected && <NotConnectedBanner />}
 
         {/* Avatar — moved here from Settings; Ava's avatar stays brand-locked. */}
         {/* Tone */}
@@ -14394,10 +13373,10 @@ export function PersonalityPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
             onClick={handleSave}
-            disabled={saving || !connected}
+            disabled={saving}
             style={{
               ...btnPrimary, padding: '10px 24px', fontSize: 13, borderRadius: 10,
-              opacity: (saving || !connected) ? 0.6 : 1,
+              opacity: saving ? 0.6 : 1,
             }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#9333ea'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--accent)'; }}
@@ -15139,60 +14118,12 @@ function SemanticRecallSettings() {
   );
 }
 
-/** Settings control for chat-backend routing — where the chat runs:
- *  the local sidecar (your own API keys / BYOK) or the Ava platform.
- *  Persists
- *  to 'ava-ide-chat-backend' and broadcasts 'ava-chat-backend-changed'
- *  so the chat surface picks the change up live. */
-function ChatBackendSetting() {
-  const [backend, setBackend] = useState<'local' | 'cloud'>(() =>
-    localStorage.getItem('ava-ide-chat-backend') === 'local' ? 'local' : 'cloud',
-  );
-  const choose = (next: 'local' | 'cloud') => {
-    setBackend(next);
-    try { localStorage.setItem('ava-ide-chat-backend', next); } catch { /* */ }
-    try {
-      window.dispatchEvent(new CustomEvent('ava-chat-backend-changed', { detail: { backend: next } }));
-    } catch { /* no window */ }
-  };
-  const opts: Array<{ id: 'local' | 'cloud'; label: string; desc: string }> = [
-    { id: 'cloud', label: t('dash.backend.platform'), desc: t('dash.backend.platform_desc') },
-    { id: 'local', label: t('dash.backend.local_sidecar'), desc: t('dash.backend.local_sidecar_desc') },
-  ];
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-      {opts.map((o) => {
-        const active = backend === o.id;
-        return (
-          <button
-            key={o.id}
-            onClick={() => choose(o.id)}
-            style={{
-              textAlign: 'left', padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-              background: active ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'rgba(26,16,40,0.6)',
-              border: `1px solid ${active ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
-              color: '#cdd6f4',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: active ? 'var(--accent)' : '#6c7086' }} />
-              {o.label}
-            </div>
-            <div style={{ fontSize: 11, color: '#6c7086', marginTop: 3 }}>{o.desc}</div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /* ===== 10. Settings ===== */
-// Settings provider id → its field in localStorage['ava-ide-byok']. The field
-// names are the sidebar key panel's and must not change, or saved keys are
-// orphaned (see Sidebar.tsx). MiniMax is retired and has no field.
-const BYOK_FIELD: Record<string, string> = {
-  deepseek: 'DeepSeek', kimi: 'Moonshot', glm: 'Zhipu', qwen: 'Qwen',
-  mistral: 'Mistral', tencent: 'Tencent', nvidia: 'NVIDIA',
+// Settings provider id → its store field (lib/provider-keys.ts). The field
+// names are the ones the IDE has always saved under and must not change.
+const BYOK_FIELD: Record<string, ProviderField> = {
+  deepseek: 'DeepSeek', kimi: 'Moonshot', glm: 'Zhipu', qwen: 'Qwen', minimax: 'MiniMax',
+  mistral: 'Mistral', xiaomi: 'Xiaomi', tencent: 'Tencent', nvidia: 'NVIDIA', brave: 'Brave',
 };
 
 export function SettingsPage() {
@@ -15206,7 +14137,6 @@ export function SettingsPage() {
     temperature: 0.7,
     maxTokens: 8192,
   };
-  const [authKey, setAuthKey] = useState(0);
   // ── Where new projects go ────────────────────────────────────────────
   // Stored locally, read by the storage bar and (once wired) by the scaffold
   // step. Empty means the default, which projectsHomeFrom resolves — the input
@@ -15236,17 +14166,6 @@ export function SettingsPage() {
     } catch { /* dialog unavailable — the text field still works */ }
   }, [saveProjectsHome]);
 
-  useEffect(() => {
-    const handler = () => {
-      // Settings and provider keys are local — signing out leaves them be.
-      setAuthKey(k => k + 1);
-    };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  void authKey;
-  const connected = checkConnected();
   // Saved locally in 'ava-ide-settings' — the same store the sidecar reads
   // permissionMode from at boot. These used to save only to the cloud, behind
   // a sync switch that was always off, so no change here ever stuck.
@@ -15354,32 +14273,34 @@ export function SettingsPage() {
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
+  // Key pages checked against each provider's own docs on 1 Nov 2026 — the
+  // same links as onboarding. Qwen's is the Singapore console: keys are
+  // region-locked and Ava uses the international endpoint.
   const PROVIDERS = [
-    { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com', description: 'DeepSeek V4.1 Flash \u2014 1M context, multimodal, MIT open-weight' },
-    { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.moonshot.ai', description: 'Kimi K2.7 Code \u2014 agentic coding leader' },
-    { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai', description: 'GLM-5.3 \u2014 open-weights, 1M context, top-tier coding' },
-    { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://dashscope.console.aliyun.com', description: 'Qwen 3.7 Plus and 3.7 Max — vision, 1M context' },
-    { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai', description: 'Mistral Large 3, Medium 3.5, Small 4 — European, vision' },
-    { id: 'tencent', name: 'Tencent Hunyuan', placeholder: '...', signupUrl: 'https://tokenhub.tencentmaas.com', description: 'Hunyuan Hy3 — open-weight MoE, agentic, 262K context, very cheap' },
-    { id: 'nvidia', name: 'NVIDIA', placeholder: 'nvapi-...', signupUrl: 'https://build.nvidia.com', description: 'Nemotron 3 Ultra — open-weight, 1M context, frontier reasoning (BYOK)' },
-    // Saved LOCALLY only (~/.ava/config.json), never synced to the cloud:
-    // this key authorises screenshots of the user's screen to leave the
-    // machine, so it stays on the machine.
+    { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'sk-...', signupUrl: 'https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key', description: 'One key: chat, images, voice and video. Make it in the Singapore region.' },
+    { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', signupUrl: 'https://platform.deepseek.com/api_keys', description: 'DeepSeek V4.1 Flash \u2014 1M context, multimodal, MIT open-weight' },
+    { id: 'kimi', name: 'Kimi (Moonshot)', placeholder: 'sk-...', signupUrl: 'https://platform.kimi.ai/console/api-keys', description: 'Kimi K2.7 Code \u2014 agentic coding leader' },
+    { id: 'glm', name: 'GLM (Zhipu AI)', placeholder: '...', signupUrl: 'https://z.ai/manage-apikey/apikey-list', description: 'GLM-5.3 \u2014 open-weights, 1M context, top-tier coding' },
+    { id: 'mistral', name: 'Mistral AI', placeholder: '...', signupUrl: 'https://console.mistral.ai/api-keys', description: 'Mistral Large 3, Medium 3.5, Small 4 — European, vision' },
+    { id: 'minimax', name: 'MiniMax', placeholder: '...', signupUrl: 'https://platform.minimax.io/console/keys', description: 'MiniMax M3 — reads images, 1M context; M3.1 Flash' },
+    { id: 'xiaomi', name: 'Xiaomi (MiMo)', placeholder: 'sk-...', signupUrl: 'https://platform.xiaomimimo.com/#/console/api-keys', description: 'Use a pay-as-you-go key (sk-), not a Token Plan key' },
+    { id: 'tencent', name: 'Tencent Hunyuan', placeholder: '...', signupUrl: 'https://console.tencentcloud.com/tokenhub/apikey', description: 'Hunyuan Hy3 — open-weight MoE, agentic, 262K context, very cheap' },
+    { id: 'nvidia', name: 'NVIDIA', placeholder: 'nvapi-...', signupUrl: 'https://build.nvidia.com/settings/api-keys', description: 'Nemotron 3 Ultra — open-weight, 1M context, frontier reasoning' },
+    { id: 'brave', name: 'Brave Search', placeholder: '...', signupUrl: 'https://api-dashboard.search.brave.com/app/keys', description: 'Optional — better web search. Without it Ava uses DuckDuckGo.' },
   ];
+  const [providerTest, setProviderTest] = useState<Record<string, { ok: boolean; text: string }>>({});
 
   // Shared with the onboarding overlay so the two lists never drift.
   const LANGUAGES = languageOptions();
 
-  // Which providers have a key — read from 'ava-ide-byok', the one store the
-  // sidecar and the sidebar key panel both use.
+  // Which providers have a key — the keychain store (lib/provider-keys.ts)
+  // the sidecar and the sidebar key panel both use.
   useEffect(() => {
     const read = () => {
-      try {
-        const keys: Record<string, string> = JSON.parse(localStorage.getItem('ava-ide-byok') || '{}');
-        const has: Record<string, boolean> = {};
-        for (const [id, field] of Object.entries(BYOK_FIELD)) has[id] = !!keys[field]?.trim();
-        setProviderKeys(has);
-      } catch { /* none saved */ }
+      const keys = getProviderKeys();
+      const has: Record<string, boolean> = {};
+      for (const [id, field] of Object.entries(BYOK_FIELD)) has[id] = !!keys[field]?.trim();
+      setProviderKeys(has);
     };
     read();
     window.addEventListener('ava-byok-changed', read);
@@ -15399,32 +14320,35 @@ export function SettingsPage() {
     try { localStorage.setItem('ava-ide-settings', JSON.stringify(updated)); } catch { /* storage unavailable */ }
   };
 
-  const writeByok = (providerId: string, value: string | null) => {
-    const field = BYOK_FIELD[providerId];
-    if (!field) return;
-    try {
-      const keys: Record<string, string> = JSON.parse(localStorage.getItem('ava-ide-byok') || '{}');
-      if (value) keys[field] = value; else delete keys[field];
-      localStorage.setItem('ava-ide-byok', JSON.stringify(keys));
-    } catch { /* storage unavailable */ }
-    window.dispatchEvent(new CustomEvent('ava-byok-changed'));
-  };
-
-  const handleSaveProviderKey = (providerId: string) => {
+  // Tested against the provider first; saved (in the OS keychain) unless the
+  // provider refused it.
+  const handleSaveProviderKey = async (providerId: string) => {
     const key = providerInputs[providerId]?.trim();
-    if (!key) return;
+    const field = BYOK_FIELD[providerId];
+    if (!key || !field) return;
     setSavingProvider(providerId);
-    // Saved on this machine only, in the same store the sidebar writes.
-    writeByok(providerId, key);
-    setProviderKeys(prev => ({ ...prev, [providerId]: true }));
-    setProviderInputs(prev => ({ ...prev, [providerId]: '' }));
-    setEditingProvider(null);
+    try {
+      const r = await testAndSaveProviderKey(field, key);
+      if (r.status === 'invalid') {
+        setProviderTest(prev => ({ ...prev, [providerId]: { ok: false, text: r.message || '' } }));
+        setSavingProvider(null);
+        return;
+      }
+      setProviderTest(prev => ({ ...prev, [providerId]: { ok: true, text: t('onb.key.works') } }));
+      setProviderKeys(prev => ({ ...prev, [providerId]: true }));
+      setProviderInputs(prev => ({ ...prev, [providerId]: '' }));
+      setEditingProvider(null);
+    } catch (err) {
+      setProviderTest(prev => ({ ...prev, [providerId]: { ok: false, text: err instanceof Error ? err.message : String(err) } }));
+    }
     setTimeout(() => setSavingProvider(null), 1500);
   };
 
   const handleRemoveProviderKey = (providerId: string) => {
-    writeByok(providerId, null);
+    const field = BYOK_FIELD[providerId];
+    if (field) void setProviderKey(field, '').catch(() => {});
     setProviderKeys(prev => ({ ...prev, [providerId]: false }));
+    setProviderTest(prev => { const next = { ...prev }; delete next[providerId]; return next; });
   };
 
   const configuredCount = Object.values(providerKeys).filter(Boolean).length;
@@ -15467,17 +14391,12 @@ export function SettingsPage() {
           </div>
         </div>
 
-        {/* Welcome tour — replay it or toggle whether it shows on startup. */}
+        {/* Welcome tour — replay it. */}
         <div style={{ ...card, padding: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{t('onboarding.replay')}</div>
             <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('onboarding.identity.cta')}</div>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#a6adc8', cursor: 'pointer' }}>
-            <input type="checkbox" defaultChecked={localStorage.getItem('ava-ide-welcome-on-startup') !== 'false'}
-              onChange={(e) => { try { localStorage.setItem('ava-ide-welcome-on-startup', e.target.checked ? 'true' : 'false'); } catch { /* non-fatal */ } }} />
-            {t('onboarding.show_on_startup')}
-          </label>
           <button onClick={() => window.dispatchEvent(new CustomEvent('ava-open-welcome'))}
             style={{ padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)' }}>
             {t('onboarding.replay')}
@@ -15867,11 +14786,6 @@ export function SettingsPage() {
         {/* ── Group: Models (sec 6+7) ──────────────────────────── */}
         <div style={{ display: settingsTab === 'models' ? 'contents' : 'none' }}>
 
-        {/* Chat backend — where the chat runs (local sidecar vs platform).
-            Mirrors the extension. */}
-        <div style={sLabel}>{t('dash.settings.section.chat_backend')}</div>
-        <ChatBackendSetting />
-
         {/* Custom OpenAI-compatible model — Ollama / LM Studio / vLLM /
             any local or remote endpoint that speaks the OpenAI Chat
             Completions API. Covers BYOM (private vLLM, self-finetuned
@@ -15959,14 +14873,14 @@ export function SettingsPage() {
                           autoFocus
                         />
                         <button
-                          onClick={() => handleSaveProviderKey(provider.id)}
-                          disabled={!providerInputs[provider.id]?.trim()}
+                          onClick={() => { void handleSaveProviderKey(provider.id); }}
+                          disabled={!providerInputs[provider.id]?.trim() || savingProvider === provider.id}
                           style={{
                             ...btnPrimary, padding: '5px 12px', fontSize: 10, borderRadius: 6,
-                            opacity: providerInputs[provider.id]?.trim() ? 1 : 0.4,
+                            opacity: providerInputs[provider.id]?.trim() && savingProvider !== provider.id ? 1 : 0.4,
                           }}
                         >
-                          {t('dash.settings.save')}
+                          {savingProvider === provider.id ? t('onb.key.testing') : t('onb.key.test')}
                         </button>
                         <button
                           onClick={() => { setEditingProvider(null); setProviderInputs(prev => ({ ...prev, [provider.id]: '' })); }}
@@ -15991,11 +14905,16 @@ export function SettingsPage() {
                       </div>
                     )}
                   </div>
+                  {providerTest[provider.id] && (
+                    <div style={{ fontSize: 10, color: providerTest[provider.id].ok ? '#a6e3a1' : '#f38ba8', marginTop: 2 }}>
+                      {providerTest[provider.id].text}
+                    </div>
+                  )}
                   {!providerKeys[provider.id] && editingProvider !== provider.id && (
                     <a
                       href={provider.signupUrl}
-                      target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: 10, color: 'var(--accent)', textDecoration: 'none' }}
+                      onClick={(e) => { e.preventDefault(); void openExternal(provider.signupUrl); }}
+                      style={{ fontSize: 10, color: 'var(--accent)', textDecoration: 'none', cursor: 'pointer' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
                     >
@@ -16288,272 +15207,10 @@ export function SettingsPage() {
 
         </div>{/* /Desktop */}
 
-        {/* ── Group: Privacy (sec 9 — Danger Zone) ─────────────── */}
+        {/* ── Group: Privacy (continued) ─────────────── */}
         <div style={{ display: settingsTab === 'privacy' ? 'contents' : 'none' }}>
-        {/* 9. Danger Zone */}
-        {connected && (
-          <>
-            <div style={sLabel}>{t('dash.settings.section.danger_zone')}</div>
-            <div style={{
-              background: 'rgba(26, 16, 40, 0.6)', border: '1px solid rgba(248,113,113,0.30)',
-              borderRadius: 12, padding: '18px 20px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f87171' }}>{t('dash.settings.disconnect_account')}</div>
-                  <div style={{ fontSize: 11, color: 'rgba(248,113,113,0.7)', marginTop: 2 }}>
-                    {t('dash.settings.disconnect_desc')}
-                  </div>
-                </div>
-                <button
-                  onClick={() => { disconnectAccount(); window.location.reload(); }}
-                  style={{
-                    background: 'transparent', border: '1px solid rgba(248,113,113,0.40)',
-                    borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 600,
-                    color: '#f87171', cursor: 'pointer', flexShrink: 0,
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(248,113,113,0.08)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                >
-                  {t('dash.settings.disconnect')}
-                </button>
-              </div>
-            </div>
-          </>
-        )}
         </div>{/* /Privacy-2 */}
       </div>
-    </div>
-  );
-}
-
-/* ===== 11. Billing ===== */
-export function BillingPage() {
-  useLocale();
-  const connected = checkConnected();
-  const { data: usage, loading } = useApiData<any>('/usage/summary', null);
-  // Tier tracked as state so the panel re-renders when refreshTier() picks
-  // up a platform upgrade (ava-tier-changed event from lib/api.ts).
-  const [tier, setTier] = useState<string>(() => localStorage.getItem('ava-ide-tier') || 'free');
-  useEffect(() => {
-    const onChange = (e: Event) => {
-      const next = (e as CustomEvent).detail?.tier as string | undefined;
-      if (next) setTier(next);
-      else setTier(localStorage.getItem('ava-ide-tier') || 'free');
-    };
-    window.addEventListener('ava-tier-changed', onChange);
-    return () => window.removeEventListener('ava-tier-changed', onChange);
-  }, []);
-
-  const tierConfig: Record<string, { label: string; color: string; bg: string; limit: string }> = {
-    free:       { label: t('dash.billing.plan.free'), color: '#a6e3a1', bg: 'rgba(166,227,161,0.10)', limit: '300 credits' },
-    pro:        { label: t('dash.billing.plan.pro'), color: '#89b4fa', bg: 'rgba(137,180,250,0.10)', limit: '5,000 credits' },
-    ultra:      { label: t('dash.billing.plan.ultra'), color: '#cba6f7', bg: 'rgba(203,166,247,0.10)', limit: '10,000 credits' },
-    enterprise: { label: t('dash.billing.plan.enterprise'), color: '#f9e2af', bg: 'rgba(249,226,175,0.10)', limit: '20,000 credits' },
-    admin:      { label: t('dash.billing.plan.admin'), color: '#f38ba8', bg: 'rgba(243,139,168,0.10)', limit: 'Unlimited' },
-  };
-  const tc = tierConfig[tier] || tierConfig.free;
-
-  const freeUsed = usage?.period?.free_credits_used || 0;
-  const freeLimit = usage?.period?.free_credits_limit || 300;
-  const planUsed = usage?.period?.credits_used || 0;
-  const planLimit = usage?.period?.credits_limit || 0;
-  const topUpBalance = usage?.period?.topup_tokens_remaining || 0;
-
-  const pct = (used: number, limit: number) => limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-
-  // All upgrades, plan changes and top-ups are managed on the web billing
-  // dashboard — every CTA opens it in the system browser via the Tauri opener.
-  // No in-app checkout (matches the extension).
-  const openExternalUrl = async (url: string) => {
-    try {
-      const { openUrl } = await import('@tauri-apps/plugin-opener');
-      await openUrl(url);
-    } catch {
-      window.open(url, '_blank');
-    }
-  };
-  const openBilling = () => { void openExternalUrl(dashboardBillingUrl()); };
-
-  return (
-    <div style={pageWrapper}>
-      <h1 style={pageTitle}>{t('dash.billing.title')}</h1>
-      <p style={pageSubtitle}>{t('dash.billing.subtitle')}</p>
-
-      {!connected ? (
-        <div style={{ ...card, textAlign: 'center', padding: 60 }}>
-          <div style={{ marginBottom: 12, color: 'var(--accent)' }}><PhCreditCard size={44} weight="duotone" /></div>
-          <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>Sign in to view billing</div>
-          <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 18 }}>Your plan, credits and upgrades are managed on your web dashboard.</div>
-          <button onClick={openBilling} style={{ ...btnPrimary, fontSize: 12 }}>Sign in to dashboard</button>
-        </div>
-      ) : loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>Loading billing data...</div>
-      ) : (
-        <>
-          {/* Current Plan */}
-          <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>{t('dash.billing.current_plan')}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 20, fontWeight: 700, color: '#cdd6f4' }}>{tc.label}</span>
-                <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, color: tc.color, background: tc.bg }}>{tc.limit}</span>
-              </div>
-            </div>
-            <button onClick={openBilling} style={{ ...btnPrimary, fontSize: 12, fontWeight: 600 }}>{t('dash.billing.manage_plan')}</button>
-          </div>
-
-          {/* Credit Balance — single card. Free tier shows the free pool;
-              paid tiers show the plan pool (which already includes any
-              top-ups, per project_billing_architecture). We don't sum the
-              two — on paid plans the legacy 300 free credits aren't an
-              additive bonus, they're just the pool that's bypassed. */}
-          {(() => {
-            const isFree = tier === 'free';
-            const isAdmin = tier === 'admin';
-            const used = isFree ? freeUsed : planUsed;
-            const limit = isFree ? freeLimit : planLimit;
-            const remaining = Math.max(0, limit - used);
-            const usedPct = isAdmin ? 100 : pct(used, limit);
-            return (
-              <div style={{ ...card, marginTop: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.usage.credits_remaining')}</div>
-                  <div style={{ fontSize: 11, color: '#45475a' }}>
-                    {isAdmin
-                      ? t('dash.usage.n_of_m', { n: (999_999_999).toLocaleString(), m: (999_999_999).toLocaleString() })
-                      : limit > 0
-                        ? t('dash.usage.n_of_m', { n: remaining.toLocaleString(), m: limit.toLocaleString() })
-                        : t('dash.usage.no_credits_period')}
-                  </div>
-                </div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4', marginBottom: 10, fontVariantNumeric: 'tabular-nums' }}>
-                  {isAdmin ? '∞' : remaining.toLocaleString()}
-                </div>
-                <div style={{ height: 6, background: 'rgba(49, 34, 68, 0.5)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${usedPct}%`,
-                    background: usedPct >= 95
-                      ? 'linear-gradient(90deg, #f87171, #ef4444)'
-                      : usedPct >= 80
-                        ? 'linear-gradient(90deg, #f59e0b, #eab308)'
-                        : 'linear-gradient(90deg, var(--accent), #7c3aed)',
-                    borderRadius: 3,
-                    transition: 'width 0.5s',
-                  }} />
-                </div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 8 }}>
-                  {isAdmin
-                    ? t('dash.billing.unlimited_usage')
-                    : tier === 'free'
-                      ? 'Resets monthly. Upgrade for more.'
-                      : 'Includes your monthly plan allowance + any top-ups.'}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Top-Up Balance */}
-          {topUpBalance > 0 && (
-            <div style={{ ...card, marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: 12, color: '#6c7086', marginBottom: 4 }}>Top-Up Balance</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#f9e2af' }}>{topUpBalance.toLocaleString()}</div>
-              </div>
-              <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 10, color: '#f9e2af', background: 'rgba(249,226,175,0.10)' }}>Active</span>
-            </div>
-          )}
-
-          {/* Token Top-Up Packages — unified purchase card shape.
-              Same visual language as the extension + the website pricing
-              page. Effective rate makes the 10M "Best value" honest —
-              20-40% cheaper per token. */}
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 24, marginBottom: 12 }}>{t('dash.billing.topups_title')}</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            {CREDIT_TOPUPS.map((pkg) => (
-              <IdePurchaseCard
-                key={pkg.id}
-                // Label + subtitle come from core's CREDIT_TOPUPS (Stripe-linked),
-                // so map by id and fall back to core's English.
-                title={t('dash.billing.credits_n', { n: pkg.credits.toLocaleString() })}
-                subtitle={tOr(`dash.billing.topup.${pkg.id}`, pkg.subtitle)}
-                price={`$${pkg.price}`}
-                effectiveRate={pkg.effectiveRate}
-                popular={pkg.popular}
-                state="live"
-                ctaLabel={t('dash.billing.get_credits')}
-                onClick={openBilling}
-              />
-            ))}
-          </div>
-
-          {/* Plans — all four tiers always shown for full transparency. Current
-              tier flagged "Your plan"; every other card opens the web dashboard. */}
-          {(
-            <>
-              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#cdd6f4', marginTop: 32, marginBottom: 12 }}>{t('dash.billing.plans_title')}</h2>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr 1fr',
-                gap: 12,
-              }}>
-                {(['free', 'pro', 'ultra', 'enterprise'] as const).map((target: Exclude<AvaPlanTier, 'admin'>) => {
-                  const plan = PLANS[target];
-                  const isCurrent = target === tier;
-                  const highlight = target === 'ultra';
-                  return (
-                    <div key={target} style={{
-                      ...card, padding: '20px 18px', position: 'relative',
-                      display: 'flex', flexDirection: 'column',
-                      borderColor: isCurrent
-                        ? 'rgba(166,227,161,0.45)'
-                        : highlight
-                        ? 'color-mix(in srgb, var(--accent) 40%, transparent)'
-                        : 'rgba(49, 34, 68, 0.5)',
-                    }}>
-                      {isCurrent && (
-                        <span style={{ position: 'absolute', top: 8, right: 10, fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(166,227,161,0.12)', color: '#a6e3a1', letterSpacing: 0.5 }}>YOUR PLAN</span>
-                      )}
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 2 }}>{plan.name}</div>
-                      <div style={{ marginBottom: 12 }}>
-                        <span style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>${plan.price}</span>
-                        <span style={{ fontSize: 11, color: '#6c7086', marginLeft: 4 }}>{t('dash.billing.per_month')}</span>
-                      </div>
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', marginBottom: 14 }}>
-                        {/* Feature text lives in core's billing module (shared with
-                            Stripe + the platform), so it is not rewritten there.
-                            Map tier+index -> key, and fall back to core's English
-                            if a key is ever missing. */}
-                        {plan.features.map((f, fi) => (
-                          <li key={f} style={{ fontSize: 11, color: '#a6adc8', marginBottom: 6, paddingLeft: 14, position: 'relative' }}>
-                            <span style={{ position: 'absolute', left: 0, color: 'var(--accent)' }}>{'\u2713'}</span>
-                            {tOr(`dash.billing.feat.${target}.${fi + 1}`, f)}
-                          </li>
-                        ))}
-                      </ul>
-                      {isCurrent ? (
-                        <div style={{
-                          marginTop: 'auto', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                          background: 'rgba(166,227,161,0.10)', color: '#a6e3a1',
-                          border: '1px solid rgba(166,227,161,0.25)', textAlign: 'center',
-                        }}>{t('dash.billing.current_plan')}</div>
-                      ) : (
-                        // Every plan change is managed on the web billing dashboard.
-                        <button onClick={openBilling} style={{ ...btnPrimary, marginTop: 'auto', width: '100%', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
-                          {target === 'free'
-                            ? t('dash.billing.manage_in_portal')
-                            : t('dash.billing.upgrade_to', { plan: plan.name })}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </>
-      )}
     </div>
   );
 }
@@ -16662,574 +15319,40 @@ export function RemoteDevicesPage() {
   );
 }
 
-/* ===== 13. Support (private tickets) ===== */
-// Support is ONE private ticket system, always answered by a person on the
-// team — there is no AI first reply, no triage, nothing in between. Discord is
-// the PUBLIC home for questions, bugs and ideas; a ticket is the PRIVATE route
-// (personal data, or anyone who simply prefers private). Every support screen
-// says so in one line. Mirrors the extension's support page, so the two
-// surfaces read the same: list → thread → reply / close, plus a new-ticket form.
-//
-// Strings use tt() with an English fallback — these keys are new and arrive in
-// the locales on the next translation run.
+/* ===== 13. Support — Discord + email ===== */
+// Discord for anything public, email for anything private. Replaces the private
+// ticket system (retired 1 Nov 2026 with accounts — a ticket needed an account
+// to belong to). Same split as the extension's SupportPanel, the docs and Ava's
+// own help rule, so none of them disagree about where to go.
 
 const SUPPORT_DISCORD_URL = 'https://discord.gg/bbtnKMW4rf';
-const SUPPORT_SUBJECT_MAX = 200;
-const SUPPORT_MESSAGE_MAX = 10_000;
-// A human answers, so there is nothing to race for: a slow poll is plenty, and
-// it only runs while a ticket is open on screen.
-const SUPPORT_POLL_MS = 30_000;
-
-/** Opens a link in the system browser (Tauri opener), falling back to window.open. */
-function openSupportLink(url: string) {
-  import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => window.open(url, '_blank'));
-}
-
-// Map ticket status -> label + IDE-palette colours. 'waiting_on_you' is the
-// attention colour: the team has replied and the ball is in the user's court.
-// Unknown statuses fall back to a neutral accent chip so a new backend status
-// never renders blank.
-function supportStatusChip(status: string): { label: string; color: string; bg: string; border: string; dot: string } {
-  const s = (status || '').toLowerCase();
-  if (s === 'waiting_on_us') return { label: tt('dash.support.tk.status.waiting_on_us', 'Waiting on us'), color: '#89b4fa', bg: 'rgba(137,180,250,0.1)', border: 'rgba(137,180,250,0.3)', dot: '#89b4fa' };
-  if (s === 'waiting_on_you') return { label: tt('dash.support.tk.status.waiting_on_you', 'Waiting on you'), color: '#fab387', bg: 'rgba(250,179,135,0.12)', border: 'rgba(250,179,135,0.4)', dot: '#fab387' };
-  if (s === 'resolved') return { label: tt('dash.support.tk.status.resolved', 'Resolved'), color: '#a6e3a1', bg: 'rgba(166,227,161,0.1)', border: 'rgba(166,227,161,0.3)', dot: '#a6e3a1' };
-  if (s === 'closed') return { label: tt('dash.support.tk.status.closed', 'Closed'), color: '#6c7086', bg: 'rgba(108,112,134,0.12)', border: 'rgba(108,112,134,0.3)', dot: '#6c7086' };
-  return { label: status || '—', color: 'var(--accent)', bg: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: 'color-mix(in srgb, var(--accent) 30%, transparent)', dot: 'var(--accent)' };
-}
-
-// Ticket categories, in the order the server and the extension list them.
-// Keys + English fallbacks, not resolved text — this is a module-level const,
-// so t() results here would evaluate once at import (before initLocale) and
-// freeze in English. supportCategoryMeta() resolves them at call time.
-const SUPPORT_CATEGORIES = [
-  { slug: 'question', icon: '❓', fallback: 'Question / how-to' },
-  { slug: 'bug', icon: '🐞', fallback: 'Bug report' },
-  { slug: 'feature', icon: '✨', fallback: 'Feature idea' },
-  { slug: 'account', icon: '👤', fallback: 'Account & login' },
-  { slug: 'billing', icon: '💳', fallback: 'Billing & credits' },
-  { slug: 'privacy', icon: '🔒', fallback: 'Privacy & my data' },
-  { slug: 'security', icon: '🛡️', fallback: 'Security report' },
-  { slug: 'other', icon: '💭', fallback: 'Something else' },
-] as const;
-
-/** Category + its label resolved at CALL time, so it follows the locale. */
-function supportCategoryMeta(slug?: string | null) {
-  const c = SUPPORT_CATEGORIES.find(x => x.slug === slug);
-  if (!c) return null;
-  return { slug: c.slug, icon: c.icon, label: tt(`dash.support.tk.cat.${c.slug}`, c.fallback) };
-}
-
-/** apiFetch throws `API <status>: <body>`; the server's body is `{ error }`.
- *  Show that message when there is one, a plain sentence when there is not. */
-function supportErrorText(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err ?? '');
-  const m = raw.match(/^API \d+: ([\s\S]*)$/);
-  if (m) {
-    try { const j = JSON.parse(m[1]); if (j?.error) return String(j.error); } catch { /* not JSON */ }
-  }
-  return tt('dash.support.tk.err_generic', 'Something went wrong. Please try again.');
-}
-
-function supportWhen(iso?: string | null, withTime = false): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  return withTime
-    ? d.toLocaleString(getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' });
-}
-
-/** The one line every support screen carries: public → Discord, private → ticket. */
-function SupportDiscordLine({ signedIn }: { signedIn: boolean }) {
-  return (
-    <div style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.6 }}>
-      {tt('dash.support.tk.public_q', 'Public question?')}{' '}
-      <a
-        href={SUPPORT_DISCORD_URL}
-        onClick={e => { e.preventDefault(); openSupportLink(SUPPORT_DISCORD_URL); }}
-        style={{ color: 'var(--accent)', textDecoration: 'none', cursor: 'pointer', fontWeight: 600 }}
-      >{tt('dash.support.tk.ask_discord', 'Ask in our Discord.')}</a>
-      {signedIn && <>{' '}{tt('dash.support.tk.private_line', 'Private? Open a ticket here — only you and the team can see it.')}</>}
-    </div>
-  );
-}
-
-type SupportView = { kind: 'empty' } | { kind: 'new' } | { kind: 'ticket'; ref: string };
+const SUPPORT_EMAIL = 'support@avasupernova.com';
 
 export function SupportPage() {
   useLocale();
-  const [tickets, setTickets] = useState<any[]>([]);
-  const [listLoaded, setListLoaded] = useState(false);
-  const [view, setView] = useState<SupportView>({ kind: 'empty' });
-  // Open ticket
-  const [ticket, setTicket] = useState<any | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [threadLoading, setThreadLoading] = useState(false);
-  const [threadError, setThreadError] = useState<string | null>(null);
-  const [reply, setReply] = useState('');
-  const [busy, setBusy] = useState(false); // reply / close / reopen in flight
-  const [actionError, setActionError] = useState<string | null>(null);
-  // New-ticket form
-  const [newCategory, setNewCategory] = useState('');
-  const [newSubject, setNewSubject] = useState('');
-  const [newMessage, setNewMessage] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  // The ticket currently on screen. Responses for any other ref are dropped,
-  // so clicking quickly between tickets never paints A's thread under B.
-  const shownRef = useRef<string | null>(null);
-  const activeRef = view.kind === 'ticket' ? view.ref : null;
-
-  const [, setAuthKey] = useState(0);
-  useEffect(() => {
-    const handler = () => {
-      if (!checkConnected()) {
-        shownRef.current = null;
-        setTickets([]); setListLoaded(false); setView({ kind: 'empty' });
-        setTicket(null); setMessages([]); setReply('');
-        setNewCategory(''); setNewSubject(''); setNewMessage('');
-      }
-      setAuthKey(k => k + 1);
-    };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-  // Signed out, or BYOK-only (no platform key): no ticket calls are made at all.
-  const connected = checkConnected();
-
-  const refreshList = useCallback(async () => {
-    if (!checkConnected()) return;
-    try {
-      const data: any = await apiFetch('/tickets');
-      const list: any[] = Array.isArray(data?.tickets) ? data.tickets : [];
-      setTickets(list);
-      // Sidebar badge + tick-engine nudge read this key.
-      const unread = typeof data?.unread === 'number'
-        ? data.unread
-        : list.reduce((sum: number, tk: any) => sum + (Number(tk.unread_user) || 0), 0);
-      try { localStorage.setItem('ava-support-unread', String(unread)); } catch { /* */ }
-    } catch { /* keep what we have */ }
-    finally { setListLoaded(true); }
-  }, []);
-
-  useEffect(() => { if (connected) refreshList(); }, [connected, refreshList]);
-
-  /** Fetches a ticket's thread (the server marks it read). Returns the message
-   *  count, or -1 on failure. `quiet` = a background refresh: keep what is
-   *  shown on failure instead of replacing it with an error. */
-  const loadTicket = useCallback(async (ref: string, quiet = false): Promise<number> => {
-    try {
-      const data: any = await apiFetch(`/tickets/${encodeURIComponent(ref)}`);
-      if (shownRef.current !== ref) return -1;
-      const msgs: any[] = Array.isArray(data?.messages) ? data.messages : [];
-      setTicket(data?.ticket || null);
-      setMessages(msgs);
-      setThreadError(null);
-      return msgs.length;
-    } catch (err) {
-      if (shownRef.current === ref && !quiet) setThreadError(supportErrorText(err));
-      return -1;
-    }
-  }, []);
-
-  const openTicket = useCallback((ref: string) => {
-    shownRef.current = ref;
-    setView({ kind: 'ticket', ref });
-    setTicket(null); setMessages([]); setThreadError(null);
-    setReply(''); setActionError(null);
-    setThreadLoading(true);
-    // Opening marks it read server-side, so refresh the list (and badge) after.
-    loadTicket(ref).then(n => { if (n >= 0) refreshList(); }).finally(() => {
-      if (shownRef.current === ref) setThreadLoading(false);
-    });
-  }, [loadTicket, refreshList]);
-
-  const startNew = useCallback(() => {
-    shownRef.current = null;
-    setView({ kind: 'new' });
-    setCreateError(null);
-  }, []);
-
-  // Background refresh while a ticket is open, so a team reply shows up
-  // without a click. The list is only re-fetched when the thread grew.
-  const countRef = useRef(0);
-  useEffect(() => { countRef.current = messages.length; }, [messages.length]);
-  useEffect(() => {
-    if (!activeRef) return;
-    const interval = setInterval(() => {
-      const before = countRef.current;
-      loadTicket(activeRef, true).then(n => { if (n > before) refreshList(); });
-    }, SUPPORT_POLL_MS);
-    return () => clearInterval(interval);
-  }, [activeRef, loadTicket, refreshList]);
-
-  // Scroll to the newest message when the thread grows (not on every poll).
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, activeRef]);
-
-  const handleReply = useCallback(async () => {
-    const text = reply.trim();
-    if (!activeRef || !text || busy) return;
-    setBusy(true); setActionError(null);
-    try {
-      const data: any = await apiFetch(`/tickets/${encodeURIComponent(activeRef)}/messages`, {
-        method: 'POST', body: JSON.stringify({ message: text }),
-      });
-      // Clear only once it is sent — a failed send keeps what they wrote.
-      setReply('');
-      if (data?.status) setTicket((prev: any) => (prev ? { ...prev, status: data.status } : prev));
-      await loadTicket(activeRef, true);
-      refreshList();
-    } catch (err) {
-      setActionError(supportErrorText(err));
-    }
-    setBusy(false);
-  }, [reply, busy, activeRef, loadTicket, refreshList]);
-
-  const handleStatus = useCallback(async (action: 'close' | 'reopen') => {
-    if (!activeRef || busy) return;
-    setBusy(true); setActionError(null);
-    try {
-      const data: any = await apiFetch(`/tickets/${encodeURIComponent(activeRef)}`, {
-        method: 'PATCH', body: JSON.stringify({ action }),
-      });
-      if (data?.status) setTicket((prev: any) => (prev ? { ...prev, status: data.status } : prev));
-      refreshList();
-    } catch (err) {
-      setActionError(supportErrorText(err));
-    }
-    setBusy(false);
-  }, [activeRef, busy, refreshList]);
-
-  const subjectTrim = newSubject.trim();
-  const messageTrim = newMessage.trim();
-  const canCreate = !!newCategory && !!subjectTrim && !!messageTrim
-    && subjectTrim.length <= SUPPORT_SUBJECT_MAX && messageTrim.length <= SUPPORT_MESSAGE_MAX && !creating;
-
-  const handleCreate = useCallback(async () => {
-    if (!canCreate) return;
-    setCreating(true); setCreateError(null);
-    try {
-      const data: any = await apiFetch('/tickets', {
-        method: 'POST',
-        body: JSON.stringify({ category: newCategory, subject: subjectTrim, message: messageTrim, source: 'ide' }),
-      });
-      setNewCategory(''); setNewSubject(''); setNewMessage('');
-      await refreshList();
-      const ref = data?.ticket?.ref_label;
-      if (ref) openTicket(ref); else setView({ kind: 'empty' });
-    } catch (err) {
-      setCreateError(supportErrorText(err));
-    }
-    setCreating(false);
-  }, [canCreate, newCategory, subjectTrim, messageTrim, refreshList, openTicket]);
-
-  if (!connected) {
-    const linkCard: React.CSSProperties = {
-      ...card, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-    };
-    return (
-      <div style={pageWrapper}>
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '40px 0' }}>
-          <div style={{ fontSize: 28, marginBottom: 16, textAlign: 'center' }}>Need help?</div>
-          <div style={{ ...card, padding: '16px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>
-              {tt('dash.support.tk.sign_in', 'Sign in to your Ava Supernova account to open a private ticket')}
-            </div>
-            <SupportDiscordLine signedIn={false} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={linkCard} onClick={() => openSupportLink(SUPPORT_DISCORD_URL)}>
-              <span style={{ fontSize: 24 }}>💬</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Community</div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Join the community for help and discussion</div>
-              </div>
-            </div>
-            <div style={linkCard} onClick={() => openSupportLink('https://github.com/AugmentedValueAcceleration/ava-supernova/issues')}>
-              <span style={{ fontSize: 24 }}>🐙</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>GitHub Issues</div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>{t('dash.support.header_sub')}</div>
-              </div>
-            </div>
-            <div style={linkCard} onClick={() => window.dispatchEvent(new CustomEvent('ava-support-nav-docs'))}>
-              <span style={{ fontSize: 24 }}>📖</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>Documentation</div>
-                <div style={{ fontSize: 11, color: '#6c7086', marginTop: 2 }}>Guides, setup instructions, and API reference</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const shown = ticket || tickets.find((tk: any) => tk.ref_label === activeRef) || null;
-  const shownStatus = String(shown?.status || '').toLowerCase();
-  const isClosed = shownStatus === 'closed';
-  const canReopen = shownStatus === 'closed' || shownStatus === 'resolved';
-  const newCatMeta = supportCategoryMeta(newCategory);
-  const divider = '1px solid color-mix(in srgb, var(--accent) 12%, transparent)';
-  const fieldLabel: React.CSSProperties = { display: 'block', fontSize: 11, color: '#a6adc8', marginBottom: 6 };
-  const counter: React.CSSProperties = { marginTop: 4, fontSize: 10, color: '#6c7086', textAlign: 'right' };
-  const errorBox: React.CSSProperties = { borderRadius: 8, border: '1px solid rgba(243,139,168,0.3)', background: 'rgba(243,139,168,0.08)', color: '#f38ba8', padding: '8px 12px', fontSize: 12 };
-
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', gap: 10 }}>
-      {/* Public → Discord, private → ticket. On every support screen. */}
-      <div style={{ borderRadius: 12, border: divider, background: 'rgba(49,34,68,0.25)', padding: '10px 16px' }}>
-        <SupportDiscordLine signedIn />
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+      <div style={{ ...card, padding: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>{t('dash.support.discord_title')}</div>
+        <p style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.6, margin: '0 0 16px' }}>{t('dash.support.discord_desc')}</p>
+        <button
+          type="button"
+          onClick={() => { void openExternal(SUPPORT_DISCORD_URL); }}
+          style={{
+            padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+            background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
+            color: 'var(--accent)',
+          }}
+        >
+          {t('dash.support.discord_cta')}
+        </button>
       </div>
-
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', borderRadius: 16, border: divider }}>
-        {/* ── My tickets ──────────────────────────────────────────── */}
-        <div style={{ display: 'flex', width: 272, flexShrink: 0, flexDirection: 'column', borderRight: divider, background: 'rgba(49,34,68,0.25)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: divider, padding: '14px 16px' }}>
-            <span style={{ fontSize: 13, fontWeight: 300, color: '#cdd6f4' }}>{tt('dash.support.tk.my_tickets', 'My tickets')}</span>
-            <button
-              onClick={startNew}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: view.kind === 'new' ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent', padding: '4px 10px', fontSize: 11, color: '#a6adc8', cursor: 'pointer' }}
-            >{tt('dash.support.tk.new_btn', '+ New ticket')}</button>
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
-            {tickets.map((tk: any) => {
-              const chip = supportStatusChip(tk.status);
-              const cat = supportCategoryMeta(tk.category);
-              const active = activeRef === tk.ref_label;
-              const unread = Number(tk.unread_user) || 0;
-              return (
-                <button
-                  key={tk.id || tk.ref_label}
-                  onClick={() => openTicket(tk.ref_label)}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left', marginBottom: 4, borderRadius: 12, cursor: 'pointer', padding: 12,
-                    border: active ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' : '1px solid transparent',
-                    background: active ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : 'transparent',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, color: '#6c7086', fontFamily: 'monospace', letterSpacing: 0.5 }}>{tk.ref_label}</span>
-                    {unread > 0 && (
-                      <span
-                        title={tt('dash.support.tk.unread', 'New reply from the team')}
-                        style={{ display: 'flex', height: 16, minWidth: 16, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--accent)', padding: '0 4px', fontSize: 8, fontWeight: 700, color: '#fff' }}
-                      >{unread}</span>
-                    )}
-                  </div>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: unread > 0 ? '#cdd6f4' : '#a6adc8', fontWeight: unread > 0 ? 600 : 400 }}>
-                    {tk.subject}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 6, fontSize: 10, color: '#6c7086' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: chip.color }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: chip.dot }} />
-                      {chip.label}
-                    </span>
-                    {cat && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, borderRadius: 4, border: divider, padding: '1px 5px' }}>
-                        <span>{cat.icon}</span>{cat.label}
-                      </span>
-                    )}
-                    <span style={{ marginLeft: 'auto' }}>{supportWhen(tk.last_message_at || tk.created_at)}</span>
-                  </div>
-                </button>
-              );
-            })}
-            {listLoaded && tickets.length === 0 && (
-              <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 11, color: '#6c7086' }}>{t('dash.support.none_yet')}</div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Right pane: ticket thread · new-ticket form · empty state ── */}
-        <div style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column', background: 'rgba(10,6,18,0.4)' }}>
-          {view.kind === 'ticket' && (
-            <>
-              {/* Header: subject, ref, category, status, Close / Reopen */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: divider, padding: '14px 20px' }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: '#cdd6f4' }}>
-                    {shown?.subject || view.ref}
-                  </div>
-                  <div style={{ marginTop: 2, fontSize: 11, color: '#6c7086' }}>
-                    <span style={{ fontFamily: 'monospace' }}>{view.ref}</span>
-                    {shown?.created_at ? ` · ${tt('dash.support.tk.opened', 'Opened')} ${supportWhen(shown.created_at)}` : ''}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 8 }}>
-                  {(() => { const m = supportCategoryMeta(shown?.category); return m ? (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 999, border: divider, background: 'rgba(49,34,68,0.5)', color: '#a6adc8', padding: '4px 12px', fontSize: 10 }}>
-                      <span>{m.icon}</span>{m.label}
-                    </span>
-                  ) : null; })()}
-                  {shown && (() => { const c = supportStatusChip(shown.status); return (
-                    <span style={{ borderRadius: 999, border: `1px solid ${c.border}`, background: c.bg, color: c.color, padding: '4px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{c.label}</span>
-                  ); })()}
-                  {shown && canReopen && (
-                    <button onClick={() => handleStatus('reopen')} disabled={busy} style={{ ...btnSecondary, padding: '4px 12px', fontSize: 11, opacity: busy ? 0.5 : 1 }}>
-                      {tt('dash.support.tk.reopen', 'Reopen')}
-                    </button>
-                  )}
-                  {shown && !isClosed && (
-                    <button onClick={() => handleStatus('close')} disabled={busy} style={{ ...btnSecondary, padding: '4px 12px', fontSize: 11, opacity: busy ? 0.5 : 1 }}>
-                      {tt('dash.support.tk.close', 'Close ticket')}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Thread — fills the space, scrolls internally */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-                {threadError ? (
-                  <div style={{ maxWidth: 480, margin: '40px auto 0', textAlign: 'center' }}>
-                    <div style={{ ...errorBox, marginBottom: 12 }}>{threadError}</div>
-                    <button onClick={() => openTicket(view.ref)} style={btnSecondary}>{tt('dash.support.tk.retry', 'Try again')}</button>
-                  </div>
-                ) : threadLoading && messages.length === 0 ? (
-                  <LoadingSpinner />
-                ) : (
-                  <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {messages.map((msg: any) => {
-                      const isUser = msg.sender === 'user';
-                      // 'ava' only exists in history from the old auto-reply era;
-                      // it renders as a team-side message, clearly labelled.
-                      const name = isUser
-                        ? (msg.sender_name || tt('dash.support.tk.you', 'You'))
-                        : msg.sender === 'ava'
-                          ? tt('dash.support.tk.ava_history', 'Ava (earlier auto-reply)')
-                          : (msg.sender_name || tt('dash.support.tk.team', 'Ava Supernova team'));
-                      return (
-                        <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-                          <div style={{
-                            maxWidth: '80%', borderRadius: 16, padding: '10px 14px',
-                            borderBottomRightRadius: isUser ? 4 : 16, borderBottomLeftRadius: isUser ? 16 : 4,
-                            background: isUser ? 'var(--accent)' : 'rgba(49,34,68,0.5)',
-                            border: isUser ? 'none' : divider,
-                            color: isUser ? '#fff' : '#a6adc8',
-                          }}>
-                            <div style={{ fontSize: 11, marginBottom: 4, color: isUser ? 'rgba(255,255,255,0.85)' : '#cdd6f4', fontWeight: 600 }}>{name}</div>
-                            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13, lineHeight: 1.6 }}>{msg.body}</div>
-                            <div style={{ marginTop: 4, fontSize: 9, opacity: 0.6 }}>{supportWhen(msg.created_at, true)}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div ref={messagesEndRef} />
-                  </div>
-                )}
-              </div>
-
-              {/* Reply box — always at the bottom */}
-              <div style={{ borderTop: divider, padding: 16 }}>
-                <div style={{ maxWidth: 640, margin: '0 auto' }}>
-                  {actionError && <div style={{ ...errorBox, marginBottom: 8 }}>{actionError}</div>}
-                  {isClosed ? (
-                    <div style={{ fontSize: 12, color: '#6c7086', textAlign: 'center' }}>
-                      {tt('dash.support.tk.closed_hint', 'This ticket is closed. Reopen it to reply.')}
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-                      <textarea
-                        value={reply}
-                        onChange={e => setReply(e.target.value)}
-                        // Ctrl/Cmd+Enter sends; plain Enter is a new line — replies are often long.
-                        onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleReply(); } }}
-                        maxLength={SUPPORT_MESSAGE_MAX}
-                        disabled={!!threadError || (threadLoading && !shown)}
-                        placeholder={t('dash.support.reply_ph')}
-                        rows={3}
-                        style={{ flex: 1, resize: 'vertical', minHeight: 44, maxHeight: 240, borderRadius: 12, border: divider, background: 'rgba(10,6,18,0.8)', padding: '10px 16px', fontSize: 13, color: '#cdd6f4', outline: 'none', fontFamily: 'inherit' }}
-                      />
-                      <button
-                        onClick={handleReply}
-                        disabled={!reply.trim() || busy || !!threadError}
-                        style={{ flexShrink: 0, borderRadius: 12, border: 'none', background: 'var(--accent)', padding: '10px 20px', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', opacity: !reply.trim() || busy || threadError ? 0.3 : 1 }}
-                      >{busy ? t('dash.chat.sending') : tt('dash.support.tk.send_reply', 'Send reply')}</button>
-                    </div>
-                  )}
-                  <div style={{ marginTop: 6, fontSize: 10, color: '#6c7086', textAlign: 'center' }}>
-                    {tt('dash.support.tk.no_secrets', 'Never paste API keys or passwords — the team never needs them.')}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {view.kind === 'new' && (
-            <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-              <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div>
-                  <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 4 }}>{tt('dash.support.tk.new_title', 'New private ticket')}</div>
-                  <div style={{ fontSize: 12, color: '#6c7086', lineHeight: 1.6 }}>
-                    {tt('dash.support.tk.new_sub', 'Only you and the team can see it. A person on the team will reply here.')}
-                  </div>
-                </div>
-                <div>
-                  <label style={fieldLabel}>{tt('dash.support.tk.category', 'Category')} *</label>
-                  <CustomSelect
-                    value={newCategory}
-                    onChange={setNewCategory}
-                    placeholder={tt('dash.support.tk.pick_category', 'Pick a category…')}
-                    options={SUPPORT_CATEGORIES.map(c => { const m = supportCategoryMeta(c.slug)!; return { value: m.slug, label: `${m.icon}  ${m.label}` }; })}
-                    width="100%"
-                  />
-                </div>
-                <div>
-                  <label style={fieldLabel}>{tt('dash.support.tk.subject', 'Subject')} *</label>
-                  <input
-                    value={newSubject}
-                    onChange={e => setNewSubject(e.target.value)}
-                    maxLength={SUPPORT_SUBJECT_MAX}
-                    placeholder={newCatMeta ? newCatMeta.label : tt('dash.support.tk.subject_ph', 'A short summary')}
-                    style={inputStyle}
-                  />
-                  <div style={counter}>{newSubject.length}/{SUPPORT_SUBJECT_MAX}</div>
-                </div>
-                <div>
-                  <label style={fieldLabel}>{tt('dash.support.tk.message', 'Message')} *</label>
-                  <textarea
-                    value={newMessage}
-                    onChange={e => setNewMessage(e.target.value)}
-                    maxLength={SUPPORT_MESSAGE_MAX}
-                    rows={8}
-                    placeholder={tt('dash.support.tk.message_ph', "Tell us what's going on, and what you were doing when it happened.")}
-                    style={{ ...inputStyle, height: 'auto', minHeight: 160, padding: '10px 12px', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}
-                  />
-                  <div style={counter}>{newMessage.length.toLocaleString(getLocale())}/{SUPPORT_MESSAGE_MAX.toLocaleString(getLocale())}</div>
-                </div>
-                <div style={{ fontSize: 12, color: '#fab387', lineHeight: 1.6 }}>
-                  {tt('dash.support.tk.no_secrets', 'Never paste API keys or passwords — the team never needs them.')}
-                </div>
-                {createError && <div style={errorBox}>{createError}</div>}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                  <button onClick={() => setView({ kind: 'empty' })} disabled={creating} style={btnSecondary}>
-                    {tt('dash.support.tk.cancel', 'Cancel')}
-                  </button>
-                  <button onClick={handleCreate} disabled={!canCreate} style={{ ...btnPrimary, opacity: canCreate ? 1 : 0.4, cursor: canCreate ? 'pointer' : 'default' }}>
-                    {creating ? t('dash.chat.sending') : tt('dash.support.tk.open_ticket', 'Open ticket')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {view.kind === 'empty' && (
-            <div style={{ display: 'flex', flex: 1, maxWidth: 480, margin: '0 auto', padding: 20, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20, fontSize: 26 }}>🔒</div>
-              <div style={{ fontSize: 16, color: '#cdd6f4', marginBottom: 6 }}>{tt('dash.support.tk.empty_title', 'Private support tickets')}</div>
-              <div style={{ maxWidth: 360, fontSize: 13, color: '#6c7086', lineHeight: 1.6, marginBottom: 16 }}>
-                {tickets.length > 0
-                  ? tt('dash.support.tk.empty_pick', 'Pick a ticket on the left, or open a new one. A person on the team answers every ticket.')
-                  : tt('dash.support.tk.empty_none', 'Open a ticket and a person on the team will reply here. Only you and the team can see it.')}
-              </div>
-              <button onClick={startNew} style={btnPrimary}>{tt('dash.support.tk.new_btn', '+ New ticket')}</button>
-            </div>
-          )}
-        </div>
+      <div style={{ ...card, padding: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 6 }}>{t('dash.support.email_title')}</div>
+        <p style={{ fontSize: 12, color: '#a6adc8', lineHeight: 1.6, margin: '0 0 16px' }}>{t('dash.support.email_desc')}</p>
+        <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#cdd6f4', userSelect: 'all' }}>{SUPPORT_EMAIL}</div>
+        <p style={{ fontSize: 11, color: '#6c7086', marginTop: 12, marginBottom: 0 }}>{t('dash.support.email_ava')}</p>
       </div>
     </div>
   );
@@ -17255,7 +15378,6 @@ const platformLabel = (p: string): string => (PLATFORM_KEYS[p] ? t(PLATFORM_KEYS
 
 export function ReleaseNotesPage() {
   useLocale();
-  const connected = checkConnected();
   const [apiReleases, setApiReleases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -17297,7 +15419,7 @@ export function ReleaseNotesPage() {
     },
   ];
 
-  const releases: any[] = (connected && apiReleases && apiReleases.length > 0) ? apiReleases : fallbackReleases;
+  const releases: any[] = (apiReleases && apiReleases.length > 0) ? apiReleases : fallbackReleases;
 
   // Auto-expand the latest release — and DON'T touch the month filter.
   //
@@ -17609,7 +15731,7 @@ function TasksPageInner() { return <TasksPage />; }
 function JournalPageInner() { return <JournalPage />; }
 
 export function AccountPage() {
-  const [tab, setTab] = useState<'settings' | 'billing' | 'connections' | 'personality' | 'profile'>('settings');
+  const [tab, setTab] = useState<'settings' | 'connections' | 'personality' | 'profile'>('settings');
   // "{name}'s profile" — the user's own data: identity/body, health goals, their
   // plans, and their catalogue contributions.
   const profileLabel = (() => {
@@ -17618,22 +15740,8 @@ export function AccountPage() {
       return first ? t('general.profile.account_tab_named', { name: first }) : t('general.profile.account_tab');
     } catch { return t('general.profile.account_tab'); }
   })();
-  // Was reading 'ava-platform-key' — wrong storage key. The canonical
-  // location is 'ava-ide-platform-key' (per getPlatformKey() in lib/api).
-  // The mismatch meant the Billing tab was hidden even for signed-in
-  // operators, because `connected` was always false. Use the helper so
-  // we also pick up the sk-ava- prefix validation.
-  const [connected, setConnected] = useState<boolean>(() => checkConnected());
-  // Re-check on auth changes (sign-in / disconnect) so the Billing tab
-  // shows / hides without a manual refresh.
-  useEffect(() => {
-    const onChange = () => setConnected(checkConnected());
-    window.addEventListener('ava-auth-changed', onChange);
-    return () => window.removeEventListener('ava-auth-changed', onChange);
-  }, []);
   const tabs = [
     { key: 'settings' as const, label: t('dash.nav.settings') },
-    ...(connected ? [{ key: 'billing' as const, label: t('dash.nav.billing') }] : []),
     // Connections tab hidden for now — being reworked later this week.
     // Re-enable by restoring: { key: 'connections' as const, label: 'Connections' },
     { key: 'personality' as const, label: t('dash.account.tab_style') },
@@ -17657,7 +15765,6 @@ export function AccountPage() {
         ))}
       </div>
       {tab === 'settings' && <SettingsPage />}
-      {tab === 'billing' && <BillingPage />}
       {tab === 'connections' && <ConnectionsPage />}
       {tab === 'personality' && <PersonalityPage />}
       {/* Your name, your picture, your body basics. The health profile and your
@@ -17723,7 +15830,8 @@ export function RoadmapPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    apiFetch(`/roadmap?locale=${encodeURIComponent(getLocale())}`)
+    fetch(`${PUBLIC_API}/roadmap?locale=${encodeURIComponent(getLocale())}`)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((res: { themes?: IdeRoadmapTheme[] } | null) => {
         if (cancelled) return;
         setThemes(res?.themes ?? []);
@@ -17806,73 +15914,11 @@ export function RoadmapPage() {
   );
 }
 
-/* ── Themed Audio Player ─────────────────────────────────────────────────── */
 
-function AvaAudioPlayer({ src }: { src: string }) {
-  const ref = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
 
-  const toggle = () => {
-    if (!ref.current) return;
-    if (playing) ref.current.pause(); else ref.current.play();
-    setPlaying(!playing);
-  };
 
-  const fmt = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  };
-
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-      borderRadius: 10, background: 'rgba(26, 16, 40, 0.8)',
-      border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-    }}>
-      <audio ref={ref} src={src} preload="metadata"
-        onLoadedMetadata={() => setDuration(ref.current?.duration || 0)}
-        onTimeUpdate={() => setProgress(ref.current?.currentTime || 0)}
-        onEnded={() => setPlaying(false)}
-      />
-      <button onClick={toggle} style={{
-        width: 32, height: 32, borderRadius: '50%',
-        background: playing ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'color-mix(in srgb, var(--accent) 15%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', color: 'var(--accent)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer', fontSize: 12, flexShrink: 0,
-      }}>
-        {playing ? '\u23F8' : '\u25B6'}
-      </button>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <div style={{
-          height: 4, borderRadius: 2, background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-          overflow: 'hidden', cursor: 'pointer',
-        }} onClick={e => {
-          if (!ref.current || !duration) return;
-          const rect = e.currentTarget.getBoundingClientRect();
-          ref.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
-        }}>
-          <div style={{
-            height: '100%', width: `${duration ? (progress / duration) * 100 : 0}%`,
-            background: 'var(--accent)', borderRadius: 2, transition: 'width 0.1s',
-          }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#6c7086' }}>
-          <span>{fmt(progress)}</span>
-          <span>{fmt(duration)}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ===== Creative Studio ===== */
-// csCard / csInput / csLabel / CSTokenBar retired — the rewritten Creative
-// Studio owns its styles inline and renders the credit-balance card directly
-// (matching the extension). Removed to satisfy noUnusedLocals.
 
 export function CreativeStudioPage() {
   // Creative Studio IS the Design Studio now — the old Compose media composer
@@ -17886,315 +15932,6 @@ export function CreativeStudioPage() {
     </div>
   );
 }
-
-/* ── Creative Studio — Library Tab ──────────────────────────────────────── */
-
-type CreativeLibFilter = 'all' | 'images' | 'music' | 'video' | 'voice' | 'sfx' | 'documents' | 'spreadsheets' | 'presentations';
-
-// Dead code after the library tab removal from Creative Studio —
-// export keeps noUnusedLocals happy for one release so a targeted
-// prune can land as its own commit. Pick up next time this file's
-// open. Renamed to _CreativeLibraryTab to signal "retained but unused".
-export function _CreativeLibraryTab() {
-  const [filter, setFilter] = useState<CreativeLibFilter>('all');
-  const [assets, setAssets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const connected = checkConnected();
-  const [source, setSource] = useState<'local' | 'cloud'>('local');
-  const [selected, setSelected] = useState<any>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  // Reset to local on logout
-  useEffect(() => {
-    const handler = () => { if (!checkConnected()) { setSource('local'); setAssets([]); setSelected(null); } };
-    window.addEventListener('ava-auth-changed', handler);
-    return () => window.removeEventListener('ava-auth-changed', handler);
-  }, []);
-
-  const FILTERS: { key: CreativeLibFilter; label: string; icon: string }[] = [
-    { key: 'all', label: t('dash.creative.filter.all'), icon: '📋' },
-    { key: 'images', label: t('dash.creative.filter.images'), icon: '🖼️' },
-    { key: 'music', label: t('dash.creative.filter.music'), icon: '🎵' },
-    { key: 'video', label: t('dash.creative.filter.video'), icon: '🎬' },
-    { key: 'voice', label: t('dash.creative.filter.voice'), icon: '🎙️' },
-    /* { key: 'sfx', label: 'SFX', icon: '🔊' }, — in development */
-    { key: 'documents', label: t('dash.creative.filter.documents'), icon: '📄' },
-    { key: 'spreadsheets', label: t('dash.creative.filter.spreadsheets'), icon: '📊' },
-    { key: 'presentations', label: t('dash.creative.filter.presentations'), icon: '📽️' },
-  ];
-
-  // Fetch assets based on source toggle
-  useEffect(() => {
-    setLoading(true);
-    setAssets([]);
-    (async () => {
-      if (source === 'local') {
-        try {
-          const { readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-          const raw = await readTextFile('.ava/creative/metadata.json', { baseDir: BaseDirectory.Home }).catch(() => '[]');
-          setAssets(JSON.parse(raw || '[]'));
-        } catch { setAssets([]); }
-      } else if (connected) {
-        try {
-          const data = await apiFetch('/library');
-          const list = Array.isArray(data) ? data : (data?.files || data?.assets || data?.items || []);
-          setAssets(list);
-        } catch { setAssets([]); }
-      }
-      setLoading(false);
-    })();
-  }, [source, connected]);
-
-  const filtered = filter === 'all' ? assets : assets.filter((a: any) => {
-    const aType = (a.asset_type || a.type || '').toLowerCase();
-    const ext = (a.name || a.title || '').split('.').pop()?.toLowerCase() || '';
-    if (filter === 'images') return ['image', 'graphic'].includes(aType) || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
-    if (filter === 'music') return aType === 'music';
-    if (filter === 'video') return aType === 'video' || ['mp4', 'webm', 'mov'].includes(ext);
-    if (filter === 'voice') return aType === 'voice';
-    if (filter === 'sfx') return aType === 'sfx';
-    if (filter === 'documents') return ['document', 'content'].includes(aType) || ['docx', 'pdf', 'md', 'txt', 'csv'].includes(ext);
-    if (filter === 'spreadsheets') return aType === 'spreadsheet' || ['xlsx', 'xls'].includes(ext);
-    if (filter === 'presentations') return aType === 'presentation' || ['pptx', 'ppt'].includes(ext);
-    return false;
-  });
-
-  const typeIcon = (type: string): string => {
-    if (['image', 'graphic'].includes(type)) return '🖼️';
-    if (type === 'music') return '🎵';
-    if (type === 'video') return '🎬';
-    if (type === 'voice') return '🎙️';
-    if (type === 'sfx') return '🔊';
-    if (type === 'presentation') return '📽️';
-    if (['document', 'content'].includes(type)) return '📄';
-    if (type === 'spreadsheet') return '📊';
-    return '📁';
-  };
-
-  const typeColor = (type: string): string => {
-    if (['image', 'graphic'].includes(type)) return '#60a5fa';
-    if (type === 'music') return '#f97316';
-    if (type === 'video') return 'var(--accent)';
-    if (type === 'voice') return '#ec4899';
-    if (type === 'sfx') return '#f59e0b';
-    if (['document', 'content'].includes(type)) return '#22c55e';
-    if (type === 'presentation') return '#eab308';
-    if (type === 'spreadsheet') return '#06b6d4';
-    return '#6c7086';
-  };
-
-  return (
-    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Source toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <button
-          onClick={() => setSource('local')}
-          style={{
-            padding: '4px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-            background: source === 'local' ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'transparent',
-            color: source === 'local' ? '#cdd6f4' : '#585b70', transition: 'all 0.15s',
-          }}
-        >
-          Local
-        </button>
-        <button
-          onClick={() => { if (connected) setSource('cloud'); }}
-          style={{
-            padding: '4px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500,
-            cursor: connected ? 'pointer' : 'not-allowed',
-            background: source === 'cloud' ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'transparent',
-            color: source === 'cloud' ? '#cdd6f4' : '#585b70',
-            opacity: connected ? 1 : 0.3, transition: 'all 0.15s',
-          }}
-          title={connected ? 'Browse cloud assets' : 'Connect account to access cloud'}
-        >
-          Cloud
-        </button>
-        {!connected && <span style={{ fontSize: 9, color: '#585b70' }}>Connect account for cloud</span>}
-      </div>
-
-      {/* Filter pills */}
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        {FILTERS.map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key)} style={{
-            padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 400, cursor: 'pointer',
-            background: filter === f.key ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'transparent',
-            color: filter === f.key ? '#cdd6f4' : '#585b70', transition: 'all 0.15s',
-          }}>
-            {f.icon} {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ fontSize: 11, color: '#6c7086' }}>{filtered.length} {filter === 'all' ? 'assets' : filter}</div>
-
-      {loading && <div style={{ padding: 24, textAlign: 'center' as const, color: '#6c7086', fontSize: 12 }}>Loading assets...</div>}
-
-      {!loading && filtered.length === 0 && (
-        <div style={{ ...card, padding: 24, textAlign: 'center' as const }}>
-          <div style={{ fontSize: 28, opacity: 0.3, marginBottom: 8 }}>✨</div>
-          <div style={{ fontSize: 13, color: '#6c7086' }}>{filter === 'all' ? 'No assets yet. Ask Ava to create something!' : `No ${filter} found.`}</div>
-        </div>
-      )}
-
-      {!loading && filtered.length > 0 && (
-        <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
-          {/* Asset grid */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-              {filtered.map((asset: any, i: number) => (
-                <div
-                  key={asset.id || i}
-                  onClick={() => setSelected(selected?.id === asset.id ? null : asset)}
-                  style={{
-                    ...card, padding: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6,
-                    border: selected?.id === asset.id ? '1px solid var(--accent)' : '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-                  }}
-                >
-                  {['image', 'graphic'].includes(asset.asset_type || '') && (asset.thumbnail_url || asset.url) ? (
-                    <img src={asset.thumbnail_url || asset.url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8 }} />
-                  ) : (
-                    <div style={{ width: '100%', height: 100, borderRadius: 8, background: 'rgba(49,34,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, opacity: 0.4 }}>
-                      {typeIcon(asset.asset_type || asset.type || '')}
-                    </div>
-                  )}
-                  <div style={{ fontSize: 10, fontWeight: 500, color: '#cdd6f4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                    {asset.title || asset.name || 'Untitled'}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 8, fontWeight: 500, padding: '1px 5px', borderRadius: 4, background: `${typeColor(asset.asset_type || '')}15`, color: typeColor(asset.asset_type || '') }}>
-                      {asset.asset_type || asset.type || 'file'}
-                    </span>
-                    <span style={{ fontSize: 8, color: '#585b70' }}>
-                      {asset.created_at ? new Date(asset.created_at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' }) : ''}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Detail panel */}
-          {selected && (
-            <div style={{ width: 300, flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {/* Preview */}
-              <div style={{ ...card, padding: 12 }}>
-                {['image', 'graphic'].includes(selected.asset_type || '') && (selected.thumbnail_url || selected.url) ? (
-                  <img src={selected.thumbnail_url || selected.url} alt="" style={{ width: '100%', borderRadius: 8, marginBottom: 10 }} />
-                ) : ['music', 'voice'].includes(selected.asset_type || '') && selected.url ? (
-                  <div style={{ marginBottom: 10 }}><AvaAudioPlayer src={selected.url} /></div>
-                ) : ['video'].includes(selected.asset_type || '') && selected.url ? (
-                  <video controls src={selected.url} style={{ width: '100%', borderRadius: 8, marginBottom: 10 }} />
-                ) : (
-                  <div style={{ width: '100%', height: 80, borderRadius: 8, background: 'rgba(49,34,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, opacity: 0.4, marginBottom: 10 }}>
-                    {typeIcon(selected.asset_type || selected.type || '')}
-                  </div>
-                )}
-
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#cdd6f4', marginBottom: 4 }}>
-                  {selected.title || selected.name || 'Untitled'}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 9, fontWeight: 500, padding: '2px 8px', borderRadius: 4, background: `${typeColor(selected.asset_type || '')}15`, color: typeColor(selected.asset_type || '') }}>
-                    {selected.asset_type || selected.type || 'file'}
-                  </span>
-                  <span style={{ fontSize: 10, color: '#585b70' }}>
-                    {selected.created_at ? new Date(selected.created_at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
-                  </span>
-                </div>
-              </div>
-
-              {/* Prompt */}
-              {selected.prompt && (
-                <div style={{ ...card, padding: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086', marginBottom: 6 }}>Prompt</div>
-                  <div style={{ fontSize: 11, color: '#a6adc8', lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>
-                    {selected.prompt}
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                {selected.url && (
-                  <a
-                    href={selected.url}
-                    download={selected.title || 'download'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
-                      background: 'var(--accent)', color: '#fff', textAlign: 'center' as const,
-                      textDecoration: 'none', cursor: 'pointer',
-                    }}
-                  >
-                    Download
-                  </a>
-                )}
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  style={{
-                    flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
-                    background: 'rgba(239,68,68,0.15)', color: '#f87171', border: 'none', cursor: 'pointer',
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-
-              {/* Delete confirmation */}
-              {confirmDelete && (
-                <div style={{
-                  ...card, padding: 16, border: '1px solid rgba(239,68,68,0.3)',
-                  background: 'rgba(239,68,68,0.05)',
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>Delete this asset?</div>
-                  <div style={{ fontSize: 11, color: '#a6adc8', marginBottom: 12, lineHeight: 1.4 }}>
-                    "{selected.title || 'Untitled'}" will be permanently removed. This cannot be undone.
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => setConfirmDelete(false)}
-                      style={{
-                        flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
-                        background: 'rgba(49,34,68,0.5)', color: '#a6adc8', border: 'none', cursor: 'pointer',
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        const deleteId = selected.id;
-                        setAssets(prev => prev.filter(a => a.id !== deleteId));
-                        setSelected(null);
-                        setConfirmDelete(false);
-                        (async () => {
-                          try {
-                            const { writeTextFile, readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-                            const raw = await readTextFile('.ava/creative/metadata.json', { baseDir: BaseDirectory.Home }).catch(() => '[]');
-                            const meta = JSON.parse(raw || '[]').filter((a: any) => a.id !== deleteId);
-                            await writeTextFile('.ava/creative/metadata.json', JSON.stringify(meta, null, 2), { baseDir: BaseDirectory.Home });
-                          } catch { /* */ }
-                        })();
-                      }}
-                      style={{
-                        flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
-                        background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer',
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 
 
 /* ===== IDE Audit View ===================================================

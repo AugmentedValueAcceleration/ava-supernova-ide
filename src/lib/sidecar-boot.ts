@@ -43,7 +43,10 @@ export function hasChatCapability(): boolean {
 /** Build the sidecar init config from localStorage — mirrors AvaChatPage.startSidecar. */
 export function buildSidecarConfig(): SidecarConfig {
   const providers = readByokProviders();
-  const model = ls('ava-ide-active-model') || 'auto';
+  // The dashboard chat's pick (the rooms share it); the terminal panel's own
+  // pick is the fallback. This read only the terminal's, so a cold boot ran
+  // whatever the terminal last chose, not what the chat showed.
+  const model = ls('ava-ide-chat-model') || ls('ava-ide-active-model') || 'auto';
   const mode = ls('ava-ide-chat-mode') || 'work';
   const workStart = Number(ls('ava-ide-work-start')) || 9;
   const workEnd = Number(ls('ava-ide-work-end')) || 17;
@@ -79,6 +82,30 @@ export function buildSidecarConfig(): SidecarConfig {
 }
 
 let booting = false;
+let restartTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * A key was added or removed: a running sidecar registered its providers at
+ * start, so it must restart for the change to count (the extension re-inits
+ * its session the same way). Debounced — a factory reset clears every key in
+ * one go. A sidecar that is not running is simply started, if it now can be.
+ */
+export function restartSidecarForKeys(): void {
+  if (restartTimer) clearTimeout(restartTimer);
+  restartTimer = setTimeout(() => {
+    restartTimer = null;
+    const sc = getSidecar();
+    if (!sc.isReady || booting) { void ensureSidecarRunning(); return; }
+    booting = true;
+    void sc.stop()
+      .catch(() => { /* already gone */ })
+      .then(async () => {
+        if (hasChatCapability()) await sc.start(buildSidecarConfig());
+      })
+      .catch(() => { /* surfaced via the sidecar event stream */ })
+      .finally(() => { booting = false; });
+  }, 600);
+}
 
 /** Ensure a live sidecar exists. No-op if one is already running/booting or there's
  *  no provider to chat through. Never stops the sidecar. */

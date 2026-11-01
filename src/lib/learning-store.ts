@@ -84,7 +84,7 @@ export async function setActiveCourse(id: string): Promise<any[]> {
 }
 
 /** Delete a course from the local store. Returns the updated curriculums so the
- *  UI can drop it without a re-read. Writes to the same account-scoped file the
+ *  UI can drop it without a re-read. Writes to the same file the
  *  extension uses, so a delete here is reflected everywhere. */
 export async function deleteCourse(id: string): Promise<any[]> {
   try {

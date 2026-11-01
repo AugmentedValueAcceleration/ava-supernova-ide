@@ -12,9 +12,7 @@ A desktop application built with **Tauri v2** (Rust), **React 19**, and a **Node
 
 - **A real IDE** — activity bar, file explorer, workspace search, git panel, editor area, terminal, and a bottom panel (Terminal · Ava CLI · Problems · Output · Debug Console).
 - **Ava, native** — not a sidebar bolted onto someone else's editor. The agent is the centre of gravity.
-- **Local or Cloud** — toggle from the chat header:
-  - **Local mode** — a Node.js engine runs `@ava/core` on your machine with the full toolkit, personas, and memory.
-  - **Cloud mode** — the platform API with managed credits and usage tracking.
+- **Runs on your machine** — a Node.js engine runs `@ava/core` locally with the full toolkit, personas, and memory, on your own provider keys (kept in the system keychain) or a local model. No account, no credits — free and open source.
 - **Owns desktop automation** — the standout capability that only a native app can offer (below).
 
 ---
@@ -44,8 +42,8 @@ Ten focused areas in the sidebar, each with its own sub-pages:
 | **Health & Nutrition** | Exercise and recipe catalogues, ready-made plans you place session by session, your plan calendar and past plans, your profile, and Ava herself |
 | **Creative Studio** | Images and video |
 | **Memory** | Patterns, preferences, decisions |
-| **History** | Credits, sessions, models |
-| **Account** | Settings, billing, personalisation |
+| **History** | Tokens, sessions, models |
+| **Settings** | Keys, preferences, personalisation |
 | **Help** | Support, releases, roadmap |
 
 ---
@@ -56,7 +54,7 @@ Same engine as the CLI and the VS Code extension — so everything you learn in 
 
 - **7 modes** — Code (`>>`), Plan (`::`), Chat (`..`), Teach (`??`), Security (`!!`), Brainstorm (`**`), Write (`<<`).
 - **24 specialist personas** — complex tasks activate an internal team (Scout → Architect → Verifier → Sequencer → Challenger → Builder for code); simple tasks go direct.
-- **Two fleets** — **Maestro** (a tier-differentiated Qwen ensemble, with Qwen 3.8 Flash coordinating and building) and **Supernova** (polyglot — DeepSeek V4.1 Flash coordinates, Qwen 3.7 Plus builds, Qwen 3.8 Flash handles vision). Both live on every plan, or on your own Qwen / DeepSeek keys.
+- **Two fleets** — **Maestro** (a tier-differentiated Qwen ensemble, with Qwen 3.8 Flash coordinating and building) and **Supernova** (polyglot — DeepSeek V4.1 Flash coordinates, Qwen 3.7 Plus builds, Qwen 3.8 Flash handles vision). Both run on your own Qwen / DeepSeek keys.
 - **120+ tools**, plus the IDE-only desktop- and browser-automation tools described above.
 - **Knowledge packs** — toggle domain expertise on/off in the chat bar; the system prompt rebuilds live, no restart.
 - **20 languages, live** — the whole interface translates, not just the chat, and switches the moment you change language — no restart, and Ava's replies follow too. Pick your language right from the welcome flow. Dates format the way your language writes them.
@@ -75,7 +73,7 @@ Tauri v2 (Rust)
 │   ├── App.tsx            — layout, routing, state
 │   ├── components/        — Sidebar, EditorArea, ActivityBar, BottomPanel, StatusBar, TitleBar …
 │   └── lib/
-│       ├── api.ts         — platform API + session stats
+│       ├── api.ts         — local usage counters
 │       └── sidecar.ts     — Node.js engine manager (NDJSON protocol)
 ├── sidecar/               — @ava/core agent runner
 └── src-tauri/             — Rust backend (windowing, shell, desktop automation via enigo + uiautomation)
@@ -103,7 +101,6 @@ pnpm tauri dev
 - **Tauri v2** — Rust backend, native WebView frontend
 - **React 19** + **Vite 7** — UI and dev server
 - **@ava/core** — the agent engine (tools, personas, memory, providers)
-- **Supabase** — accounts and credits for signed-in users (no user data is synced)
 - **Catppuccin Mocha** — dark theme palette
 
 ---

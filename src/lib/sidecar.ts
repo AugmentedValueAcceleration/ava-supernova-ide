@@ -408,7 +408,7 @@ export class SidecarManager {
   }
 
   // ── Conversation history (the shared ~/.ava/.../history/*.json files) ────────
-  // The sidecar reads/writes the SAME account-scoped transcripts the extension
+  // The sidecar reads/writes the SAME transcripts the extension
   // + CLI use, so history carries across surfaces. Request/response over the
   // event stream; resolves a safe fallback on timeout so the UI never hangs.
   private requestHistory<T>(cmd: string, respEvent: string, extra: Record<string, unknown>, pick: (e: any) => T, fallback: T): Promise<T> {

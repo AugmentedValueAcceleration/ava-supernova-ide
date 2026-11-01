@@ -76,7 +76,7 @@ const TYPE_TO_EXT: Record<MediumKind, string> = {
   video: 'mp4',
 };
 
-// ── Local persistence (account-scoped) ──────────────────────────────────────
+// ── Local persistence ──────────────────────────────────────
 
 /** The creative dir relative to the home dir: ~/.ava/users/<id>/creative when
  *  signed in (shared with the extension), ~/.ava/creative for BYOK/no-account. */
@@ -182,7 +182,7 @@ function currentProjectFolder(): string | null {
 
 /**
  * Copy a Studio asset into the user's project so it can actually be used in
- * code — the library lives account-scoped outside any project, so a reference
+ * code — the library lives outside any project, so a reference
  * to it would only ever work on this machine.
  *
  * Destination follows the project's OWN convention: the first of public/,

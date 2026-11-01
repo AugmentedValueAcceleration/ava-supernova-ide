@@ -10,7 +10,6 @@ import {
   CreativeStudioPage,
   LibraryPage,
   PersonalityPage,
-  BillingPage,
   SettingsPage,
   ConnectionsPage,
   SupportPage,
@@ -44,7 +43,6 @@ export type DashboardPageId =
   | 'health'
   | 'personality'
   | 'usage'
-  | 'billing'
   | 'settings'
   | 'connections'
   | 'support'
@@ -78,7 +76,6 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'health': '\uD83C\uDFCB\uFE0F',
   'personality': '\uD83C\uDFA8',
   'usage': '\uD83D\uDCCA',
-  'billing': '\uD83D\uDCB3',
   'settings': '\u2699\uFE0F',
   'connections': '\uD83D\uDD17',
   'support': '\uD83C\uDD98',
@@ -105,7 +102,6 @@ const dashboardLabelKeys: Record<DashboardPageId, string> = {
   'health': 'dash.nav.health',
   'personality': 'dash.nav.personality',
   'usage': 'dash.nav.usage',
-  'billing': 'dash.nav.billing',
   'settings': 'dash.nav.settings',
   'connections': 'dash.nav.connections',
   'support': 'dash.nav.support',
@@ -135,7 +131,6 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   // owns the Usage and Audit tabs now. UsagePage was a second component
   // answering the same question and is gone.
   'usage': ChatHistoryPage,
-  'billing': BillingPage,
   'settings': SettingsPage,
   'connections': ConnectionsPage,
   'support': SupportPage,

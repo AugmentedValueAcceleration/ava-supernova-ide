@@ -602,7 +602,7 @@ let agent = null;
 let conductor = null;
 let autoCoordinator = null;
 let conversation = null;
-// Conversation history → the SAME account-scoped ~/.ava/users/<id>/history/*.json
+// Conversation history → the SAME ~/.ava/history/*.json
 // files the extension + CLI write, via core's HistoryManager. So a user who
 // switches extension → IDE picks up their conversations with zero effort.
 let historyManager = null;
@@ -4285,7 +4285,7 @@ function truncateResult(result) {
 // ─── stdin Command Router ───────────────────────────────────────────────────
 
 // ── Conversation history (the shared ~/.ava/.../history/*.json files) ────────
-// Read/manage the same account-scoped transcripts the extension writes. The
+// Read/manage the same transcripts the extension writes. The
 // renderer uses these to list + resume conversations instead of its old
 // localStorage silo, so history carries across CLI / extension / IDE.
 async function handleListHistory(data) {

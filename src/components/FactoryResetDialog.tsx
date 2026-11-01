@@ -15,6 +15,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { getSidecar } from '../lib/sidecar';
+import { clearProviderKeys } from '../lib/provider-keys';
 
 type Severity = 'ordinary' | 'permanent' | 'irreversible';
 interface CatMeta { id: string; severity: Severity; defaultSelected: boolean }
@@ -38,7 +39,7 @@ const LABEL: Record<string, string> = {
   profile: 'Your profile and Ava’s personality',
   datasets: 'Captured training data',
   project_data: 'What Ava knows about your projects',
-  credentials: 'API keys and sign-in',
+  credentials: 'API keys',
   settings: 'Settings, onboarding and consent',
   projects: 'Your projects folder — YOUR SOURCE CODE',
 };
@@ -51,7 +52,7 @@ const DESC: Record<string, string> = {
   profile: 'Your details, Ava’s personality and her avatar.',
   datasets: 'The only copy. Generated from your usage.',
   project_data: 'The project registry and notes — not the projects themselves.',
-  credentials: 'Every provider key and your platform sign-in.',
+  credentials: 'Every provider key, from the system keychain.',
   settings: 'Clears these and Ava starts from onboarding, like a fresh install.',
   projects: 'The actual code you have written. This cannot be undone and is NOT in a backup.',
 };
@@ -95,6 +96,10 @@ export function FactoryResetDialog({ open, onClose }: { open: boolean; onClose: 
     // webview finishes the job. Without this the app reopens still onboarded.
     for (const k of r.clearedStateKeys ?? []) {
       try { localStorage.removeItem(k); } catch { /* private mode, nothing to do */ }
+    }
+    // Provider keys live in the OS keychain, which only the webview can reach.
+    if (chosen.some((c) => c.id === 'credentials')) {
+      await clearProviderKeys().catch(() => { /* reported keys may linger; Settings can remove them */ });
     }
     if (chosen.some((c) => c.id === 'settings')) {
       try { localStorage.clear(); } catch { /* ignore */ }
