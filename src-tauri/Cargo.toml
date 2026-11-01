@@ -25,13 +25,9 @@ tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-deep-link = "2"
-# single-instance: required so an OS-dispatched ava-ide:// URL re-uses the
-# already-running IDE process instead of spawning a sibling. Without this,
-# the OAuth callback URL launches a fresh IDE whose React app has no
-# pendingRef — the original instance sits forever waiting for a signal
-# that went to its duplicate.
-tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+# single-instance: a second launch re-uses the running IDE instead of
+# spawning a sibling that fights it for ~/.ava.
+tauri-plugin-single-instance = "2"
 keyring = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

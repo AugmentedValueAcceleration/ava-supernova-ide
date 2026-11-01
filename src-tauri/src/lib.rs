@@ -2591,28 +2591,15 @@ fn browser_close() -> Result<serde_json::Value, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // Single-instance MUST be registered first. When the OS dispatches an
-        // ava-ide:// URL it would otherwise launch a duplicate process; this
-        // plugin intercepts the secondary launch, hands its argv (including
-        // the deep-link URL) to the original instance, and exits the duplicate.
-        // The deep-link plugin's on_open_url then fires in the original
-        // instance and the React listener resolves the OAuth state correctly.
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            use tauri::Emitter;
-            // Bring the existing window to the foreground so the user sees
-            // the sign-in completing instead of clicking back manually.
+        // Single-instance MUST be registered first: a second launch hands over
+        // to the running IDE and exits, instead of a sibling process fighting
+        // it for ~/.ava. (It used to carry the ava-ide:// sign-in callback too;
+        // accounts went on 1 Nov 2026 and the scheme with them.)
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // Bring the existing window to the foreground.
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.unminimize();
                 let _ = win.set_focus();
-            }
-            // The OS appends the deep-link URL as an argv entry; forward
-            // anything that looks like our scheme to the React side via the
-            // same event the deep-link plugin emits, so a single listener
-            // handles both code paths.
-            for arg in argv {
-                if arg.starts_with("ava-ide://") {
-                    let _ = app.emit("ava-deep-link", arg);
-                }
             }
         }))
         .plugin(tauri_plugin_opener::init())
@@ -2621,36 +2608,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             setup_tray(app)?;
             setup_panic_hotkey(app)?;
-
-            // Dev-mode scheme registration. In production Tauri registers
-            // `ava-ide://` with the OS as part of the installer; in dev we
-            // have to do it ourselves each run so the callback reaches us.
-            #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
-            {
-                use tauri_plugin_deep_link::DeepLinkExt;
-                let _ = app.deep_link().register("ava-ide");
-            }
-
-            // When a `ava-ide://auth?code=...&state=...` URL arrives,
-            // forward it verbatim to the webview as the `ava-deep-link`
-            // event. The React side validates state and calls the
-            // exchange endpoint. We keep the Rust side thin — all
-            // OAuth / secret-storage logic lives in the frontend where
-            // existing shared-config helpers already know how to store
-            // and mirror the platform key.
-            use tauri::Emitter;
-            use tauri_plugin_deep_link::DeepLinkExt;
-            let app_handle = app.handle().clone();
-            app.deep_link().on_open_url(move |event| {
-                for url in event.urls() {
-                    let _ = app_handle.emit("ava-deep-link", url.to_string());
-                }
-            });
-
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
