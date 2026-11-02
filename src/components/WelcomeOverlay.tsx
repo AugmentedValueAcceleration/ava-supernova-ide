@@ -18,6 +18,7 @@ import { PATHS, pathById, type Destination, type OnboardingPath } from '../onboa
 import { getProviderKeys, testAndSaveProviderKey, type ProviderField } from '../lib/provider-keys';
 import type { KeyTestResult } from '../lib/oneshot';
 import { loadGeneralProfile, saveGeneralProfile } from '../lib/health-store';
+import { CONSENT_KEY, ONBOARDED_KEY, markShared } from '../lib/shared-onboarding';
 
 export type OnboardingMode = 'full' | 'key';
 
@@ -28,8 +29,9 @@ interface Props {
 }
 
 /** Set once the new onboarding has been seen (finished or skipped). */
-export const ONBOARDED_KEY = 'ava-ide-onboarded-v2';
-const CONSENT_KEY = 'ava-ide-consent-accepted';
+// Both flags are mirrored to ~/.ava/onboarding.json, so a welcome finished in
+// the extension counts here too (lib/shared-onboarding.ts).
+export { ONBOARDED_KEY };
 
 type Step = 'welcome' | 'key' | 'about' | 'ready';
 const ACCENT = 'var(--accent)';
@@ -108,6 +110,7 @@ export default function WelcomeOverlay({ mode, onComplete }: Props) {
 
   const finish = useCallback((navigateTo?: string) => {
     try { localStorage.setItem(ONBOARDED_KEY, new Date().toISOString()); } catch { /* non-fatal */ }
+    void markShared({ onboarded: true }).catch(() => {});
     const p = pathId ? pathById(pathId) : undefined;
     if (p) {
       // The chat reads ava-ide-chat-mode; the canonical mode id goes there.
@@ -143,6 +146,7 @@ export default function WelcomeOverlay({ mode, onComplete }: Props) {
   const next = () => {
     if (step === 'welcome' && agreed && !alreadyAccepted) {
       try { localStorage.setItem(CONSENT_KEY, new Date().toISOString()); } catch { /* non-fatal */ }
+      void markShared({ consent: true }).catch(() => {});
     }
     if (step === 'about') void saveName(name);
     if (idx === steps.length - 1) { finish(); return; }
