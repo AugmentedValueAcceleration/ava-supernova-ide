@@ -101,6 +101,27 @@ export async function hydrateProviderKeys(): Promise<void> {
   }
 }
 
+/**
+ * Re-read the keychain and announce any key the EXTENSION added, changed or
+ * removed — it writes the same entries (extension src/secrets/shared-keychain.ts),
+ * so a user with both apps enters each key once. The keychain sends no
+ * events, so this runs when the window regains focus.
+ */
+export async function refreshProviderKeys(): Promise<void> {
+  if (backend !== 'keychain') return;
+  const next: Record<string, string> = {};
+  try {
+    for (const f of Object.keys(PROVIDER_FIELDS)) {
+      const v = await invoke<string | null>('keychain_get', { key: entry(f) });
+      if (v && v.trim()) next[f] = v;
+    }
+  } catch { return; }
+  const fields = new Set([...Object.keys(keys), ...Object.keys(next)]);
+  if ([...fields].every((f) => keys[f] === next[f])) return;
+  keys = next;
+  window.dispatchEvent(new CustomEvent('ava-byok-changed'));
+}
+
 /** Every saved key by store field (Qwen, DeepSeek, Moonshot…). */
 export function getProviderKeys(): Record<string, string> {
   return { ...keys };

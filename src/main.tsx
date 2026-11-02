@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
-import { hydrateProviderKeys } from "./lib/provider-keys";
+import { hydrateProviderKeys, refreshProviderKeys } from "./lib/provider-keys";
 import { ensureDataHome } from "./lib/data-root";
 
 // Provider keys come out of the OS keychain before React mounts — every
@@ -11,6 +11,8 @@ import { ensureDataHome } from "./lib/data-root";
 void ensureDataHome();
 
 hydrateProviderKeys().finally(() => {
+// Keys the extension adds or removes land in the same keychain entries.
+window.addEventListener("focus", () => { void refreshProviderKeys(); });
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
