@@ -121,8 +121,15 @@ export function keyedFields(): Set<string> {
 export async function setProviderKey(field: ProviderField, value: string): Promise<void> {
   const v = value.trim();
   if (backend === 'keychain') {
-    if (v) await invoke('keychain_set', { key: entry(field), value: v });
-    else await invoke('keychain_delete', { key: entry(field) });
+    if (v) {
+      await invoke('keychain_set', { key: entry(field), value: v });
+      // A write that did not throw is not a key that was kept: keyring built
+      // without a backend accepts every write and keeps nothing. Read it back.
+      const back = await invoke<string | null>('keychain_get', { key: entry(field) });
+      if (back !== v) throw new Error('The system keychain did not keep the key.');
+    } else {
+      await invoke('keychain_delete', { key: entry(field) });
+    }
   } else {
     const legacy = readLegacy();
     if (v) legacy[field] = v; else delete legacy[field];
