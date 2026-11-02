@@ -2009,7 +2009,10 @@ async function handleInit(data) {
     // Personality
     let personalityPrefix = '';
     try {
-      const personality = await loadPersonality();
+      // ~/.ava/personality.json — the file the extension writes too. Called
+      // with no folder this always fell back to the default style, so what the
+      // user chose never reached Ava in the IDE.
+      const personality = await loadPersonality(AVA_HOME);
       if (personality) personalityPrefix = buildPersonalityPrefix(personality);
     } catch { /* no personality set */ }
     emit({ event: 'info', message: 'Personality loaded' });

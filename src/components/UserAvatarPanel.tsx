@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { pushSharedSettings } from '../lib/shared-settings';
 import { t } from '../lib/i18n';
 
 /**
@@ -24,6 +25,13 @@ const MAX_PX = 128;
 
 export function UserAvatarPanel({ fallbackName }: { fallbackName?: string | null }) {
   const [avatar, setAvatar] = useState<string>(() => localStorage.getItem('ava-ide-user-avatar') || '');
+  // ~/.ava/avatar.dat is shared with the extension (lib/shared-settings.ts):
+  // a picture set there shows here, and one set here goes there.
+  useEffect(() => {
+    const refresh = () => setAvatar(localStorage.getItem('ava-ide-user-avatar') || '');
+    window.addEventListener('ava-avatar-changed', refresh);
+    return () => window.removeEventListener('ava-avatar-changed', refresh);
+  }, []);
 
   const resize = useCallback((dataUri: string): Promise<string> => new Promise((resolve) => {
     const img = new Image();
@@ -51,6 +59,7 @@ export function UserAvatarPanel({ fallbackName }: { fallbackName?: string | null
     const resized = await resize(dataUri);
     localStorage.setItem('ava-ide-user-avatar', resized);
     setAvatar(resized);
+    pushSharedSettings();
     // Tell the rest of the app. Writing to storage and saying nothing meant
     // the chat kept showing the default until it happened to remount.
     try { window.dispatchEvent(new CustomEvent('ava-avatar-changed')); } catch { /* non-DOM */ }
@@ -59,6 +68,7 @@ export function UserAvatarPanel({ fallbackName }: { fallbackName?: string | null
   const remove = useCallback(() => {
     localStorage.removeItem('ava-ide-user-avatar');
     setAvatar('');
+    pushSharedSettings();
     try { window.dispatchEvent(new CustomEvent('ava-avatar-changed')); } catch { /* non-DOM */ }
   }, []);
 

@@ -58,7 +58,9 @@ import { t, tt, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
 import { trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
 import { keyedFields, getProviderKeys, testAndSaveProviderKey, setProviderKey, type ProviderField } from '../lib/provider-keys';
-import { buildSidecarConfig, hasChatCapability } from '../lib/sidecar-boot';
+import { buildSidecarConfig, hasChatCapability, restartSidecar } from '../lib/sidecar-boot';
+import { syncSharedSettings } from '../lib/shared-settings';
+import { loadVault, saveVault, getLocalModelKey, setLocalModelKey } from '../lib/keychain';
 import { ensureDataHome } from '../lib/data-root';
 import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
 import type { MonthUsage } from '../lib/usage-history';
@@ -2906,17 +2908,32 @@ export function AvaChatPage() {
   const vaultPanelRef = useRef<HTMLDivElement>(null);
   const vaultBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Load secrets from localStorage on mount
+  // The vault lives in the OS keychain the extension shares (lib/keychain.ts),
+  // so a secret saved in either app is in both. Saving waits for the first
+  // load: the empty starting list must never be written over a real vault.
+  const vaultLoaded = useRef(false);
+  const lastSavedVault = useRef<string | null>(null);
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('ava-ide-secrets');
-      if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) setSecrets(parsed); }
-    } catch { /* */ }
+    let cancelled = false;
+    const load = () => loadVault().then((v) => {
+      if (cancelled) return;
+      vaultLoaded.current = true;
+      lastSavedVault.current = JSON.stringify(v);
+      setSecrets(v as { id: string; label: string; value: string }[]);
+    }).catch(() => { vaultLoaded.current = true; });
+    void load();
+    // The extension may have changed it while this window was in the background.
+    const onFocus = () => { if (vaultLoaded.current) void load(); };
+    window.addEventListener('focus', onFocus);
+    return () => { cancelled = true; window.removeEventListener('focus', onFocus); };
   }, []);
 
-  // Persist secrets to localStorage
   useEffect(() => {
-    try { localStorage.setItem('ava-ide-secrets', JSON.stringify(secrets)); } catch { /* */ }
+    if (!vaultLoaded.current) return;
+    const json = JSON.stringify(secrets);
+    if (json === lastSavedVault.current) return; // what was just loaded
+    lastSavedVault.current = json;
+    void saveVault(secrets);
   }, [secrets]);
 
   // Close vault on outside click
@@ -13192,24 +13209,36 @@ export function PersonalityPage() {
     { value: 'structured', label: t('dash.personality.style.structured'), desc: t('dash.personality.style.structured_desc') },
   ];
 
-  // Local only: Ava's style lives in localStorage and never leaves the machine.
+  // Ava's style is ~/.ava/personality.json — the file the extension writes and
+  // the sidecar reads at start (lib/shared-settings.ts keeps the IDE's copy in
+  // step with it). Reloads when the extension changes it.
   useEffect(() => {
-    try {
-      const local = localStorage.getItem('ava-ide-personality');
-      if (local) {
-        const p = JSON.parse(local);
-        if (p.tone) setTone(p.tone);
-        if (p.energy) setEnergy(p.energy);
-        if (p.style) setStyle(p.style);
-        if (p.description) setDescription(p.description);
-      }
-    } catch {}
+    const read = () => {
+      try {
+        const local = localStorage.getItem('ava-ide-personality');
+        if (local) {
+          const p = JSON.parse(local);
+          if (p.tone) setTone(p.tone);
+          if (p.energy) setEnergy(p.energy);
+          if (p.style) setStyle(p.style);
+          setDescription(p.description || '');
+        }
+      } catch {}
+    };
+    read();
     setLoading(false);
+    window.addEventListener('ava-personality-changed', read);
+    return () => window.removeEventListener('ava-personality-changed', read);
   }, []);
 
+  /** Write it where Ava reads it, then restart her so the next reply uses it. */
+  const applyPersonality = (p: { tone: string; energy: string; style: string; description: string }) => {
+    try { localStorage.setItem('ava-ide-personality', JSON.stringify(p)); } catch {}
+    void syncSharedSettings('local').then(() => { if (getSidecar().isReady) restartSidecar(); });
+  };
+
   const handleSave = async () => {
-    // Always save locally
-    try { localStorage.setItem('ava-ide-personality', JSON.stringify({ tone, energy, style, description })); } catch {}
+    applyPersonality({ tone, energy, style, description });
 
     setSaving(true);
     setSaved(true);
@@ -13222,7 +13251,7 @@ export function PersonalityPage() {
     setEnergy('enthusiastic');
     setStyle('conversational');
     setDescription('');
-    try { localStorage.setItem('ava-ide-personality', JSON.stringify({ tone: 'warm', energy: 'enthusiastic', style: 'conversational', description: '' })); } catch {}
+    applyPersonality({ tone: 'warm', energy: 'enthusiastic', style: 'conversational', description: '' });
   };
 
   const toneLabel = TONES.find(t => t.value === tone)?.label?.toLowerCase() ?? tone;
@@ -13760,7 +13789,8 @@ export function costColourFor(cost: number): string {
 function LocalModelSettings() {
   const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('ava-ide-local-baseurl') || '');
   const [modelName, setModelName] = useState(() => localStorage.getItem('ava-ide-local-model') || '');
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('ava-ide-local-apikey') || '');
+  // The key is in the shared keychain (lib/keychain.ts), not localStorage.
+  const [apiKey, setApiKey] = useState(() => getLocalModelKey());
   const [modelLabel, setModelLabel] = useState(() => localStorage.getItem('ava-ide-local-label') || '');
   const [savedTick, setSavedTick] = useState(0);
   // Detect: the models the endpoint reports via GET /models, and which the user
@@ -13810,8 +13840,7 @@ function LocalModelSettings() {
     else localStorage.removeItem('ava-ide-local-baseurl');
     if (modelName.trim()) localStorage.setItem('ava-ide-local-model', modelName.trim());
     else localStorage.removeItem('ava-ide-local-model');
-    if (apiKey.trim()) localStorage.setItem('ava-ide-local-apikey', apiKey.trim());
-    else localStorage.removeItem('ava-ide-local-apikey');
+    void setLocalModelKey(apiKey);
     if (modelLabel.trim()) localStorage.setItem('ava-ide-local-label', modelLabel.trim());
     else localStorage.removeItem('ava-ide-local-label');
     const enabled = [...enabledModels];
@@ -13832,7 +13861,7 @@ function LocalModelSettings() {
     setDetectError('');
     localStorage.removeItem('ava-ide-local-baseurl');
     localStorage.removeItem('ava-ide-local-model');
-    localStorage.removeItem('ava-ide-local-apikey');
+    void setLocalModelKey('');
     localStorage.removeItem('ava-ide-local-label');
     localStorage.removeItem('ava-ide-local-models');
     setSavedTick(t => t + 1);

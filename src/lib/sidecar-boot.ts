@@ -11,6 +11,7 @@ import { getSidecar, type SidecarConfig } from './sidecar';
 import { getProviderKeys, PROVIDER_FIELDS, type ProviderField } from './provider-keys';
 import { ensureDataHome } from './data-root';
 import { resolveSidecarModel } from './chat-models';
+import { getLocalModelKey } from './keychain';
 
 // This file used to keep its own byte-for-byte copy of chat-models.ts's
 // SIDECAR_MODEL_MAP plus a duplicated `auto|supernova|aurora` fallback. Two
@@ -50,10 +51,12 @@ export function buildSidecarConfig(): SidecarConfig {
   const mode = ls('ava-ide-chat-mode') || 'work';
   const workStart = Number(ls('ava-ide-work-start')) || 9;
   const workEnd = Number(ls('ava-ide-work-end')) || 17;
+  let savedSettings: { permissionMode?: SidecarConfig['permissionMode']; autoMemory?: boolean } = {};
+  try { savedSettings = JSON.parse(ls('ava-ide-settings') || '{}') ?? {}; } catch { /* defaults */ }
 
   const localBaseUrl = ls('ava-ide-local-baseurl') || '';
   const localModelName = ls('ava-ide-local-model') || '';
-  const localApiKey = ls('ava-ide-local-apikey') || '';
+  const localApiKey = getLocalModelKey();
   const localModelLabel = ls('ava-ide-local-label') || '';
   let localModels: string[] = [];
   try { const v = JSON.parse(ls('ava-ide-local-models') || '[]'); if (Array.isArray(v)) localModels = v; } catch { /* ignore */ }
@@ -70,8 +73,9 @@ export function buildSidecarConfig(): SidecarConfig {
     // (she speaks 19 beyond English). Without it the agent defaulted to 'auto' and
     // ignored the operator's pick. Same store the language dropdown writes.
     language: ls('ava-ide-language') || 'auto',
-    permissionMode: (ls('ava-ide-settings') ? JSON.parse(ls('ava-ide-settings')!).permissionMode : 'balanced') || 'balanced',
-    autoMemory: true,
+    permissionMode: savedSettings.permissionMode || 'balanced',
+    // Was always true — the Settings switch never reached Ava.
+    autoMemory: savedSettings.autoMemory ?? true,
     workingHours: { start: workStart, end: workEnd },
     userName: ls('ava-ide-user-name') || undefined,
     local: localBlock,
@@ -85,18 +89,21 @@ let booting = false;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * A key was added or removed: a running sidecar registered its providers at
- * start, so it must restart for the change to count (the extension re-inits
- * its session the same way). Debounced — a factory reset clears every key in
- * one go. A sidecar that is not running is simply started, if it now can be.
+ * Something the sidecar reads once at start changed — a key, or a setting
+ * shared with the extension (personality, language…): a running sidecar must
+ * restart for it to count (the extension re-inits its session the same way).
+ * Debounced — a factory reset clears every key in one go — and it waits for
+ * any reply in flight to finish, so a change never cuts Ava off mid-answer.
+ * A sidecar that is not running is simply started, if it now can be.
  */
-export function restartSidecarForKeys(): void {
+export function restartSidecar(): void {
   if (restartTimer) clearTimeout(restartTimer);
-  restartTimer = setTimeout(() => {
+  restartTimer = setTimeout(async () => {
     restartTimer = null;
     const sc = getSidecar();
     if (!sc.isReady || booting) { void ensureSidecarRunning(); return; }
     booting = true;
+    await sc.waitForIdle(10 * 60_000);
     void sc.stop()
       .catch(() => { /* already gone */ })
       .then(async () => {

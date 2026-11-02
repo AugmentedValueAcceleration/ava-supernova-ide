@@ -8,7 +8,7 @@ import EditorArea from './components/EditorArea';
 import type { DashboardPageId } from './components/EditorArea';
 import BottomPanel from './components/BottomPanel';
 import { ensureSidecarLog } from './lib/sidecar-log';
-import { ensureSidecarRunning, restartSidecarForKeys } from './lib/sidecar-boot';
+import { ensureSidecarRunning, restartSidecar } from './lib/sidecar-boot';
 import { getSidecar } from './lib/sidecar';
 import StatusBar from './components/StatusBar';
 import WelcomeOverlay, { ONBOARDED_KEY, hasModelKey, type OnboardingMode } from './components/WelcomeOverlay';
@@ -263,7 +263,7 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     const ensure = () => { if (!cancelled) ensureSidecarRunning().catch(() => {}); };
-    const onKeys = () => { if (!cancelled) restartSidecarForKeys(); };
+    const onKeys = () => { if (!cancelled) restartSidecar(); };
     ensure();
     window.addEventListener('ava-byok-changed', onKeys);
     return () => {
