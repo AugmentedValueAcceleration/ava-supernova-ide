@@ -12,7 +12,7 @@
 // finished the welcome in an older IDE has nothing in the file yet).
 
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs';
-import { loadGeneralProfile } from './health-store';
+import { loadGeneralProfile, saveGeneralProfile } from './health-store';
 
 const FILE = '.ava/onboarding.json';
 const opts = { baseDir: BaseDirectory.Home };
@@ -69,12 +69,18 @@ export async function syncSharedOnboarding(): Promise<void> {
     const onboarded = !!local(ONBOARDED_KEY) && !shared.onboarded_at;
     if (consent || onboarded) await markShared({ consent, onboarded });
   } catch { /* the IDE's own flags still work */ }
-  // The name: general.json is the one both apps write, so it wins.
+  // The name: general.json is the one both apps write, so it wins. A name only
+  // the IDE knows (given before this file was shared) goes INTO it, so the
+  // extension greets you by it too.
   try {
-    const name = (await loadGeneralProfile()).display_name?.trim();
-    if (name && local(NAME_KEY) !== name) {
+    const profile = await loadGeneralProfile();
+    const name = profile.display_name?.trim();
+    const mine = local(NAME_KEY)?.trim();
+    if (name && mine !== name) {
       localStorage.setItem(NAME_KEY, name);
       window.dispatchEvent(new CustomEvent('ava-ide-name-changed'));
+    } else if (!name && mine) {
+      await saveGeneralProfile({ ...profile, display_name: mine });
     }
   } catch { /* keep the IDE's copy */ }
 }
