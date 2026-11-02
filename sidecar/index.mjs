@@ -4212,7 +4212,13 @@ async function handleSetModel(data) {
       if (autoCoordinator) {
         emit({ event: 'model_changed', model: data.model, provider: label });
       } else {
-        emitError(`${label} unavailable — no providers found`);
+        // Maestro is Qwen-only and Supernova Qwen + DeepSeek: a fleet that
+        // cannot seat its own models says which key is missing.
+        emitError(data.model === 'supernova'
+          ? 'Supernova runs on DeepSeek and Qwen — add both keys in Settings.'
+          : label === 'Maestro'
+            ? 'Maestro runs on Qwen — add a Qwen key in Settings.'
+            : `${label} unavailable — no providers found`);
       }
       return;
     }
