@@ -1061,7 +1061,8 @@ function AuthSection({ collapsed = false }: { collapsed?: boolean } = {}) {
 }
 
 /* ---------- API keys ---------- */
-// The providers here are the same set (and wording) as the extension's sidebar.
+// The providers here are the same set (and wording) as the extension's sidebar —
+// all ten; MiniMax and Brave were missing until 2 Nov 2026, so the count said 8.
 // Keys live in the OS keychain (lib/provider-keys.ts); the sidebar never shows
 // one back — a saved key reads "Saved — paste to replace", with Remove beside it.
 // Every pasted key is TESTED against its provider before it is saved.
@@ -1071,9 +1072,11 @@ const SIDEBAR_PROVIDERS: Array<{ key: ProviderField; label: string; placeholder:
   { key: 'Zhipu', label: 'GLM (Zhipu AI)', placeholder: '...' },
   { key: 'Qwen', label: 'Qwen (Alibaba)', placeholder: 'sk-...' },
   { key: 'Mistral', label: 'Mistral AI', placeholder: '...' },
+  { key: 'MiniMax', label: 'MiniMax', placeholder: '...' },
   { key: 'Xiaomi', label: 'Xiaomi (MiMo)', placeholder: '...' },
   { key: 'Tencent', label: 'Tencent Hunyuan', placeholder: '...' },
   { key: 'NVIDIA', label: 'NVIDIA', placeholder: 'nvapi-...' },
+  { key: 'Brave', label: 'Brave Search', placeholder: '...' },
 ];
 
 function SidebarApiKeys() {

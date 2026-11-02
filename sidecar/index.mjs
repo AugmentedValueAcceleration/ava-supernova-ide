@@ -174,6 +174,8 @@ const {
   summariseTrainingLog,
   todayLocal,
   isRoutingMode,
+  resolveMaestroCoordinator,
+  resolveAuroraCoordinator,
   getDesignStudioPrefix,
   loadFreshDesignContext,
   summariseEquipment,
@@ -1701,6 +1703,51 @@ process.on('unhandledRejection', (err) => {
   emitError(`Unhandled rejection: ${err?.humanMessage || err?.message || String(err)}`);
 });
 
+// ─── Fleets ─────────────────────────────────────────────────────────────────
+//
+// One setup for Maestro / Supernova / Aurora (and the dark Longxiang), used at
+// startup AND when the user switches. Startup used to look the fleet's name up
+// as if it were a model ("auto" is not one), so opening the IDE on a fleet
+// failed with "No model available" — the account-era fallback that hid this
+// went in Phase 3. Each fleet's seats come from core, locked to its providers.
+
+/** The model a fleet coordinates on, for the plain agent beside it — the same
+ *  seat AutoCoordinator.create picks. Null when the fleet's key is missing. */
+function fleetCoordinatorSeat(mode, providerRegistry) {
+  if (mode === 'auto') return resolveMaestroCoordinator(providerRegistry);
+  if (mode === 'aurora') return resolveAuroraCoordinator(providerRegistry);
+  const id = mode === 'supernova' ? 'deepseek:deepseek-flash' : 'kimi:kimi-k3';
+  const r = providerRegistry.resolveModel(id);
+  return r && r.provider.name === id.split(':')[0] ? r : null;
+}
+
+/** Which key a fleet that cannot be seated is missing. */
+function fleetUnavailableMessage(mode) {
+  if (mode === 'supernova') return 'Supernova runs on DeepSeek and Qwen — add both keys in Settings.';
+  if (mode === 'aurora') return 'Aurora runs on Mistral — add a Mistral key in Settings.';
+  if (mode === 'longxiang') return 'Longxiang unavailable — no providers found';
+  return 'Maestro runs on Qwen — add a Qwen key in Settings.';
+}
+
+/** The fleet's AutoCoordinator, or null when its key is missing. Core picks
+ *  every seat (Aurora: Mistral Large 4; Supernova: DeepSeek V4.1 Flash;
+ *  Maestro: Qwen 3.8 Flash) and never leaves the fleet's providers. */
+function createFleetCoordinator(mode, { providerRegistry, toolRegistry, cwd, sharedState }) {
+  const availableProviders = new Set();
+  if (sharedState.qwenApiKey) availableProviders.add('qwen');
+  if (sharedState.minimaxApiKey) availableProviders.add('minimax');
+  if (sharedState.kimiApiKey) availableProviders.add('kimi');
+  if (sharedState.deepseekApiKey) availableProviders.add('deepseek');
+  if (sharedState.mistralApiKey) availableProviders.add('mistral');
+  // Longxiang (dark) pins Kimi K3; the live fleets need no pin — core seats them.
+  const preferredCoordinatorId = mode === 'longxiang' && providerRegistry.resolveModel('kimi:kimi-k3')
+    ? 'kimi:kimi-k3'
+    : undefined;
+  return AutoCoordinator.create({
+    providerRegistry, toolRegistry, cwd, sharedState, availableProviders, mode, preferredCoordinatorId,
+  });
+}
+
 // ─── Command Handlers ───────────────────────────────────────────────────────
 
 async function handleInit(data) {
@@ -1788,10 +1835,15 @@ async function handleInit(data) {
     // keys in core.
     let activeModel = config.activeModel || 'auto';
     emit({ event: 'info', message: `Resolving model: ${activeModel}` });
-    let resolved = providerRegistry.resolveModel(activeModel);
+    const startFleet = isRoutingMode(activeModel) ? activeModel : null;
+    let resolved = startFleet
+      ? fleetCoordinatorSeat(startFleet, providerRegistry)
+      : providerRegistry.resolveModel(activeModel);
 
     if (!resolved) {
-      emitError('No model available — add a provider key in Settings, or point Ava at a local model.');
+      emitError(startFleet
+        ? fleetUnavailableMessage(startFleet)
+        : 'No model available — add a provider key in Settings, or point Ava at a local model.');
       return;
     }
 
@@ -2405,23 +2457,13 @@ async function handleInit(data) {
       surface: 'ide',
     });
 
-    // Auto Mode — detect available providers
-    const availableProviders = new Set();
-    if (sharedState.qwenApiKey) availableProviders.add('qwen');
-    if (sharedState.minimaxApiKey) availableProviders.add('minimax');
-    if (config.providers?.kimi?.apiKey || process.env.KIMI_API_KEY) availableProviders.add('kimi');
-    if (config.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY) availableProviders.add('deepseek');
-
-    // Use static create() — the best coordinator the user's keys reach
-    if (availableProviders.size > 1) {
-      autoCoordinator = AutoCoordinator.create({
-        providerRegistry,
-        toolRegistry,
-        cwd,
-        sharedState,
-        availableProviders,
-      });
-    }
+    // The fleet the user opened on — or none for a specific model, matching a
+    // switch to one. This used to build a Maestro coordinator whenever two
+    // keys were held, so a user who had picked a single model still ran
+    // through Maestro after a restart.
+    autoCoordinator = startFleet
+      ? createFleetCoordinator(startFleet, { providerRegistry, toolRegistry, cwd, sharedState })
+      : null;
 
     // Store for hot-swap model changes
     globalThis._providerRegistry = providerRegistry;
@@ -4126,82 +4168,12 @@ async function handleSetModel(data) {
     const cwd = globalThis._cwd || process.cwd();
     const sharedState = globalThis._sharedState || {};
 
-    // Maestro / Supernova / Aurora orchestrated modes — all go through
-    // AutoCoordinator. Supernova pins coordinator to DeepSeek Flash and
-    // runs Builder spawns on Qwen 3.6 Plus per the polyglot routing map.
-    // Aurora pins coordinator to Mistral Medium 3.5 (AURORA_COORDINATOR_ID)
-    // with a Mistral-only resolution chain — never silently routes to a
-    // non-Mistral model (the EU-stack guarantee). Large 3 is the heavy
-    // reserve, not the coordinator. Maestro uses the default coordinator
-    // priority ladder. Mirrors AvaViewProvider.setActiveModel in the
-    // extension.
-    // isRoutingMode comes from core, where the runtime list and the RoutingMode
-    // type are the same thing. This used to be a hand-written
-    // `=== 'auto' || === 'supernova' || === 'aurora'` that never included
-    // 'longxiang' — so picking Longxiang skipped the fleet branch, fell
-    // through to "resolve a specific model", and died on
-    // "Model not found: platform:longxiang". The extension's equivalent list
-    // was correct, which is why it went unnoticed on this side.
+    // A fleet — the same setup as startup (createFleetCoordinator). isRoutingMode
+    // comes from core, so every fleet id is recognised here, Longxiang included.
     if (isRoutingMode(data.model)) {
-      const availableProviders = new Set();
-      if (sharedState.qwenApiKey) availableProviders.add('qwen');
-      if (sharedState.minimaxApiKey) availableProviders.add('minimax');
-      if (sharedState.kimiApiKey) availableProviders.add('kimi');
-      if (sharedState.deepseekApiKey) availableProviders.add('deepseek');
-      if (sharedState.mistralApiKey) availableProviders.add('mistral');
-      // Anthropic deliberately absent — removed 2026-08-13. Offering it to the
-      // orchestrator would have picked a coordinator that core then rejects.
-
-      // Aurora's Mistral-only coordinator chain — Medium 3.5 first, it's the
-      // lead seat (AURORA_COORDINATOR_ID). Large 3 is the heavy RESERVE and
-      // Small 4 the volume workhorse, so they're fallbacks. First resolvable
-      // wins. Same chain as the extension.
-      //
-      // This used to start at Large 3 and never listed Medium 3.5 at all, so
-      // Aurora ran on a non-reasoning, text-only reserve model — while
-      // credits.ts had already been rebalanced assuming Medium 3.5 leads.
-      let preferredCoordinatorId;
-      if (data.model === 'aurora') {
-        const tries = [
-          'mistral:mistral-medium-3.5',
-          'mistral-medium-3.5',
-          'mistral:mistral-large-3',
-          'mistral-large-3',
-          'mistral:mistral-small-4',
-          'mistral-small-4',
-        ];
-        for (const id of tries) {
-          if (providerRegistry.resolveModel(id)) {
-            preferredCoordinatorId = id;
-            break;
-          }
-        }
-      } else if (data.model === 'supernova') {
-        // The user's own DeepSeek key — the same pin as the extension.
-        preferredCoordinatorId = 'deepseek:deepseek-flash';
-      } else if (data.model === 'longxiang') {
-        // Kimi K3 holds both the coordinator and Builder seats — same shape as
-        // Aurora's chain above: first resolvable wins, so a missing key
-        // degrades instead of failing. These are the ids the registry holds.
-        const tries = ['kimi:kimi-k3', 'kimi-k3'];
-        for (const id of tries) {
-          if (providerRegistry.resolveModel(id)) {
-            preferredCoordinatorId = id;
-            break;
-          }
-        }
-      }
-
-      autoCoordinator = AutoCoordinator.create({
-        providerRegistry,
-        toolRegistry,
-        cwd,
-        sharedState,
-        availableProviders,
-        mode: data.model,
-        preferredCoordinatorId,
+      autoCoordinator = createFleetCoordinator(data.model, {
+        providerRegistry, toolRegistry, cwd, sharedState,
       });
-
       const label = data.model === 'supernova'
         ? 'Supernova'
         : data.model === 'aurora'
@@ -4212,15 +4184,7 @@ async function handleSetModel(data) {
       if (autoCoordinator) {
         emit({ event: 'model_changed', model: data.model, provider: label });
       } else {
-        // Maestro is Qwen-only, Supernova Qwen + DeepSeek, Aurora Mistral-only:
-        // a fleet that cannot seat its own models says which key is missing.
-        emitError(data.model === 'supernova'
-          ? 'Supernova runs on DeepSeek and Qwen — add both keys in Settings.'
-          : label === 'Maestro'
-            ? 'Maestro runs on Qwen — add a Qwen key in Settings.'
-            : label === 'Aurora'
-              ? 'Aurora runs on Mistral — add a Mistral key in Settings.'
-              : `${label} unavailable — no providers found`);
+        emitError(fleetUnavailableMessage(data.model));
       }
       return;
     }
