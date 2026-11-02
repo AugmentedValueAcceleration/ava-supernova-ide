@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type CSSProperties } from 'react';
 import { PenNib, Paperclip as PhPaperclip } from '@phosphor-icons/react';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
+import { useModeAvailability } from '../lib/mode-availability';
 import { TTS_VOICE_CATALOGUE, TTS_VOICES, TTS_VOICE_SPEEDS, TTS_VOICE_VOLUMES, voiceSpeechRate, voiceVolume } from '@ava/core/creative';
 import { logDiag } from '../lib/sidecar-log';
 import { RoomModelPicker } from './RoomModelPicker';
@@ -569,7 +570,14 @@ const VOICE_OPTIONS = TTS_VOICE_CATALOGUE.map(v => ({
   group: GROUP_LABEL[v.group],
 }));
 
+/** The lanes that generate on the user's Qwen key (image, video, voice, and
+ *  the icon lane's Qwen-Image). Without that key they are greyed out; Logo is
+ *  drawn on the user's computer and Brand Kit generates nothing. Mirrors the
+ *  extension's QWEN_VIEWS (dashboard-ui/src/lib/design-types.ts). */
+const QWEN_VIEWS: readonly ViewId[] = ['video', 'voice', 'image', 'icon'];
+
 export function DesignStudio() {
+  const hasQwenKey = useModeAvailability().state.byok.qwen;
   // Reactive active kit — re-read whenever the brand kit changes anywhere (the
   // Brand Kit view, Ava's brand_kit tool) so the studio follows it instead of
   // freezing on the kit that happened to be active at mount.
@@ -594,6 +602,10 @@ export function DesignStudio() {
   useEffect(() => {
     try { localStorage.setItem('ava-design-studio-view', view); } catch { /* not important enough to throw */ }
   }, [view]);
+  // Without a Qwen key the image, video, voice and icon lanes can't make
+  // anything, so a saved view on one of them opens on Logo instead.
+  const needsQwen = (id: ViewId) => !hasQwenKey && QWEN_VIEWS.includes(id);
+  useEffect(() => { if (needsQwen(view)) setView('logo'); }, [hasQwenKey, view]);  // eslint-disable-line react-hooks/exhaustive-deps
   // Which room the Design Architect chat should reflect. The Open-Canvas Video
   // and Voiceover views map to their own rooms; everything else is the icon
   // studio (greeting / chips / heading / persona all follow this).
@@ -1320,14 +1332,18 @@ export function DesignStudio() {
               <span style={{ width: 3, height: 12, borderRadius: 2, background: g.accent }} />{t(g.labelKey)}
             </div>
             {g.items.map(it => {
-              // "Soon" items aren't built yet — render them inactive (non-clickable,
-              // dimmed) so the sidebar never implies something works when it doesn't.
-              const disabled = !!it.soon;
+              // "Soon" items aren't built yet, and Qwen lanes can't run without
+              // the key — render them inactive (non-clickable, dimmed) so the
+              // sidebar never implies something works when it doesn't.
+              const keyless = needsQwen(it.id);
+              const disabled = !!it.soon || keyless;
               return (
                 <button key={it.id} onClick={disabled ? undefined : () => setView(it.id)} disabled={disabled}
+                  title={keyless ? t('dash.studio.needs_qwen_tip') : undefined}
                   style={{ ...navBtn(view === it.id), ...(disabled ? { opacity: 0.45, cursor: 'default' } : {}) }}>
                   {t(`dash.studio.asset.${it.id}`)}
                   {it.soon && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999 }}>{t('dash.studio.soon')}</span>}
+                  {!it.soon && keyless && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999, whiteSpace: 'nowrap' }}>{t('dash.studio.needs_qwen')}</span>}
                 </button>
               );
             })}

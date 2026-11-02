@@ -11,8 +11,8 @@ import { t } from './i18n';
 //               coordinator AND mid-tier seats — one model since the
 //               2026-09-10 collapse; Qwen builder + light + vision +
 //               long-form).
-//   Aurora    → Mistral-only EU stack (Medium 3.5 lead + Small 4
-//               workhorse + Large 3 reserve).
+//   Aurora    → Mistral only (Large 4 coordinates + deep work, Small 4
+//               chat + brainstorm).
 //
 // Every mode unlocks the moment the user has the keys its fleet needs (no
 // accounts, 1 Nov 2026).
@@ -45,9 +45,8 @@ export type ModeId = 'maestro' | 'supernova' | 'aurora' | 'longxiang';
 import { LONGXIANG_ENABLED, AURORA_ENABLED } from '../../../core/dist/auto/routing-modes.js';
 
 export const LONGXIANG_LIVE: boolean = LONGXIANG_ENABLED;
-/** Aurora went dark on 2026-10-06. Mistral has not answered the 9 Sep approach,
- *  so a Mistral-only fleet advertises a relationship that does not exist. Same
- *  shape as LONGXIANG_LIVE, and the same single source in core. */
+/** Aurora's launch flag — dark 6 Oct – 2 Nov 2026, back on the user's own
+ *  Mistral key. Same shape as LONGXIANG_LIVE, and the same single source in core. */
 export const AURORA_LIVE: boolean = AURORA_ENABLED;
 
 export interface ByokKeys {
