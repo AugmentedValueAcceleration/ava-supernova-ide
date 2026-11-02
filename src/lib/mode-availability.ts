@@ -6,7 +6,7 @@ import { t } from './i18n';
 // Each mode is gated by the fleet of provider keys it actually needs, and
 // the picker also lists the single models the user's keys reach:
 //
-//   Maestro   → Qwen-only fleet (Qwen 3.7 Plus + 3.5 Flash light tier).
+//   Maestro   → Qwen-only fleet (3.8 Flash coordinates + chats, 3.7 Plus deep work).
 //   Supernova → DeepSeek + Qwen ensemble (DeepSeek Flash takes the
 //               coordinator AND mid-tier seats — one model since the
 //               2026-09-10 collapse; Qwen builder + light + vision +
