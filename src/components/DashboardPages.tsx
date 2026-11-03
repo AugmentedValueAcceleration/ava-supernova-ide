@@ -65,6 +65,8 @@ import { ensureDataHome } from '../lib/data-root';
 import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
 import type { MonthUsage } from '../lib/usage-history';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
+import { LazyModelViewer } from './LazyModelViewer';
+import { convertFileSrc } from '@tauri-apps/api/core';
 // The dependency-free leaf, so this renderer and the sidecar agree on what
 // is exportable and what it is called without either keeping its own list.
 import { canExport, targetsFor, TARGET_LABELS, type ExportFormat } from '@ava/core/authoring/formats';
@@ -10084,6 +10086,40 @@ export function LearningPage() {
 /* ===== 7. Library ===== */
 type LibraryFileType = 'image' | 'document' | 'spreadsheet' | 'presentation';
 type LibraryMediaKind = 'image' | 'music' | 'video' | 'voice' | 'document' | 'spreadsheet' | 'presentation';
+/** A 3D model's Library entry (written by core) as a Library file. Its card
+ *  shows the preview render; the drawer shows the model itself. */
+function modelLibraryFile(it: Record<string, unknown>): LibraryFile {
+  const str = (k: string) => (typeof it[k] === 'string' ? (it[k] as string) : undefined);
+  const folder = str('absoluteFolder') ?? '';
+  const slug = folder.split(/[\\/]/).pop() ?? '';
+  const glbRel = str('glb');
+  const creativeRoot = folder.replace(/[\\/]blender[\\/][^\\/]+$/, '');
+  return {
+    id: str('id'),
+    name: str('title') || 'Untitled model',
+    path: str('absolutePath') ?? '',
+    folder: 'Creative Studio',
+    type: 'image',
+    mediaKind: 'image',
+    designType: 'model',
+    localPath: str('absolutePath'),
+    size: typeof it.bytes === 'number' ? it.bytes : 0,
+    modified: str('updatedAt') || str('createdAt') || '',
+    prompt: str('prompt') || '',
+    source: 'local',
+    model: {
+      slug,
+      folder,
+      glbPath: glbRel && creativeRoot ? `${creativeRoot}/${glbRel}` : undefined,
+      files: Array.isArray(it.files) ? (it.files as string[]) : undefined,
+      triangles: typeof it.triangles === 'number' ? it.triangles : undefined,
+      sizeM: Array.isArray(it.sizeM) ? (it.sizeM as number[]) : undefined,
+      blenderVersion: str('blenderVersion'),
+      updatedAt: str('updatedAt'),
+    },
+  };
+}
+
 interface LibraryFile {
   /** creative_assets.id — present on cloud rows, absent on locally-scanned files.
    *  Required for the cloud delete path; absence flags the item as local. */
@@ -10111,11 +10147,33 @@ interface LibraryFile {
   url?: string;          // platform storage URL (cloud) or local-resolved path
   prompt?: string;       // generation prompt for cloud assets
   source?: 'cloud' | 'local';
+  /** A 3D model Ava built in Blender — one asset that is a whole folder
+   *  (written by core's design_build_model, shared with the extension). */
+  model?: {
+    slug: string;
+    folder: string;
+    glbPath?: string;
+    files?: string[];
+    triangles?: number;
+    sizeM?: number[];
+    blenderVersion?: string;
+    updatedAt?: string;
+  };
 }
+
+/** The Library's groups — ALWAYS all four, empty or not (his call, 3 Nov
+ *  2026), the same as the extension's. Each lists the buckets it holds. */
+const LIBRARY_GROUPS: { id: 'Open Canvas' | 'Brand & Web' | '2D' | '3D'; labelKey: string; buckets: string[] }[] = [
+  { id: 'Open Canvas', labelKey: 'dash.studio.group.open_canvas', buckets: ['image', 'video', 'voice', 'music'] },
+  { id: 'Brand & Web', labelKey: 'dash.studio.group.brand_web', buckets: ['icon', 'logo'] },
+  { id: '2D', labelKey: 'dash.studio.group.2d', buckets: [] },
+  { id: '3D', labelKey: 'dash.studio.group.3d', buckets: ['model'] },
+];
 
 /** The bucket a file sorts into: its fine-grained designType (icon / logo) if
  *  tagged, else the coarse media kind. Mirrors the extension's effectiveType. */
-function libraryBucket(f: LibraryFile): 'icon' | 'logo' | LibraryMediaKind {
+function libraryBucket(f: LibraryFile): 'icon' | 'logo' | 'model' | LibraryMediaKind {
+  if (f.model) return 'model';
   if (f.designType === 'icon' || f.designType === 'logo') return f.designType;
   return classifyMediaKind(f);
 }
@@ -11509,7 +11567,18 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // Filter axis is the real media kind, not the coalesced LibraryFileType,
   // so the user can isolate just music / video / voice within the Assets
   // tab — previously they all collapsed under Images.
-  const [filter, setFilter] = useState<'icon' | 'logo' | LibraryMediaKind | 'all'>('all');
+  const [filter, setFilter] = useState<'icon' | 'logo' | 'model' | LibraryMediaKind | 'all'>('all');
+  const [group, setGroup] = useState<'all' | (typeof LIBRARY_GROUPS)[number]['id']>('all');
+  // Ava builds models from her tools, not from here — follow the sidecar's
+  // watch on the creative folder so a new model appears by itself. Asking for
+  // the model list starts that watch.
+  useEffect(() => {
+    const sc = getSidecar();
+    const onChange = (e: SidecarEvent) => { if (e.event === 'creative_changed') setReloadKey((n) => n + 1); };
+    sc.onAny(onChange);
+    sc.listModels().catch(() => {});
+    return () => { sc.offAny(onChange); };
+  }, []);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   // Show the Markdown source alongside a document's exports. Off by default:
   // the source is on every document and says nothing by being listed. It never
@@ -11580,8 +11649,8 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           if (cancelled) return;
           const items = collapseLogoGroups(rawItems);
           setCloudFiles(items
-            .filter((it) => it.kind === 'image' || it.kind === 'video' || it.kind === 'voice')
-            .map((it): LibraryFile => ({
+            .filter((it) => it.kind === 'image' || it.kind === 'video' || it.kind === 'voice' || (it.kind as string) === 'model')
+            .map((it): LibraryFile => (it.kind as string) === 'model' ? modelLibraryFile(it as unknown as Record<string, unknown>) : ({
               id: it.id,
               name: it.title || 'Untitled',
               path: it.url || '',
@@ -11647,7 +11716,12 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         : (f.type === 'document' || f.type === 'spreadsheet')
     );
   }, [cloudFiles, localFiles, kind]);
-  const filtered = filter === 'all' ? kindFiles : kindFiles.filter((f) => libraryBucket(f) === filter);
+  const groupFiles = useMemo(() => {
+    if (kind !== 'assets' || group === 'all') return kindFiles;
+    const buckets = LIBRARY_GROUPS.find((g) => g.id === group)?.buckets ?? [];
+    return kindFiles.filter((f) => buckets.includes(libraryBucket(f)));
+  }, [kind, group, kindFiles]);
+  const filtered = filter === 'all' ? groupFiles : groupFiles.filter((f) => libraryBucket(f) === filter);
 
   // Documents group into one card each; assets stay one card per file, since
   // an image and a video of the same name are not two views of one thing.
@@ -11666,9 +11740,10 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   }, [kind, showSource, filtered, docGroups]);
 
   const typeCounts = useMemo(() => {
-    const byBucket = (k: 'icon' | 'logo' | LibraryMediaKind) => kindFiles.filter((f) => libraryBucket(f) === k).length;
+    const byBucket = (k: 'icon' | 'logo' | 'model' | LibraryMediaKind) => kindFiles.filter((f) => libraryBucket(f) === k).length;
     return {
-      all: kindFiles.length,
+      all: groupFiles.length,
+      model:        byBucket('model'),
       icon:         byBucket('icon'),
       logo:         byBucket('logo'),
       image:        byBucket('image'),
@@ -11679,7 +11754,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       spreadsheet:  byBucket('spreadsheet'),
       presentation: byBucket('presentation'),
     };
-  }, [kindFiles]);
+  }, [kindFiles, groupFiles]);
 
   // `kindAll` lived here to count how many files each SOURCE held, so the
   // cloud/local pills could show honest numbers. With the source split gone
@@ -11700,7 +11775,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     return !out || out === key ? fallback : out;
   };
   const filterOptions = useMemo(() => {
-    const base: { id: 'icon' | 'logo' | LibraryMediaKind | 'all'; label: string; count: number }[] = [
+    const base: { id: 'icon' | 'logo' | 'model' | LibraryMediaKind | 'all'; label: string; count: number }[] = [
       { id: 'all', label: localised('dash.library.all', 'All'), count: typeCounts.all },
     ];
     if (kind === 'assets') {
@@ -11712,8 +11787,14 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         { id: 'image',        label: localised('dash.library.images', 'Images'),       count: typeCounts.image },
         { id: 'video',        label: localised('dash.library.video',  'Video'),        count: typeCounts.video },
         { id: 'voice',        label: localised('dash.library.voice',  'Voiceover'),    count: typeCounts.voice },
+        { id: 'model',        label: localised('dash.library.models', '3D Models'),    count: typeCounts.model },
         { id: 'presentation', label: localised('dash.library.slides', 'Slides'),       count: typeCounts.presentation },
       );
+      // Inside a group, only that group's types.
+      if (group !== 'all') {
+        const buckets = LIBRARY_GROUPS.find((g) => g.id === group)?.buckets ?? [];
+        return base.filter((o) => o.id === 'all' || buckets.includes(o.id));
+      }
     } else {
       base.push(
         { id: 'document',     label: localised('dash.library.docs',   'Documents'),    count: typeCounts.document },
@@ -11721,7 +11802,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       );
     }
     return base;
-  }, [kind, typeCounts]);
+  }, [kind, typeCounts, group]);
 
   const [newDocOpen, setNewDocOpen] = useState(false);
   // Always open the inline modal — matches the extension's Library +
@@ -11745,6 +11826,24 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
             set. Assets had already dropped it, which left the split on the
             one tab with no cloud data and off the one that has it. */}
 
+        {/* Group row (assets) — all four groups, always, even when empty, so
+            where a thing will live is visible before it exists. Mirrors the
+            extension's Library. */}
+        {kind === 'assets' && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+            {[{ id: 'all' as const, label: localised('dash.library.all', 'All') }, ...LIBRARY_GROUPS.map((g) => ({ id: g.id, label: tt(g.labelKey, g.id) }))].map((g) => (
+              <button key={g.id} onClick={() => { setGroup(g.id); setFilter('all'); }}
+                style={{
+                  padding: '4px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 11.5,
+                  border: `1px solid ${group === g.id ? 'color-mix(in srgb, var(--accent) 45%, transparent)' : 'transparent'}`,
+                  background: group === g.id ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'transparent',
+                  color: group === g.id ? '#e0b0ff' : '#8b8398', fontWeight: group === g.id ? 600 : 400,
+                }}>
+                {g.label}
+              </button>
+            ))}
+          </div>
+        )}
         {/* Type filter + view toggle */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -11874,7 +11973,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
-            <div style={{ marginBottom: 12, color: 'var(--accent)', display: 'flex', justifyContent: 'center' }}>{filter === 'all' ? <PhFolder size={48} weight="duotone" /> : <MediaKindIcon kind={filter === 'icon' || filter === 'logo' ? 'image' : filter} size={48} weight="duotone" />}</div>
+            <div style={{ marginBottom: 12, color: 'var(--accent)', display: 'flex', justifyContent: 'center' }}>{filter === 'all' ? <PhFolder size={48} weight="duotone" /> : <MediaKindIcon kind={filter === 'icon' || filter === 'logo' || filter === 'model' ? 'image' : filter} size={48} weight="duotone" />}</div>
             <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
               {projectFolder ? t('dash.library.no_files') : t('dash.library.no_project')}
             </div>
@@ -12112,6 +12211,8 @@ function LibraryPreviewModal({
   const [renameValue, setRenameValue] = useState(file.name ?? '');
 
   const isCloud = file.source === 'cloud';
+  // A 3D model: one asset that is a whole folder made in Blender.
+  const model = file.model;
   const mediaKind = classifyMediaKind(file);
   const isOfficeDoc = mediaKind === 'document' || mediaKind === 'spreadsheet' || mediaKind === 'presentation';
 
@@ -12253,6 +12354,12 @@ function LibraryPreviewModal({
     if (!confirmDelete) { setConfirmDelete(true); return; }
     setBusy('delete');
     try {
+      if (model) {
+        await getSidecar().deleteModel(model.slug);
+        onDeleted(file.path, 'local');
+        onClose();
+        return;
+      }
       if (pendingDelete) {
         // A single format the user picked out of the Formats list.
         const abs = await siblingAbsPath(pendingDelete);
@@ -12423,8 +12530,17 @@ function LibraryPreviewModal({
     >
       <div style={{ minHeight: 0, flex: 1, overflowY: 'auto' }}>
 
-        {/* Preview area — real image / video player / audio waveform, local or cloud. */}
-        <AssetModalPreview file={file} />
+        {/* Preview area — real image / video player / audio waveform, local or
+            cloud; for a 3D model, the model itself (Ava's render as the poster). */}
+        {model?.glbPath ? (
+          <LazyModelViewer
+            src={`${convertFileSrc(model.glbPath)}?v=${encodeURIComponent(model.updatedAt ?? '')}`}
+            poster={file.localPath ? `${convertFileSrc(file.localPath)}?v=${encodeURIComponent(model.updatedAt ?? '')}` : undefined}
+            alt={file.name}
+          />
+        ) : (
+          <AssetModalPreview file={file} />
+        )}
 
         {/* Meta + actions */}
         <div style={{ padding: 20 }}>
@@ -12452,6 +12568,15 @@ function LibraryPreviewModal({
               "{file.prompt}"
             </p>
           )}
+          {/* A model's facts: real size (built to scale?), weight, which Blender, files. */}
+          {model && (
+            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 16, rowGap: 4, fontSize: 11 }}>
+              {model.sizeM?.length === 3 && (<><span style={{ color: '#6c7086' }}>{tt('library.model.size', 'Size')}</span><span style={{ color: '#a6adc8' }}>{model.sizeM.map((n) => +n.toFixed(2)).join(' × ')} m</span></>)}
+              {typeof model.triangles === 'number' && (<><span style={{ color: '#6c7086' }}>{tt('library.model.triangles', 'Triangles')}</span><span style={{ color: '#a6adc8' }}>{model.triangles.toLocaleString()}</span></>)}
+              {model.blenderVersion && (<><span style={{ color: '#6c7086' }}>{tt('library.model.made_in', 'Made in')}</span><span style={{ color: '#a6adc8' }}>Blender {model.blenderVersion}</span></>)}
+              {!!model.files?.length && (<><span style={{ color: '#6c7086' }}>{tt('library.model.files', 'Files')}</span><span style={{ color: '#a6adc8' }}>{model.files.join(', ')}</span></>)}
+            </div>
+          )}
 
           {/* Rename — inline, so the name the user gave an asset is editable
               without leaving the modal. Metadata title only; the file keeps its
@@ -12476,6 +12601,30 @@ function LibraryPreviewModal({
             </div>
           )}
 
+          {model ? (
+          <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {actionBtn(tt('library.model.open_in_blender', 'Open in Blender'), () => { getSidecar().openModelInBlender(model.slug).catch(() => {}); }, { primary: true })}
+            {actionBtn(tt('library.model.open_folder', 'Open folder'), () => { void import('@tauri-apps/plugin-opener').then(({ revealItemInDir }) => revealItemInDir(model.folder)).catch(() => {}); })}
+            {model.glbPath && actionBtn(tt('library.model.copy_glb_path', 'Copy .glb path'), () => { void navigator.clipboard.writeText(model.glbPath!).then(() => showToast('Copied the .glb path')).catch(() => showToast('Clipboard unavailable.')); })}
+            {model.files?.some((f) => f.endsWith('.fbx')) && actionBtn(tt('library.model.copy_fbx_path', 'Copy .fbx path'), () => { void navigator.clipboard.writeText(`${model.folder}/${model.slug}.fbx`).then(() => showToast('Copied the .fbx path')).catch(() => showToast('Clipboard unavailable.')); })}
+            {actionBtn(busy === 'useInProject' ? 'Copying…' : 'Use in project', () => {
+              if (!projectFolder) return;
+              setBusy('useInProject');
+              const sc = getSidecar();
+              const onResult = (e: SidecarEvent) => {
+                if (e.event !== 'model_action_result') return;
+                sc.offAny(onResult);
+                const r = e as unknown as { ok: boolean; relPath?: string; error?: string };
+                setBusy(null);
+                if (r.ok && r.relPath) { void navigator.clipboard.writeText(r.relPath).catch(() => {}); showToast(`Copied to ${r.relPath} — path on your clipboard`); }
+                else showToast(r.error ?? 'Copy failed.');
+              };
+              sc.onAny(onResult);
+              sc.copyModelToProject(model.slug, projectFolder).catch(() => { sc.offAny(onResult); setBusy(null); });
+            }, { disabled: !projectFolder })}
+            {file.id && !renaming && actionBtn('Rename', () => { setRenameValue(file.name ?? ''); setRenaming(true); })}
+          </div>
+          ) : (
           <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {/* Use in project — what makes a Studio asset usable in code. */}
             {!isCloud && file.id && actionBtn(
@@ -12510,6 +12659,7 @@ function LibraryPreviewModal({
                 happened to be selected rather than one the user pointed at. */}
             {isCloud && file.url && actionBtn(copied ? 'Copied ✓' : 'Copy URL', handleCopy)}
           </div>
+          )}
 
           {/* Every file this document exists as. A grouped card says "also a
               PDF"; this is where you open it. Honours "Show .md" for the same
@@ -12597,7 +12747,9 @@ function LibraryPreviewModal({
               {t('library.delete_confirm_title', { name: deleteName })}
             </div>
             <div style={{ marginTop: 2, fontSize: 11, color: '#a6adc8' }}>
-              {deleteCount > 1
+              {model
+                ? tt('library.model.delete_confirm', 'The whole model folder is removed from disk — the Blender file, its exports and its saved versions. It cannot be undone.')
+                : deleteCount > 1
                 ? t('library.delete_confirm_many', { count: String(deleteCount) })
                 : t('library.delete_confirm_one')}
             </div>
@@ -12612,8 +12764,8 @@ function LibraryPreviewModal({
                 (or SVG when the source is vector); PNG and JPG are made here
                 from the pixels. See image-export.ts for why a raster image
                 never grows an SVG option. */}
-            <span style={{ fontSize: 10, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', alignSelf: 'center' }}>Download</span>
-            {downloadOptions.map((opt, i) => (
+            {!model && <span style={{ fontSize: 10, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', alignSelf: 'center' }}>Download</span>}
+            {!model && downloadOptions.map((opt, i) => (
               <Fragment key={opt.format}>
                 {actionBtn(
                   downloadingFormat === opt.format ? 'Saving…' : opt.label,
@@ -12629,6 +12781,47 @@ function LibraryPreviewModal({
       </div>
 
     </Drawer>
+  );
+}
+
+/* -- Settings → Blender ---------------------------------------------------- */
+/** Which Blender the 3D room uses. Found by itself in the usual places; chosen
+ *  by hand only for an unusual install. Mirrors the extension's row. */
+function BlenderSetting() {
+  const [st, setSt] = useState<{ path: string | null; version: string | null; configured: string | null; error?: string } | null>(null);
+  useEffect(() => {
+    const sc = getSidecar();
+    const handler = (e: SidecarEvent) => {
+      if (e.event === 'blender_status') setSt(e as unknown as { path: string | null; version: string | null; configured: string | null; error?: string });
+    };
+    sc.onAny(handler);
+    sc.blenderStatus().catch(() => setSt({ path: null, version: null, configured: null }));
+    return () => { sc.offAny(handler); };
+  }, []);
+  const choose = async () => {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const picked = await open({ multiple: false, directory: false, title: 'Choose blender.exe', filters: navigator.userAgent.includes('Windows') ? [{ name: 'Blender', extensions: ['exe'] }] : undefined });
+    if (typeof picked === 'string') await getSidecar().setBlenderPath(picked);
+  };
+  const btn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'transparent', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: '#cdd6f4' };
+  return (
+    <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '18px 20px', marginBottom: 16 }}>
+      {!st ? (
+        <div style={{ fontSize: 12, color: '#6c7086' }}>{tt('dash.settings.blender_checking', 'Looking for Blender…')}</div>
+      ) : st.path ? (
+        <>
+          <div style={{ fontSize: 12, color: '#cdd6f4' }}>Blender {st.version} {st.configured ? tt('dash.settings.blender_chosen', '(chosen by you)') : tt('dash.settings.blender_found', '(found automatically)')}</div>
+          <div style={{ marginTop: 4, fontSize: 10.5, color: '#6c7086', fontFamily: 'monospace', wordBreak: 'break-all' }}>{st.path}</div>
+        </>
+      ) : (
+        <div style={{ fontSize: 12, color: '#a6adc8' }}>{tt('dash.settings.blender_missing', 'Blender isn\u2019t installed, or it\u2019s somewhere unusual. It\u2019s free from blender.org — or choose where yours is.')}</div>
+      )}
+      {st?.error && <div style={{ marginTop: 8, fontSize: 12, color: '#f38ba8' }}>{st.error}</div>}
+      <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+        <button style={btn} onClick={() => { void choose(); }}>{tt('dash.settings.blender_choose', 'Choose…')}</button>
+        {st?.configured && <button style={btn} onClick={() => { void getSidecar().setBlenderPath(null); }}>{tt('dash.settings.blender_auto', 'Use automatic')}</button>}
+      </div>
+    </div>
   );
 }
 
@@ -14795,6 +14988,10 @@ export function SettingsPage() {
 
         {/* ── Group: General (sec 5 — Language) ──────────────────── */}
         <div style={{ display: settingsTab === 'general' ? 'contents' : 'none' }}>
+        {/* Blender — which one the Design Studio's 3D room uses. Same setting
+            as the extension's (~/.ava/config.json), so both use one Blender. */}
+        <div style={sLabel}>{tt('dash.settings.blender', 'Blender (3D models)')}</div>
+        <BlenderSetting />
         {/* 5. Language */}
         <div style={sLabel}>{t('dash.settings.language')}</div>
         <div style={{

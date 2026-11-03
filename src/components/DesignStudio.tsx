@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type CSSProperties } from 'react';
 import { PenNib, Paperclip as PhPaperclip } from '@phosphor-icons/react';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
+import { ModelRoom, modelPanelSummary, type IdeModel } from './ModelRoom';
 import { useModeAvailability } from '../lib/mode-availability';
 import { TTS_VOICE_CATALOGUE, TTS_VOICES, TTS_VOICE_SPEEDS, TTS_VOICE_VOLUMES, voiceSpeechRate, voiceVolume } from '@ava/core/creative';
 import { logDiag } from '../lib/sidecar-log';
@@ -19,7 +20,7 @@ import { loadFont, registerWordmarkFonts } from '../lib/asset-forge/logo/pipelin
 import { renderMark, renderElements, type MarkSpec, type MarkStyle } from '../lib/asset-forge/logo/mark-primitives';
 import type { LogoBrief, LogoSystem, LogoVariant } from '../lib/asset-forge/logo/types';
 import { useCreativeGallery } from '../lib/creative-gallery';
-import { t } from '../lib/i18n';
+import { t, tt } from '../lib/i18n';
 
 /**
  * Design Studio (IDE) — guided icon design, mirrored faithfully from the VS Code
@@ -515,40 +516,32 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
   );
 }
 
-type ViewId = 'icon' | 'iconset' | 'appicon' | 'logo' | 'badge' | 'avatar' | 'banner' | 'hero' | 'ogimage' | 'illustration' | 'pattern' | 'gamekit' | 'gamepiece' | 'canvas' | 'image' | 'video' | 'voice' | 'brandkit';
+type ViewId = 'icon' | 'logo' | 'model' | 'image' | 'video' | 'voice' | 'brandkit';
 /** The same ids at runtime, so a restored tab can be validated. Keep in step
  *  with ViewId above — an id missing here silently reopens on Icon. */
-const VIEW_IDS = [
-  'icon', 'iconset', 'appicon', 'logo', 'badge', 'avatar', 'banner', 'hero', 'ogimage',
-  'illustration', 'pattern', 'gamekit', 'gamepiece', 'canvas', 'image', 'video', 'voice', 'brandkit',
-] as const;
+const VIEW_IDS = ['icon', 'logo', 'model', 'image', 'video', 'voice', 'brandkit'] as const;
 
-// Keys, not text. This is a module-level const — resolved strings would evaluate
-// once at import (before initLocale) and freeze in English. Labels resolve at
-// render via t(), keyed off the asset id.
-const GROUPS: { labelKey: string; accent: string; items: { id: ViewId; soon?: boolean }[] }[] = [
-  { labelKey: 'dash.studio.group.open_canvas', accent: '#6aa9ff', items: [
+// The groups (his call, 3 Nov 2026), the same as the extension's
+// (dashboard-ui/src/lib/design-types.ts): Open Canvas · Brand & Web · 2D · 3D.
+// No "Game Dev" — a 3D model is as much for a product shot or a print as for a
+// game. ONLY rooms that work are listed — no SOON placeholders — and a group
+// with no working room is not shown, so 2D appears with its first room.
+// Keys, not text: module-level, so labels resolve at render via t()/tt().
+const GROUPS: { labelKey: string; label: string; accent: string; items: { id: ViewId; soon?: boolean }[] }[] = ([
+  { labelKey: 'dash.studio.group.open_canvas', label: 'Open Canvas', accent: '#6aa9ff', items: [
     { id: 'video' },
     { id: 'voice' },
     { id: 'image' },
   ] },
-  { labelKey: 'dash.studio.group.web_app', accent: 'var(--accent)', items: [
+  { labelKey: 'dash.studio.group.brand_web', label: 'Brand & Web', accent: 'var(--accent)', items: [
     { id: 'icon' },
-    { id: 'iconset', soon: true },
-    { id: 'appicon', soon: true },
     { id: 'logo' },
-    { id: 'badge', soon: true },
-    { id: 'avatar', soon: true },
-    { id: 'banner', soon: true },
-    { id: 'hero', soon: true },
-    { id: 'ogimage', soon: true },
-    { id: 'illustration', soon: true },
-    { id: 'pattern', soon: true },
   ] },
-  { labelKey: 'dash.studio.group.game', accent: '#f0a24b', items: [
-    { id: 'gamekit', soon: true }, { id: 'gamepiece', soon: true },
+  { labelKey: 'dash.studio.group.2d', label: '2D', accent: '#f0a24b', items: [] },
+  { labelKey: 'dash.studio.group.3d', label: '3D', accent: '#f0a24b', items: [
+    { id: 'model' },
   ] },
-];
+] as { labelKey: string; label: string; accent: string; items: { id: ViewId; soon?: boolean }[] }[]).filter((g) => g.items.length > 0);
 
 // Qwen3-TTS built-in voice roster — PLACEHOLDER names for the shell (no wiring).
 // Imported, not listed here. Seven of the nine names this used to hold did
@@ -609,7 +602,9 @@ export function DesignStudio() {
   // Which room the Design Architect chat should reflect. The Open-Canvas Video
   // and Voiceover views map to their own rooms; everything else is the icon
   // studio (greeting / chips / heading / persona all follow this).
-  const designRoom: 'icon' | 'video' | 'voice' | 'image' | 'logo' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : view === 'image' ? 'image' : view === 'logo' ? 'logo' : 'icon';
+  const designRoom: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : view === 'image' ? 'image' : view === 'logo' ? 'logo' : view === 'model' ? 'model' : 'icon';
+  // The model on the 3D room's stage — its brief goes to Ava with every turn.
+  const [activeModel, setActiveModel] = useState<IdeModel | null>(null);
 
   const [query, setQuery] = useState('');
   const [shapeId, setShapeId] = useState('Bell');
@@ -709,6 +704,7 @@ export function DesignStudio() {
   // nothing for the panel. Now she sees it, works from it, and may change it
   // when the design calls for it.
   const designPanel = useMemo(() => {
+    if (view === 'model') return modelPanelSummary(activeModel);
     if (view !== 'logo') return undefined;
     const bits = [
       `form: ${logoForm}`,
@@ -724,7 +720,7 @@ export function DesignStudio() {
       `wordmark colour: ${logoWordColour}`,
     ].filter(Boolean);
     return bits.join(' · ');
-  }, [view, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
+  }, [view, activeModel, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
   // Register the bundled wordmark fonts (from bytes) when the Logo room opens, so
   // the font picker previews each name in its own typeface.
   useEffect(() => { if (view === 'logo') void registerWordmarkFonts(); }, [view]);
@@ -1329,7 +1325,7 @@ export function DesignStudio() {
         {GROUPS.map(g => (
           <div key={g.labelKey} style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px 6px', fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: 600, color: g.accent }}>
-              <span style={{ width: 3, height: 12, borderRadius: 2, background: g.accent }} />{t(g.labelKey)}
+              <span style={{ width: 3, height: 12, borderRadius: 2, background: g.accent }} />{tt(g.labelKey, g.label)}
             </div>
             {g.items.map(it => {
               // "Soon" items aren't built yet, and Qwen lanes can't run without
@@ -1341,7 +1337,7 @@ export function DesignStudio() {
                 <button key={it.id} onClick={disabled ? undefined : () => setView(it.id)} disabled={disabled}
                   title={keyless ? t('dash.studio.needs_qwen_tip') : undefined}
                   style={{ ...navBtn(view === it.id), ...(disabled ? { opacity: 0.45, cursor: 'default' } : {}) }}>
-                  {t(`dash.studio.asset.${it.id}`)}
+                  {it.id === 'model' ? tt('dash.studio.asset.model', '3D Model / Prop') : t(`dash.studio.asset.${it.id}`)}
                   {it.soon && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999 }}>{t('dash.studio.soon')}</span>}
                   {!it.soon && keyless && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999, whiteSpace: 'nowrap' }}>{t('dash.studio.needs_qwen')}</span>}
                 </button>
@@ -1516,6 +1512,8 @@ export function DesignStudio() {
               </div>
             )}
           </div>
+        ) : view === 'model' ? (
+          <ModelRoom onActiveModel={setActiveModel} />
         ) : view === 'brandkit' ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
             <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.brandkit.title')}</h2>
@@ -1859,6 +1857,15 @@ const DOCK_STARTERS_VIDEO: { icon: string; key: string }[] = [
 ];
 
 // Open-Canvas Voiceover room starters — verbatim room copy (label → prefill prompt).
+// The 3D room's chips — English fallbacks until the extractor translates them
+// (same four as the extension's ChatContainer).
+const DOCK_STARTERS_MODEL: { icon: string; key: string; label?: string; prompt?: string }[] = [
+  { icon: '◆', key: 'dash.studio.starter.model.1', label: 'A prop for my game', prompt: 'I need a prop for my game — help me work out the brief.' },
+  { icon: '◆', key: 'dash.studio.starter.model.2', label: 'A worn wooden crate', prompt: 'Let\u2019s make a worn wooden supply crate, game-ready.' },
+  { icon: '◆', key: 'dash.studio.starter.model.3', label: 'A product for a render', prompt: 'I want a 3D model of a product for a clean studio render.' },
+  { icon: '◆', key: 'dash.studio.starter.model.4', label: 'Something to 3D print', prompt: 'I want to design something to 3D print — help me get it right.' },
+];
+
 const DOCK_STARTERS_VOICE: { icon: string; key: string }[] = [
   { icon: '🎙', key: 'dash.studio.starter.voice.1' },
   { icon: '🗣', key: 'dash.studio.starter.voice.2' },
@@ -1868,7 +1875,7 @@ const DOCK_STARTERS_VOICE: { icon: string; key: string }[] = [
 
 const DESIGN_CHAT_KEY = 'ava-ide-design-chat';
 
-function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon', designPanel }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo'; designPanel?: string }) {
+function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon', designPanel }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model'; designPanel?: string }) {
   // Persist the design conversation like every other room — it was pure local
   // state before, so it vanished on every reload / tab switch.
   const [messages, setMessages] = useState<DockMessage[]>(() => {
@@ -1979,6 +1986,17 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
       .catch((e) => { logDiag(`design send FAILED: ${e?.message || e}`, 'error'); setStreaming(false); });
   }, [attachments, designRoom, designPanel]);
 
+  // The 3D room's "Agree the brief" says so in the conversation, as him, so
+  // Ava carries on instead of waiting to be told — a real turn, visible.
+  useEffect(() => {
+    const onSay = (e: Event) => {
+      const said = (e as CustomEvent<{ text?: string }>).detail?.text?.trim();
+      if (said) send(said);
+    };
+    window.addEventListener('ava-design-say', onSay);
+    return () => window.removeEventListener('ava-design-say', onSay);
+  }, [send]);
+
   const handleAttach = useCallback(() => {
     const picker = document.createElement('input');
     picker.type = 'file';
@@ -2027,10 +2045,12 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
   // chips follow the operator into the Open Canvas (Video / Voiceover). Icon
   // keeps the current studio copy exactly. No name is threaded into this dock,
   // so the greeting renders "Hey — …" (matching the existing name-less card).
-  const dockStarters = designRoom === 'video' ? DOCK_STARTERS_VIDEO : designRoom === 'voice' ? DOCK_STARTERS_VOICE : DOCK_STARTERS;
-  const dockHeading = designRoom === 'video' ? 'Direct with Ava' : designRoom === 'voice' ? 'Voice with Ava' : 'Design an icon with the Architect';
+  const dockStarters: { icon: string; key: string; label?: string; prompt?: string }[] = designRoom === 'video' ? DOCK_STARTERS_VIDEO : designRoom === 'voice' ? DOCK_STARTERS_VOICE : designRoom === 'model' ? DOCK_STARTERS_MODEL : DOCK_STARTERS;
+  const dockHeading = designRoom === 'video' ? 'Direct with Ava' : designRoom === 'voice' ? 'Voice with Ava' : designRoom === 'model' ? 'Build in 3D with Ava' : 'Design an icon with the Architect';
   const dockGreeting = designRoom === 'video'
     ? "Hey — Design Architect here, and we're on the Open Canvas. What are we filming? Give me the shot — subject, mood, the motion you want — and I'll direct it and render it right here."
+    : designRoom === 'model'
+    ? "Hey — let's build something in 3D. Tell me what it is and where it'll live — a prop for your game, a product shot, something to print — and I'll research it, find real references and measurements, and put a brief on the card for you to question before we touch Blender. Then we build it together, step by step, and I'll talk you through every one."
     : designRoom === 'voice'
     ? "Hey — Design Architect here, on the Open Canvas. What are we voicing? Tell me the script and the kind of voice you want, and I'll narrate it for you."
     : 'Tell me the shape, the material and your brand colour — I find the shape, direct the art and generate a clean transparent icon.';
@@ -2060,9 +2080,9 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
                 <p style={{ fontSize: 12, lineHeight: 1.5, color: '#a6adc8', margin: '0 0 14px' }}>{dockGreeting}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {dockStarters.map((s) => (
-                    <button key={s.key} type="button" onClick={() => { setInput(t(`${s.key}_p`)); inputRef.current?.focus(); onComposerFocus(); }}
+                    <button key={s.key} type="button" onClick={() => { setInput(s.prompt ? tt(`${s.key}_p`, s.prompt) : t(`${s.key}_p`)); inputRef.current?.focus(); onComposerFocus(); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, background: 'rgba(26,16,40,0.5)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: '#cdd6f4', cursor: 'pointer' }}>
-                      <span aria-hidden>{s.icon}</span>{t(s.key)}
+                      <span aria-hidden>{s.icon}</span>{s.label ? tt(s.key, s.label) : t(s.key)}
                     </button>
                   ))}
                 </div>

@@ -14,10 +14,10 @@
 import { createInterface } from 'node:readline';
 import { platform, homedir } from 'node:os';
 import { join, dirname, basename, resolve as resolvePath } from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
-import { appendFile, readFile, writeFile } from 'node:fs/promises';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, watch as fsWatch } from 'node:fs';
+import { appendFile, readFile, writeFile, rm, cp } from 'node:fs/promises';
 
 // ─── Resolve @ava/core ──────────────────────────────────────────────────────
 // In monorepo: workspace link. Standalone: relative path fallback.
@@ -1374,6 +1374,133 @@ async function handleFactoryResetExecute(categories) {
     });
   } catch (err) {
     emit({ event: 'factory_reset_done', ok: false, error: String(err?.message || err) });
+  }
+}
+
+// ── Design Studio 3D (Blender) ─────────────────────────────────────────────
+// The IDE's 3D room and Library read models through here, using exactly the
+// core functions the extension uses — one implementation of the brief rules,
+// the folder layout and the Library entry, on both surfaces.
+
+const creativeRoot = () => dirname(core.modelsDir());
+
+async function readCreativeIndex() {
+  try {
+    const parsed = JSON.parse(await readFile(join(creativeRoot(), 'metadata.json'), 'utf-8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+async function emitModels() {
+  try {
+    const [models, items] = await Promise.all([core.listModels(), readCreativeIndex()]);
+    emit({
+      event: 'models_list',
+      models: models.map((m) => {
+        const entry = items.find((i) => i.id === `model_${m.slug}`);
+        return {
+          slug: m.slug,
+          name: entry?.title || m.name,
+          built: m.built,
+          updatedAt: entry?.updatedAt || m.updatedAt,
+          creativeId: entry?.id,
+          previewPath: entry?.absolutePath,
+          glbPath: entry?.glb ? join(creativeRoot(), entry.glb) : undefined,
+          folder: join(core.modelsDir(), m.slug),
+          files: entry?.files,
+          triangles: entry?.triangles,
+          sizeM: entry?.sizeM,
+          blenderVersion: entry?.blenderVersion,
+          brief: m.brief ? {
+            status: m.brief.status,
+            editedByPerson: !!m.brief.editedByPerson,
+            reasoning: m.brief.reasoning,
+            fields: core.BRIEF_FIELDS.map(([key, label]) => ({ key, label, value: m.brief[key] })),
+          } : null,
+        };
+      }),
+    });
+  } catch (err) {
+    emit({ event: 'models_list', models: [], error: err?.message || 'Could not list models' });
+  }
+}
+
+// Follow brief.json + the creative index while the IDE is open: Ava proposes
+// briefs and builds models from her tools, not from the room, so the room and
+// the Library must hear about it by themselves. The folder is created first —
+// a watch on a missing folder never fires (the extension hit exactly that).
+let modelsWatcher = null;
+let modelsTimer = null;
+function watchModels() {
+  if (modelsWatcher) return;
+  try {
+    mkdirSync(core.modelsDir(), { recursive: true });
+    modelsWatcher = fsWatch(creativeRoot(), { recursive: true }, (_type, file) => {
+      const f = String(file || '').replace(/\\/g, '/');
+      if (f !== 'metadata.json' && !/^blender\/[^/]+\/brief\.json$/.test(f)) return;
+      clearTimeout(modelsTimer);
+      modelsTimer = setTimeout(() => { emitModels(); emit({ event: 'creative_changed' }); }, 400);
+    });
+  } catch { /* the room still works on demand */ }
+}
+
+/** The model folder for a slug — only if it really sits inside the models dir. */
+function modelFolder(slug) {
+  if (!slug) return null;
+  const root = resolvePath(core.modelsDir());
+  const folder = resolvePath(join(root, slug));
+  const sep = process.platform === 'win32' ? '\\' : '/';
+  return folder.toLowerCase().startsWith((root + sep).toLowerCase()) ? folder : null;
+}
+
+async function openModelInBlender(slug) {
+  const folder = modelFolder(slug);
+  const blend = folder && join(folder, `${slug}.blend`);
+  if (!blend || !existsSync(blend)) throw new Error('Could not find that model’s Blender file.');
+  const blender = await core.findBlender();
+  if (!blender) throw new Error(`Blender isn’t installed, or Ava can’t find it. It’s free from ${core.BLENDER_DOWNLOAD_URL}`);
+  // The person's own Blender, with its window, detached — closing the IDE
+  // never closes their work. Their saves are what Ava's next step builds on.
+  const child = spawn(blender.path, [blend], { cwd: folder, detached: true, stdio: 'ignore' });
+  child.on('error', (err) => emit({ event: 'model_action_result', ok: false, error: `Could not open Blender: ${err.message}` }));
+  child.unref();
+  emit({ event: 'model_action_result', ok: true, action: 'open' });
+}
+
+async function deleteModel(slug) {
+  const folder = modelFolder(slug);
+  if (!folder) throw new Error('Not a model folder.');
+  await rm(folder, { recursive: true, force: true });
+  const items = await readCreativeIndex();
+  await writeFile(join(creativeRoot(), 'metadata.json'), JSON.stringify(items.filter((i) => i.id !== `model_${slug}`), null, 2), 'utf-8');
+  emit({ event: 'model_action_result', ok: true, action: 'delete' });
+  emitModels();
+  emit({ event: 'creative_changed' });
+}
+
+async function copyModelToProject(slug, projectRoot) {
+  const folder = modelFolder(slug);
+  if (!folder) throw new Error('Not a model folder.');
+  if (!projectRoot) throw new Error('Open a project folder first — there’s nowhere to copy the model to.');
+  let dest = null;
+  for (const c of ['public', join('src', 'assets'), 'assets', 'static', 'images']) {
+    if (existsSync(join(projectRoot, c))) { dest = join(projectRoot, c); break; }
+  }
+  if (!dest) { dest = join(projectRoot, 'images'); mkdirSync(dest, { recursive: true }); }
+  let name = slug; let n = 2;
+  while (existsSync(join(dest, name))) name = `${slug}-${n++}`;
+  const target = join(dest, name);
+  // What an engine or a teammate needs — not the version history or scripts.
+  await cp(folder, target, { recursive: true, filter: (p) => !/[\\/](versions|scripts|\.tmp)([\\/]|$)/.test(p.slice(folder.length)) });
+  emit({ event: 'model_action_result', ok: true, action: 'copy', relPath: target.slice(projectRoot.length + 1).replace(/\\/g, '/') });
+}
+
+async function emitBlenderStatus(error) {
+  try {
+    const { install, configured } = await core.blenderStatus();
+    emit({ event: 'blender_status', path: install?.path ?? null, version: install?.version ?? null, source: install?.source ?? null, configured, ...(error ? { error } : {}) });
+  } catch (err) {
+    emit({ event: 'blender_status', path: null, version: null, source: null, configured: null, error: error || err?.message });
   }
 }
 
@@ -3240,7 +3367,7 @@ async function handleMessage(data) {
     const effectiveContent = activeLane === 'health'
       ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary(), getTrainingLogSummary())
       : activeLane === 'design'
-      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
+      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo', 'model'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
       : activeLane === 'learning'
       ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
       : data.content;
@@ -4440,6 +4567,39 @@ rl.on('line', async (line) => {
       // `asset_forge_voice_result` with the finished audio back to the canvas.
       handleAssetForgeVoice(data.body || {}, data.designRequestId, data.title).catch((err) =>
         emit({ event: 'asset_forge_voice_result', success: false, error: err && err.message ? err.message : 'Voice generation failed' }));
+      break;
+    // ── Design Studio 3D (Blender) — same core functions the extension uses ──
+    case 'list_models':
+      watchModels();
+      emitModels();
+      break;
+    case 'agree_model_brief':
+      // His button — the only way a brief becomes agreed; design_build_model
+      // refuses until then (enforced in core).
+      core.agreeModelBrief(String(data.slug || '')).finally(emitModels);
+      break;
+    case 'save_model_brief':
+      core.saveModelBriefEdits(String(data.slug || ''), data.fields || {}).finally(emitModels);
+      break;
+    case 'open_model_in_blender':
+      openModelInBlender(String(data.slug || '')).catch((err) =>
+        emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not open Blender' }));
+      break;
+    case 'delete_model':
+      deleteModel(String(data.slug || '')).catch((err) =>
+        emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not delete the model' }));
+      break;
+    case 'copy_model_to_project':
+      copyModelToProject(String(data.slug || ''), String(data.projectRoot || '')).catch((err) =>
+        emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not copy the model' }));
+      break;
+    case 'blender_status':
+      emitBlenderStatus();
+      break;
+    case 'set_blender_path':
+      core.setBlenderPath(data.path ?? null)
+        .then((res) => emitBlenderStatus(res.ok ? undefined : res.error))
+        .catch((err) => emitBlenderStatus(err?.message || 'Could not save that path'));
       break;
     case 'design_tool_result': {
       // The Design Studio canvas replied to a design_tool command — resolve the
