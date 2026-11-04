@@ -5,7 +5,7 @@ import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { tt } from '../lib/i18n';
 import { LazyModelViewer } from './LazyModelViewer';
 
-// ─── The 3D Model / Prop room — the IDE's mirror of the extension's ──────
+// ─── The Blender (Headless) room — the IDE's mirror of the extension's ──────
 //
 // The brief card beside the model. Ava researches and proposes the brief
 // (design_propose_model_brief, in core); it lands here; he questions it with
@@ -94,7 +94,7 @@ export function ModelRoom({ onActiveModel }: { onActiveModel: (m: IdeModel | nul
     <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ marginBottom: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{tt('dash.studio.model.title', '3D Model / Prop')}</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{tt('dash.studio.model.title', 'Blender (Headless)')}</h2>
           <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>
             {tt('dash.studio.model.subtitle', 'Built in Blender on your computer — free. The brief comes first: Ava researches it, you agree it, then you build it together.')}
           </p>

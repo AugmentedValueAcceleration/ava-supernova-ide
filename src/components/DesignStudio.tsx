@@ -1337,7 +1337,7 @@ export function DesignStudio() {
                 <button key={it.id} onClick={disabled ? undefined : () => setView(it.id)} disabled={disabled}
                   title={keyless ? t('dash.studio.needs_qwen_tip') : undefined}
                   style={{ ...navBtn(view === it.id), ...(disabled ? { opacity: 0.45, cursor: 'default' } : {}) }}>
-                  {it.id === 'model' ? tt('dash.studio.asset.model', '3D Model / Prop') : t(`dash.studio.asset.${it.id}`)}
+                  {it.id === 'model' ? tt('dash.studio.asset.model', 'Blender (Headless)') : t(`dash.studio.asset.${it.id}`)}
                   {it.soon && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999 }}>{t('dash.studio.soon')}</span>}
                   {!it.soon && keyless && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999, whiteSpace: 'nowrap' }}>{t('dash.studio.needs_qwen')}</span>}
                 </button>

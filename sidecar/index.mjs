@@ -2410,6 +2410,9 @@ async function handleInit(data) {
       // what the canvas did. If the canvas isn't mounted nothing replies and the
       // timeout resolves with a clear "open the Studio" message. Mirror of the
       // extension's DashboardPanel.requestFromDesign.
+      // The Studio rail: tools that register a job show in the sidebar
+      // (Blender runs; the extension passes the same manager).
+      generationManager: generationJobs(),
       designControl: async (command, args) => {
         const slow = command === 'generate_icon' || command === 'generate_set';
         const setCount = command === 'generate_set' && Array.isArray(args?.shapes) ? args.shapes.length : 1;
