@@ -1435,19 +1435,20 @@ function watchModels() {
   if (modelsWatcher) return;
   try {
     mkdirSync(core.modelsDir(), { recursive: true });
+    mkdirSync(core.imagesDir(), { recursive: true });
     modelsWatcher = fsWatch(creativeRoot(), { recursive: true }, (_type, file) => {
       const f = String(file || '').replace(/\\/g, '/');
-      if (f !== 'metadata.json' && !/^blender\/[^/]+\/brief\.json$/.test(f)) return;
+      if (f !== 'metadata.json' && !/^(blender|gimp)\/[^/]+\/(brief|options)\.json$/.test(f)) return;
       clearTimeout(modelsTimer);
-      modelsTimer = setTimeout(() => { emitModels(); emit({ event: 'creative_changed' }); }, 400);
+      modelsTimer = setTimeout(() => { emitModels(); emitImageWork(); emit({ event: 'creative_changed' }); }, 400);
     });
   } catch { /* the room still works on demand */ }
 }
 
 /** The model folder for a slug — only if it really sits inside the models dir. */
-function modelFolder(slug) {
+function modelFolder(slug, tool) {
   if (!slug) return null;
-  const root = resolvePath(core.modelsDir());
+  const root = resolvePath(tool === 'gimp' ? core.imagesDir() : core.modelsDir());
   const folder = resolvePath(join(root, slug));
   const sep = process.platform === 'win32' ? '\\' : '/';
   return folder.toLowerCase().startsWith((root + sep).toLowerCase()) ? folder : null;
@@ -1467,19 +1468,20 @@ async function openModelInBlender(slug) {
   emit({ event: 'model_action_result', ok: true, action: 'open' });
 }
 
-async function deleteModel(slug) {
-  const folder = modelFolder(slug);
+async function deleteModel(slug, tool) {
+  const folder = modelFolder(slug, tool);
+  const entryId = tool === 'gimp' ? `gimp_${slug}` : `model_${slug}`;
   if (!folder) throw new Error('Not a model folder.');
   await rm(folder, { recursive: true, force: true });
   const items = await readCreativeIndex();
-  await writeFile(join(creativeRoot(), 'metadata.json'), JSON.stringify(items.filter((i) => i.id !== `model_${slug}`), null, 2), 'utf-8');
+  await writeFile(join(creativeRoot(), 'metadata.json'), JSON.stringify(items.filter((i) => i.id !== entryId), null, 2), 'utf-8');
   emit({ event: 'model_action_result', ok: true, action: 'delete' });
-  emitModels();
+  if (tool === 'gimp') emitImageWork(); else emitModels();
   emit({ event: 'creative_changed' });
 }
 
-async function copyModelToProject(slug, projectRoot) {
-  const folder = modelFolder(slug);
+async function copyModelToProject(slug, projectRoot, tool) {
+  const folder = modelFolder(slug, tool);
   if (!folder) throw new Error('Not a model folder.');
   if (!projectRoot) throw new Error('Open a project folder first — there’s nowhere to copy the model to.');
   let dest = null;
@@ -1493,6 +1495,64 @@ async function copyModelToProject(slug, projectRoot) {
   // What an engine or a teammate needs — not the version history or scripts.
   await cp(folder, target, { recursive: true, filter: (p) => !/[\\/](versions|scripts|\.tmp)([\\/]|$)/.test(p.slice(folder.length)) });
   emit({ event: 'model_action_result', ok: true, action: 'copy', relPath: target.slice(projectRoot.length + 1).replace(/\\/g, '/') });
+}
+
+async function emitImageWork() {
+  try {
+    const [work, items] = await Promise.all([core.listImageWork(), readCreativeIndex()]);
+    emit({
+      event: 'image_work_list',
+      models: work.map((w) => {
+        const entry = items.find((i) => i.id === `gimp_${w.slug}`);
+        return {
+          slug: w.slug,
+          name: entry?.title || w.name,
+          built: w.built,
+          updatedAt: entry?.updatedAt || w.updatedAt,
+          creativeId: entry?.id,
+          previewPath: entry?.absolutePath,
+          folder: join(core.imagesDir(), w.slug),
+          files: entry?.files,
+          imageCount: entry?.imageCount,
+          references: w.references,
+          options: w.options ? {
+            question: w.options.question,
+            items: w.options.options.map((o) => ({ label: o.label, note: o.note, path: join(core.imagesDir(), w.slug, o.file) })),
+          } : null,
+          brief: w.brief ? {
+            status: w.brief.status,
+            editedByPerson: !!w.brief.editedByPerson,
+            reasoning: w.brief.reasoning,
+            fields: core.IMAGE_BRIEF_FIELDS.map(([key, label]) => ({ key, label, value: String(w.brief[key] ?? '') })),
+          } : null,
+        };
+      }),
+    });
+  } catch (err) {
+    emit({ event: 'image_work_list', models: [], error: err?.message || 'Could not list GIMP work' });
+  }
+}
+
+async function openWorkInGimp(slug) {
+  const folder = modelFolder(slug, 'gimp');
+  if (!folder || !existsSync(folder)) throw new Error('Could not find that work.');
+  const gimp = await core.findGimp();
+  if (!gimp) throw new Error(`GIMP 3 isn’t installed, or Ava can’t find it. It’s free from ${core.GIMP_DOWNLOAD_URL}`);
+  // Their own GIMP, with its window, detached. Every image, so a set opens as a set.
+  const xcfs = readdirSync(folder).filter((f) => f.endsWith('.xcf')).map((f) => join(folder, f));
+  const child = spawn(gimp.appPath, xcfs, { cwd: folder, detached: true, stdio: 'ignore' });
+  child.on('error', (err) => emit({ event: 'model_action_result', ok: false, error: `Could not open GIMP: ${err.message}` }));
+  child.unref();
+  emit({ event: 'model_action_result', ok: true, action: 'open' });
+}
+
+async function emitGimpStatus(error) {
+  try {
+    const { install, configured } = await core.gimpStatus();
+    emit({ event: 'gimp_status', path: install?.path ?? null, version: install?.version ?? null, source: install?.source ?? null, configured, ...(error ? { error } : {}) });
+  } catch (err) {
+    emit({ event: 'gimp_status', path: null, version: null, source: null, configured: null, error: error || err?.message });
+  }
 }
 
 async function emitBlenderStatus(error) {
@@ -3370,7 +3430,7 @@ async function handleMessage(data) {
     const effectiveContent = activeLane === 'health'
       ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary(), getTrainingLogSummary())
       : activeLane === 'design'
-      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo', 'model'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
+      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo', 'model', 'gimp'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
       : activeLane === 'learning'
       ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
       : data.content;
@@ -4589,15 +4649,48 @@ rl.on('line', async (line) => {
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not open Blender' }));
       break;
     case 'delete_model':
-      deleteModel(String(data.slug || '')).catch((err) =>
+      deleteModel(String(data.slug || ''), data.tool).catch((err) =>
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not delete the model' }));
       break;
     case 'copy_model_to_project':
-      copyModelToProject(String(data.slug || ''), String(data.projectRoot || '')).catch((err) =>
+      copyModelToProject(String(data.slug || ''), String(data.projectRoot || ''), data.tool).catch((err) =>
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not copy the model' }));
       break;
     case 'blender_status':
       emitBlenderStatus();
+      break;
+    // ── Design Studio 2D (GIMP) — the same shape, on its own folder ──
+    case 'list_image_work':
+      watchModels();
+      emitImageWork();
+      break;
+    case 'agree_image_brief':
+      core.agreeImageBrief(String(data.slug || '')).finally(emitImageWork);
+      break;
+    case 'save_image_brief':
+      core.saveImageBriefEdits(String(data.slug || ''), data.fields || {}).finally(emitImageWork);
+      break;
+    case 'pick_image_option':
+      core.pickImageOption(String(data.slug || ''), Number(data.index)).finally(emitImageWork);
+      break;
+    case 'add_image_art':
+      core.addImageReference(String(data.slug || ''), String(data.path || '')).then((res) => {
+        emitImageWork();
+        if (res.ok) emit({ event: 'image_art_added', slug: data.slug, file: res.file });
+        else emit({ event: 'model_action_result', ok: false, error: res.error });
+      }).catch((err) => emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not add that art' }));
+      break;
+    case 'open_work_in_gimp':
+      openWorkInGimp(String(data.slug || '')).catch((err) =>
+        emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not open GIMP' }));
+      break;
+    case 'gimp_status':
+      emitGimpStatus();
+      break;
+    case 'set_gimp_path':
+      core.setGimpPath(data.path ?? null)
+        .then((res) => emitGimpStatus(res.ok ? undefined : res.error))
+        .catch((err) => emitGimpStatus(err?.message || 'Could not save that path'));
       break;
     case 'set_blender_path':
       core.setBlenderPath(data.path ?? null)

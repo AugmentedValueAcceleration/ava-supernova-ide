@@ -381,7 +381,7 @@ export class SidecarManager {
   /**
    * Send a chat message to the agent.
    */
-  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string, designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model', designPanel?: string, talk?: boolean): Promise<void> {
+  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string, designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp', designPanel?: string, talk?: boolean): Promise<void> {
     // For large attachments (images), write to temp files to avoid stdin buffer limits
     let processedAttachments = attachments;
     if (attachments?.length) {
@@ -501,10 +501,19 @@ export class SidecarManager {
   async agreeModelBrief(slug: string): Promise<void> { await this.send({ cmd: 'agree_model_brief', slug }); }
   async saveModelBrief(slug: string, fields: Record<string, string>): Promise<void> { await this.send({ cmd: 'save_model_brief', slug, fields }); }
   async openModelInBlender(slug: string): Promise<void> { await this.send({ cmd: 'open_model_in_blender', slug }); }
-  async deleteModel(slug: string): Promise<void> { await this.send({ cmd: 'delete_model', slug }); }
-  async copyModelToProject(slug: string, projectRoot: string): Promise<void> { await this.send({ cmd: 'copy_model_to_project', slug, projectRoot }); }
+  async deleteModel(slug: string, tool: 'blender' | 'gimp' = 'blender'): Promise<void> { await this.send({ cmd: 'delete_model', slug, tool }); }
+  async copyModelToProject(slug: string, projectRoot: string, tool: 'blender' | 'gimp' = 'blender'): Promise<void> { await this.send({ cmd: 'copy_model_to_project', slug, projectRoot, tool }); }
   async blenderStatus(): Promise<void> { await this.send({ cmd: 'blender_status' }); }
   async setBlenderPath(path: string | null): Promise<void> { await this.send({ cmd: 'set_blender_path', path }); }
+  // ── Design Studio 2D (GIMP) ── `image_work_list`, `gimp_status`.
+  async listImageWork(): Promise<void> { await this.send({ cmd: 'list_image_work' }); }
+  async agreeImageBrief(slug: string): Promise<void> { await this.send({ cmd: 'agree_image_brief', slug }); }
+  async saveImageBrief(slug: string, fields: Record<string, string>): Promise<void> { await this.send({ cmd: 'save_image_brief', slug, fields }); }
+  async pickImageOption(slug: string, index: number): Promise<void> { await this.send({ cmd: 'pick_image_option', slug, index }); }
+  async addImageArt(slug: string, path: string): Promise<void> { await this.send({ cmd: 'add_image_art', slug, path }); }
+  async openWorkInGimp(slug: string): Promise<void> { await this.send({ cmd: 'open_work_in_gimp', slug }); }
+  async gimpStatus(): Promise<void> { await this.send({ cmd: 'gimp_status' }); }
+  async setGimpPath(path: string | null): Promise<void> { await this.send({ cmd: 'set_gimp_path', path }); }
 
   /**
    * List the project's decision records. Answers with a `decisions_list` event.

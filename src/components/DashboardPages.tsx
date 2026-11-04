@@ -10093,7 +10093,8 @@ function modelLibraryFile(it: Record<string, unknown>): LibraryFile {
   const folder = str('absoluteFolder') ?? '';
   const slug = folder.split(/[\\/]/).pop() ?? '';
   const glbRel = str('glb');
-  const creativeRoot = folder.replace(/[\\/]blender[\\/][^\\/]+$/, '');
+  const creativeRoot = folder.replace(/[\\/](blender|gimp)[\\/][^\\/]+$/, '');
+  const tool = it.kind === 'gimp' ? 'gimp' as const : 'blender' as const;
   return {
     id: str('id'),
     name: str('title') || 'Untitled model',
@@ -10101,13 +10102,15 @@ function modelLibraryFile(it: Record<string, unknown>): LibraryFile {
     folder: 'Creative Studio',
     type: 'image',
     mediaKind: 'image',
-    designType: 'model',
+    designType: tool === 'gimp' ? 'gimp' : 'model',
     localPath: str('absolutePath'),
     size: typeof it.bytes === 'number' ? it.bytes : 0,
     modified: str('updatedAt') || str('createdAt') || '',
     prompt: str('prompt') || '',
     source: 'local',
     model: {
+      tool,
+      imageCount: typeof it.imageCount === 'number' ? it.imageCount : undefined,
       slug,
       folder,
       glbPath: glbRel && creativeRoot ? `${creativeRoot}/${glbRel}` : undefined,
@@ -10150,6 +10153,9 @@ interface LibraryFile {
   /** A 3D model Ava built in Blender — one asset that is a whole folder
    *  (written by core's design_build_model, shared with the extension). */
   model?: {
+    /** Blender model, or a folder of GIMP work: the same drawer serves both. */
+    tool: 'blender' | 'gimp';
+    imageCount?: number;
     slug: string;
     folder: string;
     glbPath?: string;
@@ -10166,14 +10172,14 @@ interface LibraryFile {
 const LIBRARY_GROUPS: { id: 'Open Canvas' | 'Brand & Web' | '2D' | '3D'; labelKey: string; buckets: string[] }[] = [
   { id: 'Open Canvas', labelKey: 'dash.studio.group.open_canvas', buckets: ['image', 'video', 'voice', 'music'] },
   { id: 'Brand & Web', labelKey: 'dash.studio.group.brand_web', buckets: ['icon', 'logo'] },
-  { id: '2D', labelKey: 'dash.studio.group.2d', buckets: [] },
+  { id: '2D', labelKey: 'dash.studio.group.2d', buckets: ['gimp'] },
   { id: '3D', labelKey: 'dash.studio.group.3d', buckets: ['model'] },
 ];
 
 /** The bucket a file sorts into: its fine-grained designType (icon / logo) if
  *  tagged, else the coarse media kind. Mirrors the extension's effectiveType. */
-function libraryBucket(f: LibraryFile): 'icon' | 'logo' | 'model' | LibraryMediaKind {
-  if (f.model) return 'model';
+function libraryBucket(f: LibraryFile): 'icon' | 'logo' | 'model' | 'gimp' | LibraryMediaKind {
+  if (f.model) return f.model.tool === 'gimp' ? 'gimp' : 'model';
   if (f.designType === 'icon' || f.designType === 'logo') return f.designType;
   return classifyMediaKind(f);
 }
@@ -11567,7 +11573,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // Filter axis is the real media kind, not the coalesced LibraryFileType,
   // so the user can isolate just music / video / voice within the Assets
   // tab — previously they all collapsed under Images.
-  const [filter, setFilter] = useState<'icon' | 'logo' | 'model' | LibraryMediaKind | 'all'>('all');
+  const [filter, setFilter] = useState<'icon' | 'logo' | 'model' | 'gimp' | LibraryMediaKind | 'all'>('all');
   const [group, setGroup] = useState<'all' | (typeof LIBRARY_GROUPS)[number]['id']>('all');
   // Ava builds models from her tools, not from here — follow the sidecar's
   // watch on the creative folder so a new model appears by itself. Asking for
@@ -11649,8 +11655,8 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           if (cancelled) return;
           const items = collapseLogoGroups(rawItems);
           setCloudFiles(items
-            .filter((it) => it.kind === 'image' || it.kind === 'video' || it.kind === 'voice' || (it.kind as string) === 'model')
-            .map((it): LibraryFile => (it.kind as string) === 'model' ? modelLibraryFile(it as unknown as Record<string, unknown>) : ({
+            .filter((it) => it.kind === 'image' || it.kind === 'video' || it.kind === 'voice' || (it.kind as string) === 'model' || (it.kind as string) === 'gimp')
+            .map((it): LibraryFile => (it.kind as string) === 'model' || (it.kind as string) === 'gimp' ? modelLibraryFile(it as unknown as Record<string, unknown>) : ({
               id: it.id,
               name: it.title || 'Untitled',
               path: it.url || '',
@@ -11740,10 +11746,11 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   }, [kind, showSource, filtered, docGroups]);
 
   const typeCounts = useMemo(() => {
-    const byBucket = (k: 'icon' | 'logo' | 'model' | LibraryMediaKind) => kindFiles.filter((f) => libraryBucket(f) === k).length;
+    const byBucket = (k: 'icon' | 'logo' | 'model' | 'gimp' | LibraryMediaKind) => kindFiles.filter((f) => libraryBucket(f) === k).length;
     return {
       all: groupFiles.length,
       model:        byBucket('model'),
+      gimp:         byBucket('gimp'),
       icon:         byBucket('icon'),
       logo:         byBucket('logo'),
       image:        byBucket('image'),
@@ -11775,7 +11782,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     return !out || out === key ? fallback : out;
   };
   const filterOptions = useMemo(() => {
-    const base: { id: 'icon' | 'logo' | 'model' | LibraryMediaKind | 'all'; label: string; count: number }[] = [
+    const base: { id: 'icon' | 'logo' | 'model' | 'gimp' | LibraryMediaKind | 'all'; label: string; count: number }[] = [
       { id: 'all', label: localised('dash.library.all', 'All'), count: typeCounts.all },
     ];
     if (kind === 'assets') {
@@ -11788,6 +11795,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
         { id: 'video',        label: localised('dash.library.video',  'Video'),        count: typeCounts.video },
         { id: 'voice',        label: localised('dash.library.voice',  'Voiceover'),    count: typeCounts.voice },
         { id: 'model',        label: localised('dash.library.models', '3D Models'),    count: typeCounts.model },
+        { id: 'gimp',         label: localised('dash.library.gimp',   'GIMP'),         count: typeCounts.gimp },
         { id: 'presentation', label: localised('dash.library.slides', 'Slides'),       count: typeCounts.presentation },
       );
       // Inside a group, only that group's types.
@@ -11973,7 +11981,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: 60 }}>
-            <div style={{ marginBottom: 12, color: 'var(--accent)', display: 'flex', justifyContent: 'center' }}>{filter === 'all' ? <PhFolder size={48} weight="duotone" /> : <MediaKindIcon kind={filter === 'icon' || filter === 'logo' || filter === 'model' ? 'image' : filter} size={48} weight="duotone" />}</div>
+            <div style={{ marginBottom: 12, color: 'var(--accent)', display: 'flex', justifyContent: 'center' }}>{filter === 'all' ? <PhFolder size={48} weight="duotone" /> : <MediaKindIcon kind={filter === 'icon' || filter === 'logo' || filter === 'model' || filter === 'gimp' ? 'image' : filter} size={48} weight="duotone" />}</div>
             <div style={{ fontSize: 14, color: '#cdd6f4', fontWeight: 500, marginBottom: 6 }}>
               {projectFolder ? t('dash.library.no_files') : t('dash.library.no_project')}
             </div>
@@ -12355,7 +12363,7 @@ function LibraryPreviewModal({
     setBusy('delete');
     try {
       if (model) {
-        await getSidecar().deleteModel(model.slug);
+        await getSidecar().deleteModel(model.slug, model.tool);
         onDeleted(file.path, 'local');
         onClose();
         return;
@@ -12573,6 +12581,7 @@ function LibraryPreviewModal({
             <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 16, rowGap: 4, fontSize: 11 }}>
               {model.sizeM?.length === 3 && (<><span style={{ color: '#6c7086' }}>{tt('library.model.size', 'Size')}</span><span style={{ color: '#a6adc8' }}>{model.sizeM.map((n) => +n.toFixed(2)).join(' × ')} m</span></>)}
               {typeof model.triangles === 'number' && (<><span style={{ color: '#6c7086' }}>{tt('library.model.triangles', 'Triangles')}</span><span style={{ color: '#a6adc8' }}>{model.triangles.toLocaleString()}</span></>)}
+              {typeof model.imageCount === 'number' && (<><span style={{ color: '#6c7086' }}>{tt('library.gimp.images', 'Images')}</span><span style={{ color: '#a6adc8' }}>{model.imageCount}</span></>)}
               {model.blenderVersion && (<><span style={{ color: '#6c7086' }}>{tt('library.model.made_in', 'Made in')}</span><span style={{ color: '#a6adc8' }}>Blender {model.blenderVersion}</span></>)}
               {!!model.files?.length && (<><span style={{ color: '#6c7086' }}>{tt('library.model.files', 'Files')}</span><span style={{ color: '#a6adc8' }}>{model.files.join(', ')}</span></>)}
             </div>
@@ -12603,7 +12612,7 @@ function LibraryPreviewModal({
 
           {model ? (
           <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {actionBtn(tt('library.model.open_in_blender', 'Open in Blender'), () => { getSidecar().openModelInBlender(model.slug).catch(() => {}); }, { primary: true })}
+            {actionBtn(model.tool === 'gimp' ? tt('library.gimp.open_in_gimp', 'Open in GIMP') : tt('library.model.open_in_blender', 'Open in Blender'), () => { (model.tool === 'gimp' ? getSidecar().openWorkInGimp(model.slug) : getSidecar().openModelInBlender(model.slug)).catch(() => {}); }, { primary: true })}
             {actionBtn(tt('library.model.open_folder', 'Open folder'), () => { void import('@tauri-apps/plugin-opener').then(({ revealItemInDir }) => revealItemInDir(model.folder)).catch(() => {}); })}
             {model.glbPath && actionBtn(tt('library.model.copy_glb_path', 'Copy .glb path'), () => { void navigator.clipboard.writeText(model.glbPath!).then(() => showToast('Copied the .glb path')).catch(() => showToast('Clipboard unavailable.')); })}
             {model.files?.some((f) => f.endsWith('.fbx')) && actionBtn(tt('library.model.copy_fbx_path', 'Copy .fbx path'), () => { void navigator.clipboard.writeText(`${model.folder}/${model.slug}.fbx`).then(() => showToast('Copied the .fbx path')).catch(() => showToast('Clipboard unavailable.')); })}
@@ -12620,7 +12629,7 @@ function LibraryPreviewModal({
                 else showToast(r.error ?? 'Copy failed.');
               };
               sc.onAny(onResult);
-              sc.copyModelToProject(model.slug, projectFolder).catch(() => { sc.offAny(onResult); setBusy(null); });
+              sc.copyModelToProject(model.slug, projectFolder, model.tool).catch(() => { sc.offAny(onResult); setBusy(null); });
             }, { disabled: !projectFolder })}
             {file.id && !renaming && actionBtn('Rename', () => { setRenameValue(file.name ?? ''); setRenaming(true); })}
           </div>
@@ -12747,7 +12756,9 @@ function LibraryPreviewModal({
               {t('library.delete_confirm_title', { name: deleteName })}
             </div>
             <div style={{ marginTop: 2, fontSize: 11, color: '#a6adc8' }}>
-              {model
+              {model?.tool === 'gimp'
+                ? tt('library.gimp.delete_confirm', 'The whole folder is removed from disk — the layered files, their exports and saved versions. It cannot be undone.')
+                : model
                 ? tt('library.model.delete_confirm', 'The whole model folder is removed from disk — the Blender file, its exports and its saved versions. It cannot be undone.')
                 : deleteCount > 1
                 ? t('library.delete_confirm_many', { count: String(deleteCount) })
@@ -12787,39 +12798,40 @@ function LibraryPreviewModal({
 /* -- Settings → Blender ---------------------------------------------------- */
 /** Which Blender the 3D room uses. Found by itself in the usual places; chosen
  *  by hand only for an unusual install. Mirrors the extension's row. */
-function BlenderSetting() {
+function ToolPathSetting({ tool }: { tool: 'blender' | 'gimp' }) {
+  const label = tool === 'gimp' ? 'GIMP' : 'Blender';
   const [st, setSt] = useState<{ path: string | null; version: string | null; configured: string | null; error?: string } | null>(null);
   useEffect(() => {
     const sc = getSidecar();
     const handler = (e: SidecarEvent) => {
-      if (e.event === 'blender_status') setSt(e as unknown as { path: string | null; version: string | null; configured: string | null; error?: string });
+      if (e.event === `${tool}_status`) setSt(e as unknown as { path: string | null; version: string | null; configured: string | null; error?: string });
     };
     sc.onAny(handler);
-    sc.blenderStatus().catch(() => setSt({ path: null, version: null, configured: null }));
+    (tool === 'gimp' ? sc.gimpStatus() : sc.blenderStatus()).catch(() => setSt({ path: null, version: null, configured: null }));
     return () => { sc.offAny(handler); };
-  }, []);
+  }, [tool]);
   const choose = async () => {
     const { open } = await import('@tauri-apps/plugin-dialog');
-    const picked = await open({ multiple: false, directory: false, title: 'Choose blender.exe', filters: navigator.userAgent.includes('Windows') ? [{ name: 'Blender', extensions: ['exe'] }] : undefined });
-    if (typeof picked === 'string') await getSidecar().setBlenderPath(picked);
+    const picked = await open({ multiple: false, directory: false, title: tool === 'gimp' ? 'Choose gimp.exe' : 'Choose blender.exe', filters: navigator.userAgent.includes('Windows') ? [{ name: label, extensions: ['exe'] }] : undefined });
+    if (typeof picked === 'string') await (tool === 'gimp' ? getSidecar().setGimpPath(picked) : getSidecar().setBlenderPath(picked));
   };
   const btn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'transparent', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: '#cdd6f4' };
   return (
     <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12, padding: '18px 20px', marginBottom: 16 }}>
       {!st ? (
-        <div style={{ fontSize: 12, color: '#6c7086' }}>{tt('dash.settings.blender_checking', 'Looking for Blender…')}</div>
+        <div style={{ fontSize: 12, color: '#6c7086' }}>{tt(`dash.settings.${tool}_checking`, `Looking for ${label}…`)}</div>
       ) : st.path ? (
         <>
-          <div style={{ fontSize: 12, color: '#cdd6f4' }}>Blender {st.version} {st.configured ? tt('dash.settings.blender_chosen', '(chosen by you)') : tt('dash.settings.blender_found', '(found automatically)')}</div>
+          <div style={{ fontSize: 12, color: '#cdd6f4' }}>{label} {st.version} {st.configured ? tt('dash.settings.blender_chosen', '(chosen by you)') : tt('dash.settings.blender_found', '(found automatically)')}</div>
           <div style={{ marginTop: 4, fontSize: 10.5, color: '#6c7086', fontFamily: 'monospace', wordBreak: 'break-all' }}>{st.path}</div>
         </>
       ) : (
-        <div style={{ fontSize: 12, color: '#a6adc8' }}>{tt('dash.settings.blender_missing', 'Blender isn\u2019t installed, or it\u2019s somewhere unusual. It\u2019s free from blender.org — or choose where yours is.')}</div>
+        <div style={{ fontSize: 12, color: '#a6adc8' }}>{tt(`dash.settings.${tool}_missing`, tool === 'gimp' ? 'GIMP 3 isn\u2019t installed, or it\u2019s somewhere unusual. It\u2019s free from gimp.org — or choose where yours is.' : 'Blender isn\u2019t installed, or it\u2019s somewhere unusual. It\u2019s free from blender.org — or choose where yours is.')}</div>
       )}
       {st?.error && <div style={{ marginTop: 8, fontSize: 12, color: '#f38ba8' }}>{st.error}</div>}
       <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
         <button style={btn} onClick={() => { void choose(); }}>{tt('dash.settings.blender_choose', 'Choose…')}</button>
-        {st?.configured && <button style={btn} onClick={() => { void getSidecar().setBlenderPath(null); }}>{tt('dash.settings.blender_auto', 'Use automatic')}</button>}
+        {st?.configured && <button style={btn} onClick={() => { void (tool === 'gimp' ? getSidecar().setGimpPath(null) : getSidecar().setBlenderPath(null)); }}>{tt('dash.settings.blender_auto', 'Use automatic')}</button>}
       </div>
     </div>
   );
@@ -14991,7 +15003,9 @@ export function SettingsPage() {
         {/* Blender — which one the Design Studio's 3D room uses. Same setting
             as the extension's (~/.ava/config.json), so both use one Blender. */}
         <div style={sLabel}>{tt('dash.settings.blender', 'Blender (3D models)')}</div>
-        <BlenderSetting />
+        <ToolPathSetting tool="blender" />
+        <div style={sLabel}>{tt('dash.settings.gimp', 'GIMP (2D images)')}</div>
+        <ToolPathSetting tool="gimp" />
         {/* 5. Language */}
         <div style={sLabel}>{t('dash.settings.language')}</div>
         <div style={{

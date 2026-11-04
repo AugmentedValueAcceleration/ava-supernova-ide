@@ -516,10 +516,10 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
   );
 }
 
-type ViewId = 'icon' | 'logo' | 'model' | 'image' | 'video' | 'voice' | 'brandkit';
+type ViewId = 'icon' | 'logo' | 'model' | 'gimp' | 'image' | 'video' | 'voice' | 'brandkit';
 /** The same ids at runtime, so a restored tab can be validated. Keep in step
  *  with ViewId above — an id missing here silently reopens on Icon. */
-const VIEW_IDS = ['icon', 'logo', 'model', 'image', 'video', 'voice', 'brandkit'] as const;
+const VIEW_IDS = ['icon', 'logo', 'model', 'gimp', 'image', 'video', 'voice', 'brandkit'] as const;
 
 // The groups (his call, 3 Nov 2026), the same as the extension's
 // (dashboard-ui/src/lib/design-types.ts): Open Canvas · Brand & Web · 2D · 3D.
@@ -537,7 +537,9 @@ const GROUPS: { labelKey: string; label: string; accent: string; items: { id: Vi
     { id: 'icon' },
     { id: 'logo' },
   ] },
-  { labelKey: 'dash.studio.group.2d', label: '2D', accent: '#f0a24b', items: [] },
+  { labelKey: 'dash.studio.group.2d', label: '2D', accent: '#f0a24b', items: [
+    { id: 'gimp' },
+  ] },
   { labelKey: 'dash.studio.group.3d', label: '3D', accent: '#f0a24b', items: [
     { id: 'model' },
   ] },
@@ -602,9 +604,10 @@ export function DesignStudio() {
   // Which room the Design Architect chat should reflect. The Open-Canvas Video
   // and Voiceover views map to their own rooms; everything else is the icon
   // studio (greeting / chips / heading / persona all follow this).
-  const designRoom: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : view === 'image' ? 'image' : view === 'logo' ? 'logo' : view === 'model' ? 'model' : 'icon';
+  const designRoom: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : view === 'image' ? 'image' : view === 'logo' ? 'logo' : view === 'model' ? 'model' : view === 'gimp' ? 'gimp' : 'icon';
   // The model on the 3D room's stage — its brief goes to Ava with every turn.
   const [activeModel, setActiveModel] = useState<IdeModel | null>(null);
+  const [roomWork, setRoomWork] = useState<string[]>([]);
 
   const [query, setQuery] = useState('');
   const [shapeId, setShapeId] = useState('Bell');
@@ -652,6 +655,16 @@ export function DesignStudio() {
   const [genError, setGenError] = useState<string | null>(null);
   const [genSize, setGenSize] = useState(512);
   const [dockOpen, setDockOpen] = useState(false);
+  const [designBusy, setDesignBusy] = useState(false);
+  // New brief: open the chat, ready to type.
+  useEffect(() => {
+    const onNew = () => {
+      setDockOpen(true);
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent('ava-design-focus')), 80);
+    };
+    window.addEventListener('ava-design-new', onNew);
+    return () => window.removeEventListener('ava-design-new', onNew);
+  }, []);
   // Keep the conversation mounted through the slide-down so the collapse animates.
   const [renderConv, setRenderConv] = useState(false);
   useEffect(() => {
@@ -704,7 +717,7 @@ export function DesignStudio() {
   // nothing for the panel. Now she sees it, works from it, and may change it
   // when the design calls for it.
   const designPanel = useMemo(() => {
-    if (view === 'model') return modelPanelSummary(activeModel);
+    if (view === 'model' || view === 'gimp') return modelPanelSummary(activeModel, view === 'gimp', roomWork);
     if (view !== 'logo') return undefined;
     const bits = [
       `form: ${logoForm}`,
@@ -720,7 +733,7 @@ export function DesignStudio() {
       `wordmark colour: ${logoWordColour}`,
     ].filter(Boolean);
     return bits.join(' · ');
-  }, [view, activeModel, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
+  }, [view, activeModel, roomWork, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
   // Register the bundled wordmark fonts (from bytes) when the Logo room opens, so
   // the font picker previews each name in its own typeface.
   useEffect(() => { if (view === 'logo') void registerWordmarkFonts(); }, [view]);
@@ -1337,7 +1350,7 @@ export function DesignStudio() {
                 <button key={it.id} onClick={disabled ? undefined : () => setView(it.id)} disabled={disabled}
                   title={keyless ? t('dash.studio.needs_qwen_tip') : undefined}
                   style={{ ...navBtn(view === it.id), ...(disabled ? { opacity: 0.45, cursor: 'default' } : {}) }}>
-                  {it.id === 'model' ? tt('dash.studio.asset.model', 'Blender (Headless)') : t(`dash.studio.asset.${it.id}`)}
+                  {it.id === 'model' ? tt('dash.studio.asset.model', 'Blender (Headless)') : it.id === 'gimp' ? tt('dash.studio.asset.gimp', 'GIMP (Headless)') : t(`dash.studio.asset.${it.id}`)}
                   {it.soon && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999 }}>{t('dash.studio.soon')}</span>}
                   {!it.soon && keyless && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999, whiteSpace: 'nowrap' }}>{t('dash.studio.needs_qwen')}</span>}
                 </button>
@@ -1513,7 +1526,9 @@ export function DesignStudio() {
             )}
           </div>
         ) : view === 'model' ? (
-          <ModelRoom onActiveModel={setActiveModel} />
+          <ModelRoom key="blender" tool="blender" busy={designBusy} onActiveModel={setActiveModel} onRoster={setRoomWork} />
+        ) : view === 'gimp' ? (
+          <ModelRoom key="gimp" tool="gimp" busy={designBusy} onActiveModel={setActiveModel} onRoster={setRoomWork} />
         ) : view === 'brandkit' ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
             <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.brandkit.title')}</h2>
@@ -1552,7 +1567,7 @@ export function DesignStudio() {
             </button>
           </div>
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-            <DesignArchitectDock showMessages={renderConv} onComposerFocus={() => setDockOpen(true)} designRoom={designRoom} designPanel={designPanel} />
+            <DesignArchitectDock showMessages={renderConv} onComposerFocus={() => setDockOpen(true)} designRoom={designRoom} designPanel={designPanel} onBusyChange={setDesignBusy} />
           </div>
         </div>
       </div>
@@ -1866,6 +1881,13 @@ const DOCK_STARTERS_MODEL: { icon: string; key: string; label?: string; prompt?:
   { icon: '◆', key: 'dash.studio.starter.model.4', label: 'Something to 3D print', prompt: 'I want to design something to 3D print — help me get it right.' },
 ];
 
+const DOCK_STARTERS_GIMP: { icon: string; key: string; label?: string; prompt?: string }[] = [
+  { icon: '◆', key: 'dash.studio.starter.gimp.1', label: 'A matching icon set', prompt: 'I need a matching set of icons — help me work out the brief.' },
+  { icon: '◆', key: 'dash.studio.starter.gimp.2', label: 'Game UI', prompt: 'I need UI for my game: buttons, frames and bars that match.' },
+  { icon: '◆', key: 'dash.studio.starter.gimp.3', label: 'A sprite sheet', prompt: 'I want to make a sprite sheet — help me get it right.' },
+  { icon: '◆', key: 'dash.studio.starter.gimp.4', label: 'Web graphics', prompt: 'I need graphics for my website, sized properly.' },
+];
+
 const DOCK_STARTERS_VOICE: { icon: string; key: string }[] = [
   { icon: '🎙', key: 'dash.studio.starter.voice.1' },
   { icon: '🗣', key: 'dash.studio.starter.voice.2' },
@@ -1875,7 +1897,7 @@ const DOCK_STARTERS_VOICE: { icon: string; key: string }[] = [
 
 const DESIGN_CHAT_KEY = 'ava-ide-design-chat';
 
-function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon', designPanel }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model'; designPanel?: string }) {
+function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon', designPanel, onBusyChange }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp'; designPanel?: string; onBusyChange?: (busy: boolean) => void }) {
   // Persist the design conversation like every other room — it was pure local
   // state before, so it vanished on every reload / tab switch.
   const [messages, setMessages] = useState<DockMessage[]>(() => {
@@ -1891,6 +1913,7 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  useEffect(() => { onBusyChange?.(streaming); }, [streaming, onBusyChange]);
   const [attachments, setAttachments] = useState<DockAttachment[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState<DockConfirm | null>(null);
   const [confirmText, setConfirmText] = useState('');
@@ -1997,6 +2020,12 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
     return () => window.removeEventListener('ava-design-say', onSay);
   }, [send]);
 
+  useEffect(() => {
+    const onFocus = () => inputRef.current?.focus();
+    window.addEventListener('ava-design-focus', onFocus);
+    return () => window.removeEventListener('ava-design-focus', onFocus);
+  }, []);
+
   const handleAttach = useCallback(() => {
     const picker = document.createElement('input');
     picker.type = 'file';
@@ -2045,10 +2074,12 @@ function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon
   // chips follow the operator into the Open Canvas (Video / Voiceover). Icon
   // keeps the current studio copy exactly. No name is threaded into this dock,
   // so the greeting renders "Hey — …" (matching the existing name-less card).
-  const dockStarters: { icon: string; key: string; label?: string; prompt?: string }[] = designRoom === 'video' ? DOCK_STARTERS_VIDEO : designRoom === 'voice' ? DOCK_STARTERS_VOICE : designRoom === 'model' ? DOCK_STARTERS_MODEL : DOCK_STARTERS;
-  const dockHeading = designRoom === 'video' ? 'Direct with Ava' : designRoom === 'voice' ? 'Voice with Ava' : designRoom === 'model' ? 'Build in 3D with Ava' : 'Design an icon with the Architect';
+  const dockStarters: { icon: string; key: string; label?: string; prompt?: string }[] = designRoom === 'video' ? DOCK_STARTERS_VIDEO : designRoom === 'voice' ? DOCK_STARTERS_VOICE : designRoom === 'model' ? DOCK_STARTERS_MODEL : designRoom === 'gimp' ? DOCK_STARTERS_GIMP : DOCK_STARTERS;
+  const dockHeading = designRoom === 'video' ? 'Direct with Ava' : designRoom === 'voice' ? 'Voice with Ava' : designRoom === 'model' ? 'Build in 3D with Ava' : designRoom === 'gimp' ? 'Make it in GIMP with Ava' : 'Design an icon with the Architect';
   const dockGreeting = designRoom === 'video'
     ? "Hey — Design Architect here, and we're on the Open Canvas. What are we filming? Give me the shot — subject, mood, the motion you want — and I'll direct it and render it right here."
+    : designRoom === 'gimp'
+    ? "Hey — let's make something in GIMP. Tell me what you need and where it'll be seen: a set of icons, game UI, a sprite sheet, a texture, web graphics. I'll look at what it has to sit beside, put a brief on the card for you to question, then we make it together in layers you can open and change yourself."
     : designRoom === 'model'
     ? "Hey — let's build something in 3D. Tell me what it is and where it'll live — a prop for your game, a product shot, something to print — and I'll research it, find real references and measurements, and put a brief on the card for you to question before we touch Blender. Then we build it together, step by step, and I'll talk you through every one."
     : designRoom === 'voice'

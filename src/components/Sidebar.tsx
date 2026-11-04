@@ -1630,7 +1630,7 @@ function GenerationRail({ collapsed }: { collapsed?: boolean }) {
               <span style={{
                 fontSize: 11, color: '#a6adc8', textTransform: 'capitalize',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{failed ? `${job.type} failed` : job.type}</span>
+              }}>{failed ? `${job.type === 'gimp' ? 'GIMP' : job.type} failed` : job.type === 'gimp' ? 'GIMP' : job.type}</span>
               <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#6c7086', flexShrink: 0 }}>
                 {elapsedLabel(job.startedAt, job.completedAt, now)}
               </span>
