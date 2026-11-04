@@ -9,7 +9,7 @@ import { RoomModelPicker } from './RoomModelPicker';
 import { Select } from './Select';
 import { buildShapeSvg, svgToPngDataUrl } from '../lib/asset-forge/icon-svg';
 import { searchShapes, getShape, type ShapeHit } from '../lib/asset-forge/shape-library';
-import { activeKit, loadKits, upsertKit, type BrandKit } from '../lib/asset-forge/brand-kit';
+import { activeKit, loadKits, upsertKit, connectKitStore, applyStoreKits, type BrandKit, type KitShapes } from '../lib/asset-forge/brand-kit';
 import { MATERIALS, armatureSvg, composeIconPrompt, ICON_NEGATIVE } from '../lib/asset-forge/generate';
 import { buildLettermark } from '../lib/asset-forge/logo/lettermark';
 import { typesetWordmark } from '../lib/asset-forge/logo/wordmark';
@@ -519,7 +519,6 @@ function WaveformPlayer({ voiceName, durationSec }: { voiceName: string; duratio
 type ViewId = 'icon' | 'logo' | 'model' | 'gimp' | 'image' | 'video' | 'voice' | 'brandkit';
 /** The same ids at runtime, so a restored tab can be validated. Keep in step
  *  with ViewId above — an id missing here silently reopens on Icon. */
-const VIEW_IDS = ['icon', 'logo', 'model', 'gimp', 'image', 'video', 'voice', 'brandkit'] as const;
 
 // The groups (his call, 3 Nov 2026), the same as the extension's
 // (dashboard-ui/src/lib/design-types.ts): Open Canvas · Brand & Web · 2D · 3D.
@@ -583,22 +582,28 @@ export function DesignStudio() {
     window.addEventListener('ava-kit-changed', h);
     return () => window.removeEventListener('ava-kit-changed', h);
   }, []);
-  // Reopens where you left it. This was hardcoded to 'icon', so a reload always
-  // dropped you into Icon — worst for Video, which is the lane you deliberately
-  // walk away from because it takes minutes to render.
-  const [view, setView] = useState<ViewId>(() => {
-    try {
-      const saved = localStorage.getItem('ava-design-studio-view');
-      return saved && (VIEW_IDS as readonly string[]).includes(saved) ? (saved as ViewId) : 'icon';
-    } catch {
-      return 'icon';  // storage disabled — not worth failing the page over
-    }
-  });
+  // The shared store: ~/.ava/brand-kits.json, the same kits as the extension.
   useEffect(() => {
-    try { localStorage.setItem('ava-design-studio-view', view); } catch { /* not important enough to throw */ }
-  }, [view]);
+    const sc = getSidecar();
+    const onKits = (e: SidecarEvent) => {
+      if (e.event !== 'brand_kits') return;
+      const data = e as unknown as { kits: BrandKit[]; activeId: string | null; project: { key: string; path: string } | null } & KitShapes;
+      applyStoreKits(data.kits, data.activeId, data.project, { kinds: data.kinds, pieces: data.pieces, corePieces: data.corePieces, projects: data.projects });
+    };
+    sc.onAny(onKits);
+    connectKitStore(
+      (kits, activeId) => { sc.connectBrandKits(kits, activeId).catch(() => {}); },
+      (change) => {
+        (change.op === 'save' ? sc.saveBrandKit(change.kit) : change.op === 'delete' ? sc.deleteBrandKit(change.id) : sc.setActiveBrandKit(change.id)).catch(() => {});
+      },
+    );
+    return () => { sc.offAny(onKits); };
+  }, []);
+  // Always the same place on entry: Video, on the Open Canvas. Every room is one
+  // click away, so a fixed start beats trying to remember the last one.
+  const [view, setView] = useState<ViewId>('video');
   // Without a Qwen key the image, video, voice and icon lanes can't make
-  // anything, so a saved view on one of them opens on Logo instead.
+  // anything, so the Studio opens on Logo instead.
   const needsQwen = (id: ViewId) => !hasQwenKey && QWEN_VIEWS.includes(id);
   useEffect(() => { if (needsQwen(view)) setView('logo'); }, [hasQwenKey, view]);  // eslint-disable-line react-hooks/exhaustive-deps
   // Which room the Design Architect chat should reflect. The Open-Canvas Video
@@ -1057,21 +1062,19 @@ export function DesignStudio() {
         return;
       }
       if (m.command === 'brand_kit') {
-        if (args.action === 'update') {
-          const active = activeKit();
-          const next: BrandKit = {
-            ...active,
-            name: typeof args.name === 'string' && args.name.trim() ? args.name.trim() : active.name,
-            palette: { ...active.palette, ...((args.palette as Partial<BrandKit['palette']> | undefined) ?? {}) },
-            styleTags: Array.isArray(args.styleTags) ? (args.styleTags as unknown[]).map(String) : active.styleTags,
-          };
-          upsertKit(next);
-          void loadKits();
-          reply(true, { name: next.name, palette: next.palette, styleTags: next.styleTags });
-        } else {
-          const k = activeKit();
-          reply(true, { name: k.name, palette: k.palette, styleTags: k.styleTags });
+        // Everything else in design_brand_kit goes straight to the store. Assigning
+        // what's on the canvas is the one action only the canvas can do.
+        const slot = (['primary', 'mark', 'light', 'dark'] as const).find(x => x === args.slot) ?? 'primary';
+        let asset: string | null = null;
+        if (logoSystem) {
+          const v = logoSystem.assets.find(x => x.variant === logoVariant) ?? logoSystem.assets[0];
+          if (v) asset = 'data:image/svg+xml,' + encodeURIComponent(v.svg);
         }
+        if (!asset) asset = imageSrc || genResultRef.current || null;
+        if (!asset) { reply(false, undefined, 'Nothing on the canvas to assign — design a logo, or make/open an image or icon first, then set it as the logo.'); return; }
+        const target = (typeof args.kit_id === 'string' ? loadKits().find(k => k.id === args.kit_id) : undefined) ?? activeKit();
+        upsertKit({ ...target, logo: { ...(target.logo ?? {}), [slot]: asset } });
+        reply(true, { name: target.name, slot });
         return;
       }
       if (m.command === 'generate_video') {

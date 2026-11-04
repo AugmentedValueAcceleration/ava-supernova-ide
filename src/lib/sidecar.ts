@@ -509,6 +509,11 @@ export class SidecarManager {
   async listImageWork(): Promise<void> { await this.send({ cmd: 'list_image_work' }); }
   async agreeImageBrief(slug: string): Promise<void> { await this.send({ cmd: 'agree_image_brief', slug }); }
   async saveImageBrief(slug: string, fields: Record<string, string>): Promise<void> { await this.send({ cmd: 'save_image_brief', slug, fields }); }
+  async connectBrandKits(kits: unknown, activeId: string | null): Promise<void> { await this.send({ cmd: 'brand_kits_connect', kits, activeId }); }
+  async saveBrandKit(kit: unknown): Promise<void> { await this.send({ cmd: 'brand_kit_save', kit }); }
+  async deleteBrandKit(id: string): Promise<void> { await this.send({ cmd: 'brand_kit_delete', id }); }
+  async setActiveBrandKit(id: string): Promise<void> { await this.send({ cmd: 'brand_kit_set_active', id }); }
+  async removeImageFinal(slug: string, file: string): Promise<void> { await this.send({ cmd: 'remove_image_final', slug, file }); }
   async pickImageOption(slug: string, index: number): Promise<void> { await this.send({ cmd: 'pick_image_option', slug, index }); }
   async addImageArt(slug: string, path: string): Promise<void> { await this.send({ cmd: 'add_image_art', slug, path }); }
   async openWorkInGimp(slug: string): Promise<void> { await this.send({ cmd: 'open_work_in_gimp', slug }); }

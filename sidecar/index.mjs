@@ -1425,6 +1425,29 @@ async function emitModels() {
   }
 }
 
+// Brand kits live in one file, shared with the extension and changed by Ava's
+// tool, so the Studio is told whenever it moves. Its folder always exists.
+async function emitBrandKits() {
+  try {
+    emit({ event: 'brand_kits', ...(await core.brandKitsForApps(globalThis.__avaProjectRoot)) });
+  } catch (err) {
+    emit({ event: 'brand_kits_error', error: err?.message || 'Could not read the brand kits' });
+  }
+}
+let kitsWatcher = null;
+let kitsTimer = null;
+function watchBrandKits() {
+  if (kitsWatcher) return;
+  try {
+    const file = core.brandKitsFile();
+    kitsWatcher = fsWatch(dirname(file), (_type, name) => {
+      if (name !== basename(file)) return;
+      clearTimeout(kitsTimer);
+      kitsTimer = setTimeout(emitBrandKits, 200);
+    });
+  } catch { /* the Studio still loads them when it opens */ }
+}
+
 // Follow brief.json + the creative index while the IDE is open: Ava proposes
 // briefs and builds models from her tools, not from the room, so the room and
 // the Library must hear about it by themselves. The folder is created first —
@@ -1438,7 +1461,7 @@ function watchModels() {
     mkdirSync(core.imagesDir(), { recursive: true });
     modelsWatcher = fsWatch(creativeRoot(), { recursive: true }, (_type, file) => {
       const f = String(file || '').replace(/\\/g, '/');
-      if (f !== 'metadata.json' && !/^(blender|gimp)\/[^/]+\/(brief|options)\.json$/.test(f)) return;
+      if (f !== 'metadata.json' && !/^(blender|gimp)\/[^/]+\/(brief|options|finals)\.json$/.test(f)) return;
       clearTimeout(modelsTimer);
       modelsTimer = setTimeout(() => { emitModels(); emitImageWork(); emit({ event: 'creative_changed' }); }, 400);
     });
@@ -1515,6 +1538,7 @@ async function emitImageWork() {
           files: entry?.files,
           imageCount: entry?.imageCount,
           references: w.references,
+          finals: w.finals.map((file) => ({ file, path: join(core.imagesDir(), w.slug, file) })),
           options: w.options ? {
             question: w.options.question,
             items: w.options.options.map((o) => ({ label: o.label, note: o.note, path: join(core.imagesDir(), w.slug, o.file) })),
@@ -2473,6 +2497,8 @@ async function handleInit(data) {
       // The Studio rail: tools that register a job show in the sidebar
       // (Blender runs; the extension passes the same manager).
       generationManager: generationJobs(),
+      designRoom: () => globalThis.__avaDesignRoom,
+      designProject: () => globalThis.__avaProjectRoot ?? null,
       designControl: async (command, args) => {
         const slow = command === 'generate_icon' || command === 'generate_set';
         const setCount = command === 'generate_set' && Array.isArray(args?.shapes) ? args.shapes.length : 1;
@@ -3427,10 +3453,13 @@ async function handleMessage(data) {
       } catch { /* unreadable folder — the prefix handles null */ }
     }
 
+    if (activeLane === 'design') globalThis.__avaDesignRoom = data.designRoom;
+    // The kit for this project reaches her every turn (see the extension's note).
+    const designKitSummary = activeLane === 'design' ? await core.kitForProject(globalThis.__avaProjectRoot).then(core.brandKitSummary).catch(() => undefined) : undefined;
     const effectiveContent = activeLane === 'health'
       ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary(), getTrainingLogSummary())
       : activeLane === 'design'
-      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', undefined, ['video', 'voice', 'icon', 'image', 'logo', 'model', 'gimp'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
+      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', designKitSummary, ['video', 'voice', 'icon', 'image', 'logo', 'model', 'gimp'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
       : activeLane === 'learning'
       ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
       : data.content;
@@ -4669,6 +4698,28 @@ rl.on('line', async (line) => {
       break;
     case 'save_image_brief':
       core.saveImageBriefEdits(String(data.slug || ''), data.fields || {}).finally(emitImageWork);
+      break;
+    case 'brand_kits_connect':
+      watchBrandKits();
+      core.importBrandKits(data.kits, data.activeId).finally(emitBrandKits);
+      break;
+    case 'brand_kit_save':
+      core.saveBrandKit(data.kit).finally(emitBrandKits);
+      break;
+    case 'brand_kit_delete':
+      core.deleteBrandKit(String(data.id || '')).finally(emitBrandKits);
+      break;
+    case 'brand_kit_link':
+      (data.link ? core.linkBrandKit : core.unlinkBrandKit)(String(data.id || ''), data.project || globalThis.__avaProjectRoot).finally(emitBrandKits);
+      break;
+    case 'brand_kit_agree':
+      core.agreeBrandKit(String(data.id || '')).finally(emitBrandKits);
+      break;
+    case 'brand_kit_set_active':
+      core.setActiveBrandKit(String(data.id || '')).finally(emitBrandKits);
+      break;
+    case 'remove_image_final':
+      core.removeImageFinal(String(data.slug || ''), String(data.file || '')).finally(emitImageWork);
       break;
     case 'pick_image_option':
       core.pickImageOption(String(data.slug || ''), Number(data.index)).finally(emitImageWork);

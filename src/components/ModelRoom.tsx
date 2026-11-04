@@ -37,6 +37,8 @@ export interface IdeModel {
   options?: null | { question: string; items: Array<{ label: string; note?: string; path: string }> };
   /** GIMP work: their own art, for Ava to test against. */
   references?: string[];
+  /** GIMP work: the finished files. */
+  finals?: Array<{ file: string; path: string }>;
   brief: null | {
     status: 'proposed' | 'agreed';
     editedByPerson: boolean;
@@ -73,10 +75,18 @@ export function modelPanelSummary(m: IdeModel | null, gimp = false, work: string
   const status = b.status === 'agreed' ? 'brief AGREED by them' : `brief waiting for their agreement${b.editedByPerson ? ' — THEY EDITED IT, work from their version' : ''}`;
   const art = m.references?.length ? ` · their art in references/: ${m.references.join(', ')}` : '';
   const waiting = m.options ? ` · OPTIONS ON THE STAGE waiting for their pick: ${m.options.question}` : '';
-  return `${roster} ${head} · ${status}${art}${waiting} · ${b.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}`;
+  const finals = m.finals?.length ? ` · marked final: ${m.finals.map((f) => f.file).join(', ')}` : '';
+  return `${roster} ${head} · ${status}${art}${finals}${waiting} · ${b.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}`;
 }
 
 const BORDER = 'rgba(255,255,255,0.08)';
+/** The checker that means "transparent here", behind images in the studio. */
+const CHECKER: CSSProperties = {
+  backgroundColor: '#5c5c66',
+  backgroundImage: 'linear-gradient(45deg, #7a7a84 25%, transparent 25%, transparent 75%, #7a7a84 75%), linear-gradient(45deg, #7a7a84 25%, transparent 25%, transparent 75%, #7a7a84 75%)',
+  backgroundSize: '16px 16px',
+  backgroundPosition: '0 0, 8px 8px',
+};
 const btn = (primary = false): CSSProperties => ({
   borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
   border: `1px solid ${primary ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : BORDER}`,
@@ -231,7 +241,9 @@ export function ModelRoom({ tool = 'blender', busy = false, onActiveModel, onRos
                 sayToAva(`I pick "${label}".`);
               }} />
             ) : active.built && tool === 'gimp' && active.previewPath ? (
-              <img src={fileUrl(active.previewPath, v)} alt={active.name} style={{ flex: 1, minHeight: 0, width: '100%', objectFit: 'contain', background: 'rgba(0,0,0,0.2)', padding: 16, boxSizing: 'border-box' }} />
+              <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'rgba(0,0,0,0.2)' }}>
+                <img src={fileUrl(active.previewPath, v)} alt={active.name} style={{ ...CHECKER, position: 'absolute', inset: 16, margin: 'auto', maxWidth: 'calc(100% - 32px)', maxHeight: 'calc(100% - 32px)' }} />
+              </div>
             ) : active.built && active.glbPath ? (
               <LazyModelViewer fill src={fileUrl(active.glbPath, v)!} poster={fileUrl(active.previewPath, v)} alt={active.name} />
             ) : (
@@ -242,6 +254,24 @@ export function ModelRoom({ tool = 'blender', busy = false, onActiveModel, onRos
                     ? tt('dash.studio.model.not_built_agreed', 'The brief is agreed — Ava can start building. Each step appears here.')
                     : tt('dash.studio.model.not_built_brief', 'Once you agree the brief, Ava builds it here, step by step.')}
                 </p>
+              </div>
+            )}
+            {tool === 'gimp' && active.built && (
+              <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', borderTop: `1px solid ${BORDER}`, padding: '8px 12px' }}>
+                <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.2, color: '#8b8398' }}>{tt('dash.studio.finals', 'Final')}</span>
+                {!active.finals?.length && (
+                  <span style={{ borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 500, background: 'rgba(240,162,75,0.14)', color: '#f0a24b' }}>
+                    {tt('dash.studio.no_final', 'No final yet')}
+                  </span>
+                )}
+                {active.finals?.map((f) => (
+                  <div key={f.file} title={f.file} style={{ position: 'relative', flexShrink: 0, paddingRight: 6, paddingTop: 6 }}>
+                    <img src={fileUrl(f.path, v)} alt={f.file} style={{ ...CHECKER, height: 40, width: 40, objectFit: 'contain', borderRadius: 4, border: `1px solid ${BORDER}` }} />
+                    <button aria-label={tt('dash.studio.finals_remove', 'Remove from finals')} title={tt('dash.studio.finals_remove', 'Remove from finals')}
+                      onClick={() => { getSidecar().removeImageFinal(active.slug, f.file).catch(() => {}); }}
+                      style={{ position: 'absolute', top: 0, right: 0, width: 16, height: 16, padding: 0, lineHeight: '14px', borderRadius: 999, border: 'none', background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: 10, cursor: 'pointer' }}>×</button>
+                  </div>
+                ))}
               </div>
             )}
             {active.built && (
@@ -278,7 +308,7 @@ function OptionsStage({ model, onPick }: { model: IdeModel; onPick: (index: numb
         {options.items.map((o, i) => (
           <button key={o.path} onClick={() => onPick(i, o.label)}
             style={{ display: 'flex', flexDirection: 'column', gap: 8, borderRadius: 12, border: `1px solid ${BORDER}`, padding: 10, textAlign: 'left', background: 'transparent', cursor: 'pointer' }}>
-            <img src={fileUrl(o.path, model.updatedAt)} alt={o.label} style={{ width: '100%', maxHeight: 280, objectFit: 'contain', borderRadius: 8, background: 'rgba(0,0,0,0.2)' }} />
+            <img src={fileUrl(o.path, model.updatedAt)} alt={o.label} style={{ ...CHECKER, width: '100%', maxHeight: 280, objectFit: 'contain', borderRadius: 8 }} />
             <span style={{ fontSize: 12, fontWeight: 500, color: '#cdd6f4' }}>{o.label}</span>
             {o.note && <span style={{ fontSize: 11, color: '#8b8398', lineHeight: 1.6 }}>{o.note}</span>}
           </button>
