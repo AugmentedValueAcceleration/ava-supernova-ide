@@ -381,7 +381,7 @@ export class SidecarManager {
   /**
    * Send a chat message to the agent.
    */
-  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string, designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp', designPanel?: string, talk?: boolean): Promise<void> {
+  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string, designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp' | 'brandkit', designPanel?: string, talk?: boolean): Promise<void> {
     // For large attachments (images), write to temp files to avoid stdin buffer limits
     let processedAttachments = attachments;
     if (attachments?.length) {
@@ -512,8 +512,20 @@ export class SidecarManager {
   async connectBrandKits(kits: unknown, activeId: string | null): Promise<void> { await this.send({ cmd: 'brand_kits_connect', kits, activeId }); }
   async saveBrandKit(kit: unknown): Promise<void> { await this.send({ cmd: 'brand_kit_save', kit }); }
   async deleteBrandKit(id: string): Promise<void> { await this.send({ cmd: 'brand_kit_delete', id }); }
+  async linkBrandKit(id: string, link: boolean, project?: string): Promise<void> { await this.send({ cmd: 'brand_kit_link', id, link, project }); }
+  async agreeBrandKit(id: string): Promise<void> { await this.send({ cmd: 'brand_kit_agree', id }); }
+  async setBrandPiece(id: string, piece: string, state: string): Promise<void> { await this.send({ cmd: 'brand_kit_piece', id, piece, state }); }
+  async brandKitLibrary(requestId: string, everything: boolean): Promise<void> { await this.send({ cmd: 'brand_kit_library', requestId, everything }); }
+  async brandLogoFromLibrary(kitId: string, path: string): Promise<void> { await this.send({ cmd: 'brand_kit_logo_from_library', kitId, path }); }
+  async brandKitFonts(requestId: string): Promise<void> { await this.send({ cmd: 'brand_kit_fonts', requestId }); }
+  async installBrandFont(requestId: string, family: string): Promise<void> { await this.send({ cmd: 'brand_kit_font_install', requestId, family }); }
+  async brandPieceFromLibrary(kitId: string, piece: string, path: string): Promise<void> { await this.send({ cmd: 'brand_kit_piece_library', kitId, piece, path }); }
+  async brandPieceUpload(kitId: string, piece: string, name: string, dataUrl: string): Promise<void> { await this.send({ cmd: 'brand_kit_piece_upload', kitId, piece, name, dataUrl }); }
+  async brandPieceRemove(kitId: string, piece: string, file?: string): Promise<void> { await this.send({ cmd: 'brand_kit_piece_remove', kitId, piece, file }); }
   async setActiveBrandKit(id: string): Promise<void> { await this.send({ cmd: 'brand_kit_set_active', id }); }
   async removeImageFinal(slug: string, file: string): Promise<void> { await this.send({ cmd: 'remove_image_final', slug, file }); }
+  async imageVersion(slug: string, name: string, action: 'main' | 'keep' | 'delete'): Promise<void> { await this.send({ cmd: 'image_version', slug, name, action }); }
+  async restoreImageStep(slug: string, number: number): Promise<void> { await this.send({ cmd: 'restore_image_step', slug, number }); }
   async pickImageOption(slug: string, index: number): Promise<void> { await this.send({ cmd: 'pick_image_option', slug, index }); }
   async addImageArt(slug: string, path: string): Promise<void> { await this.send({ cmd: 'add_image_art', slug, path }); }
   async openWorkInGimp(slug: string): Promise<void> { await this.send({ cmd: 'open_work_in_gimp', slug }); }

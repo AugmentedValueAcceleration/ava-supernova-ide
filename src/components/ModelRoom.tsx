@@ -39,6 +39,9 @@ export interface IdeModel {
   references?: string[];
   /** GIMP work: the finished files. */
   finals?: Array<{ file: string; path: string }>;
+  history?: Array<{ number: number; label: string; at: string; path?: string }>;
+  versions?: string[];
+  main?: string | null;
   brief: null | {
     status: 'proposed' | 'agreed';
     editedByPerson: boolean;
@@ -76,7 +79,8 @@ export function modelPanelSummary(m: IdeModel | null, gimp = false, work: string
   const art = m.references?.length ? ` · their art in references/: ${m.references.join(', ')}` : '';
   const waiting = m.options ? ` · OPTIONS ON THE STAGE waiting for their pick: ${m.options.question}` : '';
   const finals = m.finals?.length ? ` · marked final: ${m.finals.map((f) => f.file).join(', ')}` : '';
-  return `${roster} ${head} · ${status}${art}${finals}${waiting} · ${b.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}`;
+  const designs = (m.versions?.length ?? 0) > 1 ? ` · designs on their tiles: ${m.versions!.map((d, i) => `${String.fromCharCode(65 + i)} = ${d}`).join(', ')}${m.main ? ` · THEIR MAIN DESIGN: ${m.main}` : ''}` : '';
+  return `${roster} ${head} · ${status}${art}${finals}${designs}${waiting} · ${b.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}`;
 }
 
 const BORDER = 'rgba(255,255,255,0.08)';
@@ -115,15 +119,23 @@ const ROOMS = {
   },
 } as const;
 
-export function ModelRoom({ tool = 'blender', busy = false, onActiveModel, onRoster }: { tool?: keyof typeof ROOMS; busy?: boolean; onActiveModel: (m: IdeModel | null) => void; onRoster?: (names: string[]) => void }) {
+export function ModelRoom({ tool = 'blender', busy = false, startFresh = false, onActiveModel, onRoster }: { tool?: keyof typeof ROOMS; busy?: boolean; startFresh?: boolean; onActiveModel: (m: IdeModel | null) => void; onRoster?: (names: string[]) => void }) {
   const room = ROOMS[tool];
   const [models, setModels] = useState<IdeModel[] | null>(null);
-  const [picked, setPicked] = useState<string | null>(null);
+  // A design opened from the Library comes straight to the stage.
+  const [picked, setPicked] = useState<string | null>(() => {
+    if (tool !== 'gimp') return null;
+    try {
+      const slug = sessionStorage.getItem('ava-open-work');
+      sessionStorage.removeItem('ava-open-work');
+      return slug;
+    } catch { return null; }
+  });
 
   // The stage is cleared by New brief, and stays clear until a new piece of
   // work appears. A slug we have not seen comes forward by itself, even if an
   // older piece was picked in the dropdown: that pick used to stick and hide it.
-  const [fresh, setFresh] = useState(false);
+  const [fresh, setFresh] = useState(startFresh);
   const known = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!models) { known.current = null; return; }
@@ -158,9 +170,56 @@ export function ModelRoom({ tool = 'blender', busy = false, onActiveModel, onRos
 
   const active = useMemo(() => (models?.length && !fresh ? models.find((m) => m.slug === picked) ?? models[0] : null), [models, picked, fresh]);
   useEffect(() => { onActiveModel(active); }, [active, onActiveModel]);
+  // A step they've clicked to look at. Only the look: nothing changes until
+  // they choose to go back to it.
+  const [viewing, setViewing] = useState<number | null>(null);
+  // A design they've clicked: what to do with it is their choice, on this tile.
+  const [choosing, setChoosing] = useState<string | null>(null);
+  const [confirmingVersion, setConfirmingVersion] = useState(false);
+  useEffect(() => { setConfirmingVersion(false); }, [choosing]);
+  useEffect(() => { setViewing(null); }, [active?.slug, active?.history?.length]);
+  const latestStep = active?.history?.[active.history.length - 1]?.number;
+  const latestLabel = active?.history?.[active.history.length - 1]?.label;
+  const lookingAt = viewing !== null && viewing !== latestStep ? active?.history?.find((s) => s.number === viewing) : undefined;
+  const version = active?.versions?.find((n) => n === choosing);
+  const versionLetter = (name: string) => String.fromCharCode(65 + (active?.versions?.indexOf(name) ?? 0));
+  const onVersion = (action: 'main' | 'keep' | 'delete', name: string) => {
+    getSidecar().imageVersion(active!.slug, name, action).catch(() => {});
+    setChoosing(null);
+    if (action === 'main') sayToAva(`I've chosen design ${versionLetter(name)}, "${name}", as the main design.`);
+  };
+  const versionPath = (name: string) => `${active?.folder}/${name}.png`;
+  const goBack = (number: number) => {
+    getSidecar().restoreImageStep(active!.slug, number).catch(() => {});
+    sayToAva(`I've gone back to step ${number}. Carry on from there.`);
+  };
   useEffect(() => { if (models) onRoster?.(models.map((m) => m.name)); }, [models, onRoster]);
+  // A brief waiting for them: slide the chat down so the card has the room.
+  // Agreeing sends a message to Ava, and that brings the chat back up.
+  const waiting = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!models) return;
+    const before = waiting.current;
+    const proposed = models.filter((m) => m.brief?.status === 'proposed');
+    waiting.current = new Set(proposed.map((m) => JSON.stringify(m.brief)));
+    if (!before) return;
+    // Same name re-proposed is the same slug, so nothing else notices: bring it
+    // to the stage here, or the piece already showing stays in its place.
+    const changed = proposed.find((m) => !before.has(JSON.stringify(m.brief)));
+    if (!changed) return;
+    setPicked(changed.slug);
+    setFresh(false);
+    window.dispatchEvent(new CustomEvent('ava-design-card'));
+  }, [models]);
+  // The file watcher can miss a change, so ask again each time she finishes.
+  const wasBusy = useRef(busy);
+  useEffect(() => {
+    if (wasBusy.current && !busy) { const sc = getSidecar(); (tool === 'gimp' ? sc.listImageWork() : sc.listModels()).catch(() => {}); }
+    wasBusy.current = busy;
+  }, [busy, tool]);
 
-  const v = active?.updatedAt ?? '';
+  // Going back rewrites preview.png at the same path, so the step counts.
+  const v = `${active?.updatedAt ?? ''}.${latestStep ?? 0}`;
   const addArt = async (slug: string) => {
     try {
       const { open } = await import('@tauri-apps/plugin-dialog');
@@ -233,15 +292,48 @@ export function ModelRoom({ tool = 'blender', busy = false, onActiveModel, onRos
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: 'grid', gap: 16, overflow: 'hidden', gridTemplateColumns: 'minmax(280px, 380px) 1fr' }}>
-          <BriefCard key={active.slug + (active.brief?.status ?? '')} model={active} tool={tool} />
+          <BriefCard key={active.slug + (active.brief?.status ?? '') + (active.brief?.fields ?? []).map((f) => f.value).join('|')} model={active} tool={tool} />
           <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column', borderRadius: 12, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
             {tool === 'gimp' && active.options ? (
               <OptionsStage model={active} onPick={(index, label) => {
                 getSidecar().pickImageOption(active.slug, index).catch(() => {});
                 sayToAva(`I pick "${label}".`);
               }} />
+            ) : version ? (
+              <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'rgba(0,0,0,0.2)' }}>
+                <img src={fileUrl(versionPath(version), v)} alt={version} style={{ ...CHECKER, position: 'absolute', inset: 16, margin: 'auto', maxWidth: 'calc(100% - 32px)', maxHeight: 'calc(100% - 32px)', objectFit: 'contain' }} />
+                <div style={{ position: 'absolute', left: 12, right: 12, top: 12, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, borderRadius: 8, background: 'rgba(0,0,0,0.7)', padding: '8px 12px' }}>
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: '#e7e3ee' }}>{versionLetter(version)}: {version}</span>
+                  {confirmingVersion ? (
+                    <>
+                      <span style={{ fontSize: 12, color: '#a6adc8' }}>{tt('dash.studio.version_delete_sure', 'Delete this design for good?')}</span>
+                      <button style={btn()} onClick={() => setConfirmingVersion(false)}>{tt('library.cancel', 'Cancel')}</button>
+                      <button style={{ ...btn(), borderColor: 'rgba(239,68,68,0.6)', background: 'rgba(239,68,68,0.15)', color: '#f87171' }} onClick={() => onVersion('delete', version)}>{tt('library.delete', 'Delete')}</button>
+                    </>
+                  ) : (
+                    <>
+                      <button style={btn()} onClick={() => setChoosing(null)}>{tt('dash.studio.step_latest', 'Back to latest')}</button>
+                      <button style={{ ...btn(), opacity: busy ? 0.4 : 1, cursor: busy ? 'not-allowed' : 'pointer' }} disabled={busy} onClick={() => setConfirmingVersion(true)}>{tt('library.delete', 'Delete')}</button>
+                      {active.main !== version && <button style={{ ...btn(), opacity: busy ? 0.4 : 1, cursor: busy ? 'not-allowed' : 'pointer' }} disabled={busy} onClick={() => onVersion('keep', version)}>{tt('dash.studio.version_keep', 'Keep for later')}</button>}
+                      {active.main !== version && <button style={{ ...btn(true), opacity: busy ? 0.4 : 1, cursor: busy ? 'not-allowed' : 'pointer' }} disabled={busy} onClick={() => onVersion('main', version)}>{tt('dash.studio.version_main', 'Make this the main one')}</button>}
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : lookingAt?.path ? (
+              <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'rgba(0,0,0,0.2)' }}>
+                <img src={fileUrl(lookingAt.path, lookingAt.at)} alt={lookingAt.label} style={{ ...CHECKER, position: 'absolute', inset: 16, margin: 'auto', maxWidth: 'calc(100% - 32px)', maxHeight: 'calc(100% - 32px)', objectFit: 'contain' }} />
+                <div style={{ position: 'absolute', left: 12, right: 12, top: 12, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, borderRadius: 8, background: 'rgba(0,0,0,0.7)', padding: '8px 12px' }}>
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: '#e7e3ee' }}>{tt('dash.studio.step', 'Step {n}').replace('{n}', String(lookingAt.number))}: {lookingAt.label}</span>
+                  <button style={btn()} onClick={() => setViewing(null)}>{tt('dash.studio.step_latest', 'Back to latest')}</button>
+                  <button style={{ ...btn(true), opacity: busy ? 0.4 : 1, cursor: busy ? 'not-allowed' : 'pointer' }} disabled={busy} onClick={() => goBack(lookingAt.number)}>{tt('dash.studio.step_restore', 'Go back to this')}</button>
+                </div>
+              </div>
             ) : active.built && tool === 'gimp' && active.previewPath ? (
               <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'rgba(0,0,0,0.2)' }}>
+                <span style={{ position: 'absolute', left: 12, top: 12, zIndex: 1, maxWidth: 'calc(100% - 24px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderRadius: 6, background: 'rgba(0,0,0,0.7)', padding: '4px 8px', fontSize: 11, color: '#e7e3ee' }}>
+                  {active.finals?.length ? tt('dash.studio.showing_final', 'Finished') : tt('dash.studio.working_on', 'Working on')}: {active.name}{latestLabel ? ` · ${latestLabel}` : ''}
+                </span>
                 <img src={fileUrl(active.previewPath, v)} alt={active.name} style={{ ...CHECKER, position: 'absolute', inset: 16, margin: 'auto', maxWidth: 'calc(100% - 32px)', maxHeight: 'calc(100% - 32px)' }} />
               </div>
             ) : active.built && active.glbPath ? (
@@ -254,6 +346,29 @@ export function ModelRoom({ tool = 'blender', busy = false, onActiveModel, onRos
                     ? tt('dash.studio.model.not_built_agreed', 'The brief is agreed — Ava can start building. Each step appears here.')
                     : tt('dash.studio.model.not_built_brief', 'Once you agree the brief, Ava builds it here, step by step.')}
                 </p>
+              </div>
+            )}
+            {tool === 'gimp' && (active.versions?.length ?? 0) > 1 && (
+              <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', borderTop: `1px solid ${BORDER}`, padding: '8px 12px' }}>
+                <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.2, color: '#8b8398' }}>{tt('dash.studio.versions', 'Designs')}</span>
+                {active.versions!.map((name, i) => (
+                  <button key={name} title={name} onClick={() => { setViewing(null); setChoosing(name); }}
+                    style={{ position: 'relative', flexShrink: 0, height: 48, width: 64, padding: 0, overflow: 'hidden', cursor: 'pointer', background: 'transparent', borderRadius: 4, border: `1px solid ${choosing === name || active.main === name ? '#a855f7' : BORDER}` }}>
+                    <img src={fileUrl(versionPath(name), v)} alt={name} style={{ ...CHECKER, height: '100%', width: '100%', objectFit: 'contain' }} />
+                    <span style={{ position: 'absolute', left: 0, top: 0, borderBottomRightRadius: 4, background: 'rgba(0,0,0,0.8)', padding: '0 4px', fontSize: 10, color: '#e7e3ee' }}>{String.fromCharCode(65 + i)}{active.main === name ? ' ★' : ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {tool === 'gimp' && !!active.history?.length && (
+              <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', borderTop: `1px solid ${BORDER}`, padding: '8px 12px' }}>
+                <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.2, color: '#8b8398' }}>{tt('dash.studio.history', 'History')}</span>
+                {active.history.map((s) => (
+                  <button key={s.number} title={`${tt('dash.studio.step', 'Step {n}').replace('{n}', String(s.number))}: ${s.label}`} onClick={() => { setChoosing(null); setViewing(s.number); }}
+                    style={{ flexShrink: 0, height: 40, width: 40, padding: 0, overflow: 'hidden', cursor: 'pointer', background: 'transparent', borderRadius: 4, border: `1px solid ${(viewing ?? latestStep) === s.number ? '#a855f7' : BORDER}` }}>
+                    {s.path ? <img src={fileUrl(s.path, s.at)} alt={s.label} style={{ ...CHECKER, height: '100%', width: '100%', objectFit: 'contain' }} /> : <span style={{ fontSize: 10, color: '#8b8398' }}>{s.number}</span>}
+                  </button>
+                ))}
               </div>
             )}
             {tool === 'gimp' && active.built && (

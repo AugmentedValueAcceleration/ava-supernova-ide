@@ -1461,7 +1461,7 @@ function watchModels() {
     mkdirSync(core.imagesDir(), { recursive: true });
     modelsWatcher = fsWatch(creativeRoot(), { recursive: true }, (_type, file) => {
       const f = String(file || '').replace(/\\/g, '/');
-      if (f !== 'metadata.json' && !/^(blender|gimp)\/[^/]+\/(brief|options|finals)\.json$/.test(f)) return;
+      if (f !== 'metadata.json' && !/^(blender|gimp)\/[^/]+\/(brief|options|finals|history|main)\.json$/.test(f)) return;
       clearTimeout(modelsTimer);
       modelsTimer = setTimeout(() => { emitModels(); emitImageWork(); emit({ event: 'creative_changed' }); }, 400);
     });
@@ -1539,6 +1539,9 @@ async function emitImageWork() {
           imageCount: entry?.imageCount,
           references: w.references,
           finals: w.finals.map((file) => ({ file, path: join(core.imagesDir(), w.slug, file) })),
+          versions: w.versions,
+          main: w.main,
+          history: w.history.map((s) => ({ number: s.number, label: s.label, at: s.at, path: s.preview ? join(core.imagesDir(), w.slug, s.preview) : undefined })),
           options: w.options ? {
             question: w.options.question,
             items: w.options.options.map((o) => ({ label: o.label, note: o.note, path: join(core.imagesDir(), w.slug, o.file) })),
@@ -2186,7 +2189,7 @@ async function handleInit(data) {
       const id = crypto.randomUUID().slice(0, 8);
       const toolCategory = toolRegistry.getCategoryForTool(toolName);
       const extra = toolName === 'health_profile_ask' ? { profileField: buildProfileFieldPayload(args) } : {};
-      emit({ event: 'confirm_required', id, toolCallId, toolName, toolCategory, args, ...extra });
+      emit({ event: 'confirm_required', id, toolCallId, toolName, toolCategory, args, summary: core.toolRequestInWords(toolName, args), ...extra });
       return new Promise((resolve) => {
         // args are kept so the confirmation handler can act on the CALL,
         // not just the answer — writePlanRecord needs the plan itself.
@@ -3459,7 +3462,7 @@ async function handleMessage(data) {
     const effectiveContent = activeLane === 'health'
       ? getHealthRoomPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me with a plan.', getHealthProfileSummary(), getHealthPlansSummary(), getTrainingLogSummary())
       : activeLane === 'design'
-      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', designKitSummary, ['video', 'voice', 'icon', 'image', 'logo', 'model', 'gimp'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
+      ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', designKitSummary, ['video', 'voice', 'icon', 'image', 'logo', 'model', 'gimp', 'brandkit'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
       : activeLane === 'learning'
       ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
       : data.content;
@@ -4712,6 +4715,40 @@ rl.on('line', async (line) => {
     case 'brand_kit_link':
       (data.link ? core.linkBrandKit : core.unlinkBrandKit)(String(data.id || ''), data.project || globalThis.__avaProjectRoot).finally(emitBrandKits);
       break;
+    case 'brand_kit_library':
+      core.kitLibraryChoices(!!data.everything).then((choices) => emit({ event: 'brand_kit_library', requestId: data.requestId, choices }));
+      break;
+    case 'brand_kit_logo_from_library':
+      (core.isLibraryFile(String(data.path || '')) ? core.setBrandLogoFromFile(String(data.kitId || ''), 'primary', String(data.path)) : Promise.resolve(null))
+        .then((kit) => { if (!kit) emit({ event: 'model_action_result', ok: false, error: 'That file could not be used as a logo.' }); })
+        .finally(emitBrandKits);
+      break;
+    case 'brand_kit_fonts':
+      core.fontChoices()
+        .then((choices) => emit({ event: 'brand_kit_fonts', requestId: data.requestId, ...choices }))
+        .catch(() => emit({ event: 'brand_kit_fonts', requestId: data.requestId, installed: null, google: [] }));
+      break;
+    case 'brand_kit_font_install':
+      core.installFontTheyChose(String(data.family || ''))
+        .then((result) => emit({ event: 'brand_kit_font_installed', requestId: data.requestId, ...result }))
+        .catch((err) => emit({ event: 'brand_kit_font_installed', requestId: data.requestId, ok: false, message: String(err?.message || err) }));
+      break;
+    case 'brand_kit_piece_library':
+      core.addPieceFromLibrary(String(data.kitId || ''), String(data.piece || ''), String(data.path || ''))
+        .then((kit) => { if (!kit) emit({ event: 'model_action_result', ok: false, error: 'That file could not be added to the kit.' }); })
+        .finally(emitBrandKits);
+      break;
+    case 'brand_kit_piece_upload':
+      core.addPieceUpload(String(data.kitId || ''), String(data.piece || ''), String(data.name || ''), String(data.dataUrl || ''))
+        .then((kit) => { if (!kit) emit({ event: 'model_action_result', ok: false, error: 'That file could not be added to the kit. Use a PNG, JPG, WebP or SVG.' }); })
+        .finally(emitBrandKits);
+      break;
+    case 'brand_kit_piece_remove':
+      core.removePieceFile(String(data.kitId || ''), String(data.piece || ''), data.file ? String(data.file) : undefined).finally(emitBrandKits);
+      break;
+    case 'brand_kit_piece':
+      core.setBrandPiece(String(data.id || ''), String(data.piece || ''), data.state).finally(emitBrandKits);
+      break;
     case 'brand_kit_agree':
       core.agreeBrandKit(String(data.id || '')).finally(emitBrandKits);
       break;
@@ -4720,6 +4757,18 @@ rl.on('line', async (line) => {
       break;
     case 'remove_image_final':
       core.removeImageFinal(String(data.slug || ''), String(data.file || '')).finally(emitImageWork);
+      break;
+    case 'image_version': {
+      const slug = String(data.slug || '');
+      const name = String(data.name || '');
+      const done = data.action === 'main' ? core.chooseImageMain(slug, name)
+        : data.action === 'keep' ? core.keepImageVersion(slug, name)
+        : core.deleteImageVersion(slug, name);
+      done.finally(() => { emitImageWork(); emit({ event: 'creative_changed' }); });
+      break;
+    }
+    case 'restore_image_step':
+      core.restoreImageStep(String(data.slug || ''), Number(data.number)).finally(() => { emitImageWork(); emit({ event: 'creative_changed' }); });
       break;
     case 'pick_image_option':
       core.pickImageOption(String(data.slug || ''), Number(data.index)).finally(emitImageWork);

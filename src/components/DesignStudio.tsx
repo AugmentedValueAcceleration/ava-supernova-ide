@@ -7,9 +7,11 @@ import { TTS_VOICE_CATALOGUE, TTS_VOICES, TTS_VOICE_SPEEDS, TTS_VOICE_VOLUMES, v
 import { logDiag } from '../lib/sidecar-log';
 import { RoomModelPicker } from './RoomModelPicker';
 import { Select } from './Select';
+import { BrandKitsPage, type KitActions } from './BrandKitsPage';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { buildShapeSvg, svgToPngDataUrl } from '../lib/asset-forge/icon-svg';
 import { searchShapes, getShape, type ShapeHit } from '../lib/asset-forge/shape-library';
-import { activeKit, loadKits, upsertKit, connectKitStore, applyStoreKits, type BrandKit, type KitShapes } from '../lib/asset-forge/brand-kit';
+import { activeKit, loadKits, upsertKit, connectKitStore, applyStoreKits, storeKits, type BrandKit, type KitShapes, type PieceDef } from '../lib/asset-forge/brand-kit';
 import { MATERIALS, armatureSvg, composeIconPrompt, ICON_NEGATIVE } from '../lib/asset-forge/generate';
 import { buildLettermark } from '../lib/asset-forge/logo/lettermark';
 import { typesetWordmark } from '../lib/asset-forge/logo/wordmark';
@@ -601,7 +603,7 @@ export function DesignStudio() {
   }, []);
   // Always the same place on entry: Video, on the Open Canvas. Every room is one
   // click away, so a fixed start beats trying to remember the last one.
-  const [view, setView] = useState<ViewId>('video');
+  const [view, setView] = useState<ViewId>(() => { try { return sessionStorage.getItem('ava-open-work') ? 'gimp' : 'video'; } catch { return 'video'; } });
   // Without a Qwen key the image, video, voice and icon lanes can't make
   // anything, so the Studio opens on Logo instead.
   const needsQwen = (id: ViewId) => !hasQwenKey && QWEN_VIEWS.includes(id);
@@ -609,7 +611,7 @@ export function DesignStudio() {
   // Which room the Design Architect chat should reflect. The Open-Canvas Video
   // and Voiceover views map to their own rooms; everything else is the icon
   // studio (greeting / chips / heading / persona all follow this).
-  const designRoom: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : view === 'image' ? 'image' : view === 'logo' ? 'logo' : view === 'model' ? 'model' : view === 'gimp' ? 'gimp' : 'icon';
+  const designRoom: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp' | 'brandkit' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : view === 'image' ? 'image' : view === 'logo' ? 'logo' : view === 'model' ? 'model' : view === 'gimp' ? 'gimp' : 'icon';
   // The model on the 3D room's stage — its brief goes to Ava with every turn.
   const [activeModel, setActiveModel] = useState<IdeModel | null>(null);
   const [roomWork, setRoomWork] = useState<string[]>([]);
@@ -660,6 +662,86 @@ export function DesignStudio() {
   const [genError, setGenError] = useState<string | null>(null);
   const [genSize, setGenSize] = useState(512);
   const [dockOpen, setDockOpen] = useState(false);
+  const [openKit, setOpenKit] = useState<BrandKit | null>(null);
+  // A kit piece was just opened: its room starts on a clean stage.
+  const [pieceStart, setPieceStart] = useState(false);
+  useEffect(() => { if (view !== 'gimp' && view !== 'model') setPieceStart(false); }, [view]);
+  const say = (text: string) => window.setTimeout(() => window.dispatchEvent(new CustomEvent('ava-design-say', { detail: { text } })), 150);
+  const openPiece = (k: BrandKit, piece: PieceDef) => {
+    if (k.pieces?.[piece.id]?.state !== 'agreed') getSidecar().setBrandPiece(k.id, piece.id, 'in_progress').catch(() => {});
+    if (piece.room === 'gimp' || piece.room === 'blender') {
+      setPieceStart(true);
+      setView(piece.room === 'gimp' ? 'gimp' : 'model');
+    }
+    setDockOpen(true);
+    say(`Let's make the "${piece.label}" for the "${k.name}" kit (kit ${k.id}, piece ${piece.id}).`);
+  };
+  const openPieceRef = useRef(openPiece);
+  openPieceRef.current = openPiece;
+  // Agreeing is their click. Ava hears once it's really done.
+  const pendingAgree = useRef<string | null>(null);
+  useEffect(() => {
+    const onChange = () => {
+      if (!pendingAgree.current) return;
+      const done = loadKits().find(k => k.id === pendingAgree.current);
+      if (done && done.status !== 'proposed') {
+        pendingAgree.current = null;
+        say(`I've agreed the "${done.name}" kit.`);
+      }
+    };
+    window.addEventListener('ava-kit-changed', onChange);
+    return () => window.removeEventListener('ava-kit-changed', onChange);
+  }, []);
+  const kitActions = useMemo<KitActions>(() => ({
+    link: (id, link, project) => { getSidecar().linkBrandKit(id, link, project).catch(() => {}); },
+    agree: (id) => { pendingAgree.current = id; getSidecar().agreeBrandKit(id).catch(() => {}); },
+    startPiece: (k, piece) => openPieceRef.current(k, piece),
+    withAva: (project) => { setDockOpen(true); say(project ? `Let's make a brand kit for my project "${project.name}" (${project.path}).` : "Let's make a new brand kit."); },
+    logoFromLibrary: (kitId, path) => { getSidecar().brandLogoFromLibrary(kitId, path).catch(() => {}); },
+    loadFonts: () => new Promise((resolve) => {
+      const sc = getSidecar();
+      const requestId = String(Date.now()) + Math.random();
+      const onReply = (e: SidecarEvent) => {
+        if (e.event !== 'brand_kit_fonts') return;
+        const data = e as unknown as { requestId: string; installed: string[] | null; google: string[] };
+        if (data.requestId !== requestId) return;
+        sc.offAny(onReply);
+        resolve({ installed: data.installed, google: data.google });
+      };
+      sc.onAny(onReply);
+      sc.brandKitFonts(requestId).catch(() => { sc.offAny(onReply); resolve({ installed: null, google: [] }); });
+    }),
+    installFont: (family) => new Promise((resolve) => {
+      const sc = getSidecar();
+      const requestId = String(Date.now()) + Math.random();
+      const onReply = (e: SidecarEvent) => {
+        if (e.event !== 'brand_kit_font_installed') return;
+        const data = e as unknown as { requestId: string; ok: boolean; message: string };
+        if (data.requestId !== requestId) return;
+        sc.offAny(onReply);
+        resolve({ ok: data.ok, message: data.message });
+      };
+      sc.onAny(onReply);
+      sc.installBrandFont(requestId, family).catch(() => { sc.offAny(onReply); resolve({ ok: false, message: 'That font could not be installed.' }); });
+    }),
+    pieceFromLibrary: (kitId, piece, path) => { getSidecar().brandPieceFromLibrary(kitId, piece, path).catch(() => {}); },
+    pieceUpload: (kitId, piece, name, dataUrl) => { getSidecar().brandPieceUpload(kitId, piece, name, dataUrl).catch(() => {}); },
+    pieceRemoveFile: (kitId, piece, file) => { getSidecar().brandPieceRemove(kitId, piece, file).catch(() => {}); },
+    toSrc: (value) => convertFileSrc(value),
+    loadLibrary: (everything) => new Promise((resolve) => {
+      const sc = getSidecar();
+      const requestId = String(Date.now()) + Math.random();
+      const onReply = (e: SidecarEvent) => {
+        if (e.event !== 'brand_kit_library') return;
+        const data = e as unknown as { requestId: string; choices: Array<{ key: string; title: string; path: string }> };
+        if (data.requestId !== requestId) return;
+        sc.offAny(onReply);
+        resolve(data.choices.map((c) => ({ ...c, src: convertFileSrc(c.path) })));
+      };
+      sc.onAny(onReply);
+      sc.brandKitLibrary(requestId, everything).catch(() => { sc.offAny(onReply); resolve([]); });
+    }),
+  }), []);
   const [designBusy, setDesignBusy] = useState(false);
   // New brief: open the chat, ready to type.
   useEffect(() => {
@@ -667,8 +749,18 @@ export function DesignStudio() {
       setDockOpen(true);
       window.setTimeout(() => window.dispatchEvent(new CustomEvent('ava-design-focus')), 80);
     };
+    // A card waiting for a decision takes the screen; what they say back,
+    // including agreeing it, brings the chat up again.
+    const onCard = () => setDockOpen(false);
+    const onSay = () => setDockOpen(true);
     window.addEventListener('ava-design-new', onNew);
-    return () => window.removeEventListener('ava-design-new', onNew);
+    window.addEventListener('ava-design-card', onCard);
+    window.addEventListener('ava-design-say', onSay);
+    return () => {
+      window.removeEventListener('ava-design-new', onNew);
+      window.removeEventListener('ava-design-card', onCard);
+      window.removeEventListener('ava-design-say', onSay);
+    };
   }, []);
   // Keep the conversation mounted through the slide-down so the collapse animates.
   const [renderConv, setRenderConv] = useState(false);
@@ -723,6 +815,10 @@ export function DesignStudio() {
   // when the design calls for it.
   const designPanel = useMemo(() => {
     if (view === 'model' || view === 'gimp') return modelPanelSummary(activeModel, view === 'gimp', roomWork);
+    if (view === 'brandkit') {
+      const names = (storeKits() ?? []).map(k => `"${k.name}"${k.status === 'proposed' ? ' (proposed, waiting for them)' : ''}`).join(', ');
+      return `Their kits: ${names || 'none yet'}.${openKit ? ` Open on the page: "${openKit.name}" [${openKit.id}].` : ''}`;
+    }
     if (view !== 'logo') return undefined;
     const bits = [
       `form: ${logoForm}`,
@@ -738,7 +834,7 @@ export function DesignStudio() {
       `wordmark colour: ${logoWordColour}`,
     ].filter(Boolean);
     return bits.join(' · ');
-  }, [view, activeModel, roomWork, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
+  }, [view, activeModel, roomWork, openKit, kitTick, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
   // Register the bundled wordmark fonts (from bytes) when the Logo room opens, so
   // the font picker previews each name in its own typeface.
   useEffect(() => { if (view === 'logo') void registerWordmarkFonts(); }, [view]);
@@ -1529,24 +1625,11 @@ export function DesignStudio() {
             )}
           </div>
         ) : view === 'model' ? (
-          <ModelRoom key="blender" tool="blender" busy={designBusy} onActiveModel={setActiveModel} onRoster={setRoomWork} />
+          <ModelRoom key="blender" tool="blender" startFresh={pieceStart} busy={designBusy} onActiveModel={setActiveModel} onRoster={setRoomWork} />
         ) : view === 'gimp' ? (
-          <ModelRoom key="gimp" tool="gimp" busy={designBusy} onActiveModel={setActiveModel} onRoster={setRoomWork} />
+          <ModelRoom key="gimp" tool="gimp" startFresh={pieceStart} busy={designBusy} onActiveModel={setActiveModel} onRoster={setRoomWork} />
         ) : view === 'brandkit' ? (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-            <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{t('dash.studio.brandkit.title')}</h2>
-            <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 16px' }}>{t('dash.studio.brandkit.subtitle')}</p>
-            <div style={{ maxWidth: 460 }}>
-              <label style={{ fontSize: 11, color: '#8b8398', display: 'block', marginBottom: 6 }}>Palette</label>
-              {(Object.keys(kit.palette) as (keyof typeof kit.palette)[]).map(role => (
-                <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', fontSize: 12.5, color: '#a6adc8' }}>
-                  <span style={{ width: 24, height: 24, borderRadius: 4, background: kit.palette[role] }} />
-                  <span style={{ textTransform: 'capitalize' }}>{role}</span>
-                  <code style={{ marginLeft: 'auto', fontSize: 11, color: '#8b8398' }}>{kit.palette[role].toUpperCase()}</code>
-                </div>
-              ))}
-            </div>
-          </div>
+          <BrandKitsPage actions={kitActions} onOpenKit={setOpenKit} />
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center', padding: '0 40px', color: '#8b8398' }}>
             <PenNib weight="duotone" size={26} style={{ color: 'var(--accent)' }} />
@@ -1900,7 +1983,7 @@ const DOCK_STARTERS_VOICE: { icon: string; key: string }[] = [
 
 const DESIGN_CHAT_KEY = 'ava-ide-design-chat';
 
-function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon', designPanel, onBusyChange }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp'; designPanel?: string; onBusyChange?: (busy: boolean) => void }) {
+function DesignArchitectDock({ showMessages, onComposerFocus, designRoom = 'icon', designPanel, onBusyChange }: { showMessages: boolean; onComposerFocus: () => void; designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp' | 'brandkit'; designPanel?: string; onBusyChange?: (busy: boolean) => void }) {
   // Persist the design conversation like every other room — it was pure local
   // state before, so it vanished on every reload / tab switch.
   const [messages, setMessages] = useState<DockMessage[]>(() => {

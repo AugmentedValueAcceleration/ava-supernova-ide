@@ -2867,6 +2867,8 @@ export function AvaChatPage() {
     id: string;
     toolName: string;
     args: Record<string, unknown>;
+    /** What she's asking, in plain words. */
+    summary?: string;
     desktopClassification?: {
       riskClass: 'observational' | 'navigational' | 'mutative-reversible' | 'mutative-irreversible' | 'privileged';
       reasons: string[];
@@ -4378,6 +4380,7 @@ export function AvaChatPage() {
           id: event.id!,
           toolName: event.toolName || 'unknown',
           args: event.args || {},
+          summary: (event as unknown as { summary?: string }).summary,
           desktopClassification: event.desktopClassification,
         });
         break;
@@ -6257,7 +6260,9 @@ export function AvaChatPage() {
                   ? 'Ava wants your approval to run this plan:'
                   : desktopActionLine
                     ? `Ava wants to: ${desktopActionLine}`
-                    : <>{t('dash.cc.ava_wants_to_run')} <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span></>
+                    : pendingConfirm.summary
+                      ? pendingConfirm.summary
+                      : <>{t('dash.cc.ava_wants_to_run')} <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span></>
                 }
               </div>
             </div>
@@ -6281,7 +6286,7 @@ export function AvaChatPage() {
               >
                 {isPlanCard ? 'Approve plan' : t('plan.approve')}
               </button>
-              {!isPlanCard && cls?.riskClass !== 'mutative-irreversible' && cls?.riskClass !== 'privileged' && (
+              {!isPlanCard && pendingConfirm.toolName !== 'design_install_font' && cls?.riskClass !== 'mutative-irreversible' && cls?.riskClass !== 'privileged' && (
                 <button
                   onClick={approveAlwaysCategory}
                   style={{
@@ -12612,6 +12617,10 @@ function LibraryPreviewModal({
 
           {model ? (
           <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {model.tool === 'gimp' && actionBtn(tt('library.gimp.open_in_room', 'Open in GIMP room'), () => {
+              try { sessionStorage.setItem('ava-open-work', model.slug); } catch { /* opens on the latest */ }
+              window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'creative-studio' }));
+            }, { primary: true })}
             {actionBtn(model.tool === 'gimp' ? tt('library.gimp.open_in_gimp', 'Open in GIMP') : tt('library.model.open_in_blender', 'Open in Blender'), () => { (model.tool === 'gimp' ? getSidecar().openWorkInGimp(model.slug) : getSidecar().openModelInBlender(model.slug)).catch(() => {}); }, { primary: true })}
             {actionBtn(tt('library.model.open_folder', 'Open folder'), () => { void import('@tauri-apps/plugin-opener').then(({ revealItemInDir }) => revealItemInDir(model.folder)).catch(() => {}); })}
             {model.glbPath && actionBtn(tt('library.model.copy_glb_path', 'Copy .glb path'), () => { void navigator.clipboard.writeText(model.glbPath!).then(() => showToast('Copied the .glb path')).catch(() => showToast('Clipboard unavailable.')); })}
