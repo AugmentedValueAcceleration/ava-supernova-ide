@@ -50,6 +50,13 @@ export interface GalleryItem {
   path?: string;
   absolutePath?: string;
   bytes?: number;
+  /** How it was made, for the making record — the same fields the extension
+   *  writes. 'generated' = an AI model made it (aiModel names which);
+   *  'composed' = built by code from shapes and fonts, like a logo. Absent on
+   *  anything saved before 9 Nov 2026: unknown, never guessed. */
+  origin?: 'generated' | 'composed';
+  aiModel?: string;
+  aiProvider?: string;
 }
 
 const TYPE_TO_DIR: Record<MediumKind, string> = {
@@ -285,7 +292,7 @@ export function useCreativeGallery(kind: MediumKind) {
   /** Persist a freshly-generated item to disk + metadata. Always inserts into
    *  the in-memory gallery so the user sees it immediately. */
   const saveGenerated = useCallback(async (
-    args: { id?: string; prompt: string; title: string; url: string; ext?: string; designType?: string },
+    args: { id?: string; prompt: string; title: string; url: string; ext?: string; designType?: string; made?: { origin: 'generated' | 'composed'; aiModel?: string } },
   ): Promise<GalleryItem> => {
     const id = args.id ?? `${kind}_${Date.now()}`;
     let item: GalleryItem = {
@@ -297,6 +304,7 @@ export function useCreativeGallery(kind: MediumKind) {
       createdAt: new Date().toISOString(),
       ext: args.ext,
       designType: args.designType,
+      ...(args.made ? { origin: args.made.origin, ...(args.made.aiModel ? { aiModel: args.made.aiModel, aiProvider: 'qwen' } : {}) } : {}),
     };
 
     const saved = await saveBinaryToDisk(item);

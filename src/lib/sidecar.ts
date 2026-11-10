@@ -500,9 +500,9 @@ export class SidecarManager {
   /** His button on the brief card — the only way a brief becomes agreed. */
   async agreeModelBrief(slug: string): Promise<void> { await this.send({ cmd: 'agree_model_brief', slug }); }
   async saveModelBrief(slug: string, fields: Record<string, string>): Promise<void> { await this.send({ cmd: 'save_model_brief', slug, fields }); }
-  async openModelInBlender(slug: string): Promise<void> { await this.send({ cmd: 'open_model_in_blender', slug }); }
-  async deleteModel(slug: string, tool: 'blender' | 'gimp' = 'blender'): Promise<void> { await this.send({ cmd: 'delete_model', slug, tool }); }
-  async copyModelToProject(slug: string, projectRoot: string, tool: 'blender' | 'gimp' = 'blender'): Promise<void> { await this.send({ cmd: 'copy_model_to_project', slug, projectRoot, tool }); }
+  async openModelInBlender(slug: string, tool: 'blender' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'open_model_in_blender', slug, tool }); }
+  async deleteModel(slug: string, tool: 'blender' | 'gimp' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'delete_model', slug, tool }); }
+  async copyModelToProject(slug: string, projectRoot: string, tool: 'blender' | 'gimp' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'copy_model_to_project', slug, projectRoot, tool }); }
   async blenderStatus(): Promise<void> { await this.send({ cmd: 'blender_status' }); }
   async setBlenderPath(path: string | null): Promise<void> { await this.send({ cmd: 'set_blender_path', path }); }
   // ── Design Studio 2D (GIMP) ── `image_work_list`, `gimp_status`.
@@ -524,8 +524,30 @@ export class SidecarManager {
   async brandPieceRemove(kitId: string, piece: string, file?: string): Promise<void> { await this.send({ cmd: 'brand_kit_piece_remove', kitId, piece, file }); }
   async setActiveBrandKit(id: string): Promise<void> { await this.send({ cmd: 'brand_kit_set_active', id }); }
   async removeImageFinal(slug: string, file: string): Promise<void> { await this.send({ cmd: 'remove_image_final', slug, file }); }
+  // Library folders — names that point at work (core's library-folders). Every call answers with a library_folders event.
+  async foldersLoad(): Promise<void> { await this.send({ cmd: 'folders_load' }); }
+  async folderCreate(name: string, parentId: string | null, add?: Array<{ ref: string; pick?: string[] }>): Promise<void> { await this.send({ cmd: 'folder_create', name, parentId, add }); }
+  async folderRename(id: string, name: string): Promise<void> { await this.send({ cmd: 'folder_rename', id, name }); }
+  async folderMove(id: string, parentId: string | null): Promise<void> { await this.send({ cmd: 'folder_move', id, parentId }); }
+  async folderDelete(id: string): Promise<void> { await this.send({ cmd: 'folder_delete', id }); }
+  async folderAdd(id: string, items: Array<{ ref: string; pick?: string[] }>): Promise<void> { await this.send({ cmd: 'folder_add', id, items }); }
+  async folderRemove(id: string, refs: string[]): Promise<void> { await this.send({ cmd: 'folder_remove', id, refs }); }
+  async planAgree(id: string): Promise<void> { await this.send({ cmd: 'plan_agree', id }); }
+  /** Change a piece (itemId + fields), add one (null + fields), or remove one (itemId + null). */
+  async planItem(id: string, itemId: string | null, fields: { name?: string; what?: string; tool?: string; folder?: string } | null): Promise<void> { await this.send({ cmd: 'plan_item', id, itemId, fields }); }
+  async planDelete(id: string): Promise<void> { await this.send({ cmd: 'plan_delete', id }); }
+  async folderNote(id: string, note: string): Promise<void> { await this.send({ cmd: 'folder_note', id, note }); }
+  async folderPick(id: string, ref: string, pick: string[]): Promise<void> { await this.send({ cmd: 'folder_pick', id, ref, pick }); }
+  /** Their own files, copied into the Library (and into a folder, if one is open). */
+  async libraryUpload(paths: string[], folderId?: string): Promise<void> { await this.send({ cmd: 'library_upload', paths, folderId }); }
+  /** What a folder's download would hold. Answers with folder_export_preview. */
+  async folderExportPreview(id: string): Promise<void> { await this.send({ cmd: 'folder_export_preview', id }); }
+  /** Download a folder into `dest`. Answers with folder_export_progress events, then folder_export_result. */
+  async folderExport(id: string, dest: string, zip: boolean, record = true, store?: string): Promise<void> { await this.send({ cmd: 'folder_export', id, dest, zip, record, store }); }
   async imageVersion(slug: string, name: string, action: 'main' | 'keep' | 'delete'): Promise<void> { await this.send({ cmd: 'image_version', slug, name, action }); }
   async restoreImageStep(slug: string, number: number): Promise<void> { await this.send({ cmd: 'restore_image_step', slug, number }); }
+  /** A 3D model back to an earlier step, textures and all. */
+  async restoreModelStep(slug: string, number: number): Promise<void> { await this.send({ cmd: 'restore_model_step', slug, number }); }
   async pickImageOption(slug: string, index: number): Promise<void> { await this.send({ cmd: 'pick_image_option', slug, index }); }
   async addImageArt(slug: string, path: string): Promise<void> { await this.send({ cmd: 'add_image_art', slug, path }); }
   async openWorkInGimp(slug: string): Promise<void> { await this.send({ cmd: 'open_work_in_gimp', slug }); }

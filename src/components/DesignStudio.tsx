@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type
 import { PenNib, Paperclip as PhPaperclip } from '@phosphor-icons/react';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { ModelRoom, modelPanelSummary, type IdeModel } from './ModelRoom';
+import { useLibraryFolders, folderContextLine } from './LibraryFolders';
 import { useModeAvailability } from '../lib/mode-availability';
 import { TTS_VOICE_CATALOGUE, TTS_VOICES, TTS_VOICE_SPEEDS, TTS_VOICE_VOLUMES, voiceSpeechRate, voiceVolume } from '@ava/core/creative';
 import { logDiag } from '../lib/sidecar-log';
@@ -39,7 +40,7 @@ import { t, tt } from '../lib/i18n';
  * on the 'design' surface (mirrors HealthRoomChat, lane === 'design').
  */
 
-type GenOutcome = { ok: boolean; dataUrl?: string; error?: string };
+type GenOutcome = { ok: boolean; dataUrl?: string; error?: string; model?: string };
 
 // Logo styles — REAL vector paints from the shape engine, not prompt words. A
 // gradient logo is a true SVG gradient: still scalable, still exact, no model.
@@ -614,6 +615,8 @@ export function DesignStudio() {
   const designRoom: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp' | 'brandkit' = view === 'video' ? 'video' : view === 'voice' ? 'voice' : view === 'image' ? 'image' : view === 'logo' ? 'logo' : view === 'model' ? 'model' : view === 'gimp' ? 'gimp' : 'icon';
   // The model on the 3D room's stage — its brief goes to Ava with every turn.
   const [activeModel, setActiveModel] = useState<IdeModel | null>(null);
+  // Library folders: when the piece on the stage is in one, Ava is told so (Phase 3).
+  const { folders: libraryFolders, plans: libraryPlans } = useLibraryFolders();
   const [roomWork, setRoomWork] = useState<string[]>([]);
 
   const [query, setQuery] = useState('');
@@ -626,7 +629,7 @@ export function DesignStudio() {
   const [imageGenerating, setImageGenerating] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageSize, setImageSize] = useState('1280*1280');
-  const imageResolverRef = useRef<((r: { ok: boolean; dataUrl?: string; error?: string }) => void) | null>(null);
+  const imageResolverRef = useRef<((r: { ok: boolean; dataUrl?: string; error?: string; model?: string }) => void) | null>(null);
   const pendingImageRef = useRef(false);
   const lastImageTitleRef = useRef('Image');
 
@@ -814,7 +817,7 @@ export function DesignStudio() {
   // nothing for the panel. Now she sees it, works from it, and may change it
   // when the design calls for it.
   const designPanel = useMemo(() => {
-    if (view === 'model' || view === 'gimp') return modelPanelSummary(activeModel, view === 'gimp', roomWork);
+    if (view === 'model' || view === 'gimp') return modelPanelSummary(activeModel, view === 'gimp', roomWork) + folderContextLine(libraryFolders, activeModel?.creativeId, libraryPlans);
     if (view === 'brandkit') {
       const names = (storeKits() ?? []).map(k => `"${k.name}"${k.status === 'proposed' ? ' (proposed, waiting for them)' : ''}`).join(', ');
       return `Their kits: ${names || 'none yet'}.${openKit ? ` Open on the page: "${openKit.name}" [${openKit.id}].` : ''}`;
@@ -834,7 +837,7 @@ export function DesignStudio() {
       `wordmark colour: ${logoWordColour}`,
     ].filter(Boolean);
     return bits.join(' · ');
-  }, [view, activeModel, roomWork, openKit, kitTick, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
+  }, [view, activeModel, libraryFolders, libraryPlans, roomWork, openKit, kitTick, logoForm, logoTagline, logoMarkType, logoMark, logoContainer, logoSpec, logoStyle, logoColour, logoSecondary, logoWordColour, logoFontId, kit.styleTags]);
   // Register the bundled wordmark fonts (from bytes) when the Logo room opens, so
   // the font picker previews each name in its own typeface.
   useEffect(() => { if (view === 'logo') void registerWordmarkFonts(); }, [view]);
@@ -853,6 +856,8 @@ export function DesignStudio() {
   const genResolverRef = useRef<((r: GenOutcome) => void) | null>(null);
   const genResultRef = useRef<string | null>(null);
   useEffect(() => { genResultRef.current = genResult; }, [genResult]);
+  // Which AI model made the picture on the canvas, so a later Save records it.
+  const genModelRef = useRef<string | undefined>(undefined);
 
   // Shape-as-dial: render the shape to a duotone armature, hand it to the sidecar
   // with an art-director prompt → Qwen-Image-edit → server matte. Returns a
@@ -925,19 +930,21 @@ export function DesignStudio() {
   }, []);
 
   // Save a matted PNG to the local creative gallery (transparent icon).
-  const saveToLibrary = useCallback((dataUrl: string, title: string, designType?: string) => {
-    gallery.saveGenerated({ url: dataUrl, title, prompt: title, ext: 'png', designType }).catch(() => {});
+  // `aiModel` is the model that generated it, for the making record. Every
+  // picture saved here was generated.
+  const saveToLibrary = useCallback((dataUrl: string, title: string, designType?: string, aiModel?: string) => {
+    gallery.saveGenerated({ url: dataUrl, title, prompt: title, ext: 'png', designType, made: { origin: 'generated', aiModel } }).catch(() => {});
   }, [gallery]);
 
   // ── Image lane wiring (mirror of runVideoGeneration) — free-form Qwen-Image
   // via the sidecar with NO reference armature and matte:false (a hero / banner
   // keeps its background; it isn't cut out like an icon). Auto-saves on success.
-  const runImageGeneration = (prompt: string, size: string): Promise<{ ok: boolean; dataUrl?: string; error?: string }> => {
+  const runImageGeneration = (prompt: string, size: string): Promise<{ ok: boolean; dataUrl?: string; error?: string; model?: string }> => {
     return new Promise((resolve) => {
       const title = (prompt.trim().split(/\s+/).slice(0, 6).join(' ') || 'Image').slice(0, 60);
       lastImageTitleRef.current = title;
       imageResolverRef.current = (r) => {
-        if (r.ok && r.dataUrl) saveToLibrary(r.dataUrl, title); // lands in creative/images/
+        if (r.ok && r.dataUrl) saveToLibrary(r.dataUrl, title, undefined, r.model); // lands in creative/images/
         resolve(r);
       };
       pendingImageRef.current = true;
@@ -1100,6 +1107,8 @@ export function DesignStudio() {
         prompt: `${brand} logo — ${a.label}`,
         ext: 'svg',
         designType: 'logo',
+        // Built by code from shapes and fonts, not generated as a picture.
+        made: { origin: 'composed' },
       }).catch(() => {});
     }
   };
@@ -1151,7 +1160,7 @@ export function DesignStudio() {
           if (!resolved) { failed.push(s); continue; }
           setShapeId(resolved.id);
           const out = await runGeneration(resolved, look, col);
-          if (out.ok && out.dataUrl) { made++; saveToLibrary(out.dataUrl, `${resolved.label}-${mat.label}`.toLowerCase().replace(/\s+/g, '-'), 'icon'); }
+          if (out.ok && out.dataUrl) { made++; saveToLibrary(out.dataUrl, `${resolved.label}-${mat.label}`.toLowerCase().replace(/\s+/g, '-'), 'icon', out.model); }
           else failed.push(resolved.label);
         }
         reply(true, { made, failed });
@@ -1325,7 +1334,7 @@ export function DesignStudio() {
         const title = (typeof args.title === 'string' && args.title.trim())
           ? args.title.trim()
           : `${(getShape(shapeId)?.label ?? 'icon')}-${material.label}`.toLowerCase().replace(/\s+/g, '-');
-        saveToLibrary(url, title, 'icon');
+        saveToLibrary(url, title, 'icon', genModelRef.current);
         reply(true, { title });
         return;
       }
@@ -1350,17 +1359,17 @@ export function DesignStudio() {
           const resolveImg = imageResolverRef.current;
           if (resolveImg) {
             imageResolverRef.current = null;
-            resolveImg(ok ? { ok: true, dataUrl: event.dataUrl } : { ok: false, error: event.error || 'Generation failed' });
+            resolveImg(ok ? { ok: true, dataUrl: event.dataUrl, model: event.model as string | undefined } : { ok: false, error: event.error || 'Generation failed' });
           }
           return;
         }
-        if (ok) { setGenResult(event.dataUrl!); setDockOpen(false); } // icon ready → slide the chat down, reveal it
+        if (ok) { genModelRef.current = event.model as string | undefined; setGenResult(event.dataUrl!); setDockOpen(false); } // icon ready → slide the chat down, reveal it
         else setGenError(event.error || 'Generation failed');
         setGenStatus(null);
         const resolve = genResolverRef.current;
         if (resolve) {
           genResolverRef.current = null;
-          resolve(ok ? { ok: true, dataUrl: event.dataUrl } : { ok: false, error: event.error || 'Generation failed' });
+          resolve(ok ? { ok: true, dataUrl: event.dataUrl, model: event.model as string | undefined } : { ok: false, error: event.error || 'Generation failed' });
         }
         return;
       }
@@ -1377,6 +1386,7 @@ export function DesignStudio() {
           videoGallery.saveGenerated({
             url: event.url, title: savedTitle,
             prompt: (event.prompt as string | undefined) || savedTitle, ext: 'mp4',
+            made: { origin: 'generated', aiModel: event.model as string | undefined },
           }).catch(() => { /* the clip is on the stage either way */ });
         }
         const resolve = videoResolverRef.current;
@@ -1397,6 +1407,7 @@ export function DesignStudio() {
             || ((spoken.trim().split(/\s+/).slice(0, 6).join(' ') || 'Voiceover').slice(0, 60));
           voiceGallery.saveGenerated({
             url: event.url, title: savedTitle, prompt: spoken || savedTitle, ext: 'mp3',
+            made: { origin: 'generated', aiModel: event.model as string | undefined },
           }).catch(() => { /* the read plays either way */ });
         }
         const ok = !!event.success && !!event.url;

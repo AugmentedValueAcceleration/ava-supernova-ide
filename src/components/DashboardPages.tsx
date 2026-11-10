@@ -79,6 +79,7 @@ import { homeDir } from '@tauri-apps/api/path';
 import { projectsHomeFrom } from '@ava/core/projects/home';
 import { readProjectsHomeSetting, writeProjectsHomeSetting } from '../lib/shared-config';
 import { DateField } from './MiniDatePicker';
+import { useLibraryFolders, useFolderSidebar, FoldersView, FolderCard, FolderDropBar, FolderSidebar, FolderGlyph, fileRef, uploadToLibrary as uploadFilesToLibrary, type FolderItem, type FolderRef } from './LibraryFolders';
 import { LessonPlayer, type PlayableLesson, type LessonStep } from './LessonPlayer';
 import { LearningRoomChat, seedLearningRoom } from './LearningRoomChat';
 import { seedHealthRoom } from './HealthRoomChat';
@@ -10098,8 +10099,11 @@ function modelLibraryFile(it: Record<string, unknown>): LibraryFile {
   const folder = str('absoluteFolder') ?? '';
   const slug = folder.split(/[\\/]/).pop() ?? '';
   const glbRel = str('glb');
-  const creativeRoot = folder.replace(/[\\/](blender|gimp)[\\/][^\\/]+$/, '');
-  const tool = it.kind === 'gimp' ? 'gimp' as const : 'blender' as const;
+  const creativeRoot = folder.replace(/[\\/](blender|gimp|uploads)[\\/][^\\/]+$/, '');
+  // An upload is a model they brought in themselves (core's library-upload).
+  const tool = it.kind === 'gimp' ? 'gimp' as const : String(it.id ?? '').startsWith('upload_') ? 'upload' as const : 'blender' as const;
+  // No preview (Blender wasn't here to render one): no picture, so the card shows its kind.
+  const picture = it.hasPreview === false ? undefined : str('absolutePath');
   return {
     id: str('id'),
     name: str('title') || 'Untitled model',
@@ -10108,7 +10112,7 @@ function modelLibraryFile(it: Record<string, unknown>): LibraryFile {
     type: 'image',
     mediaKind: 'image',
     designType: tool === 'gimp' ? 'gimp' : 'model',
-    localPath: str('absolutePath'),
+    localPath: picture,
     size: typeof it.bytes === 'number' ? it.bytes : 0,
     modified: str('updatedAt') || str('createdAt') || '',
     prompt: str('prompt') || '',
@@ -10158,8 +10162,8 @@ interface LibraryFile {
   /** A 3D model Ava built in Blender — one asset that is a whole folder
    *  (written by core's design_build_model, shared with the extension). */
   model?: {
-    /** Blender model, or a folder of GIMP work: the same drawer serves both. */
-    tool: 'blender' | 'gimp';
+    /** Blender model, a folder of GIMP work, or a model they uploaded: the same drawer serves all three. */
+    tool: 'blender' | 'gimp' | 'upload';
     imageCount?: number;
     slug: string;
     folder: string;
@@ -11579,7 +11583,15 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // so the user can isolate just music / video / voice within the Assets
   // tab — previously they all collapsed under Images.
   const [filter, setFilter] = useState<'icon' | 'logo' | 'model' | 'gimp' | LibraryMediaKind | 'all'>('all');
-  const [group, setGroup] = useState<'all' | (typeof LIBRARY_GROUPS)[number]['id']>('all');
+  const [group, setGroup] = useState<'all' | 'folders' | (typeof LIBRARY_GROUPS)[number]['id']>('all');
+  // Library folders: names that point at work. Shared with the extension through core.
+  const { folders, missing: missingInFolders, gimpFinals, plans: folderPlans, error: folderError, clearError: clearFolderError, uploadNote, clearUploadNote } = useLibraryFolders();
+  const [dragging, setDragging] = useState(false);
+  // A folder tile in All was clicked: open the Folders view at it.
+  const [folderToOpen, setFolderToOpen] = useState<string | null>(null);
+  const [sidebarOpen, toggleSidebar] = useFolderSidebar();
+  // A logo system's forms, by group, so a folder can hold just some of them.
+  const [logoForms, setLogoForms] = useState<Record<string, { key: string; label: string }[]>>({});
   // Ava builds models from her tools, not from here — follow the sidecar's
   // watch on the creative folder so a new model appears by itself. Asking for
   // the model list starts that watch.
@@ -11658,9 +11670,15 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
       readAllLocalCreative()
         .then((rawItems) => {
           if (cancelled) return;
+          const forms: Record<string, { key: string; label: string }[]> = {};
+          for (const it of rawItems) {
+            const m = LOGO_VARIANT_RE.exec(it.id);
+            if (m) (forms[m[1]] ??= []).push({ key: m[2], label: (it.title || m[2]).replace(/^.* — /, '') });
+          }
+          setLogoForms(forms);
           const items = collapseLogoGroups(rawItems);
           setCloudFiles(items
-            .filter((it) => it.kind === 'image' || it.kind === 'video' || it.kind === 'voice' || (it.kind as string) === 'model' || (it.kind as string) === 'gimp')
+            .filter((it) => it.kind === 'image' || it.kind === 'video' || it.kind === 'voice' || it.kind === 'music' || (it.kind as string) === 'model' || (it.kind as string) === 'gimp')
             .map((it): LibraryFile => (it.kind as string) === 'model' || (it.kind as string) === 'gimp' ? modelLibraryFile(it as unknown as Record<string, unknown>) : ({
               id: it.id,
               name: it.title || 'Untitled',
@@ -11728,7 +11746,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
     );
   }, [cloudFiles, localFiles, kind]);
   const groupFiles = useMemo(() => {
-    if (kind !== 'assets' || group === 'all') return kindFiles;
+    if (kind !== 'assets' || group === 'all' || group === 'folders') return kindFiles;
     const buckets = LIBRARY_GROUPS.find((g) => g.id === group)?.buckets ?? [];
     return kindFiles.filter((f) => buckets.includes(libraryBucket(f)));
   }, [kind, group, kindFiles]);
@@ -11824,6 +11842,142 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
   // bouncing the user out to Creative Studio.
   const handleNewDocument = () => setNewDocOpen(true);
 
+  // One card, as the grid shows it — and as a folder shows it.
+  const gridCard = (file: LibraryFile) => {
+    const kind = classifyMediaKind(file);
+    const colors = MEDIA_KIND_COLORS[kind];
+    const isSelected = selectedFile?.path === file.path;
+    return (
+      <div
+        onClick={() => setSelectedFile(isSelected ? null : file)}
+        style={{
+          background: 'rgba(26, 16, 40, 0.6)', border: `1px solid ${isSelected ? colors.border : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
+          borderRadius: 10, overflow: 'hidden', cursor: 'pointer',
+          transition: 'border-color 0.2s, transform 0.15s',
+        }}
+      >
+        {/* Thumbnail area — pick the right element per real
+            media kind. Music / voice / video have no <img>
+            representation, so they get an icon instead of the
+            broken-image glyph the row was rendering before. */}
+        <div style={{
+          height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: colors.bg, position: 'relative',
+        }}>
+          {(() => {
+            const iconFallback = <span style={{ color: colors.text, opacity: 0.95 }}><MediaKindIcon kind={kind} size={52} weight="duotone" /></span>;
+            if (kind === 'image') {
+              // An icon or a logo is shown WHOLE. `cover` is right for
+              // a photo — a frame filling its card is the gallery look
+              // — but it crops a square icon on a wide card to the
+              // middle of the glyph: a bell became an orange curve.
+              const whole = file.designType === 'icon' || file.designType === 'logo';
+              return <LocalThumb file={file} style={whole
+                ? { width: '100%', height: '100%', objectFit: 'contain', padding: 12, boxSizing: 'border-box' }
+                : { width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
+            }
+            if (kind === 'video') {
+              return <LocalVideoThumb file={file} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
+            }
+            return iconFallback;
+          })()}
+          {/* Type badge — labelled and coloured by real media kind
+              so MP3 rows read MUSIC, not IMAGE. */}
+          <span style={{
+            position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 600,
+            padding: '2px 8px', borderRadius: 6, background: 'rgba(0,0,0,0.6)',
+            color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5,
+          }}>{libraryBadgeLabel(file.name, kind)}</span>
+        </div>
+        {/* File info */}
+        <div style={{ padding: '10px 12px' }}>
+          <div style={{
+            fontSize: 12, fontWeight: 500, color: '#cdd6f4',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4,
+          }}>{file.name}</div>
+          <div style={{ fontSize: 10, color: '#6c7086', display: 'flex', justifyContent: 'space-between' }}>
+            <span>{formatFileSize(file.size)}</span>
+            {file.modified && <span>{new Date(file.modified).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  const listRow = (file: LibraryFile, i: number) => {
+    const kind = classifyMediaKind(file);
+    const colors = MEDIA_KIND_COLORS[kind];
+    const isSelected = selectedFile?.path === file.path;
+    return (
+      <div
+        onClick={() => setSelectedFile(isSelected ? null : file)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
+          borderBottom: i < filtered.length - 1 ? '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' : 'none',
+          background: isSelected ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent',
+          cursor: 'pointer', transition: 'background 0.15s',
+        }}
+      >
+        {/* Icon — kind-specific so music/voice/video each get their
+            own glyph instead of every row showing the image icon. */}
+        <div style={{
+          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+          background: colors.bg, border: `1px solid ${colors.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: colors.text,
+        }}><MediaKindIcon kind={kind} size={20} weight="duotone" /></div>
+        {/* Name + folder */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 13, fontWeight: 500, color: '#cdd6f4',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{file.name}</div>
+          {file.folder && (
+            <div style={{ fontSize: 11, color: '#6c7086', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {file.folder}
+            </div>
+          )}
+        </div>
+        {/* Type badge */}
+        <span style={{
+          fontSize: 10, fontWeight: 500, padding: '3px 8px', borderRadius: 6,
+          background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`,
+          textTransform: 'capitalize', flexShrink: 0,
+        }}>{kind}</span>
+        {/* Size */}
+        <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', flexShrink: 0, width: 60, textAlign: 'right' }}>
+          {formatFileSize(file.size)}
+        </span>
+        {/* Date */}
+        <span style={{ fontSize: 11, color: '#6c7086', flexShrink: 0, width: 80, textAlign: 'right' }}>
+          {file.modified ? new Date(file.modified).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
+        </span>
+      </div>
+    );
+  };
+
+  /** What a folder keeps for this file: the Library entry, the logo system, or the project file. */
+  const refForFile = (file: LibraryFile): FolderRef | null => {
+    if (file.id) {
+      const m = LOGO_VARIANT_RE.exec(file.id);
+      return m ? `logo:${m[1]}` : `creative:${file.id}`;
+    }
+    if (file.source === 'local' && projectFolder && file.path) return fileRef(`${projectFolder.replace(/[\\/]+$/, '')}/${file.path}`);
+    return null;
+  };
+
+  // Every card, by the reference a folder keeps, for the Folders view.
+  const folderItems = new Map<FolderRef, FolderItem>();
+  if (group === 'folders') {
+    for (const file of kindFiles) {
+      const ref = refForFile(file);
+      if (!ref) continue;
+      const logo = file.id ? LOGO_VARIANT_RE.exec(file.id) : null;
+      const finals = file.id ? gimpFinals[file.id] : undefined;
+      const parts = logo ? logoForms[logo[1]] : finals?.length ? finals.map((f) => ({ key: f, label: f.split('/').pop() ?? f })) : undefined;
+      folderItems.set(ref, { ref, title: file.name, parts, card: gridCard(file) });
+    }
+  }
+
   const refreshLocalFiles = () => {
     if (!projectFolder) return;
     scanLocalLibrary(projectFolder).then(setLocalFiles);
@@ -11855,6 +12009,18 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                 {g.label}
               </button>
             ))}
+            <span style={{ width: 1, height: 16, background: 'color-mix(in srgb, var(--accent) 18%, transparent)', margin: '0 4px' }} aria-hidden />
+            <button onClick={() => { setFolderToOpen(null); setGroup('folders'); setFilter('all'); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '4px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 11.5,
+                border: `1px solid ${group === 'folders' ? 'color-mix(in srgb, var(--accent) 45%, transparent)' : 'transparent'}`,
+                background: group === 'folders' ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'transparent',
+                color: group === 'folders' ? '#e0b0ff' : '#8b8398', fontWeight: group === 'folders' ? 600 : 400,
+              }}>
+              <FolderGlyph size={12} />{tt('library.folders.title', 'Folders')}
+              {folders.length ? <span style={{ opacity: 0.6 }}>{folders.length}</span> : null}
+            </button>
           </div>
         )}
         {/* Type filter + view toggle */}
@@ -11887,6 +12053,18 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                 Open save folder
               </button>
             )}
+            {kind === 'assets' && group !== 'folders' && (
+              <button
+                onClick={() => { uploadFilesToLibrary().catch(() => {}); }}
+                title={tt('library.folders.upload_title', 'Copy your own files into the Library. They are recorded as your work.')}
+                style={{
+                  padding: '6px 14px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                  cursor: 'pointer', fontSize: 12, background: 'transparent', color: '#a6adc8', marginRight: 6,
+                }}
+              >
+                {tt('library.folders.upload', 'Upload')}
+              </button>
+            )}
             <button
               onClick={() => { setReloadKey((n) => n + 1); refreshLocalFiles(); }}
               title={t('dash.common.refresh')}
@@ -11901,7 +12079,7 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
             >
               <PhArrowsClockwise size={14} weight="bold" />
             </button>
-            {filterOptions.map((tab) => (
+            {group !== 'folders' && filterOptions.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setFilter(tab.id)}
@@ -11980,7 +12158,38 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 32px 32px' }}>
-        {loading ? (
+        {/* Your folders down the side, beside the work, on every Assets tab but Folders. */}
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        {kind === 'assets' && group !== 'folders' && (
+          <FolderSidebar
+            folders={folders}
+            open={sidebarOpen}
+            onToggle={toggleSidebar}
+            onOpenFolder={(id) => { setFolderToOpen(id); setGroup('folders'); setFilter('all'); }}
+          />
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+        {kind === 'assets' && group !== 'folders' && dragging && !sidebarOpen && <FolderDropBar folders={folders} onDone={() => setDragging(false)} />}
+        {kind === 'assets' && group !== 'folders' && uploadNote && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, padding: '8px 12px', borderRadius: 8, fontSize: 12, color: '#cdd6f4', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', background: 'color-mix(in srgb, var(--accent) 14%, transparent)' }}>
+            <span style={{ flex: 1 }}>{uploadNote}</span>
+            <button onClick={clearUploadNote} aria-label="Close" style={{ background: 'none', border: 'none', color: '#6c7086', cursor: 'pointer' }}>✕</button>
+          </div>
+        )}
+        {kind === 'assets' && group === 'folders' ? (
+          <FoldersView
+            key={folderToOpen ?? 'top'}
+            initialOpenId={folderToOpen}
+            plans={folderPlans}
+            folders={folders}
+            missing={missingInFolders}
+            error={folderError}
+            onClearError={clearFolderError}
+            items={folderItems}
+            uploadNote={uploadNote}
+            onClearUploadNote={clearUploadNote}
+          />
+        ) : loading ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#6c7086' }}>
             <div style={{ fontSize: 13 }}>{t('dash.library.scanning')}</div>
           </div>
@@ -12010,125 +12219,24 @@ function LibraryAssetsView({ kind }: { kind: 'assets' | 'documents' }) {
                 onSelect={() => setSelectedFile(selectedFile?.path === group.primary.path ? null : group.primary)}
               />
             ))}
-            {docGroups.length === 0 && filtered.map((file, i) => {
-              const kind = classifyMediaKind(file);
-              const colors = MEDIA_KIND_COLORS[kind];
-              const isSelected = selectedFile?.path === file.path;
-              return (
-                <div
-                  key={i}
-                  onClick={() => setSelectedFile(isSelected ? null : file)}
-                  style={{
-                    background: 'rgba(26, 16, 40, 0.6)', border: `1px solid ${isSelected ? colors.border : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
-                    borderRadius: 10, overflow: 'hidden', cursor: 'pointer',
-                    transition: 'border-color 0.2s, transform 0.15s',
-                  }}
-                >
-                  {/* Thumbnail area — pick the right element per real
-                      media kind. Music / voice / video have no <img>
-                      representation, so they get an icon instead of the
-                      broken-image glyph the row was rendering before. */}
-                  <div style={{
-                    height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: colors.bg, position: 'relative',
-                  }}>
-                    {(() => {
-                      const iconFallback = <span style={{ color: colors.text, opacity: 0.95 }}><MediaKindIcon kind={kind} size={52} weight="duotone" /></span>;
-                      if (kind === 'image') {
-                        // An icon or a logo is shown WHOLE. `cover` is right for
-                        // a photo — a frame filling its card is the gallery look
-                        // — but it crops a square icon on a wide card to the
-                        // middle of the glyph: a bell became an orange curve.
-                        const whole = file.designType === 'icon' || file.designType === 'logo';
-                        return <LocalThumb file={file} style={whole
-                          ? { width: '100%', height: '100%', objectFit: 'contain', padding: 12, boxSizing: 'border-box' }
-                          : { width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
-                      }
-                      if (kind === 'video') {
-                        return <LocalVideoThumb file={file} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallback={iconFallback} />;
-                      }
-                      return iconFallback;
-                    })()}
-                    {/* Type badge — labelled and coloured by real media kind
-                        so MP3 rows read MUSIC, not IMAGE. */}
-                    <span style={{
-                      position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 600,
-                      padding: '2px 8px', borderRadius: 6, background: 'rgba(0,0,0,0.6)',
-                      color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5,
-                    }}>{libraryBadgeLabel(file.name, kind)}</span>
-                  </div>
-                  {/* File info */}
-                  <div style={{ padding: '10px 12px' }}>
-                    <div style={{
-                      fontSize: 12, fontWeight: 500, color: '#cdd6f4',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4,
-                    }}>{file.name}</div>
-                    <div style={{ fontSize: 10, color: '#6c7086', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{formatFileSize(file.size)}</span>
-                      {file.modified && <span>{new Date(file.modified).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {docGroups.length === 0 && filtered.map((file, i) => (
+              <FolderCard key={i} folders={folders} itemRef={refForFile(file)} onDragging={setDragging}>
+                {gridCard(file)}
+              </FolderCard>
+            ))}
           </div>
         ) : (
           /* List view */
           <div style={{ background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10, overflow: 'hidden' }}>
-            {listFiles.map((file, i) => {
-              const kind = classifyMediaKind(file);
-              const colors = MEDIA_KIND_COLORS[kind];
-              const isSelected = selectedFile?.path === file.path;
-              return (
-                <div
-                  key={i}
-                  onClick={() => setSelectedFile(isSelected ? null : file)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
-                    borderBottom: i < filtered.length - 1 ? '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' : 'none',
-                    background: isSelected ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent',
-                    cursor: 'pointer', transition: 'background 0.15s',
-                  }}
-                >
-                  {/* Icon — kind-specific so music/voice/video each get their
-                      own glyph instead of every row showing the image icon. */}
-                  <div style={{
-                    width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                    background: colors.bg, border: `1px solid ${colors.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: colors.text,
-                  }}><MediaKindIcon kind={kind} size={20} weight="duotone" /></div>
-                  {/* Name + folder */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: 13, fontWeight: 500, color: '#cdd6f4',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>{file.name}</div>
-                    {file.folder && (
-                      <div style={{ fontSize: 11, color: '#6c7086', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {file.folder}
-                      </div>
-                    )}
-                  </div>
-                  {/* Type badge */}
-                  <span style={{
-                    fontSize: 10, fontWeight: 500, padding: '3px 8px', borderRadius: 6,
-                    background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`,
-                    textTransform: 'capitalize', flexShrink: 0,
-                  }}>{kind}</span>
-                  {/* Size */}
-                  <span style={{ fontSize: 11, color: '#6c7086', fontFamily: 'monospace', flexShrink: 0, width: 60, textAlign: 'right' }}>
-                    {formatFileSize(file.size)}
-                  </span>
-                  {/* Date */}
-                  <span style={{ fontSize: 11, color: '#6c7086', flexShrink: 0, width: 80, textAlign: 'right' }}>
-                    {file.modified ? new Date(file.modified).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
-                  </span>
-                </div>
-              );
-            })}
+            {listFiles.map((file, i) => (
+              <FolderCard key={i} folders={folders} itemRef={kind === 'assets' ? refForFile(file) : null} onDragging={setDragging}>
+                {listRow(file, i)}
+              </FolderCard>
+            ))}
           </div>
         )}
+        </div>
+        </div>
       </div>
 
       {/* Full-screen preview modal — context-aware actions per source
@@ -12621,7 +12729,7 @@ function LibraryPreviewModal({
               try { sessionStorage.setItem('ava-open-work', model.slug); } catch { /* opens on the latest */ }
               window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'creative-studio' }));
             }, { primary: true })}
-            {actionBtn(model.tool === 'gimp' ? tt('library.gimp.open_in_gimp', 'Open in GIMP') : tt('library.model.open_in_blender', 'Open in Blender'), () => { (model.tool === 'gimp' ? getSidecar().openWorkInGimp(model.slug) : getSidecar().openModelInBlender(model.slug)).catch(() => {}); }, { primary: true })}
+            {actionBtn(model.tool === 'gimp' ? tt('library.gimp.open_in_gimp', 'Open in GIMP') : tt('library.model.open_in_blender', 'Open in Blender'), () => { (model.tool === 'gimp' ? getSidecar().openWorkInGimp(model.slug) : getSidecar().openModelInBlender(model.slug, model.tool === 'upload' ? 'upload' : 'blender')).catch(() => {}); }, { primary: true })}
             {actionBtn(tt('library.model.open_folder', 'Open folder'), () => { void import('@tauri-apps/plugin-opener').then(({ revealItemInDir }) => revealItemInDir(model.folder)).catch(() => {}); })}
             {model.glbPath && actionBtn(tt('library.model.copy_glb_path', 'Copy .glb path'), () => { void navigator.clipboard.writeText(model.glbPath!).then(() => showToast('Copied the .glb path')).catch(() => showToast('Clipboard unavailable.')); })}
             {model.files?.some((f) => f.endsWith('.fbx')) && actionBtn(tt('library.model.copy_fbx_path', 'Copy .fbx path'), () => { void navigator.clipboard.writeText(`${model.folder}/${model.slug}.fbx`).then(() => showToast('Copied the .fbx path')).catch(() => showToast('Clipboard unavailable.')); })}

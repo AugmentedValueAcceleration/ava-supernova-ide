@@ -5,6 +5,7 @@ import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { tt } from '../lib/i18n';
 import { LazyModelViewer } from './LazyModelViewer';
 import { Select } from './Select';
+import { FolderPicker, PlanChip, useLibraryFolders } from './LibraryFolders';
 
 // ─── The Blender (Headless) room — the IDE's mirror of the extension's ──────
 //
@@ -120,6 +121,8 @@ const ROOMS = {
 } as const;
 
 export function ModelRoom({ tool = 'blender', busy = false, startFresh = false, onActiveModel, onRoster }: { tool?: keyof typeof ROOMS; busy?: boolean; startFresh?: boolean; onActiveModel: (m: IdeModel | null) => void; onRoster?: (names: string[]) => void }) {
+  // The Library folders this piece can be filed into (Phase 3).
+  const { folders: libraryFolders, plans: libraryPlans } = useLibraryFolders();
   const room = ROOMS[tool];
   const [models, setModels] = useState<IdeModel[] | null>(null);
   // A design opened from the Library comes straight to the stage.
@@ -190,7 +193,7 @@ export function ModelRoom({ tool = 'blender', busy = false, startFresh = false, 
   };
   const versionPath = (name: string) => `${active?.folder}/${name}.png`;
   const goBack = (number: number) => {
-    getSidecar().restoreImageStep(active!.slug, number).catch(() => {});
+    (tool === 'gimp' ? getSidecar().restoreImageStep(active!.slug, number) : getSidecar().restoreModelStep(active!.slug, number)).catch(() => {});
     sayToAva(`I've gone back to step ${number}. Carry on from there.`);
   };
   useEffect(() => { if (models) onRoster?.(models.map((m) => m.name)); }, [models, onRoster]);
@@ -360,7 +363,7 @@ export function ModelRoom({ tool = 'blender', busy = false, startFresh = false, 
                 ))}
               </div>
             )}
-            {tool === 'gimp' && !!active.history?.length && (
+            {!!active.history?.length && (
               <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', borderTop: `1px solid ${BORDER}`, padding: '8px 12px' }}>
                 <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.2, color: '#8b8398' }}>{tt('dash.studio.history', 'History')}</span>
                 {active.history.map((s) => (
@@ -393,6 +396,9 @@ export function ModelRoom({ tool = 'blender', busy = false, startFresh = false, 
               <div style={{ flexShrink: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, borderTop: `1px solid ${BORDER}`, padding: '8px 12px' }}>
                 <button style={btn(true)} onClick={() => (tool === 'gimp' ? getSidecar().openWorkInGimp(active.slug) : getSidecar().openModelInBlender(active.slug)).catch(() => {})}>{tt(room.openKey, room.open)}</button>
                 <button style={btn()} onClick={() => revealItemInDir(active.folder).catch(() => {})}>{tt('library.model.open_folder', 'Open folder')}</button>
+                {/* Which Library folders (packs) this piece is in — file it without leaving the room. */}
+                {active.creativeId && <FolderPicker folders={libraryFolders} itemRef={`creative:${active.creativeId}`} />}
+                <PlanChip folders={libraryFolders} plans={libraryPlans} creativeId={active.creativeId} />
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: '#8b8398' }}>
                   {[typeof active.imageCount === 'number' ? `${active.imageCount} image${active.imageCount === 1 ? '' : 's'}` : '',
                     active.references?.length ? tt('dash.studio.art_count', 'Your art: {count}').replace('{count}', String(active.references.length)) : '',

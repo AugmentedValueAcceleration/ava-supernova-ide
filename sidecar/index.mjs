@@ -367,7 +367,7 @@ async function handleAssetForgeGenerate(body) {
         dataUrl = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
       }
     } catch { /* keep the raw url */ }
-    emit({ event: 'asset_forge_result', success: true, dataUrl, rawUrl: gen.url });
+    emit({ event: 'asset_forge_result', success: true, dataUrl, rawUrl: gen.url, model: gen.model });
   } catch (err) {
     emit({ event: 'asset_forge_result', success: false, error: err instanceof Error ? err.message : 'Generation failed' });
   }
@@ -503,7 +503,7 @@ async function handleAssetForgeVoice(body, designRequestId, title) {
         }
       } catch { /* fall back to the raw url */ }
     }
-    emit({ event: 'asset_forge_voice_result', success: true, url: audioUrl });
+    emit({ event: 'asset_forge_voice_result', success: true, url: audioUrl, prompt: body.text, model: data.model });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Voice generation failed';
     emit({ event: 'asset_forge_voice_result', success: false, error: msg });
@@ -566,7 +566,7 @@ async function handleAssetForgeVideo(body, designRequestId, title) {
   }
   try {
     // 1) Submit — DashScope accepts the job and hands back a task id.
-    const { taskId } = await wanSubmit(apiKey, {
+    const { taskId, model: videoModel } = await wanSubmit(apiKey, {
       prompt: body.prompt, duration: body.duration, resolution: body.resolution, aspect: body.aspect,
     });
     // Accepted and queued at Wan. The bar advances on STAGE, never on a guessed
@@ -581,7 +581,7 @@ async function handleAssetForgeVideo(body, designRequestId, title) {
       // the EVENT. The IDE's gallery write is front-end (Tauri fs) so it cannot
       // move down here, but it must not depend on a ref set before the wait.
       gm?.update(jobId, { status: 'downloading', progress: 88 });
-      emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(final.url, 'video/mp4'), prompt: body.prompt, title });
+      emit({ event: 'asset_forge_video_result', success: true, url: await proxyMediaToDataUrl(final.url, 'video/mp4'), prompt: body.prompt, title, model: videoModel });
       gm?.complete(jobId, { url: final.url });
       answer({ ok: true, data: { duration: Number(body.duration) || undefined } });
     } else {
@@ -1411,6 +1411,8 @@ async function emitModels() {
           triangles: entry?.triangles,
           sizeM: entry?.sizeM,
           blenderVersion: entry?.blenderVersion,
+          // Every saved step, with its picture: the same strip as the GIMP room.
+          history: m.history.map((s) => ({ number: s.number, label: s.label, at: s.at, path: s.preview ? join(core.modelsDir(), m.slug, s.preview) : undefined })),
           brief: m.brief ? {
             status: m.brief.status,
             editedByPerson: !!m.brief.editedByPerson,
@@ -1471,14 +1473,15 @@ function watchModels() {
 /** The model folder for a slug — only if it really sits inside the models dir. */
 function modelFolder(slug, tool) {
   if (!slug) return null;
-  const root = resolvePath(tool === 'gimp' ? core.imagesDir() : core.modelsDir());
+  // 'upload': a model they brought in themselves, in creative/uploads/<slug> (core's library-upload).
+  const root = resolvePath(tool === 'gimp' ? core.imagesDir() : tool === 'upload' ? join(creativeRoot(), 'uploads') : core.modelsDir());
   const folder = resolvePath(join(root, slug));
   const sep = process.platform === 'win32' ? '\\' : '/';
   return folder.toLowerCase().startsWith((root + sep).toLowerCase()) ? folder : null;
 }
 
-async function openModelInBlender(slug) {
-  const folder = modelFolder(slug);
+async function openModelInBlender(slug, tool) {
+  const folder = modelFolder(slug, tool === 'upload' ? 'upload' : 'blender');
   const blend = folder && join(folder, `${slug}.blend`);
   if (!blend || !existsSync(blend)) throw new Error('Could not find that model’s Blender file.');
   const blender = await core.findBlender();
@@ -1493,7 +1496,7 @@ async function openModelInBlender(slug) {
 
 async function deleteModel(slug, tool) {
   const folder = modelFolder(slug, tool);
-  const entryId = tool === 'gimp' ? `gimp_${slug}` : `model_${slug}`;
+  const entryId = tool === 'gimp' ? `gimp_${slug}` : tool === 'upload' ? `upload_${slug}` : `model_${slug}`;
   if (!folder) throw new Error('Not a model folder.');
   await rm(folder, { recursive: true, force: true });
   const items = await readCreativeIndex();
@@ -1518,6 +1521,22 @@ async function copyModelToProject(slug, projectRoot, tool) {
   // What an engine or a teammate needs — not the version history or scripts.
   await cp(folder, target, { recursive: true, filter: (p) => !/[\\/](versions|scripts|\.tmp)([\\/]|$)/.test(p.slice(folder.length)) });
   emit({ event: 'model_action_result', ok: true, action: 'copy', relPath: target.slice(projectRoot.length + 1).replace(/\\/g, '/') });
+}
+
+/** Every Library folder, after any change; a refused change carries its reason. */
+async function emitFolders(res) {
+  try {
+    const folders = await core.readFolders();
+    const missing = Object.fromEntries(folders.map((f) => [f.id, core.missingFiles(f)]).filter(([, m]) => m.length));
+    // A GIMP work's finished files, so a folder can hold just some of a set.
+    // The extension has these on its Library cards already; the IDE's cards don't.
+    const work = await core.listImageWork().catch(() => []);
+    const gimpFinals = Object.fromEntries(work.filter((w) => w.finals?.length).map((w) => [`gimp_${w.slug}`, w.finals]));
+    const plans = await core.planStatuses(folders).catch(() => ({}));
+    emit({ event: 'library_folders', folders, missing, gimpFinals, plans, ...(res && res.ok === false ? { error: res.error || 'That did not work.' } : {}) });
+  } catch (err) {
+    emit({ event: 'library_folders', folders: [], missing: {}, error: err?.message || 'Could not read the folders.' });
+  }
 }
 
 async function emitImageWork() {
@@ -4677,7 +4696,7 @@ rl.on('line', async (line) => {
       core.saveModelBriefEdits(String(data.slug || ''), data.fields || {}).finally(emitModels);
       break;
     case 'open_model_in_blender':
-      openModelInBlender(String(data.slug || '')).catch((err) =>
+      openModelInBlender(String(data.slug || ''), data.tool).catch((err) =>
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not open Blender' }));
       break;
     case 'delete_model':
@@ -4758,6 +4777,75 @@ rl.on('line', async (line) => {
     case 'remove_image_final':
       core.removeImageFinal(String(data.slug || ''), String(data.file || '')).finally(emitImageWork);
       break;
+    // ── Library folders (Phase 1 of Library folders and packs). Names that
+    // point at work — files never move. Same store as the extension (core).
+    case 'folders_load':
+      emitFolders();
+      break;
+    case 'folder_create':
+      core.createFolder(String(data.name ?? ''), data.parentId ?? null).then(async (res) => {
+        if (res.ok && Array.isArray(data.add) && data.add.length) await core.addToFolder(res.value.id, data.add);
+        emitFolders(res);
+      }).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'folder_rename':
+      core.renameFolder(String(data.id || ''), String(data.name ?? '')).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'folder_move':
+      core.moveFolder(String(data.id || ''), data.parentId ?? null).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'folder_delete':
+      core.deleteFolder(String(data.id || '')).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'folder_add':
+      core.addToFolder(String(data.id || ''), Array.isArray(data.items) ? data.items : []).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'folder_remove':
+      core.removeFromFolder(String(data.id || ''), Array.isArray(data.refs) ? data.refs.map(String) : []).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    // Pack plans: only their clicks agree, edit or delete one.
+    case 'plan_agree':
+      core.agreePackPlan(String(data.id || '')).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'plan_item':
+      core.editPlanItem(String(data.id || ''), data.itemId ?? null, data.fields ?? null).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'plan_delete':
+      core.deletePackPlan(String(data.id || '')).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'folder_note':
+      core.setFolderNote(String(data.id || ''), String(data.note ?? '')).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    case 'folder_pick':
+      core.setMemberPick(String(data.id || ''), String(data.ref || ''), Array.isArray(data.pick) ? data.pick.map(String) : []).then(emitFolders).catch((err) => emitFolders({ ok: false, error: err?.message }));
+      break;
+    // ── Download a folder as a real folder (Phase 2). The IDE picks the place
+    // in its own dialog and sends it here.
+    case 'folder_export_preview':
+      core.previewFolderExport(String(data.id || '')).then((summary) => emit({ event: 'folder_export_preview', id: data.id, summary, stores: core.STORE_PROFILES }))
+        .catch(() => emit({ event: 'folder_export_preview', id: data.id, summary: null }));
+      break;
+    case 'folder_export':
+      core.exportFolder(String(data.id || ''), String(data.dest || ''), {
+        zip: !!data.zip,
+        record: data.record !== false,
+        store: data.store || undefined,
+        onProgress: (done, total, label) => emit({ event: 'folder_export_progress', id: data.id, done, total, label }),
+      }).then((res) => emit({ event: 'folder_export_result', id: data.id, ...res }))
+        .catch((err) => emit({ event: 'folder_export_result', id: data.id, ok: false, warnings: [], error: err?.message || 'The download failed.' }));
+      break;
+    case 'library_upload': {
+      // Their own files, picked in the IDE's own dialog: copied into the Library.
+      const paths = Array.isArray(data.paths) ? data.paths.map(String) : [];
+      core.uploadToLibrary(paths).then(async (results) => {
+        const added = results.filter((r) => r.ok && r.id).map((r) => ({ ref: `creative:${r.id}` }));
+        if (data.folderId && added.length) await core.addToFolder(String(data.folderId), added);
+        emit({ event: 'creative_changed' });
+        emitFolders();
+        emit({ event: 'library_upload_result', results: results.map((r) => ({ name: r.source.split(/[\\/]/).pop(), ok: r.ok, error: r.error })) });
+      }).catch((err) => emit({ event: 'library_upload_result', results: [{ name: '', ok: false, error: err?.message || 'Upload failed' }] }));
+      break;
+    }
     case 'image_version': {
       const slug = String(data.slug || '');
       const name = String(data.name || '');
@@ -4767,6 +4855,12 @@ rl.on('line', async (line) => {
       done.finally(() => { emitImageWork(); emit({ event: 'creative_changed' }); });
       break;
     }
+    case 'restore_model_step':
+      core.restoreModelStep(String(data.slug || ''), Number(data.number))
+        .then((step) => (step ? core.touchLibraryEntry(String(data.slug || '')) : null))
+        .catch(() => null)
+        .finally(() => { emitModels(); emit({ event: 'creative_changed' }); });
+      break;
     case 'restore_image_step':
       core.restoreImageStep(String(data.slug || ''), Number(data.number)).finally(() => { emitImageWork(); emit({ event: 'creative_changed' }); });
       break;
