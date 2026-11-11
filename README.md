@@ -2,7 +2,7 @@
 
 **The standalone AI-native development environment — Ava with her own home, and her own hands.**
 
-A desktop application built with **Tauri v2** (Rust), **React 19**, and a **Node.js engine** running `@ava/core` locally. The full agent — 80+ tools, 7 modes, 24 specialist personas, 5-layer memory — with no browser and no VS Code required. And because it owns its whole stack, the IDE does the one thing the extension can't: **drive your entire machine.**
+A desktop application built with **Tauri v2** (Rust), **React 19**, and a **Node.js engine** running `@ava/core` locally. The full agent — 100+ tools, 7 modes, 24 specialist personas, 5-layer memory — with no browser and no VS Code required. And because it owns its whole stack, the IDE does the one thing the extension can't: **drive your entire machine.**
 
 > **Coming Q4 2026.** Free and open source. Your keys. Your machine. Your work.
 >
@@ -41,9 +41,9 @@ Ten focused areas in the sidebar, each with its own sub-pages:
 | **Command Centre** | Your daily overview — weather, news, tasks, journal, learning, memory, session stats, latest release |
 | **Chat** | Talk, build, create — the full agent, all 7 modes, fleet + model pickers |
 | **Planner** | Tasks, journal, learning |
-| **Library** | Courses, generated assets, documents |
+| **Library** | Courses, generated assets, documents — with folders, packs planned with Ava, and downloads ready for your game engine or a store |
 | **Health & Nutrition** | Exercise and recipe catalogues, ready-made plans you place session by session, your plan calendar and past plans, your profile, and Ava herself |
-| **Creative Studio** | Logos, icons, images, video and voiceovers — images, video and voice on your own Qwen key; logos, icons and background removal on your machine, free |
+| **Creative Studio** | Logos, icons, images, video and voiceovers, plus 2D work made in GIMP and 3D models built in Blender on your machine (brief first, every step saved), and brand kits linked to your projects — images, video and voice on your own Qwen key; logos, icons, GIMP, Blender and background removal on your machine, free |
 | **Memory** | Patterns, preferences, decisions |
 | **History** | Tokens, sessions, models |
 | **Settings** | Keys, preferences, personalisation |
@@ -58,7 +58,7 @@ Same engine as the CLI and the VS Code extension — so everything you learn in 
 - **7 modes** — Code (`>>`), Plan (`::`), Chat (`..`), Teach (`??`), Security (`!!`), Brainstorm (`**`), Write (`<<`).
 - **24 specialist personas** — complex tasks activate an internal team (Scout → Architect → Verifier → Sequencer → Challenger → Builder for code); simple tasks go direct.
 - **Three fleets** — **Maestro** (Qwen — Qwen 3.8 Flash coordinates, Qwen 3.7 Plus builds; needs a Qwen key), **Supernova** (DeepSeek V4.1 Flash coordinates and builds, Qwen 3.8 Flash handles images; needs DeepSeek + Qwen keys) and **Aurora** (every model from Mistral, a European lab — Large 4 coordinates and builds, Small 4 handles chat; needs a Mistral key). Or pick any single model your keys reach.
-- **80+ tools**, including the IDE-only desktop- and browser-automation tools described above.
+- **100+ tools**, including the IDE-only desktop- and browser-automation tools described above.
 - **Knowledge packs** — toggle domain expertise on/off in the chat bar; the system prompt rebuilds live, no restart.
 - **20 languages, live** — the whole interface translates, not just the chat, and switches the moment you change language — no restart, and Ava's replies follow too. Pick your language right from the welcome flow. Dates format the way your language writes them.
 - **5-layer memory** — local-first, curated by a dedicated Memory Agent so context stays lean.

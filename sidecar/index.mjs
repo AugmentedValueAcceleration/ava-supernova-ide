@@ -1510,17 +1510,14 @@ async function copyModelToProject(slug, projectRoot, tool) {
   const folder = modelFolder(slug, tool);
   if (!folder) throw new Error('Not a model folder.');
   if (!projectRoot) throw new Error('Open a project folder first — there’s nowhere to copy the model to.');
-  let dest = null;
-  for (const c of ['public', join('src', 'assets'), 'assets', 'static', 'images']) {
-    if (existsSync(join(projectRoot, c))) { dest = join(projectRoot, c); break; }
-  }
-  if (!dest) { dest = join(projectRoot, 'images'); mkdirSync(dest, { recursive: true }); }
-  let name = slug; let n = 2;
-  while (existsSync(join(dest, name))) name = `${slug}-${n++}`;
-  const target = join(dest, name);
-  // What an engine or a teammate needs — not the version history or scripts.
-  await cp(folder, target, { recursive: true, filter: (p) => !/[\\/](versions|scripts|\.tmp)([\\/]|$)/.test(p.slice(folder.length)) });
-  emit({ event: 'model_action_result', ok: true, action: 'copy', relPath: target.slice(projectRoot.length + 1).replace(/\\/g, '/') });
+  // Core copies FINISHED files only, made the way a folder download makes
+  // them, into the place the project's engine looks — the same code as the
+  // extension. Never Ava's briefs, scripts, history or tests.
+  const entryId = tool === 'gimp' ? `gimp_${slug}` : tool === 'upload' ? `upload_${slug}` : `model_${slug}`;
+  const item = (await readCreativeIndex()).find((i) => i.id === entryId);
+  const r = await core.copyWorkToProject({ id: entryId, kind: tool === 'gimp' ? 'gimp' : 'model', title: item?.title ?? slug, absoluteFolder: folder }, projectRoot);
+  if (!r.ok) throw new Error(r.error || 'Nothing could be copied.');
+  emit({ event: 'model_action_result', ok: true, action: 'copy', relPath: r.relPath, warnings: r.warnings.map((w) => w.message) });
 }
 
 /** Every Library folder, after any change; a refused change carries its reason. */
@@ -4822,7 +4819,7 @@ rl.on('line', async (line) => {
     // ── Download a folder as a real folder (Phase 2). The IDE picks the place
     // in its own dialog and sends it here.
     case 'folder_export_preview':
-      core.previewFolderExport(String(data.id || '')).then((summary) => emit({ event: 'folder_export_preview', id: data.id, summary, stores: core.STORE_PROFILES }))
+      core.previewFolderExport(String(data.id || '')).then((summary) => emit({ event: 'folder_export_preview', id: data.id, summary, stores: core.STORE_PROFILES, trademark: core.STORE_TRADEMARK_NOTICE }))
         .catch(() => emit({ event: 'folder_export_preview', id: data.id, summary: null }));
       break;
     case 'folder_export':
@@ -4842,7 +4839,7 @@ rl.on('line', async (line) => {
         if (data.folderId && added.length) await core.addToFolder(String(data.folderId), added);
         emit({ event: 'creative_changed' });
         emitFolders();
-        emit({ event: 'library_upload_result', results: results.map((r) => ({ name: r.source.split(/[\\/]/).pop(), ok: r.ok, error: r.error })) });
+        emit({ event: 'library_upload_result', results: results.map((r) => ({ name: r.source.split(/[\\/]/).pop(), ok: r.ok, error: r.error, note: r.note })) });
       }).catch((err) => emit({ event: 'library_upload_result', results: [{ name: '', ok: false, error: err?.message || 'Upload failed' }] }));
       break;
     }

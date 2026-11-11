@@ -12740,9 +12740,10 @@ function LibraryPreviewModal({
               const onResult = (e: SidecarEvent) => {
                 if (e.event !== 'model_action_result') return;
                 sc.offAny(onResult);
-                const r = e as unknown as { ok: boolean; relPath?: string; error?: string };
+                const r = e as unknown as { ok: boolean; relPath?: string; error?: string; warnings?: string[] };
                 setBusy(null);
-                if (r.ok && r.relPath) { void navigator.clipboard.writeText(r.relPath).catch(() => {}); showToast(`Copied to ${r.relPath} — path on your clipboard`); }
+                // A warning (no Blender, so no .fbx) is said, not hidden.
+                if (r.ok && r.relPath) { void navigator.clipboard.writeText(r.relPath).catch(() => {}); showToast(`Copied to ${r.relPath} — path on your clipboard${r.warnings?.length ? `. ${r.warnings.join(' ')}` : ''}`); }
                 else showToast(r.error ?? 'Copy failed.');
               };
               sc.onAny(onResult);

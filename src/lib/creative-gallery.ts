@@ -223,9 +223,17 @@ export async function copyCreativeToProject(
     try { await stat(p); return true; } catch { return false; }
   };
 
-  const PREFERRED = ['public', 'src/assets', 'assets', 'static', 'images'];
+  // A game engine's own folder first (the same rules as core's
+  // projectAssetDir, which models and GIMP work use): Unity Assets/, Unreal
+  // Content/ (every Unreal project has Config/DefaultEngine.ini), Godot assets/.
   let destDir: string | null = null;
-  for (const candidate of PREFERRED) {
+  if (await isTaken(`${projectRoot}/ProjectSettings/ProjectVersion.txt`) && await isDir(`${projectRoot}/Assets`)) destDir = `${projectRoot}/Assets`;
+  else if (await isTaken(`${projectRoot}/Config/DefaultEngine.ini`)) destDir = `${projectRoot}/Content`;
+  else if (await isTaken(`${projectRoot}/project.godot`)) destDir = `${projectRoot}/assets`;
+  if (destDir) await mkdir(destDir, { recursive: true }).catch(() => {});
+
+  const PREFERRED = ['public', 'src/assets', 'assets', 'static', 'images'];
+  for (const candidate of destDir ? [] : PREFERRED) {
     const abs = `${projectRoot}/${candidate}`;
     if (await isDir(abs)) { destDir = abs; break; }
   }
