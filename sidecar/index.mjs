@@ -4722,8 +4722,8 @@ rl.on('line', async (line) => {
           }
           const facts = await core.fetchSafetyFacts({ recipes, exercises, level });
           const unknown = (slug) => ({ slug, verdict: 'warn', reasons: ['not found in the library, so not checked against your rules'], unverified: [] });
-          for (const slug of recipes) results[slug] = facts.recipes[slug] ? core.checkRecipe(facts.recipes[slug], profile) : unknown(slug);
-          for (const slug of exercises) results[slug] = facts.exercises[slug] ? core.checkExercise(facts.exercises[slug], profile) : unknown(slug);
+          for (const slug of recipes) results[slug] = facts.recipes[slug] ? core.checkRecipeSafety(facts.recipes[slug], profile) : unknown(slug);
+          for (const slug of exercises) results[slug] = facts.exercises[slug] ? core.checkExerciseSafety(facts.exercises[slug], profile) : unknown(slug);
           emit({ event: 'health_safety_result', results, checked: true, rules: true });
         } catch {
           emit({ event: 'health_safety_result', results: {}, checked: false, rules: true });
