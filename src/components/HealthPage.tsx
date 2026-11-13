@@ -13,16 +13,8 @@ import {
   type HealthExerciseDetail,
   type HealthRecipeSummary,
   type HealthRecipeDetail,
-  type HealthRecipeSkillLevel,
-  type HealthExerciseType,
   type HealthWorkoutType,
-  loadMySubmissions,
-  clearRejectedSubmissions,
-  type HealthMySubmissions,
-  type HealthSubmissionStatus,
   loadTaxonomies,
-  submitExercise,
-  submitRecipe,
   type HealthTaxonomies,
 } from '../lib/health-catalog';
 import {
@@ -33,11 +25,12 @@ import {
   type HealthProfile,
   type GeneralProfile,
 } from '../lib/health-store';
-import { t, useLocale, getLocale } from '../lib/i18n';
+import { t, tt, useLocale } from '../lib/i18n';
 import { CookingTimeGrid, type CookTime } from './CookingTimeGrid';
 import { ContentRating } from './ContentRating';
 import { UserAvatarPanel } from './UserAvatarPanel';
 import HealthPlansPage from './HealthPlansPage';
+import { ShoppingTab } from './ShoppingTab';
 import { StarterShelf } from './StarterShelf';
 import { StarterDetailBody } from './StartersSheet';
 import { planFromCurated, type CuratedPlanDetail } from '@ava/core/health/starters';
@@ -57,7 +50,7 @@ import { todayLocal } from '@ava/core/dates';
 
 // Same five as the extension, in the same order. A shared room that opens on
 // a different tab depending on which app you launched is one room in name only.
-type HealthTab = 'plans' | 'starters' | 'exercises' | 'recipes' | 'profile' | 'ava';
+type HealthTab = 'plans' | 'shopping' | 'starters' | 'exercises' | 'recipes' | 'profile' | 'ava';
 
 // Set when something elsewhere (the main-chat → Health room handoff) wants the
 // page to open on the Ava room tab. Read on mount; the live event covers the
@@ -98,7 +91,8 @@ export function HealthPage() {
   // nobody clicked a tab there, so there is nothing to acknowledge.
   const { current: tab, pending: tabPending, switchTo: setTabUser, setNow: setTab } =
     useTabTransition<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'plans');
-  const [contributeOpen, setContributeOpen] = useState(false);
+  /** The day view's "Shopping list" opens the Shopping tab (13 Nov 2026). */
+  const [shoppingPlanId, setShoppingPlanId] = useState<string | null>(null);
   /** A card opened from the Ready-made tab, shown as its full week. */
   const [starterOpenId, setStarterOpenId] = useState<string | null>(null);
   const [starterDetail, setStarterDetail] = useState<CuratedPlanDetail | null>(null);
@@ -150,20 +144,10 @@ export function HealthPage() {
             {t('health.browse.subtitle')}
           </p>
         </div>
-        <div style={{ position: 'absolute', top: 20, right: 32 }}>
-          <button
-            onClick={() => setContributeOpen(true)}
-            style={{
-              padding: '6px 14px', fontSize: 12, fontWeight: 500, borderRadius: 6,
-              background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-              color: '#c084fc',
-              border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
-              cursor: 'pointer',
-            }}
-          >{t('health.browse.contribute')}</button>
-        </div>
+        {/* Contribute removed 11 Nov 2026 (no accounts: not something we offer). */}
         <div style={{ display: 'flex', gap: 2 }}>
           <button onClick={() => setTabUser('plans')} style={tabBtnStyle(tab === 'plans')}>{t('health.browse.tab.plans')}{tabPending === 'plans' && <TabSpinner />}</button>
+          <button onClick={() => setTabUser('shopping')} style={tabBtnStyle(tab === 'shopping')}>{tt('health.browse.tab.shopping', 'Shopping')}{tabPending === 'shopping' && <TabSpinner />}</button>
           <button onClick={() => setTabUser('starters')} style={tabBtnStyle(tab === 'starters')}>{t('health.browse.tab.starters')}{tabPending === 'starters' && <TabSpinner />}</button>
           <button onClick={() => setTabUser('exercises')} style={tabBtnStyle(tab === 'exercises')}>{t('health.browse.tab.exercises')}{tabPending === 'exercises' && <TabSpinner />}</button>
           <button onClick={() => setTabUser('recipes')} style={tabBtnStyle(tab === 'recipes')}>{t('health.browse.tab.recipes')}{tabPending === 'recipes' && <TabSpinner />}</button>
@@ -174,8 +158,7 @@ export function HealthPage() {
 
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {/* Non-Ava tabs — padded scroll area. */}
-        <div style={{ height: '100%', overflowY: 'auto', padding: '20px 32px', display: tab === 'ava' ? 'none' : 'block' }}>
-          {contributeOpen && <ContributeModal onClose={() => setContributeOpen(false)} />}
+        <div style={{ height: '100%', overflowY: 'auto', padding: tab === 'shopping' ? 0 : '20px 32px', display: tab === 'ava' ? 'none' : 'block' }}>
           {/* Ready-made plans: their own tab, so they are a thing people know
               exists rather than something found by pressing "New plan". */}
           {tab === 'starters' && (
@@ -212,7 +195,8 @@ export function HealthPage() {
               <StarterShelf profile={starterProfile} onOpen={setStarterOpenId} />
             )
           )}
-          {tab === 'plans' && <HealthPlansPage />}
+          {tab === 'plans' && <HealthPlansPage onOpenShopping={(planId) => { setShoppingPlanId(planId); setTab('shopping'); }} />}
+          {tab === 'shopping' && <ShoppingTab initialPlanId={shoppingPlanId} />}
           {tab === 'exercises' && <ExercisesGrid />}
           {tab === 'recipes' && <RecipesGrid />}
           {tab === 'profile' && <ProfileTab />}
@@ -852,54 +836,6 @@ function Pagination({ total, offset, loading, onPage }: {
   );
 }
 
-// ── Detail modals ─────────────────────────────────────────────────────────
-
-function ModalShell({ onClose, children, fillHeight }: { onClose: () => void; children: React.ReactNode; fillHeight?: boolean }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        background: 'rgba(0, 0, 0, 0.6)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          position: 'relative', width: '100%', maxWidth: 640,
-          background: 'linear-gradient(160deg, #0f0f17, #1a1625)',
-          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', borderRadius: 16,
-          // fillHeight: a consistent modal size (so detail overlays don't
-          // resize per tab) with the body flexing + scrolling inside. Otherwise
-          // the modal grows to fit its content up to 85vh.
-          ...(fillHeight
-            ? { height: 'min(760px, 86vh)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
-            : { maxHeight: '85vh', overflowY: 'auto' }),
-        }}
-      >
-        <button
-          onClick={onClose}
-          aria-label={t('health.browse.close')}
-          style={{
-            position: 'absolute', top: 12, right: 12, zIndex: 1,
-            width: 30, height: 30, borderRadius: '50%', cursor: 'pointer',
-            border: 'none', background: 'rgba(0, 0, 0, 0.4)', color: '#cdd6f4', fontSize: 16, lineHeight: 1,
-          }}
-        >×</button>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 /** Full-page detail view inside the Health tab — a back bar over the detail
  *  body (which owns its own scroll). Replaces the old modal overlay for a
  *  page-style UX (navigate in, "← Back"); Esc also goes back. */
@@ -1174,130 +1110,6 @@ function RecipeDetailView({ slug, onBack }: { slug: string; onBack: () => void }
           ? <DetailCentered>{t('health.browse.couldnt_load_recipe')}</DetailCentered>
           : <RecipeDetailBody r={detail} />}
     </DetailPageView>
-  );
-}
-
-// ── My submissions tab ────────────────────────────────────────────────────
-
-const STATUS_STYLE: Record<HealthSubmissionStatus, { fg: string; labelKey: string }> = {
-  pending: { fg: '#fbbf24', labelKey: 'health.mysubs.status.pending' },
-  rejected: { fg: '#f38ba8', labelKey: 'health.mysubs.status.rejected' },
-  published: { fg: '#34d399', labelKey: 'health.mysubs.status.published' },
-};
-
-function StatusBadge({ status }: { status: HealthSubmissionStatus }) {
-  const s = STATUS_STYLE[status];
-  return (
-    <span style={{
-      fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1,
-      padding: '2px 8px', borderRadius: 999,
-      color: s.fg, background: `${s.fg}1f`, border: `1px solid ${s.fg}55`,
-    }}>
-      {t(s.labelKey)}
-    </span>
-  );
-}
-
-interface SubmissionRowData {
-  key: string;
-  name: string;
-  kind: string;
-  status: HealthSubmissionStatus;
-  at: string | null;
-  notes: string | null;
-}
-
-function SubmissionRow({ row }: { row: SubmissionRowData }) {
-  return (
-    <div style={{
-      ...cardStyle, padding: 14,
-      display: 'flex', flexDirection: 'column', gap: 6,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6c7086' }}>{row.kind}</span>
-        <span style={{ fontSize: 13, color: '#cdd6f4', flex: 1, minWidth: 0 }}>{row.name}</span>
-        <StatusBadge status={row.status} />
-      </div>
-      <div style={{ fontSize: 10, color: '#6c7086' }}>
-        {row.at
-          ? t('health.mysubs.submitted', { date: new Date(row.at).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) })
-          : t('health.mysubs.submitted_no_date')}
-      </div>
-      {row.status === 'rejected' && row.notes && (
-        <div style={{
-          fontSize: 11, color: '#9b8caa', lineHeight: 1.5,
-          borderLeft: '2px solid rgba(243,139,168,0.4)', paddingLeft: 8, marginTop: 2,
-        }}>
-          {row.notes}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The caller's own submissions — pending / rejected / published —
- *  with a "clear rejected" action. Reads through the submission data
- *  layer; the submit modal that creates these lands in 2e-3. */
-export function MySubmissionsTab() {
-  const [data, setData] = useState<HealthMySubmissions | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [clearing, setClearing] = useState(false);
-
-  const reload = useCallback(() => {
-    setLoading(true);
-    loadMySubmissions()
-      .then(setData)
-      .catch(() => setData({ exercises: [], recipes: [] }))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { reload(); }, [reload]);
-
-  const clearRejected = useCallback(async () => {
-    setClearing(true);
-    try {
-      await clearRejectedSubmissions();
-      reload();
-    } catch {
-      /* non-fatal — the list just stays as-is */
-    } finally {
-      setClearing(false);
-    }
-  }, [reload]);
-
-  if (loading) return <CenterNote>{t('health.mysubs.loading')}</CenterNote>;
-
-  const d = data ?? { exercises: [], recipes: [] };
-  const rows: SubmissionRowData[] = [
-    ...d.exercises.map(e => ({ key: `e-${e.id}`, name: e.name, kind: t('health.submit.kind.exercise'), status: e.status, at: e.submitted_at, notes: e.review_notes })),
-    ...d.recipes.map(r => ({ key: `r-${r.id}`, name: r.name, kind: t('health.submit.kind.recipe'), status: r.status, at: r.submitted_at, notes: r.review_notes })),
-  ];
-
-  if (rows.length === 0) {
-    return <CenterNote>{t('health.mysubs.empty_use_contribute')}</CenterNote>;
-  }
-
-  const hasRejected = rows.some(r => r.status === 'rejected');
-
-  return (
-    <div style={{ maxWidth: 620, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {hasRejected && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            onClick={clearRejected}
-            disabled={clearing}
-            style={{
-              padding: '5px 12px', fontSize: 11, cursor: clearing ? 'wait' : 'pointer',
-              borderRadius: 6, background: 'transparent', color: '#f38ba8',
-              border: '1px solid rgba(243,139,168,0.3)',
-            }}
-          >
-            {clearing ? t('health.mysubs.clearing') : t('health.mysubs.clear_rejected_short')}
-          </button>
-        </div>
-      )}
-      {rows.map(row => <SubmissionRow key={row.key} row={row} />)}
-    </div>
   );
 }
 
@@ -1851,6 +1663,12 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
   const v = r.versions.find(vv => vv.level === level) || r.versions[0];
   const st = r.storage;
   const nut = v?.nutrition ?? null;
+  // Sauces, marinades and condiments go INTO something — no "serves", and
+  // their figures are per 100 g / per tablespoon. One without that basis
+  // still carries an old per-serving guess, so it is not shown.
+  const isTopping = r.course === 'sauce' || r.course === 'condiment';
+  const showNut = !!nut && (!isTopping || !!nut.per);
+  const nutPer = nut?.per === '100g' ? t('health.browse.per_100g_est') : nut?.per === 'tbsp' ? t('health.browse.per_tbsp_est') : t('health.browse.per_serving_est');
   const cuisineLine = (r.cuisines && r.cuisines.length ? r.cuisines.join(' · ') : r.cuisine_name) || '';
   const shared = r.ingredients.filter(ing => !ing.level);
   const own = r.ingredients.filter(ing => ing.level && ing.level === level);
@@ -1900,7 +1718,7 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
               {v.prep_time_minutes != null && <span>{t('health.browse.prep')} <strong style={{ color: '#cdd6f4' }}>{v.prep_time_minutes}m</strong></span>}
               {v.cook_time_minutes != null && <span>{t('health.browse.cook')} <strong style={{ color: '#cdd6f4' }}>{v.cook_time_minutes}m</strong></span>}
               {v.total_time_minutes != null && <span>{t('health.browse.total')} <strong style={{ color: '#cdd6f4' }}>{v.total_time_minutes}m</strong></span>}
-              {v.default_servings != null && <span>{t('health.browse.serves')} <strong style={{ color: '#cdd6f4' }}>{v.default_servings}</strong></span>}
+              {v.default_servings != null && !isTopping && <span>{t('health.browse.serves')} <strong style={{ color: '#cdd6f4' }}>{v.default_servings}</strong></span>}
               {st?.keeps_fridge_days != null && <span>{t('health.storage.fridge')} <strong style={{ color: '#cdd6f4' }}>{st.keeps_fridge_days}d</strong></span>}
               {st?.keeps_freezer_months != null && <span>{t('health.storage.freezer')} <strong style={{ color: '#cdd6f4' }}>{st.keeps_freezer_months}mo</strong></span>}
             </div>
@@ -1964,9 +1782,9 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
             </div>
           )}
 
-          {nut && Object.keys(nut).length > 0 && (
+          {showNut && nut && Object.keys(nut).length > 0 && (
             <div>
-              {sectionLabel(t('health.browse.nutrition') + ' · ' + t('health.browse.per_serving_est'))}
+              {sectionLabel(t('health.browse.nutrition') + ' · ' + nutPer)}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 12, color: '#9b8caa' }}>
                 {NUTRITION_DISPLAY.map(([k, label]) => typeof nut[k] === 'number' && (
                   <span key={k}>{label} <strong style={{ color: '#cdd6f4' }}>{nut[k]}</strong></span>
@@ -1983,409 +1801,6 @@ export function RecipeDetailBody({ r }: { r: HealthRecipeDetail }) {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Contribute modal ──────────────────────────────────────────────────────
-
-const primaryBtn: React.CSSProperties = {
-  padding: '7px 16px', fontSize: 12, fontWeight: 600, borderRadius: 8,
-  background: 'color-mix(in srgb, var(--accent) 20%, transparent)', color: '#c084fc',
-  border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', cursor: 'pointer',
-};
-
-const ghostBtn: React.CSSProperties = {
-  padding: '4px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
-  background: 'transparent', color: '#9b8caa', border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
-};
-
-const EXERCISE_TYPES: HealthExerciseType[] = [
-  'compound', 'isolation', 'bodyweight', 'plyometric',
-  'mobility', 'cardio', 'isometric', 'stretching', 'breathing',
-];
-
-export function ContributeModal({ onClose }: { onClose: () => void }) {
-  const [kind, setKind] = useState<'exercise' | 'recipe'>('exercise');
-  const [taxonomies, setTaxonomies] = useState<HealthTaxonomies | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    loadTaxonomies().then(t => { if (live) setTaxonomies(t); }).catch(() => { /* pickers degrade gracefully */ });
-    return () => { live = false; };
-  }, []);
-
-  const kindBtn = (k: 'exercise' | 'recipe', label: string) => (
-    <button onClick={() => setKind(k)} style={{
-      flex: 1, padding: '8px 0', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: 8,
-      background: kind === k ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
-      color: kind === k ? '#c084fc' : '#6c7086',
-      border: `1px solid ${kind === k ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
-    }}>{label}</button>
-  );
-
-  return (
-    <ModalShell onClose={onClose}>
-      <div style={{ padding: '28px 28px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div>
-          <h2 style={{ fontSize: 19, fontWeight: 300, color: '#cdd6f4', margin: 0 }}>{t('health.submit.contribute_short')}</h2>
-          <p style={{ fontSize: 12, color: '#9b8caa', margin: '4px 0 0' }}>
-            {t('health.submit.contribute_short_blurb')}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {kindBtn('exercise', t('health.submit.kind.exercise'))}
-          {kindBtn('recipe', t('health.submit.kind.recipe'))}
-        </div>
-        {kind === 'exercise'
-          ? <ExerciseSubmissionForm taxonomies={taxonomies} onDone={onClose} />
-          : <RecipeSubmissionForm taxonomies={taxonomies} onDone={onClose} />}
-      </div>
-    </ModalShell>
-  );
-}
-
-function ExerciseSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxonomies | null; onDone: () => void }) {
-  const [name, setName] = useState('');
-  const [exerciseType, setExerciseType] = useState<HealthExerciseType>('compound');
-  const [workoutType, setWorkoutType] = useState<HealthWorkoutType>('strength');
-  const [difficulty, setDifficulty] = useState(3);
-  const [description, setDescription] = useState('');
-  const [beginnerDetail, setBeginnerDetail] = useState('');
-  const [advancedDetail, setAdvancedDetail] = useState('');
-  const [commonMistakes, setCommonMistakes] = useState('');
-  const [steps, setSteps] = useState<string[]>(['']);
-  const [contraindications, setContraindications] = useState<string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
-
-  const canSubmit = name.trim().length > 0 && !submitting;
-
-  const submit = async () => {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    setResult(null);
-    try {
-      const row = await submitExercise({
-        name: name.trim(),
-        exercise_type: exerciseType,
-        workout_type: workoutType,
-        difficulty,
-        description: description.trim() || null,
-        beginner_detail: beginnerDetail.trim() || null,
-        advanced_detail: advancedDetail.trim() || null,
-        common_mistakes: commonMistakes.trim() || null,
-        steps: steps.map(s => s.trim()).filter(Boolean),
-        contraindication_slugs: contraindications,
-      });
-      setResult({
-        ok: true,
-        msg: row.status === 'published' ? t('health.submit.published_thanks') : t('health.submit.submitted_thanks'),
-      });
-    } catch (e) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : t('health.submit.submission_failed') });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (result?.ok) {
-    return (
-      <div>
-        <CenterNote>{result.msg}</CenterNote>
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <button onClick={onDone} style={primaryBtn}>{t('health.submit.done')}</button>
-        </div>
-      </div>
-    );
-  }
-
-  const area: React.CSSProperties = { ...fieldInputStyle, resize: 'vertical' };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Field label={t('health.submit.name')}>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder={t('health.submit.ex_name_ph')} style={fieldInputStyle} />
-      </Field>
-      <FieldRow>
-        <Field label={t('health.submit.exercise_type')}>
-          <select value={exerciseType} onChange={e => setExerciseType(e.target.value as HealthExerciseType)} style={fieldInputStyle}>
-            {EXERCISE_TYPES.map(et => <option key={et} value={et}>{t(`health.submit.ex_type.${et}`)}</option>)}
-          </select>
-        </Field>
-        <Field label={t('health.submit.workout_type')}>
-          <select value={workoutType} onChange={e => setWorkoutType(e.target.value as HealthWorkoutType)} style={fieldInputStyle}>
-            {WORKOUT_TYPES.map(w => <option key={w} value={w}>{t(`health.submit.wk_type.${w}`)}</option>)}
-          </select>
-        </Field>
-        <Field label={t('health.submit.difficulty_1_5')}>
-          <select value={difficulty} onChange={e => setDifficulty(Number(e.target.value))} style={fieldInputStyle}>
-            {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </Field>
-      </FieldRow>
-      <Field label={t('health.submit.description')}>
-        <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} style={area} />
-      </Field>
-      <Field label={t('health.submit.how_to_do_it_steps')}>
-        <StepsEditor steps={steps} onChange={setSteps} />
-      </Field>
-      <Field label={t('health.submit.ex_beginner_label_short')}>
-        <textarea value={beginnerDetail} onChange={e => setBeginnerDetail(e.target.value)} rows={2} style={area} />
-      </Field>
-      <Field label={t('health.submit.ex_advanced_label_short')}>
-        <textarea value={advancedDetail} onChange={e => setAdvancedDetail(e.target.value)} rows={2} style={area} />
-      </Field>
-      <Field label={t('health.submit.ex_mistakes_label_short')}>
-        <textarea value={commonMistakes} onChange={e => setCommonMistakes(e.target.value)} rows={2} style={area} />
-      </Field>
-      {taxonomies && taxonomies.contraindications.length > 0 && (
-        <Field label={t('health.submit.contraindications_label')}>
-          <ChipSelect
-            options={taxonomies.contraindications.map(c => ({ slug: c.slug, name: c.name }))}
-            selected={contraindications}
-            onChange={setContraindications}
-          />
-        </Field>
-      )}
-      {result && !result.ok && (
-        <div style={{ fontSize: 12, color: '#f38ba8' }}>{result.msg}</div>
-      )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button
-          onClick={submit}
-          disabled={!canSubmit}
-          style={{ ...primaryBtn, opacity: canSubmit ? 1 : 0.4, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
-        >
-          {submitting ? t('health.submit.submitting') : t('health.submit.submit_for_review')}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** A string[] list editor — numbered rows with add / remove. */
-function StepsEditor({ steps, onChange }: { steps: string[]; onChange: (next: string[]) => void }) {
-  const set = (i: number, v: string) => onChange(steps.map((s, idx) => (idx === i ? v : s)));
-  const add = () => onChange([...steps, '']);
-  const remove = (i: number) => onChange(steps.length > 1 ? steps.filter((_, idx) => idx !== i) : ['']);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {steps.map((s, i) => (
-        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: '#6c7086', width: 16, textAlign: 'right' }}>{i + 1}</span>
-          <input value={s} onChange={e => set(i, e.target.value)} placeholder={t('health.submit.step_n_placeholder', { n: i + 1 })} style={{ ...fieldInputStyle, flex: 1 }} />
-          <button onClick={() => remove(i)} aria-label={t('health.submit.remove_step')} style={{ width: 26, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer', fontSize: 15 }}>×</button>
-        </div>
-      ))}
-      <button onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>{t('health.submit.add_step')}</button>
-    </div>
-  );
-}
-
-/** Multi-select chip group over a slug/name option list. */
-function ChipSelect({ options, selected, onChange }: {
-  options: Array<{ slug: string; name: string }>;
-  selected: string[];
-  onChange: (next: string[]) => void;
-}) {
-  const toggle = (slug: string) =>
-    onChange(selected.includes(slug) ? selected.filter(s => s !== slug) : [...selected, slug]);
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {options.map(o => {
-        const on = selected.includes(o.slug);
-        return (
-          <button key={o.slug} onClick={() => toggle(o.slug)} style={{
-            padding: '3px 9px', fontSize: 10, cursor: 'pointer', borderRadius: 999,
-            background: on ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
-            color: on ? '#c084fc' : '#6c7086',
-            border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)'}`,
-          }}>{o.name}</button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Recipe submission form ────────────────────────────────────────────────
-
-interface IngredientDraft {
-  name: string;
-  quantity: string;
-  unit: string;
-  optional: boolean;
-}
-
-const emptyIngredient = (): IngredientDraft => ({ name: '', quantity: '', unit: '', optional: false });
-
-function RecipeSubmissionForm({ taxonomies, onDone }: { taxonomies: HealthTaxonomies | null; onDone: () => void }) {
-  const [name, setName] = useState('');
-  const [cuisineSlug, setCuisineSlug] = useState('');
-  const [course, setCourse] = useState('');
-  const [originCountry, setOriginCountry] = useState('');
-  const [overview, setOverview] = useState('');
-  const [ingredients, setIngredients] = useState<IngredientDraft[]>([emptyIngredient()]);
-  const [allergens, setAllergens] = useState<string[]>([]);
-  const [method, setMethod] = useState<string[]>(['']);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
-
-  const canSubmit = name.trim().length > 0 && !submitting;
-
-  const submit = async () => {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    setResult(null);
-    try {
-      const cleanIngredients = ingredients
-        .filter(i => i.name.trim())
-        .map(i => ({
-          name: i.name.trim(),
-          quantity: parseNum(i.quantity),
-          unit: i.unit.trim() || null,
-          optional: i.optional,
-          notes: null,
-        }));
-      const cleanSteps = method.map(s => s.trim()).filter(Boolean);
-      // One method version when steps are filled in; the schema also
-      // accepts an empty versions array (operator composes the
-      // skill-level versions post-approval).
-      const versions = cleanSteps.length > 0
-        ? [{
-            level: 'intermediate' as HealthRecipeSkillLevel,
-            description: null,
-            prep_time_minutes: null,
-            cook_time_minutes: null,
-            total_time_minutes: null,
-            default_servings: null,
-            steps: cleanSteps.map(action => ({
-              action, notes: null, technique_term: null, time_estimate_seconds: null, tricky_flag: false,
-            })),
-            equipment: [],
-            diet_slugs: [],
-            dietary_flag_slugs: [],
-          }]
-        : [];
-      const row = await submitRecipe({
-        name: name.trim(),
-        cuisine_slug: cuisineSlug || null,
-        course: course || null,
-        origin_country: originCountry.trim() || null,
-        overview: overview.trim() || null,
-        ingredients: cleanIngredients,
-        allergen_slugs: allergens,
-        versions,
-      });
-      setResult({
-        ok: true,
-        msg: row.status === 'published' ? t('health.submit.published_thanks') : t('health.submit.submitted_thanks'),
-      });
-    } catch (e) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : t('health.submit.submission_failed') });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (result?.ok) {
-    return (
-      <div>
-        <CenterNote>{result.msg}</CenterNote>
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <button onClick={onDone} style={primaryBtn}>{t('health.submit.done')}</button>
-        </div>
-      </div>
-    );
-  }
-
-  const area: React.CSSProperties = { ...fieldInputStyle, resize: 'vertical' };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Field label={t('health.submit.name')}>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder={t('health.submit.rc_name_ph')} style={fieldInputStyle} />
-      </Field>
-      <FieldRow>
-        <Field label={t('health.submit.cuisine')}>
-          <select value={cuisineSlug} onChange={e => setCuisineSlug(e.target.value)} style={fieldInputStyle}>
-            <option value="">—</option>
-            {(taxonomies?.cuisines ?? []).map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-          </select>
-        </Field>
-        <Field label={t('health.submit.rc_course_label')}>
-          <select value={course} onChange={e => setCourse(e.target.value)} style={fieldInputStyle}>
-            <option value="">—</option>
-            {COURSES.map(c => <option key={c} value={c}>{courseLabel(c)}</option>)}
-          </select>
-        </Field>
-        <Field label={t('health.submit.origin_country')}>
-          <input value={originCountry} onChange={e => setOriginCountry(e.target.value)} style={fieldInputStyle} />
-        </Field>
-      </FieldRow>
-      <Field label={t('health.submit.overview')}>
-        <textarea value={overview} onChange={e => setOverview(e.target.value)} rows={2} style={area} />
-      </Field>
-      <Field label={t('health.submit.ingredients')}>
-        <IngredientsEditor ingredients={ingredients} onChange={setIngredients} />
-      </Field>
-      <Field label={t('health.submit.method_steps')}>
-        <StepsEditor steps={method} onChange={setMethod} />
-      </Field>
-      {taxonomies && taxonomies.allergens.length > 0 && (
-        <Field label={t('health.submit.allergens')}>
-          <ChipSelect
-            options={taxonomies.allergens.map(a => ({ slug: a.slug, name: a.name }))}
-            selected={allergens}
-            onChange={setAllergens}
-          />
-        </Field>
-      )}
-      {result && !result.ok && (
-        <div style={{ fontSize: 12, color: '#f38ba8' }}>{result.msg}</div>
-      )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button
-          onClick={submit}
-          disabled={!canSubmit}
-          style={{ ...primaryBtn, opacity: canSubmit ? 1 : 0.4, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
-        >
-          {submitting ? t('health.submit.submitting') : t('health.submit.submit_for_review')}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Ingredient list editor — name / quantity / unit / optional rows. */
-function IngredientsEditor({ ingredients, onChange }: {
-  ingredients: IngredientDraft[];
-  onChange: (next: IngredientDraft[]) => void;
-}) {
-  const set = (i: number, patch: Partial<IngredientDraft>) =>
-    onChange(ingredients.map((ing, idx) => (idx === i ? { ...ing, ...patch } : ing)));
-  const add = () => onChange([...ingredients, emptyIngredient()]);
-  const remove = (i: number) =>
-    onChange(ingredients.length > 1 ? ingredients.filter((_, idx) => idx !== i) : [emptyIngredient()]);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {ingredients.map((ing, i) => (
-        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input value={ing.quantity} onChange={e => set(i, { quantity: e.target.value })} placeholder={t('health.submit.qty')} inputMode="numeric"
-            style={{ ...fieldInputStyle, width: 56 }} />
-          <input value={ing.unit} onChange={e => set(i, { unit: e.target.value })} placeholder={t('health.submit.unit')}
-            style={{ ...fieldInputStyle, width: 72 }} />
-          <input value={ing.name} onChange={e => set(i, { name: e.target.value })} placeholder={t('health.submit.ingredient_n_placeholder', { n: i + 1 })}
-            style={{ ...fieldInputStyle, flex: 1 }} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#6c7086' }}>
-            <input type="checkbox" checked={ing.optional} onChange={e => set(i, { optional: e.target.checked })} />
-            {t('health.submit.opt_short')}
-          </label>
-          <button onClick={() => remove(i)} aria-label={t('health.submit.remove_ingredient')}
-            style={{ width: 26, border: 'none', background: 'transparent', color: '#6c7086', cursor: 'pointer', fontSize: 15 }}>×</button>
-        </div>
-      ))}
-      <button onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>{t('health.submit.add_ingredient')}</button>
     </div>
   );
 }

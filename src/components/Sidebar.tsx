@@ -1538,7 +1538,7 @@ export default function Sidebar({ activePanel, position = 'left', onTogglePositi
       <GenerationRail collapsed={collapsed} />
 
       {/* Mini Calendar — always visible */}
-      <SidebarCalendar onDashboardSelect={onDashboardSelect} />
+      <SidebarCalendar />
 
       {/* Auth + BYOK section — anchored at the very bottom of the rail,
           below the calendar. Only shown when the dashboard panel is the
@@ -1654,7 +1654,7 @@ function GenerationRail({ collapsed }: { collapsed?: boolean }) {
 
 /* ── Sidebar Calendar ──────────────────────────────────────────────────── */
 
-function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: string) => void }) {
+function SidebarCalendar() {
   useLocale(); // re-render on locale change; `t` is a direct import
   const [monthOffset, setMonthOffset] = useState(0);
   const [taskDates, setTaskDates] = useState<Set<string>>(new Set());
@@ -1674,7 +1674,10 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
     loadHealthPlanIndex().then(plans => {
       const map = new Map<string, { training: boolean; meals: boolean; rest: boolean }>();
       for (const p of plans) {
-        if (!p.start_date) continue;
+        // Only what is actually planned (13 Nov 2026): an active plan's days that
+        // hold training or meals. A draft is an idea, not a plan, and 17 empty
+        // drafts were dotting four weeks of the calendar with nothing in them.
+        if (!p.start_date || p.status !== 'active') continue;
         const start = new Date(`${p.start_date}T00:00:00`);
         if (isNaN(start.getTime())) continue;
         const training = p.type === 'fitness' || p.type === 'combined';
@@ -1686,7 +1689,10 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
           const prev = map.get(key) ?? { training: false, meals: false, rest: false };
           // A rest day in a fitness plan is marked as rest, not as training.
           const isRest = training && restDays.has(i + 1);
-          map.set(key, { training: prev.training || (training && !isRest), meals: prev.meals || meals, rest: prev.rest || isRest });
+          const hasTraining = p.training_days ? p.training_days.includes(i + 1) : training && !isRest;
+          const hasMeals = p.meal_days ? p.meal_days.includes(i + 1) : meals;
+          if (!hasTraining && !hasMeals && !isRest) continue;
+          map.set(key, { training: prev.training || hasTraining, meals: prev.meals || hasMeals, rest: prev.rest || isRest });
         }
       }
       setPlanMarks(map);
@@ -1739,13 +1745,6 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
     );
   }
 
-  function handleDayClick(day: number) {
-    const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'tasks' }));
-    window.dispatchEvent(new CustomEvent('ava-task-date-selected', { detail: iso }));
-    onDashboardSelect?.('tasks');
-  }
-
   return (
     <div style={{
       borderTop: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
@@ -1782,11 +1781,12 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
           if (mk?.meals) dots.push('#f59e0b');
           if (taskDates.has(iso)) dots.push('#38bdf8');
           return (
-            <button
+            // A glance at what is planned, not a way in (operator, 13 Nov
+            // 2026): the page you are on stays put.
+            <span
               key={day}
-              onClick={() => handleDayClick(day)}
               style={{
-                width: 24, height: 24, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                width: 24, height: 24, borderRadius: '50%',
                 background: isToday ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'transparent',
                 color: isToday ? 'var(--accent)' : '#a6adc8',
                 fontSize: 9, fontWeight: isToday ? 600 : 400,
@@ -1800,7 +1800,7 @@ function SidebarCalendar({ onDashboardSelect }: { onDashboardSelect?: (page: str
                   {dots.map((c, di) => <span key={di} style={{ width: 4, height: 4, borderRadius: '50%', background: c }} />)}
                 </span>
               )}
-            </button>
+            </span>
           );
         })}
       </div>

@@ -4,6 +4,9 @@ import { t, useLocale } from '../lib/i18n';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { ProfileFieldCard } from './ProfileFieldCard';
 import { RoomModelPicker } from './RoomModelPicker';
+import { PlanReview, type PlanReviewData } from './PlanReview';
+import { loadExerciseDetail, loadRecipeDetail } from '../lib/health-catalog';
+import { loadHealthProfile } from '../lib/health-store';
 
 interface RoomAttachment { name: string; dataUri: string; mimeType: string }
 
@@ -77,6 +80,11 @@ export function HealthRoomChat({ active }: { active: boolean }) {
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<RoomAttachment[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  // Ava's plan, shown full-page before it is saved (PlanReview, 12 Nov 2026).
+  const [pendingPlan, setPendingPlan] = useState<{ id: string; review: PlanReviewData } | null>(null);
+  const [exDetails, setExDetails] = useState<Record<string, unknown>>({});
+  const [reDetails, setReDetails] = useState<Record<string, unknown>>({});
+  const [kitchenLevel, setKitchenLevel] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -110,6 +118,11 @@ export function HealthRoomChat({ active }: { active: boolean }) {
           }
           break;
         case 'confirm_required':
+          if (event.toolName === 'health_plan_create' && event.id && event.planReview) {
+            setPendingPlan({ id: event.id, review: event.planReview as PlanReviewData });
+            loadHealthProfile().then((p) => setKitchenLevel(p?.kitchen?.level ?? null)).catch(() => {});
+            break;
+          }
           // health_profile_ask (and ask_user) need user input in the room.
           // Render an inline card; the answer resolves the sidecar's pending
           // confirmation. Without this the agent would hang on the health lane.
@@ -148,6 +161,7 @@ export function HealthRoomChat({ active }: { active: boolean }) {
         case 'stopped':
         case 'cancelled':
           setStreaming(false);
+          setPendingPlan(null);
           break;
         case 'error':
           setMessages((prev) => [...prev, { id: rid(), role: 'error', text: event.message || 'Something went wrong.' }]);
@@ -202,6 +216,23 @@ export function HealthRoomChat({ active }: { active: boolean }) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
   };
 
+  // Ask Ava from the plan wizard (11 Nov 2026): show the short label, send the
+  // in-room directive — the same words the extension sends (core
+  // health/room-directives). Waits for any turn in flight, like the seed.
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const d = (e as CustomEvent<{ label: string; directive: string }>).detail;
+      if (!d?.directive) return;
+      setMessages((prev) => [...prev, { id: rid(), role: 'user', text: d.label }, { id: rid(), role: 'ava', text: '', toolCalls: [] }]);
+      setStreaming(true);
+      getSidecar().waitForIdle().then(() => {
+        getSidecar().sendMessage(d.directive, undefined, undefined, 'health').catch(() => setStreaming(false));
+      });
+    };
+    window.addEventListener('ava-health-room-ask', onAsk);
+    return () => window.removeEventListener('ava-health-room-ask', onAsk);
+  }, []);
+
   // Drain the main-chat handoff seed on mount/activation: if this is a fresh
   // thread, auto-send the user's carried request so Ava continues the
   // conversation. Consume-once (null after) + empty-thread guard. The user's
@@ -234,6 +265,13 @@ export function HealthRoomChat({ active }: { active: boolean }) {
       getSidecar().confirm(pc.id, true, typeof value === 'string' ? value : JSON.stringify(value)).catch(() => {});
     }
   }, [pendingConfirm]);
+  // Save, change (their words go back to Ava), or don't save.
+  const decidePlan = useCallback((approved: boolean, reason?: string) => {
+    const pp = pendingPlan;
+    if (!pp) return;
+    setPendingPlan(null);
+    getSidecar().confirm(pp.id, approved, reason).catch(() => {});
+  }, [pendingPlan]);
   const skipConfirm = useCallback(() => {
     const pc = pendingConfirm;
     if (!pc) return;
@@ -355,6 +393,20 @@ export function HealthRoomChat({ active }: { active: boolean }) {
           </div>
         )}
         {/* Inline confirmation — the profile-fill card (or a generic prompt) */}
+        {pendingPlan && (
+          <PlanReview
+            review={pendingPlan.review}
+            kitchenLevel={kitchenLevel}
+            exerciseDetails={exDetails}
+            recipeDetails={reDetails as never}
+            onLoadExerciseDetail={(slug) => { loadExerciseDetail(slug).then((d) => { if (d) setExDetails((p) => ({ ...p, [slug]: d })); }).catch(() => {}); }}
+            onLoadRecipeDetail={(slug) => { loadRecipeDetail(slug).then((d) => { if (d) setReDetails((p) => ({ ...p, [slug]: d })); }).catch(() => {}); }}
+            onSave={() => decidePlan(true)}
+            onChange={(text) => decidePlan(false, text)}
+            onDiscard={() => decidePlan(false)}
+            onOpenSafety={async () => { try { const { openUrl } = await import('@tauri-apps/plugin-opener'); await openUrl('https://avasupernova.com/health/safety'); } catch { /* the link is shown either way */ } }}
+          />
+        )}
         {pendingConfirm && (
           <div style={{ marginTop: 12 }}>
             <ProfileFieldCard

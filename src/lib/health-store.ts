@@ -174,6 +174,33 @@ export function emptyHealthDailyPlan(date: string): HealthDailyPlan {
   };
 }
 
+// ── Shopping (13 Nov 2026) ── ticks and "already in the cupboard" staples in
+// shopping.json beside profile.json, the same file the extension reads, so
+// they follow you between the two.
+
+export interface ShoppingState {
+  schema_version: 1;
+  staples: string[];
+  ticks: Record<string, string[]>;
+  updated_at: string | null;
+}
+const shoppingPath = async (): Promise<string> => `${await healthDir()}/shopping.json`;
+
+export async function loadShoppingState(): Promise<ShoppingState> {
+  try {
+    const s = JSON.parse(await readTextFile(await shoppingPath(), { baseDir: BaseDirectory.Home })) as ShoppingState;
+    if (s && s.schema_version === 1) return { schema_version: 1, staples: Array.isArray(s.staples) ? s.staples : [], ticks: s.ticks && typeof s.ticks === 'object' ? s.ticks : {}, updated_at: s.updated_at ?? null };
+  } catch { /* none yet */ }
+  return { schema_version: 1, staples: [], ticks: {}, updated_at: null };
+}
+
+export async function saveShoppingState(state: ShoppingState): Promise<void> {
+  // A trip's ticks matter for weeks, not forever: keep the 26 most recent.
+  const ticks = Object.fromEntries(Object.entries(state.ticks ?? {}).slice(-26));
+  await mkdir(await healthDir(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
+  await writeTextFile(await shoppingPath(), JSON.stringify({ ...state, schema_version: 1, ticks, updated_at: new Date().toISOString() }, null, 2), { baseDir: BaseDirectory.Home });
+}
+
 // ── Storage ───────────────────────────────────────────────────────────────
 
 /** Read the operator's HealthProfile from disk. Returns the empty

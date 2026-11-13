@@ -116,6 +116,10 @@ export interface HealthPlanSummary {
    *  holds summaries mark rest days differently from training days —
    *  without it every day of a fitness plan wore the training dot. */
   rest_days?: number[];
+  /** Days that actually have training / meals in them (13 Nov 2026). The
+   *  sidebar calendar marks only these, so an empty plan shows nothing. */
+  training_days?: number[];
+  meal_days?: number[];
 }
 
 // ── Storage ───────────────────────────────────────────────────────────
@@ -125,6 +129,8 @@ function toSummary(p: HealthPlan): HealthPlanSummary {
     id: p.id, type: p.type, title: p.title, status: p.status,
     duration_days: p.duration_days, start_date: p.start_date, source: p.source, updated_at: p.updated_at,
     rest_days: p.days.filter((d) => d.kind === 'rest').map((d) => d.day_index),
+    training_days: p.days.filter((d) => (d.training ?? []).length > 0).map((d) => d.day_index),
+    meal_days: p.days.filter((d) => (d.meals ?? []).length > 0).map((d) => d.day_index),
   };
 }
 

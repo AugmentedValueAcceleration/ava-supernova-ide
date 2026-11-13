@@ -30,6 +30,7 @@
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.15.0",
     "playwright": "^1.58.2",
+    "qrcode-generator": "2.0.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^9.1.0",

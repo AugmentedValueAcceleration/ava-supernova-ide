@@ -2201,10 +2201,13 @@ async function handleInit(data) {
     // toolCallId is forwarded so the IDE frontend can attach the confirmation
     // card to the exact tool call instance, fixing the first-ask race where
     // the buttons rendered without working onClick handlers.
-    toolRegistry.setConfirmationHandler(async (toolName, args, toolCallId) => {
+    toolRegistry.setConfirmationHandler(async (toolName, args, toolCallId, review) => {
       const id = crypto.randomUUID().slice(0, 8);
       const toolCategory = toolRegistry.getCategoryForTool(toolName);
-      const extra = toolName === 'health_profile_ask' ? { profileField: buildProfileFieldPayload(args) } : {};
+      // health_plan_create carries the whole plan, already checked, for the
+      // full-page preview (PlanReview) — same as the extension.
+      const extra = toolName === 'health_profile_ask' ? { profileField: buildProfileFieldPayload(args) }
+        : toolName === 'health_plan_create' && review ? { planReview: review } : {};
       emit({ event: 'confirm_required', id, toolCallId, toolName, toolCategory, args, summary: core.toolRequestInWords(toolName, args), ...extra });
       return new Promise((resolve) => {
         // args are kept so the confirmation handler can act on the CALL,
@@ -4700,6 +4703,34 @@ rl.on('line', async (line) => {
       deleteModel(String(data.slug || ''), data.tool).catch((err) =>
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not delete the model' }));
       break;
+    case 'health_safety_check': {
+      // Their hard rules against what the plan wizard is showing (Part 1,
+      // 11 Nov 2026). Same as the extension host: the profile is read here,
+      // on their machine; only slugs go to the server; EVERY slug asked about
+      // gets an answer (no rules -> ok; not in the library -> not checked).
+      (async () => {
+        const recipes = Array.isArray(data.recipes) ? data.recipes.map(String) : [];
+        const exercises = Array.isArray(data.exercises) ? data.exercises.map(String) : [];
+        try {
+          const { profile, level } = await core.loadSafetyProfile();
+          const results = {};
+          const ok = (slug) => ({ slug, verdict: 'ok', reasons: [], unverified: [] });
+          if (!core.hasHardRules(profile)) {
+            for (const slug of [...recipes, ...exercises]) results[slug] = ok(slug);
+            emit({ event: 'health_safety_result', results, checked: true, rules: false });
+            return;
+          }
+          const facts = await core.fetchSafetyFacts({ recipes, exercises, level });
+          const unknown = (slug) => ({ slug, verdict: 'warn', reasons: ['not found in the library, so not checked against your rules'], unverified: [] });
+          for (const slug of recipes) results[slug] = facts.recipes[slug] ? core.checkRecipe(facts.recipes[slug], profile) : unknown(slug);
+          for (const slug of exercises) results[slug] = facts.exercises[slug] ? core.checkExercise(facts.exercises[slug], profile) : unknown(slug);
+          emit({ event: 'health_safety_result', results, checked: true, rules: true });
+        } catch {
+          emit({ event: 'health_safety_result', results: {}, checked: false, rules: true });
+        }
+      })();
+      break;
+    }
     case 'copy_model_to_project':
       copyModelToProject(String(data.slug || ''), String(data.projectRoot || ''), data.tool).catch((err) =>
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not copy the model' }));

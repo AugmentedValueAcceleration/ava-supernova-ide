@@ -147,6 +147,8 @@ export interface SidecarEvent {
   // health_profile_ask — structured profile-field card (goal cards, chips,
   // number box). The room resolves the control from HEALTH_PROFILE_FIELDS.
   profileField?: { field: string; question: string; currentValue?: unknown };
+  // health_plan_create — the whole plan, already checked (core PlanReview).
+  planReview?: unknown;
   // general_profile_saved / health_profile_saved — Ava saved a profile field
   // via the fill card; the renderer can refresh the profile pages.
   profile?: Record<string, unknown>;
@@ -502,6 +504,8 @@ export class SidecarManager {
   async saveModelBrief(slug: string, fields: Record<string, string>): Promise<void> { await this.send({ cmd: 'save_model_brief', slug, fields }); }
   async openModelInBlender(slug: string, tool: 'blender' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'open_model_in_blender', slug, tool }); }
   async deleteModel(slug: string, tool: 'blender' | 'gimp' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'delete_model', slug, tool }); }
+  /** Check library items against their hard rules; answers with a 'health_safety_result' event. */
+  async healthSafetyCheck(recipes: string[], exercises: string[]): Promise<void> { await this.send({ cmd: 'health_safety_check', recipes, exercises }); }
   async copyModelToProject(slug: string, projectRoot: string, tool: 'blender' | 'gimp' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'copy_model_to_project', slug, projectRoot, tool }); }
   async blenderStatus(): Promise<void> { await this.send({ cmd: 'blender_status' }); }
   async setBlenderPath(path: string | null): Promise<void> { await this.send({ cmd: 'set_blender_path', path }); }

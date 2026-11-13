@@ -185,6 +185,8 @@ export interface HealthRecipeNutrition {
   sodium_mg?: number;
   saturated_fat_g?: number;
   source?: 'estimated' | 'verified';
+  /** Absent = per serving. Sauces are per 100 g, condiments per tablespoon (13 Nov 2026). */
+  per?: '100g' | 'tbsp';
   generated_at?: string;
 }
 
@@ -433,136 +435,6 @@ export async function loadTaxonomies(): Promise<HealthTaxonomies> {
     dietary_flags: raw.dietary_flags ?? [],
     collections: raw.collections ?? [],
   };
-}
-
-// ── Contribution / submission flow ────────────────────────────────────────
-
-export interface HealthExerciseSubmissionPayload {
-  name: string;
-  exercise_type: HealthExerciseType;
-  workout_type: HealthWorkoutType;
-  difficulty: number;
-  description: string | null;
-  beginner_detail: string | null;
-  advanced_detail?: string | null;
-  common_mistakes: string | null;
-  steps: string[];
-  contraindication_slugs: string[];
-}
-
-export interface HealthRecipeVersionStepPayload {
-  action: string;
-  notes: string | null;
-  technique_term: string | null;
-  time_estimate_seconds: number | null;
-  tricky_flag: boolean;
-}
-
-export interface HealthRecipeVersionEquipmentPayload {
-  name: string;
-  notes: string | null;
-  optional: boolean;
-}
-
-export interface HealthRecipeVersionPayload {
-  level: HealthRecipeSkillLevel;
-  description: string | null;
-  prep_time_minutes: number | null;
-  cook_time_minutes: number | null;
-  total_time_minutes: number | null;
-  default_servings: number | null;
-  steps: HealthRecipeVersionStepPayload[];
-  equipment: HealthRecipeVersionEquipmentPayload[];
-  diet_slugs: string[];
-  dietary_flag_slugs: string[];
-}
-
-export interface HealthRecipeSubmissionPayload {
-  name: string;
-  cuisine_slug: string | null;
-  course: string | null;
-  origin_country: string | null;
-  overview: string | null;
-  ingredients: Array<{
-    name: string;
-    quantity: number | null;
-    unit: string | null;
-    optional: boolean;
-    notes: string | null;
-  }>;
-  allergen_slugs: string[];
-  versions: HealthRecipeVersionPayload[];
-}
-
-export interface HealthMySubmissionExercise {
-  id: string;
-  slug: string;
-  name: string;
-  status: HealthSubmissionStatus;
-  submitted_at: string | null;
-  reviewed_at: string | null;
-  review_notes: string | null;
-  exercise_type: string;
-  workout_type: string;
-}
-
-export interface HealthMySubmissionRecipe {
-  id: string;
-  slug: string;
-  name: string;
-  status: HealthSubmissionStatus;
-  submitted_at: string | null;
-  reviewed_at: string | null;
-  review_notes: string | null;
-  course: string | null;
-}
-
-export interface HealthMySubmissions {
-  exercises: HealthMySubmissionExercise[];
-  recipes: HealthMySubmissionRecipe[];
-}
-
-/** The row the server echoes back for a freshly-accepted submission. */
-export interface HealthSubmissionRow {
-  id: string;
-  slug: string;
-  name: string;
-  status: HealthSubmissionStatus;
-}
-
-/** Submit an exercise for review. Auth optional — signed-in callers
- *  get full attribution, anonymous callers a device-id pseudonym. */
-export async function submitExercise(
-  payload: HealthExerciseSubmissionPayload,
-): Promise<HealthSubmissionRow> {
-  const data = await healthRequest<{ submission: HealthSubmissionRow }>(
-    '/health/submissions/exercise',
-    { method: 'POST', body: payload, timeoutMs: 15000 },
-  );
-  return data.submission;
-}
-
-/** Submit a recipe for review. */
-export async function submitRecipe(
-  payload: HealthRecipeSubmissionPayload,
-): Promise<HealthSubmissionRow> {
-  const data = await healthRequest<{ submission: HealthSubmissionRow }>(
-    '/health/submissions/recipe',
-    { method: 'POST', body: payload, timeoutMs: 15000 },
-  );
-  return data.submission;
-}
-
-/** Load the caller's own submissions — pending, rejected and
- *  published — so they can track what they've contributed. */
-export async function loadMySubmissions(): Promise<HealthMySubmissions> {
-  const data = await healthRequest<Partial<HealthMySubmissions>>('/health/submissions/mine');
-  return { exercises: data.exercises ?? [], recipes: data.recipes ?? [] };
-}
-
-/** Clear the caller's rejected submissions from their list. */
-export async function clearRejectedSubmissions(): Promise<void> {
-  await healthRequest('/health/submissions/mine', { method: 'DELETE' });
 }
 
 // ── Morning brief ─────────────────────────────────────────────────────────
