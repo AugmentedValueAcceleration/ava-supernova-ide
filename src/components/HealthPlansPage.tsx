@@ -33,6 +33,7 @@ import { ExerciseDetailBody as CatExerciseDetail, RecipeDetailBody as CatRecipeD
 import { freshGymSession, gymExerciseFromPlan, type GymSession, type GymExercise } from '@ava/core/health/session-types';
 import { sessionsForDate, saveSession, listAllSessions } from '../lib/health-sessions-store';
 import { LogSessionSheet } from './LogSessionSheet';
+import { SendWorkoutToPhone, GymButton } from './SendItemToPhone';
 import { fillDayMeta } from '../lib/plan-meal-meta';
 import { PrepSheet } from './PrepSheet';
 import { DuplicateSheet } from './DuplicateSheet';
@@ -907,6 +908,7 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
     return null;
   })();
   const [logging, setLogging] = useState(false);
+  const [gym, setGym] = useState(false);
   const [prepping, setPrepping] = useState(false);
   // Duplicate is per plan-day: which plan's day is being copied has to be
   // unambiguous, so it opens from the covered plan for this date.
@@ -987,6 +989,10 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
               <button type="button" onClick={() => onOpenShopping?.()} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
                 {t('health.shopping.title')}
               </button>
+            )}
+            {/* Take it to the gym (Part 5b): the day's training on the phone, ticked off set by set. */}
+            {loggableDay && !editing && (
+              <GymButton onClick={() => setGym(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }} />
             )}
             {loggableDay && dateKey <= todayISO() && !editing && (
               <button type="button" onClick={() => setLogging(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
@@ -1164,6 +1170,10 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
           <PrepSheet plan={preppablePlan} profile={profile} onClose={() => setPrepping(false)} />
         )}
 
+        {gym && loggableDay && (
+          <SendWorkoutToPhone planId={loggableDay.plan.id} day={loggableDay.day} date={dateKey} onClose={() => setGym(false)}
+            onOpenUrl={(url) => { void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {}); }} />
+        )}
         {logging && loggableDay && (
           <LogSessionSheet
             day={loggableDay.day}

@@ -39,6 +39,7 @@ import { saveHealthPlan } from '../lib/health-plans-store';
 import { todayLocal } from '@ava/core/dates';
 import { libraryFit, orderByPreference, type FitVerdict } from '@ava/core/health/library-fit';
 import { useLibraryFit, FitBar, FitMark } from './LibraryFit';
+import { SendItemToPhone, SendToPhoneButton, type PhoneItem } from './SendItemToPhone';
 
 /**
  * Health & Nutrition page for the IDE — the public exercise + recipe
@@ -877,23 +878,37 @@ function Pagination({ total, offset, loading, onPage }: {
 /** Full-page detail view inside the Health tab — a back bar over the detail
  *  body (which owns its own scroll). Replaces the old modal overlay for a
  *  page-style UX (navigate in, "← Back"); Esc also goes back. */
-function DetailPageView({ onBack, backLabel, children }: { onBack: () => void; backLabel: string; children: React.ReactNode }) {
+function DetailPageView({ onBack, backLabel, children, phone }: { onBack: () => void; backLabel: string; children: React.ReactNode; phone?: PhoneItem | null }) {
+  const [sending, setSending] = useState(false);
+  const [cookingLevel, setCookingLevel] = useState<string | null>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onBack(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !sending) onBack(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onBack]);
+  }, [onBack, sending]);
+  // A recipe opens on the phone at their cooking level.
+  useEffect(() => {
+    if (phone?.kind !== 'recipe') return;
+    loadHealthProfile().then((p) => setCookingLevel(p.kitchen?.level ?? null)).catch(() => {});
+  }, [phone?.kind]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{ flex: 'none', borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', paddingBottom: 10, marginBottom: 6 }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', paddingBottom: 10, marginBottom: 6 }}>
         <button
           onClick={onBack}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'transparent', color: '#9b8caa', fontSize: 11, fontWeight: 600, padding: '5px 10px' }}
         >
           ← {backLabel}
         </button>
+        <span style={{ flex: 1 }} />
+        {/* Send to phone (Part 5b): nobody takes their computer to the stove or the gym. */}
+        {phone && <SendToPhoneButton onClick={() => setSending(true)} />}
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+      {phone && sending && (
+        <SendItemToPhone item={phone} cookingLevel={cookingLevel} onClose={() => setSending(false)}
+          onOpenUrl={(url) => { void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {}); }} />
+      )}
     </div>
   );
 }
@@ -925,7 +940,7 @@ function ExerciseDetailView({ slug, onBack }: { slug: string; onBack: () => void
   }, [slug]);
 
   return (
-    <DetailPageView onBack={onBack} backLabel={t('health.browse.tab.exercises')}>
+    <DetailPageView onBack={onBack} backLabel={t('health.browse.tab.exercises')} phone={detail ? { kind: 'exercise', slug: detail.slug, name: detail.name } : null}>
       {loading
         ? <DetailCentered>{t('health.browse.loading_exercise')}</DetailCentered>
         : failed || !detail
@@ -1141,7 +1156,7 @@ function RecipeDetailView({ slug, onBack }: { slug: string; onBack: () => void }
   }, [slug]);
 
   return (
-    <DetailPageView onBack={onBack} backLabel={t('health.browse.tab.recipes')}>
+    <DetailPageView onBack={onBack} backLabel={t('health.browse.tab.recipes')} phone={detail ? { kind: 'recipe', slug: detail.slug, name: detail.name } : null}>
       {loading
         ? <DetailCentered>{t('health.browse.loading_recipe')}</DetailCentered>
         : failed || !detail
