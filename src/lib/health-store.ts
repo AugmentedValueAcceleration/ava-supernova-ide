@@ -220,6 +220,8 @@ export async function saveHealthProfile(profile: HealthProfile): Promise<void> {
   const next: HealthProfile = { ...profile, schema_version: 1, updated_at: new Date().toISOString() };
   await mkdir(await healthDir(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
   await writeTextFile(await profilePath(), JSON.stringify(next, null, 2), { baseDir: BaseDirectory.Home });
+  // Lists showing "what fits you" re-check against the new rules (Health Part 3).
+  try { window.dispatchEvent(new Event('ava-health-profile-saved')); } catch { /* no window in tests */ }
 }
 
 // ── General profile (identity + body basics) ──────────────────────────────

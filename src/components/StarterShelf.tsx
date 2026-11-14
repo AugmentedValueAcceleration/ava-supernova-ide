@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { t } from '../lib/i18n';
-import { loadCuratedPlans } from '../lib/curated-plans';
+import { loadCuratedPlans, loadCuratedPlan } from '../lib/curated-plans';
 import { orderForProfile } from '@ava/core/health/starters';
+import { planRefs, starterFit } from '@ava/core/health/library-fit';
+import { useLibraryFit, StarterFitLine } from './LibraryFit';
 import type { CuratedPlanSummary } from '@ava/core/health/starters';
 import type { HealthProfile } from '../lib/health-store';
 
@@ -46,6 +48,33 @@ export function StarterShelf({
     () => orderForProfile(plans, profile?.goals?.primary ?? null),
     [plans, profile],
   );
+
+  // "Fits you" / "needs a swap" (Health Part 3): what each plan contains,
+  // checked against their rules on this machine. Only when they have rules.
+  const fit = useLibraryFit();
+  const [refs, setRefs] = useState<Record<string, { recipes: string[]; exercises: string[] }>>({});
+  useEffect(() => {
+    if (!fit.rules || !plans.length) return;
+    let live = true;
+    void Promise.all(plans.filter((p) => !refs[p.id]).map(async (p) => {
+      try {
+        const d = await loadCuratedPlan(p.id);
+        return d ? [p.id, planRefs(d.days ?? [])] as const : null;
+      } catch { return null; }
+    })).then((rows) => {
+      if (!live) return;
+      const got = Object.fromEntries(rows.filter((r): r is NonNullable<typeof r> => !!r));
+      if (Object.keys(got).length) setRefs((prev) => ({ ...prev, ...got }));
+    });
+    return () => { live = false; };
+    // refs left out on purpose: a plan whose fetch failed is not retried in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fit.rules, plans]);
+  useEffect(() => {
+    if (!fit.rules) return;
+    const all = Object.values(refs);
+    fit.check(all.flatMap((r) => r.recipes), all.flatMap((r) => r.exercises));
+  }, [fit.rules, fit.check, refs]);
 
   // A shelf that cannot load says nothing rather than claiming the shelf is
   // empty — "there are no ready-made plans" is a statement about the product,
@@ -94,6 +123,7 @@ export function StarterShelf({
                   display: 'block', fontSize: 12, fontWeight: 500, color: '#cdd6f4',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>{p.title}</span>
+                {fit.rules && refs[p.id] && <StarterFitLine fit={starterFit(refs[p.id], fit.state)} />}
                 <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                   {[
                     `${p.duration_days}d`,

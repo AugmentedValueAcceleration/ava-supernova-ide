@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTabTransition } from '../lib/useTabTransition';
 import { TabSpinner } from './TabSpinner';
 import { HealthRoomChat } from './HealthRoomChat';
@@ -37,6 +37,8 @@ import { planFromCurated, type CuratedPlanDetail } from '@ava/core/health/starte
 import { loadCuratedPlan, reportCuratedStart } from '../lib/curated-plans';
 import { saveHealthPlan } from '../lib/health-plans-store';
 import { todayLocal } from '@ava/core/dates';
+import { libraryFit, orderByPreference, type FitVerdict } from '@ava/core/health/library-fit';
+import { useLibraryFit, FitBar, FitMark } from './LibraryFit';
 
 /**
  * Health & Nutrition page for the IDE — the public exercise + recipe
@@ -93,6 +95,8 @@ export function HealthPage() {
     useTabTransition<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'plans');
   /** The day view's "Shopping list" opens the Shopping tab (13 Nov 2026). */
   const [shoppingPlanId, setShoppingPlanId] = useState<string | null>(null);
+  /** Recipes and Exercises show only what fits their rules until switched (Health Part 3). */
+  const [fitsOnly, setFitsOnly] = useState(true);
   /** A card opened from the Ready-made tab, shown as its full week. */
   const [starterOpenId, setStarterOpenId] = useState<string | null>(null);
   const [starterDetail, setStarterDetail] = useState<CuratedPlanDetail | null>(null);
@@ -197,8 +201,8 @@ export function HealthPage() {
           )}
           {tab === 'plans' && <HealthPlansPage onOpenShopping={(planId) => { setShoppingPlanId(planId); setTab('shopping'); }} />}
           {tab === 'shopping' && <ShoppingTab initialPlanId={shoppingPlanId} />}
-          {tab === 'exercises' && <ExercisesGrid />}
-          {tab === 'recipes' && <RecipesGrid />}
+          {tab === 'exercises' && <ExercisesGrid fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => setTabUser('profile')} />}
+          {tab === 'recipes' && <RecipesGrid fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => setTabUser('profile')} />}
           {tab === 'profile' && <ProfileTab />}
         </div>
         {/* Ava room — always mounted so its conversation survives tab switches;
@@ -213,8 +217,12 @@ export function HealthPage() {
 
 // ── Exercises grid ────────────────────────────────────────────────────────
 
-function ExercisesGrid() {
+/** "Only what fits me" — shared by both browse tabs (Health Part 3). */
+interface GridFitProps { fitsOnly: boolean; onToggleFit: () => void; onProfile: () => void }
+
+function ExercisesGrid({ fitsOnly, onToggleFit, onProfile }: GridFitProps) {
   const [items, setItems] = useState<HealthExerciseSummary[]>([]);
+  const fit = useLibraryFit();
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<'all' | HealthWorkoutType>('all');
@@ -253,6 +261,10 @@ function ExercisesGrid() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, search]);
 
+  // Each page is checked against their rules on this machine.
+  useEffect(() => { if (fit.rules) fit.check([], items.map((i) => i.slug)); }, [fit.rules, fit.check, items]);
+  const fitView = libraryFit(items, fit.state, { rules: fit.rules, fitsOnly });
+
   // Detail opens as a full page in place of the grid (not an overlay).
   if (modalSlug) {
     return <ExerciseDetailView slug={modalSlug} onBack={() => setModalSlug(null)} />;
@@ -267,31 +279,33 @@ function ExercisesGrid() {
           <FilterChip key={w} active={filter === w} onClick={() => setFilter(w)}>{workoutLabel(w)}</FilterChip>
         ))}
       </FilterRow>
+      {!loading && !failed && <FitBar rules={fit.rules} fitsOnly={fitsOnly} view={fitView} onToggle={onToggleFit} onProfile={onProfile} />}
 
       <div style={{ flex: 1, minHeight: 0 }}>
         {loading ? (
           <CenterNote>{t('health.browse.loading_exercises')}</CenterNote>
         ) : failed ? (
-          <LoadError noun={t('health.browse.noun.exercises')} onRetry={() => void fetchPage(0)} />
-        ) : items.length === 0 ? (
-          <CenterNote>{search ? t('health.browse.no_exercises_match_q', { q: search }) : t('health.browse.no_exercises_found')}</CenterNote>
+          <LoadError noun={t('health.browse.noun.exercises')} onRetry={() => { fit.retry(); void fetchPage(0); }} />
+        ) : fitView.shown.length === 0 ? (
+          <CenterNote>{items.length > 0 ? tt('health.fit.none_on_page', 'Nothing on this page fits your rules. Try the next page, or show everything.') : search ? t('health.browse.no_exercises_match_q', { q: search }) : t('health.browse.no_exercises_found')}</CenterNote>
         ) : (
           <CardGrid view={view}>
-            {items.map(ex => (
-              <ExerciseCardItem key={ex.id} ex={ex} view={view} onOpen={setModalSlug} />
+            {fitView.shown.map(ex => (
+              <ExerciseCardItem key={ex.id} ex={ex} view={view} onOpen={setModalSlug} fit={fit.rules ? fit.state.results[ex.slug] : undefined} />
             ))}
           </CardGrid>
         )}
       </div>
-      {items.length > 0 && <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />}
+      {items.length > 0 && <Pagination total={total} offset={offset} loading={loading} onPage={(o) => { fit.retry(); void fetchPage(o); }} />}
     </div>
   );
 }
 
 // ── Recipes grid ──────────────────────────────────────────────────────────
 
-function RecipesGrid() {
+function RecipesGrid({ fitsOnly, onToggleFit, onProfile }: GridFitProps) {
   const [items, setItems] = useState<HealthRecipeSummary[]>([]);
+  const fit = useLibraryFit();
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [course, setCourse] = useState<'all' | string>('all');
@@ -354,6 +368,12 @@ function RecipesGrid() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course, collections, diets, flags, cuisines, maxTime, sort, search]);
 
+  // Each page is checked against their rules on this machine; preferences
+  // (likes, dislikes, cuisines) only change the order.
+  useEffect(() => { if (fit.rules) fit.check(items.map((i) => i.slug), []); }, [fit.rules, fit.check, items]);
+  const ordered = useMemo(() => orderByPreference(items, fit.profile), [items, fit.profile]);
+  const fitView = libraryFit(ordered, fit.state, { rules: fit.rules, fitsOnly });
+
   // Toggle a slug in a multi-select axis (immutable Set so React re-renders).
   const toggleIn = (set: Set<string>, setSet: (s: Set<string>) => void) => (slug: string) => {
     const next = new Set(set);
@@ -414,24 +434,26 @@ function RecipesGrid() {
         )}
       </div>
 
+      {!loading && !failed && <FitBar rules={fit.rules} fitsOnly={fitsOnly} view={fitView} onToggle={onToggleFit} onProfile={onProfile} />}
+
       {/* Results fill the remaining height so pagination is pushed to the foot
           of the page even when only a few cards land. */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {loading ? (
           <CenterNote>{t('health.browse.loading_recipes')}</CenterNote>
         ) : failed ? (
-          <LoadError noun={t('health.browse.noun.recipes')} onRetry={() => void fetchPage(0)} />
-        ) : items.length === 0 ? (
-          <CenterNote>{search ? t('health.browse.no_recipes_match_q', { q: search }) : t('health.browse.no_recipes_found')}</CenterNote>
+          <LoadError noun={t('health.browse.noun.recipes')} onRetry={() => { fit.retry(); void fetchPage(0); }} />
+        ) : fitView.shown.length === 0 ? (
+          <CenterNote>{items.length > 0 ? tt('health.fit.none_on_page', 'Nothing on this page fits your rules. Try the next page, or show everything.') : search ? t('health.browse.no_recipes_match_q', { q: search }) : t('health.browse.no_recipes_found')}</CenterNote>
         ) : (
           <CardGrid view={view}>
-            {items.map((r) => (
-              <RecipeCardItem key={r.id} r={r} view={view} onOpen={setModalSlug} />
+            {fitView.shown.map((r) => (
+              <RecipeCardItem key={r.id} r={r} view={view} onOpen={setModalSlug} fit={fit.rules ? fit.state.results[r.slug] : undefined} />
             ))}
           </CardGrid>
         )}
       </div>
-      {items.length > 0 && <Pagination total={total} offset={offset} loading={loading} onPage={fetchPage} />}
+      {items.length > 0 && <Pagination total={total} offset={offset} loading={loading} onPage={(o) => { fit.retry(); void fetchPage(o); }} />}
     </div>
   );
 }
@@ -605,7 +627,7 @@ function Card({ onClick, children }: { onClick: () => void; children: React.Reac
 
 // ── Browse cards (compact-hero grid + dense list variants) ─────────────────
 
-function ExerciseCardItem({ ex, view, onOpen }: { ex: HealthExerciseSummary; view: View; onOpen: (slug: string) => void }) {
+function ExerciseCardItem({ ex, view, onOpen, fit }: { ex: HealthExerciseSummary; view: View; onOpen: (slug: string) => void; fit?: FitVerdict }) {
   const accent = WORKOUT_ACCENT[ex.workout_type];
   const img = ex.thumbnail_url
     ? <img src={ex.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -624,6 +646,7 @@ function ExerciseCardItem({ ex, view, onOpen }: { ex: HealthExerciseSummary; vie
             <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ex.name}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}><Dots value={ex.difficulty} accent={accent} /><span style={{ fontSize: 10, color: '#6c7086', textTransform: 'capitalize' }}>{exerciseTypeLabel(ex.exercise_type)}</span></div>
           </div>
+          <FitMark fit={fit} />
         </div>
       </Card>
     );
@@ -633,6 +656,7 @@ function ExerciseCardItem({ ex, view, onOpen }: { ex: HealthExerciseSummary; vie
       <div style={{ position: 'relative', aspectRatio: '3 / 2', overflow: 'hidden', background: `linear-gradient(135deg, ${accent}33, ${accent}11)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {img}
         <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: accent }} />
+        <FitMark fit={fit} floating />
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '66%', background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.3) 50%, transparent)' }} />
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 8 }}>
           <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: accent, marginBottom: 2 }}>{workoutLabel(ex.workout_type)}</div>
@@ -668,7 +692,7 @@ function FromScratchBadge({ floating }: { floating?: boolean }) {
   );
 }
 
-function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: View; onOpen: (slug: string) => void }) {
+function RecipeCardItem({ r, view, onOpen, fit }: { r: HealthRecipeSummary; view: View; onOpen: (slug: string) => void; fit?: FitVerdict }) {
   const footer = r.course || r.origin_country || r.cuisine_name || '';
   const img = r.hero_image_url
     ? <img src={r.hero_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -687,6 +711,7 @@ function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: Vie
               {r.from_scratch && <FromScratchBadge />}
             </div>
           </div>
+          <FitMark fit={fit} />
         </div>
       </Card>
     );
@@ -696,6 +721,7 @@ function RecipeCardItem({ r, view, onOpen }: { r: HealthRecipeSummary; view: Vie
       <div style={{ position: 'relative', aspectRatio: '3 / 2', overflow: 'hidden', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {img}
         {r.from_scratch && <FromScratchBadge floating />}
+        <FitMark fit={fit} floating />
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '66%', background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.3) 50%, transparent)' }} />
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 8 }}>
           {r.cuisine_name && <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.6, color: '#fbbf24', marginBottom: 2 }}>{r.cuisine_name}</div>}
