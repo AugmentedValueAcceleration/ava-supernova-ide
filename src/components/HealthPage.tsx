@@ -1339,6 +1339,66 @@ export function ProfileTab() {
         <p style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: '#9b8caa', maxWidth: '70ch' }}>{t('health.profile.intro_blurb')}</p>
       </div>
 
+      {/* Never — the hard rules (Health Part 2, mockup approved 14 Nov 2026),
+          kept apart from preferences so people can see which are guarantees. */}
+      <RuleSection kind="never" title={tt('health.profile.never.title', 'Never')}
+        body={tt('health.profile.never.body', 'Ava keeps to these everywhere: plans she builds, the wizard, the library, For you. Anything that breaks one is never offered. Checked on this computer.')}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+        <Field label={tt('health.profile.never.allergies', 'Allergies')} hint={tt('health.profile.never.allergies_hint', 'Fish, sesame, mustard and a few others can only be checked from the ingredients. Ava will say so when that is all there is.')}>
+          <Chips selected={c.allergens} options={allergenOpts}
+            onToggle={slug => update({ ...p, constraints: { ...c, allergens: toggle(c.allergens, slug) } })}
+            emptyHint={t('health.profile.allergens_loading')} />
+        </Field>
+        <Field label={tt('health.profile.never.diet', 'Diet')}>
+          <Chips selected={c.dietary} options={DIETARY_OPTIONS.map(o => ({ slug: o.slug, label: t(o.labelKey) }))}
+            onToggle={slug => update({ ...p, constraints: { ...c, dietary: toggle(c.dietary, slug) } })} />
+          <button type="button" onClick={() => { void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl('https://avasupernova.com/guides/diets-explained')).catch(() => {}); }}
+            style={{ marginTop: 8, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 11, color: 'var(--accent)' }}>
+            {tt('health.profile.never.diet_link', 'What do these mean?')}
+          </button>
+        </Field>
+        <Field label={t('health.profile.injuries')} hint={tt('health.profile.never.injuries_hint', 'Exercises to avoid are left out. Ones to take care with stay, marked, with an easier version.')}>
+          <textarea rows={2} value={c.injuries.join('\n')}
+            placeholder={t('health.profile.injuries_placeholder')}
+            onChange={e => update({ ...p, constraints: { ...c, injuries: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
+            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
+        </Field>
+        <Field label={tt('health.profile.never.kit', 'Kit you have')} hint={tt('health.profile.never.kit_hint', 'Bodyweight is always included. Leave this empty and nothing is filtered by kit.')}>
+          <Chips selected={c.equipment_available} options={EQUIPMENT_OPTIONS.map(o => ({ slug: o.slug, label: t(o.labelKey) }))}
+            onToggle={slug => update({ ...p, constraints: { ...c, equipment_available: toggle(c.equipment_available, slug) } })} />
+        </Field>
+        </div>
+      </RuleSection>
+
+      {/* Prefer — steers, never hides. */}
+      <RuleSection kind="prefer" title={tt('health.profile.prefer.title', 'Prefer')}
+        body={tt('health.profile.prefer.body', 'Ava leans this way: what you like comes first, what you dislike comes last. Nothing is hidden for these.')}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+        <Field label={tt('health.profile.prefer.likes', 'Foods you like')}>
+          <textarea rows={2} value={f.likes.join('\n')}
+            placeholder={t('health.profile.likes_placeholder')}
+            onChange={e => update({ ...p, food: { ...f, likes: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
+            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
+        </Field>
+        <Field label={tt('health.profile.prefer.dislikes', 'Foods you\'d rather not')}>
+          <textarea rows={2} value={f.dislikes.join('\n')}
+            placeholder={t('health.profile.dislikes_placeholder')}
+            onChange={e => update({ ...p, food: { ...f, dislikes: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
+            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
+        </Field>
+        <Field label={tt('health.profile.prefer.cuisines', 'Favourite cuisines')}>
+          <Chips selected={f.cuisines} options={CUISINE_OPTIONS}
+            onToggle={slug => update({ ...p, food: { ...f, cuisines: toggle(f.cuisines, slug) } })} />
+        </Field>
+        </div>
+      </RuleSection>
+
+      {/* About you — how Ava shapes a plan. */}
+      <div>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 500, color: '#cdd6f4' }}>{tt('health.profile.about.title', 'About you')}</h2>
+        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#6c7086' }}>{tt('health.profile.about.body', 'How Ava shapes a plan around you.')}</p>
+      </div>
+
       {/* Goals — selectable cards, like the extension. */}
       <ProfileSection title={t('health.profile.goals')} subtitle={t('health.profile.goals_subtitle')}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
@@ -1362,34 +1422,6 @@ export function ProfileTab() {
           <input type="text" value={p.goals.weekly_focus ?? ''} maxLength={120}
             placeholder={t('health.profile.weekly_focus_placeholder')}
             onChange={e => update({ ...p, goals: { ...p.goals, weekly_focus: e.target.value || null } })}
-            style={fieldInputStyle} />
-        </Field>
-      </ProfileSection>
-
-      {/* Constraints — chips + textarea, full-width stacked. */}
-      <ProfileSection title={t('health.profile.constraints')} subtitle={t('health.profile.constraints_subtitle')}>
-        <Field label={t('health.profile.allergens')}>
-          <Chips selected={c.allergens} options={allergenOpts}
-            onToggle={slug => update({ ...p, constraints: { ...c, allergens: toggle(c.allergens, slug) } })}
-            emptyHint={t('health.profile.allergens_loading')} />
-        </Field>
-        <Field label={t('health.profile.dietary')}>
-          <Chips selected={c.dietary} options={DIETARY_OPTIONS.map(o => ({ slug: o.slug, label: t(o.labelKey) }))}
-            onToggle={slug => update({ ...p, constraints: { ...c, dietary: toggle(c.dietary, slug) } })} />
-        </Field>
-        <Field label={t('health.profile.equipment')}>
-          <Chips selected={c.equipment_available} options={EQUIPMENT_OPTIONS.map(o => ({ slug: o.slug, label: t(o.labelKey) }))}
-            onToggle={slug => update({ ...p, constraints: { ...c, equipment_available: toggle(c.equipment_available, slug) } })} />
-        </Field>
-        <Field label={t('health.profile.injuries')}>
-          <textarea rows={2} value={c.injuries.join('\n')}
-            placeholder={t('health.profile.injuries_placeholder')}
-            onChange={e => update({ ...p, constraints: { ...c, injuries: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
-            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
-        </Field>
-        <Field label={t('health.profile.minutes_per_day')}>
-          <input type="number" inputMode="numeric" value={c.minutes_per_day_target ?? ''} placeholder="45"
-            onChange={e => update({ ...p, constraints: { ...c, minutes_per_day_target: parseNum(e.target.value) } })}
             style={fieldInputStyle} />
         </Field>
       </ProfileSection>
@@ -1439,6 +1471,11 @@ export function ProfileTab() {
             </div>
           </Field>
         </div>
+        <Field label={t('health.profile.minutes_per_day')}>
+          <input type="number" inputMode="numeric" value={c.minutes_per_day_target ?? ''} placeholder="45"
+            onChange={e => update({ ...p, constraints: { ...c, minutes_per_day_target: parseNum(e.target.value) } })}
+            style={fieldInputStyle} />
+        </Field>
       </ProfileSection>
 
       {/* Kitchen — household size drives servings and therefore every quantity
@@ -1489,26 +1526,6 @@ export function ProfileTab() {
             {t('health.profile.minutes_fill_action')}
           </button>
         </div>
-      </ProfileSection>
-
-      {/* Food & taste — steers meal plans toward what they enjoy. */}
-      <ProfileSection title={t('health.profile.food_taste')} subtitle={t('health.profile.food_taste_subtitle')}>
-        <Field label={t('health.profile.likes')}>
-          <textarea rows={2} value={f.likes.join('\n')}
-            placeholder={t('health.profile.likes_placeholder')}
-            onChange={e => update({ ...p, food: { ...f, likes: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
-            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
-        </Field>
-        <Field label={t('health.profile.dislikes')}>
-          <textarea rows={2} value={f.dislikes.join('\n')}
-            placeholder={t('health.profile.dislikes_placeholder')}
-            onChange={e => update({ ...p, food: { ...f, dislikes: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })}
-            style={{ ...fieldInputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} />
-        </Field>
-        <Field label={t('health.profile.cuisines')}>
-          <Chips selected={f.cuisines} options={CUISINE_OPTIONS}
-            onToggle={slug => update({ ...p, food: { ...f, cuisines: toggle(f.cuisines, slug) } })} />
-        </Field>
       </ProfileSection>
 
       {/* Schedule — time pickers in a 3-column grid. */}
@@ -1672,12 +1689,34 @@ function FieldRow({ children }: { children: React.ReactNode }) {
 // A <div>, NOT a <label>: a label forwards clicks anywhere in its box to the
 // first control inside, which for the custom TimeField/chip buttons popped the
 // wrong thing open. The label is uppercase + tracked to match the extension.
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9b8caa', marginBottom: 4 }}>{label}</div>
       {children}
+      {hint && <p style={{ margin: '4px 0 0', fontSize: 10, lineHeight: 1.5, color: '#9b8caa' }}>{hint}</p>}
     </div>
+  );
+}
+
+/** Never (green, a shield) and Prefer (blue, a heart) — mirrors the extension. */
+function RuleSection({ kind, title, body, children }: { kind: 'never' | 'prefer'; title: string; body: string; children: React.ReactNode }) {
+  const never = kind === 'never';
+  return (
+    <section style={{ borderRadius: 12, padding: 20, border: `1px solid ${never ? '#5f8f5a' : '#5a5f8f'}`, background: never ? 'rgba(166,227,161,0.06)' : 'rgba(137,180,250,0.06)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+        {never ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a6e3a1" strokeWidth="2" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></svg>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#89b4fa" strokeWidth="2" aria-hidden="true"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" /></svg>
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#cdd6f4' }}>{title}</h2>
+          <p style={{ margin: '2px 0 0', fontSize: 11, lineHeight: 1.5, color: '#a6adc8' }}>{body}</p>
+        </div>
+      </div>
+      {children}
+    </section>
   );
 }
 
