@@ -34,6 +34,8 @@ import { freshGymSession, gymExerciseFromPlan, type GymSession, type GymExercise
 import { sessionsForDate, saveSession, listAllSessions } from '../lib/health-sessions-store';
 import { LogSessionSheet } from './LogSessionSheet';
 import { SendWorkoutToPhone, GymButton, SendMealToPhone, KitchenButton } from './SendItemToPhone';
+import { ResultsImport, AddFromPhoneButton } from './ResultsImport';
+import { decodeResults, sessionFromResults, type SharedResults } from '@ava/core/health/share-results';
 import { fillDayMeta } from '../lib/plan-meal-meta';
 import { PrepSheet } from './PrepSheet';
 import { DuplicateSheet } from './DuplicateSheet';
@@ -505,6 +507,8 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan, onOpenShoppi
     }
     return map;
   }, [fullPlans]);
+  /** Results from the phone (Health Part 6): the paste box, then "Add this session?". */
+  const [phone, setPhone] = useState<{ results: SharedResults | null; payload: string | null; failed?: boolean; saving?: boolean; saved?: boolean } | null>(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -514,8 +518,25 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan, onOpenShoppi
             {t('health.plans.your_plans_blurb')}
           </p>
         </div>
-        <button type="button" onClick={onNew} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>{t('health.plans.new_plan')}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {/* Add from phone (Part 6): paste the link the phone sent. */}
+          <AddFromPhoneButton onClick={() => setPhone({ results: null, payload: null })} style={{ ...accentBtn(false), padding: '6px 12px', fontSize: 11 }} />
+          <button type="button" onClick={onNew} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>{t('health.plans.new_plan')}</button>
+        </div>
       </div>
+      {phone && (
+        <ResultsImport results={phone.results} failed={phone.failed} saving={phone.saving} saved={phone.saved}
+          onCheck={(text) => { void decodeResults(text).then((r) => setPhone({ results: r, payload: r ? text : null, failed: !r })); }}
+          onSave={() => {
+            const r = phone.results;
+            if (!r) return;
+            setPhone({ ...phone, saving: true });
+            void saveSession(sessionFromResults(r))
+              .then(() => setPhone((p) => (p ? { ...p, saving: false, saved: true } : p)))
+              .catch(() => setPhone((p) => (p ? { ...p, saving: false, failed: true } : p)));
+          }}
+          onClose={() => setPhone(null)} />
+      )}
 
       <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${BORDER}` }}>
         {/* All three, always. A tab that only appears once you have archived
