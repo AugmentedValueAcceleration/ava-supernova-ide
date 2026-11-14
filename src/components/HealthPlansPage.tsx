@@ -33,7 +33,7 @@ import { ExerciseDetailBody as CatExerciseDetail, RecipeDetailBody as CatRecipeD
 import { freshGymSession, gymExerciseFromPlan, type GymSession, type GymExercise } from '@ava/core/health/session-types';
 import { sessionsForDate, saveSession, listAllSessions } from '../lib/health-sessions-store';
 import { LogSessionSheet } from './LogSessionSheet';
-import { SendWorkoutToPhone, GymButton } from './SendItemToPhone';
+import { SendWorkoutToPhone, GymButton, SendMealToPhone, KitchenButton } from './SendItemToPhone';
 import { fillDayMeta } from '../lib/plan-meal-meta';
 import { PrepSheet } from './PrepSheet';
 import { DuplicateSheet } from './DuplicateSheet';
@@ -909,6 +909,19 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
   })();
   const [logging, setLogging] = useState(false);
   const [gym, setGym] = useState(false);
+  const [kitchen, setKitchen] = useState(false);
+  const [cookingLevel, setCookingLevel] = useState<string | null>(null);
+  useEffect(() => { loadHealthProfile().then((p) => setCookingLevel(p.kitchen?.level ?? null)).catch(() => {}); }, []);
+  // The day's recipes, for "Take it to the kitchen" (meals without a library recipe have no page).
+  const kitchenMeals = (() => {
+    const out: Array<{ slot: string; name: string; slug: string }> = [];
+    for (const p of plans) {
+      const d = planDayForDate(p, dateKey);
+      for (const m of d?.meals ?? []) if (m.ref?.slug) out.push({ slot: m.slot, name: m.name, slug: m.ref.slug });
+    }
+    const order = ['breakfast', 'lunch', 'snack', 'dinner'];
+    return out.sort((a, b) => order.indexOf(a.slot) - order.indexOf(b.slot));
+  })();
   const [prepping, setPrepping] = useState(false);
   // Duplicate is per plan-day: which plan's day is being copied has to be
   // unambiguous, so it opens from the covered plan for this date.
@@ -993,6 +1006,9 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
             {/* Take it to the gym (Part 5b): the day's training on the phone, ticked off set by set. */}
             {loggableDay && !editing && (
               <GymButton onClick={() => setGym(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }} />
+            )}
+            {kitchenMeals.length > 0 && !editing && (
+              <KitchenButton onClick={() => setKitchen(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }} />
             )}
             {loggableDay && dateKey <= todayISO() && !editing && (
               <button type="button" onClick={() => setLogging(true)} style={{ ...accentBtn(true), padding: '6px 12px', fontSize: 11 }}>
@@ -1170,6 +1186,10 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
           <PrepSheet plan={preppablePlan} profile={profile} onClose={() => setPrepping(false)} />
         )}
 
+        {kitchen && (
+          <SendMealToPhone meals={kitchenMeals} cookingLevel={cookingLevel} onClose={() => setKitchen(false)}
+            onOpenUrl={(url) => { void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {}); }} />
+        )}
         {gym && loggableDay && (
           <SendWorkoutToPhone planId={loggableDay.plan.id} day={loggableDay.day} date={dateKey} onClose={() => setGym(false)}
             onOpenUrl={(url) => { void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {}); }} />
