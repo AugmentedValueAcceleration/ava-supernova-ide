@@ -60,6 +60,16 @@ type HealthTab = 'plans' | 'shopping' | 'starters' | 'exercises' | 'recipes' | '
 let pendingHealthRoomOpen = false;
 export function requestHealthRoomTab(): void { pendingHealthRoomOpen = true; }
 
+// Set by the command centre's For you (Health Part 4): open on a tab, with a
+// dish or exercise open, or the new-plan wizard holding a first item.
+type HealthOpenRequest = {
+  tab: 'plans' | 'exercises' | 'recipes' | 'profile';
+  item?: { kind: 'recipe' | 'exercise'; slug: string };
+  seed?: { kind: 'recipe' | 'exercise'; slug: string; name: string; course?: string | null };
+};
+let pendingHealthOpen: HealthOpenRequest | null = null;
+export function requestHealthOpen(req: HealthOpenRequest): void { pendingHealthOpen = req; }
+
 const PAGE_SIZE = 24;
 
 const WORKOUT_TYPES: HealthWorkoutType[] = [
@@ -92,7 +102,9 @@ export function HealthPage() {
   // effect, and the handler below that lands you on Plans after an action):
   // nobody clicked a tab there, so there is nothing to acknowledge.
   const { current: tab, pending: tabPending, switchTo: setTabUser, setNow: setTab } =
-    useTabTransition<HealthTab>(pendingHealthRoomOpen ? 'ava' : 'plans');
+    useTabTransition<HealthTab>(pendingHealthRoomOpen ? 'ava' : pendingHealthOpen?.tab ?? 'plans');
+  // What For you asked to open, taken once.
+  const [openReq] = useState<HealthOpenRequest | null>(() => { const r = pendingHealthOpen; pendingHealthOpen = null; return r; });
   /** The day view's "Shopping list" opens the Shopping tab (13 Nov 2026). */
   const [shoppingPlanId, setShoppingPlanId] = useState<string | null>(null);
   /** Recipes and Exercises show only what fits their rules until switched (Health Part 3). */
@@ -199,10 +211,10 @@ export function HealthPage() {
               <StarterShelf profile={starterProfile} onOpen={setStarterOpenId} />
             )
           )}
-          {tab === 'plans' && <HealthPlansPage onOpenShopping={(planId) => { setShoppingPlanId(planId); setTab('shopping'); }} />}
+          {tab === 'plans' && <HealthPlansPage seed={openReq?.seed ?? null} onOpenShopping={(planId) => { setShoppingPlanId(planId); setTab('shopping'); }} />}
           {tab === 'shopping' && <ShoppingTab initialPlanId={shoppingPlanId} />}
-          {tab === 'exercises' && <ExercisesGrid fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => setTabUser('profile')} />}
-          {tab === 'recipes' && <RecipesGrid fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => setTabUser('profile')} />}
+          {tab === 'exercises' && <ExercisesGrid initialSlug={openReq?.item?.kind === 'exercise' ? openReq.item.slug : null} fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => setTabUser('profile')} />}
+          {tab === 'recipes' && <RecipesGrid initialSlug={openReq?.item?.kind === 'recipe' ? openReq.item.slug : null} fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => setTabUser('profile')} />}
           {tab === 'profile' && <ProfileTab />}
         </div>
         {/* Ava room — always mounted so its conversation survives tab switches;
@@ -218,9 +230,9 @@ export function HealthPage() {
 // ── Exercises grid ────────────────────────────────────────────────────────
 
 /** "Only what fits me" — shared by both browse tabs (Health Part 3). */
-interface GridFitProps { fitsOnly: boolean; onToggleFit: () => void; onProfile: () => void }
+interface GridFitProps { fitsOnly: boolean; onToggleFit: () => void; onProfile: () => void; initialSlug?: string | null }
 
-function ExercisesGrid({ fitsOnly, onToggleFit, onProfile }: GridFitProps) {
+function ExercisesGrid({ fitsOnly, onToggleFit, onProfile, initialSlug }: GridFitProps) {
   const [items, setItems] = useState<HealthExerciseSummary[]>([]);
   const fit = useLibraryFit();
   const [total, setTotal] = useState(0);
@@ -230,7 +242,7 @@ function ExercisesGrid({ fitsOnly, onToggleFit, onProfile }: GridFitProps) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [modalSlug, setModalSlug] = useState<string | null>(null);
+  const [modalSlug, setModalSlug] = useState<string | null>(initialSlug ?? null);
 
   const fetchPage = useCallback(async (off: number) => {
     setLoading(true);
@@ -303,7 +315,7 @@ function ExercisesGrid({ fitsOnly, onToggleFit, onProfile }: GridFitProps) {
 
 // ── Recipes grid ──────────────────────────────────────────────────────────
 
-function RecipesGrid({ fitsOnly, onToggleFit, onProfile }: GridFitProps) {
+function RecipesGrid({ fitsOnly, onToggleFit, onProfile, initialSlug }: GridFitProps) {
   const [items, setItems] = useState<HealthRecipeSummary[]>([]);
   const fit = useLibraryFit();
   const [total, setTotal] = useState(0);
@@ -324,7 +336,7 @@ function RecipesGrid({ fitsOnly, onToggleFit, onProfile }: GridFitProps) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [modalSlug, setModalSlug] = useState<string | null>(null);
+  const [modalSlug, setModalSlug] = useState<string | null>(initialSlug ?? null);
 
   // Taxonomies (collections / diets / flags / cuisines) load once to populate
   // the filter chips. Silent on failure — filters just stay empty.

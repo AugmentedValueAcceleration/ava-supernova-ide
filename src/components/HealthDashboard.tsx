@@ -1,5 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { WeeklyPlanView } from './WeeklyPlanView';
+import { ForYou } from './ForYou';
+import { requestHealthOpen } from './HealthPage';
 import { t, useLocale } from '../lib/i18n';
 
 /**
@@ -24,6 +26,12 @@ function longDate(): string {
   return new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+/** Into the Health page, on a tab, with something open (For you, Health Part 4). */
+function go(req: Parameters<typeof requestHealthOpen>[0]) {
+  requestHealthOpen(req);
+  window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'health' }));
+}
+
 export function HealthDashboard() {
   useLocale();
   const [innerTab, setInnerTab] = useState<'today' | 'week'>('today');
@@ -41,6 +49,13 @@ export function HealthDashboard() {
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#6c7086' }}>{longDate()}</div>
         <h1 style={{ fontSize: 20, fontWeight: 300, color: '#cdd6f4', margin: '4px 0 0' }}>{t(greetingKey())}.</h1>
       </header>
+
+      <ForYou h={{
+        onOpenItem: (kind, slug) => go({ tab: kind === 'recipe' ? 'recipes' : 'exercises', item: { kind, slug } }),
+        onStartPlan: (seed) => go({ tab: 'plans', seed }),
+        onProfile: () => go({ tab: 'profile' }),
+        onOpenPlans: () => go({ tab: 'plans' }),
+      }} />
 
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
         <button onClick={() => setInnerTab('today')} style={tabBtn(innerTab === 'today')}>{t('health.week.today')}</button>

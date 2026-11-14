@@ -1783,23 +1783,24 @@ function SidebarCalendar() {
           return (
             // A glance at what is planned, not a way in (operator, 13 Nov
             // 2026): the page you are on stays put.
-            <span
-              key={day}
-              style={{
-                width: 24, height: 24, borderRadius: '50%',
-                background: isToday ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'transparent',
-                color: isToday ? 'var(--accent)' : '#a6adc8',
-                fontSize: 9, fontWeight: isToday ? 600 : 400,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                position: 'relative',
-              }}
-            >
-              {day}
-              {dots.length > 0 && (
-                <span style={{ position: 'absolute', bottom: 1, display: 'flex', gap: 1 }}>
-                  {dots.map((c, di) => <span key={di} style={{ width: 4, height: 4, borderRadius: '50%', background: c }} />)}
-                </span>
-              )}
+            // The number alone in a centred circle; the dots sit UNDER it, so
+            // they never push the number off centre (14 Nov 2026).
+            <span key={day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <span
+                style={{
+                  width: 22, height: 22, borderRadius: '50%',
+                  background: isToday ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'transparent',
+                  color: isToday ? 'var(--accent)' : '#a6adc8',
+                  fontSize: 9, fontWeight: isToday ? 600 : 400,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {day}
+              </span>
+              <span aria-hidden style={{ display: 'flex', justifyContent: 'center', gap: 2, height: 4 }}>
+                {dots.map((c, di) => <span key={di} style={{ width: 4, height: 4, borderRadius: '50%', background: c }} />)}
+              </span>
             </span>
           );
         })}

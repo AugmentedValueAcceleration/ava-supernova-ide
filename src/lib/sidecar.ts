@@ -506,6 +506,8 @@ export class SidecarManager {
   async deleteModel(slug: string, tool: 'blender' | 'gimp' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'delete_model', slug, tool }); }
   /** Check library items against their hard rules; answers with a 'health_safety_result' event. */
   async healthSafetyCheck(recipes: string[], exercises: string[]): Promise<void> { await this.send({ cmd: 'health_safety_check', recipes, exercises }); }
+  /** Build "For you" (Health Part 4); answers with a 'health_for_you_result' event. */
+  async healthForYou(profile: unknown, activePlans: unknown[], today: string): Promise<void> { await this.send({ cmd: 'health_for_you', profile, activePlans, today }); }
   async copyModelToProject(slug: string, projectRoot: string, tool: 'blender' | 'gimp' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'copy_model_to_project', slug, projectRoot, tool }); }
   async blenderStatus(): Promise<void> { await this.send({ cmd: 'blender_status' }); }
   async setBlenderPath(path: string | null): Promise<void> { await this.send({ cmd: 'set_blender_path', path }); }

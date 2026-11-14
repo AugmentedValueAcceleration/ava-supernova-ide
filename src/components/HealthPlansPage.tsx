@@ -187,11 +187,16 @@ function dayTotals(day: HealthPlanDay, recipeDetails: Record<string, HealthRecip
 }
 
 // ── Top component — owns state, talks to catalogue + plan store ───────
-export default function HealthPlansPage({ onOpenShopping }: { onOpenShopping?: (planId: string | null) => void } = {}) {
+export default function HealthPlansPage({ onOpenShopping, seed: seedIn = null }: {
+  onOpenShopping?: (planId: string | null) => void;
+  /** For you → "Start a plan with it": the wizard opens with this on day 1. */
+  seed?: { kind: 'recipe' | 'exercise'; slug: string; name: string; course?: string | null } | null;
+} = {}) {
   useLocale();
   const [plans, setPlans] = useState<HealthPlanSummary[]>([]);
   const [planOpen, setPlanOpen] = useState<HealthPlan | null>(null);
-  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(!!seedIn);
+  const [seed, setSeed] = useState(seedIn);
   const [exerciseResults, setExerciseResults] = useState<HealthExerciseSummary[]>([]);
   const [recipeResults, setRecipeResults] = useState<HealthRecipeSummary[]>([]);
   const [exerciseTotal, setExerciseTotal] = useState(0);
@@ -295,7 +300,8 @@ export default function HealthPlansPage({ onOpenShopping }: { onOpenShopping?: (
         <PlanWizard
           healthProfile={wizProfile}
           onSaveProfile={saveWizProfile}
-          onCancel={() => setSetupOpen(false)}
+          onCancel={() => { setSetupOpen(false); setSeed(null); }}
+          seed={seed}
           onAskAva={(type) => {
             // Same as the extension: to the health room's tab, with the plan
             // type handed over as a confirmed intent.
@@ -303,7 +309,7 @@ export default function HealthPlansPage({ onOpenShopping }: { onOpenShopping?: (
             window.dispatchEvent(new Event('ava-open-health-room'));
             window.dispatchEvent(new CustomEvent('ava-health-room-ask', { detail: healthRoomPlanDirective(type) }));
           }}
-          onCreate={(plan: never) => { void onSavePlan(plan as unknown as HealthPlan); }}
+          onCreate={(plan: never) => { setSeed(null); void onSavePlan(plan as unknown as HealthPlan); }}
           onOpenSafety={openSafety}
           exerciseResults={exerciseResults}
           recipeResults={recipeResults}

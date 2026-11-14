@@ -95,6 +95,16 @@ try {
   healthCore = await import(`file://${healthPath.replace(/\\/g, '/')}`);
 }
 
+// For you (Health Part 4): the command centre's picks, built here where the
+// person's profile is, against core's safety rules. Only slugs leave the machine.
+let forYouCore;
+try {
+  forYouCore = await import('@ava/core/health/for-you');
+} catch {
+  const fyPath = join(__dirname, '..', '..', 'core', 'dist', 'health', 'for-you.js');
+  forYouCore = await import(`file://${fyPath.replace(/\\/g, '/')}`);
+}
+
 // Desktop subpath — the five-persona conductor (runDesktopTrajectory) lives
 // here. Drives Desktop Automation Mode turns instead of the regular agent loop.
 let desktopCore;
@@ -4703,6 +4713,21 @@ rl.on('line', async (line) => {
       deleteModel(String(data.slug || ''), data.tool).catch((err) =>
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not delete the model' }));
       break;
+    case 'health_for_you': {
+      (async () => {
+        try {
+          const result = await forYouCore.buildForYou({
+            profile: data.profile ?? null,
+            activePlans: Array.isArray(data.activePlans) ? data.activePlans : [],
+            today: String(data.today || ''),
+          });
+          emit({ event: 'health_for_you_result', result });
+        } catch {
+          emit({ event: 'health_for_you_result', result: null });
+        }
+      })();
+      break;
+    }
     case 'health_safety_check': {
       // Their hard rules against what the plan wizard is showing (Part 1,
       // 11 Nov 2026). Same as the extension host: the profile is read here,
