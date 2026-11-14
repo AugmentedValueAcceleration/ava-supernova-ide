@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTabTransition } from '../lib/useTabTransition';
 import { TabSpinner } from './TabSpinner';
-import { t, useLocale, getLocale } from '../lib/i18n';
+import { t, tt, useLocale, getLocale } from '../lib/i18n';
 import {
   loadExercises, loadRecipes, loadExerciseDetail, loadRecipeDetail,
 } from '../lib/health-catalog';
@@ -36,6 +36,8 @@ import { LogSessionSheet } from './LogSessionSheet';
 import { SendWorkoutToPhone, GymButton, SendMealToPhone, KitchenButton } from './SendItemToPhone';
 import { ResultsImport, AddFromPhoneButton } from './ResultsImport';
 import { decodeResults, sessionFromResults, type SharedResults } from '@ava/core/health/share-results';
+import { progressionAfterSession, lastTimesForDay, applyProgression, type ProgressionRow } from '@ava/core/health/progression';
+import { NextTimeDialog, LastTimeLine } from './NextTime';
 import { fillDayMeta } from '../lib/plan-meal-meta';
 import { PrepSheet } from './PrepSheet';
 import { DuplicateSheet } from './DuplicateSheet';
@@ -116,6 +118,17 @@ function durationLabel(days: number): string {
   if (days < 14 || days % 7 !== 0) return t('health.plans.duration.days', { n: days });
   return t('health.plans.duration.weeks', { n: days / 7 });
 }
+/** "Saved. Next time?" / "Step up" (Part 6): the rows, where Update applies from,
+ *  and who to tell when the plan changes. */
+interface ProgressionOffer { planId: string; fromDay: number; rows: ProgressionRow[]; title?: string; note?: string; onApplied?: (plan: HealthPlan) => void }
+async function offerAfterSession(session: GymSession): Promise<ProgressionOffer | null> {
+  if (!session.plan_id || session.day_index == null) return null;
+  const plan = await loadHealthPlan(session.plan_id).catch(() => null);
+  if (!plan) return null;
+  const rows = progressionAfterSession(plan as never, session);
+  return rows.length ? { planId: plan.id, fromDay: session.day_index + 1, rows } : null;
+}
+
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -509,6 +522,18 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan, onOpenShoppi
   }, [fullPlans]);
   /** Results from the phone (Health Part 6): the paste box, then "Add this session?". */
   const [phone, setPhone] = useState<{ results: SharedResults | null; payload: string | null; failed?: boolean; saving?: boolean; saved?: boolean } | null>(null);
+  /** Progression from the log: offered, never applied unasked. */
+  const [nextTime, setNextTime] = useState<{ offer: ProgressionOffer; busy?: boolean } | null>(null);
+  const applyNextTime = async (offer: ProgressionOffer, choices: Parameters<typeof applyProgression>[2]) => {
+    setNextTime({ offer, busy: true });
+    const plan = await loadHealthPlan(offer.planId).catch(() => null);
+    if (plan) {
+      const next = applyProgression(plan as never, offer.fromDay, choices) as unknown as HealthPlan;
+      await onSavePlan(next);
+      offer.onApplied?.(next);
+    }
+    setNextTime(null);
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -531,11 +556,22 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan, onOpenShoppi
             const r = phone.results;
             if (!r) return;
             setPhone({ ...phone, saving: true });
-            void saveSession(sessionFromResults(r))
-              .then(() => setPhone((p) => (p ? { ...p, saving: false, saved: true } : p)))
+            const session = sessionFromResults(r);
+            void saveSession(session)
+              .then(async () => {
+                setPhone((p) => (p ? { ...p, saving: false, saved: true } : p));
+                // Something to step up -> the saved screen becomes "Saved. Next time?".
+                const offer = await offerAfterSession(session);
+                if (offer) { setPhone(null); setNextTime({ offer }); }
+              })
               .catch(() => setPhone((p) => (p ? { ...p, saving: false, failed: true } : p)));
           }}
           onClose={() => setPhone(null)} />
+      )}
+      {nextTime && (
+        <NextTimeDialog rows={nextTime.offer.rows} busy={nextTime.busy} title={nextTime.offer.title} note={nextTime.offer.note}
+          onApply={(choices) => { void applyNextTime(nextTime.offer, choices); }}
+          onClose={() => setNextTime(null)} />
       )}
 
       <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${BORDER}` }}>
@@ -599,7 +635,7 @@ function BasePlansTab({ plans, onNew, onOpen, onDelete, onSavePlan, onOpenShoppi
         </>
       )}
 
-      {dayKey && <HealthDayView dateKey={dayKey} onClose={() => setDayKey(null)} onNewPlan={() => { setDayKey(null); onNew(); }} onSavePlan={onSavePlan} onOpenShopping={onOpenShopping ? () => { setDayKey(null); onOpenShopping(null); } : undefined} />}
+      {dayKey && <HealthDayView dateKey={dayKey} onNextTime={(offer) => setNextTime({ offer })} onClose={() => setDayKey(null)} onNewPlan={() => { setDayKey(null); onNew(); }} onSavePlan={onSavePlan} onOpenShopping={onOpenShopping ? () => { setDayKey(null); onOpenShopping(null); } : undefined} />}
     </div>
   );
 }
@@ -633,7 +669,7 @@ function planDayForDate(plan: HealthPlan, dateKey: string): HealthPlanDay | null
 interface DayAgendaItem { id: string; kind: 'exercise' | 'recipe'; slug?: string; title: string; meta?: string; slot?: string; thumb?: string | null; planTitle: string; planId: string; itemId: string; dayIndex: number }
 interface DayAgendaSection { key: string; label: string; icon: string; accent: string; items: DayAgendaItem[] }
 
-function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping }: { dateKey: string; onClose: () => void; onNewPlan: () => void; onSavePlan: (plan: HealthPlan) => void; onOpenShopping?: () => void }) {
+function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping, onNextTime }: { dateKey: string; onClose: () => void; onNewPlan: () => void; onSavePlan: (plan: HealthPlan) => void; onOpenShopping?: () => void; onNextTime?: (offer: ProgressionOffer) => void }) {
   useLocale();
   const [plans, setPlans] = useState<HealthPlan[]>([]);
   const [exerciseDetails, setExerciseDetails] = useState<Record<string, HealthExerciseDetail>>({});
@@ -928,6 +964,28 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
     }
     return null;
   })();
+  // "Last time" under each exercise (Part 6), from the log before this day.
+  const [lastTimes, setLastTimes] = useState<Record<string, ProgressionRow>>({});
+  const ltPlan = loggableDay?.plan ?? null;
+  const ltDay = loggableDay?.day.day_index ?? null;
+  useEffect(() => {
+    if (!ltPlan || ltDay == null) { setLastTimes({}); return; }
+    let live = true;
+    listAllSessions()
+      .then((all) => { if (live) setLastTimes(lastTimesForDay(ltPlan as never, ltDay, all, dateKey)); })
+      .catch(() => { if (live) setLastTimes({}); });
+    return () => { live = false; };
+  }, [ltPlan, ltDay, dateKey, daySession]);
+  /** The plan changed from a "Next time?" choice: show it here at once. */
+  const onApplied = (next: HealthPlan) => setPlans((prev) => prev.map((p) => (p.id === next.id ? next : p)));
+  const stepUp = (row: ProgressionRow) => {
+    if (!ltPlan || ltDay == null) return;
+    onNextTime?.({
+      planId: ltPlan.id, fromDay: ltDay, rows: [row], onApplied,
+      title: `${tt('health.next.step_up_title', 'Step up')}: ${row.name}`,
+      note: tt('health.next.note_day', 'Changes this day and the rest of the plan. Days already done are not touched.'),
+    });
+  };
   const [logging, setLogging] = useState(false);
   const [gym, setGym] = useState(false);
   const [kitchen, setKitchen] = useState(false);
@@ -1134,10 +1192,16 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
                           )}
                         </div>
                       ) : (
-                        <button key={item.id} type="button" disabled={!item.slug} onClick={() => openItem(item)} title={item.planTitle}
-                          style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden', borderRadius: 10, border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.015)', padding: 8, textAlign: 'left', cursor: item.slug ? 'pointer' : 'default' }}>
-                          <AgendaCardInner item={item} icon={section.icon} accent={section.accent} />
-                        </button>
+                        <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <button type="button" disabled={!item.slug} onClick={() => openItem(item)} title={item.planTitle}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden', borderRadius: 10, border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.015)', padding: 8, textAlign: 'left', cursor: item.slug ? 'pointer' : 'default' }}>
+                            <AgendaCardInner item={item} icon={section.icon} accent={section.accent} />
+                          </button>
+                          {item.kind === 'exercise' && item.slug && item.planId === ltPlan?.id && lastTimes[item.slug] && (
+                            <LastTimeLine row={lastTimes[item.slug]}
+                              onStepUp={dateKey >= todayISO() && onNextTime ? () => stepUp(lastTimes[item.slug!]) : undefined} />
+                          )}
+                        </div>
                       )
                     ))}
                   </div>
@@ -1221,7 +1285,14 @@ function HealthDayView({ dateKey, onClose, onNewPlan, onSavePlan, onOpenShopping
             planId={loggableDay.plan.id}
             date={dateKey}
             existing={daySession}
-            onSave={s => { setDaySession(s); saveSession(s).catch(() => { /* non-fatal — it is still on screen */ }); }}
+            onSave={s => {
+              setDaySession(s);
+              saveSession(s)
+                // Logged by hand: the same "Saved. Next time?" as a session from the phone.
+                .then(() => offerAfterSession(s))
+                .then((offer) => { if (offer) onNextTime?.({ ...offer, onApplied }); })
+                .catch(() => { /* non-fatal — it is still on screen */ });
+            }}
             onClose={() => setLogging(false)}
           />
         )}
