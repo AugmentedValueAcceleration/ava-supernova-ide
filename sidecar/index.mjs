@@ -241,6 +241,7 @@ const {
   MemoryRecallV4Tool,
   AvaMemory,
   memoryPage,
+  ensureOldMemoryImported,
   MemorySaveV4Tool,
   MemoryUpdateV4Tool,
   MemoryDeleteV4Tool,
@@ -2361,6 +2362,8 @@ async function handleInit(data) {
     const memoryV4 = memoryV4Root();
     if (memoryV4) {
       try {
+        // First start after the update: the old memory comes across once, free.
+        await ensureOldMemoryImported(new AvaMemory({ root: memoryV4 }), AVA_HOME, (m) => emit({ event: 'info', message: m }));
         memorySession = await MemorySession.open({
           root: memoryV4,
           projectPath: projectRoot ?? null,
