@@ -1,3 +1,5 @@
+import { MemoryV4Page } from './MemoryV4Page';
+import { memoryRequest, useMemoryV4Status } from '../lib/memory-v4';
 import { stripChangesSummary } from '@ava/core/changes-summary';
 import { FactoryResetDialog } from './FactoryResetDialog';
 import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -8039,7 +8041,17 @@ function isMemoryStale(entry: any): boolean {
   return daysSince > 90;
 }
 
+/**
+ * The Memory page. With memory v4 on it is "What Ava knows" (MemoryV4Page,
+ * shared with the extension); otherwise the old page below. Chosen here, in
+ * its own component, so neither page's hooks depend on the switch.
+ */
 export function MemoryPage() {
+  const v4 = useMemoryV4Status();
+  return v4.on ? <MemoryV4Page request={memoryRequest} /> : <MemoryPageV3 />;
+}
+
+function MemoryPageV3() {
   useLocale();
   const [memories, setMemories] = useState<any[]>([]);
   const [search, setSearch] = useState('');

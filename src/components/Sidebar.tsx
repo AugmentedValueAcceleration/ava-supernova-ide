@@ -5,6 +5,7 @@ import { readLocalTasks } from '../lib/task-store';
 // The generation rail listens for `generation_progress` from the sidecar, which
 // holds creative jobs outside the canvas so they survive navigating away.
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
+import { useMemoryV4Status } from '../lib/memory-v4';
 import { Tooltip } from './Tooltip';
 import {
   Lightning as PhCommand,
@@ -1237,8 +1238,21 @@ const NAV_ITEMS: { id: string; Icon: PhIconType; labelKey: string; descKey: stri
   { id: 'help',            Icon: PhHelp,     labelKey: 'dash.nav.help',            descKey: 'dash.nav.help_desc' },
 ];
 
+/** Things waiting for a yes on the Memory page (memory v4), as a small count. */
+function MemoryBadge({ count, rail }: { count: number; rail?: boolean }) {
+  if (!count) return null;
+  return (
+    <span style={{
+      position: 'absolute', top: rail ? 2 : -4, right: rail ? 2 : -6, minWidth: 14, height: 14, borderRadius: 999,
+      background: 'var(--accent, #a855f7)', color: '#fff', fontSize: 9, fontWeight: 700, lineHeight: '14px', textAlign: 'center', padding: '0 3px',
+    }}>{count}</span>
+  );
+}
+
 function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { onDashboardSelect?: (page: string) => void; activePage?: string | null; collapsed?: boolean }) {
   useLocale();
+  const memoryV4 = useMemoryV4Status();
+  const memoryWaiting = memoryV4.on ? memoryV4.pending : 0;
 
   // ── Collapsed icons-only rail ─────────────────────────────────────
   // Mirrors the extension NavSidebar's collapsed mode: 9 stacked icon
@@ -1268,6 +1282,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
                 onMouseOut={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#a6adc8'; } }}
               >
                 <item.Icon size={20} weight="duotone" />
+                {item.id === 'memory' && <MemoryBadge count={memoryWaiting} rail />}
               </button>
               </Tooltip>
             );
@@ -1301,6 +1316,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
             >
               <span style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative', color: isActive ? '#cba6f7' : '#a6adc8' }}>
                 <item.Icon size={20} weight="duotone" />
+                {item.id === 'memory' && <MemoryBadge count={memoryWaiting} />}
               </span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

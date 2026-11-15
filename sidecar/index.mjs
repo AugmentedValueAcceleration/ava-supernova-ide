@@ -239,6 +239,8 @@ const {
   MemoryAgent,
   MemorySession,
   MemoryRecallV4Tool,
+  AvaMemory,
+  memoryPage,
   MemorySaveV4Tool,
   MemoryUpdateV4Tool,
   MemoryDeleteV4Tool,
@@ -656,6 +658,22 @@ let memoryManager = null;
 let memorySession = null;
 // The fleet's own low-cost model for memory v4's end-of-session tidy-up.
 let memoryModel = null;
+// The Memory page's store: the same folder memorySession uses, opened even
+// before a session exists (the page can be open with no chat started).
+let memoryV4PageStore = null;
+function memoryV4Store() {
+  const root = memoryV4Root();
+  if (!root) return null;
+  if (!memoryV4PageStore || memoryV4PageStore.root !== root) memoryV4PageStore = new AvaMemory({ root });
+  return memoryV4PageStore;
+}
+/** Tell the front-end whether memory v4 is on and how many things wait for a yes. */
+async function emitMemoryV4Status() {
+  const mem = memoryV4Store();
+  let pending = 0;
+  try { pending = mem ? (await mem.listFacts('pending')).length : 0; } catch { /* a count is not worth failing over */ }
+  emit({ event: 'memory_v4_status', on: !!mem, pending });
+}
 
 /** Memory v4 tidy-up model for a fleet (or, for a single model, any key held). Mirrors the extension. */
 function pickMemoryModel(providerRegistry, sharedState, fleet) {
@@ -731,6 +749,7 @@ async function reflectSession(conv) {
     if (userTurns <= (lastReflectedTurns.get(conv.id) ?? 0)) return 0;
     const r = await consolidateSession({ session: memorySession, messages, provider: memoryModel.provider, model: memoryModel.model, log: (m) => emit({ event: 'info', message: m }) }).catch(() => null);
     lastReflectedTurns.set(conv.id, userTurns);
+    if (r) void emitMemoryV4Status();
     if (r) emit({ event: 'info', message: `Memory tidy-up: ${r.dayLines} day lines, ${r.saved} saved, ${r.waiting} waiting for a yes, ${r.changed} changed, threads +${r.threadsOpened}/-${r.threadsClosed}` });
     return r ? r.saved + r.waiting + r.changed : 0;
   }
@@ -4844,6 +4863,26 @@ rl.on('line', async (line) => {
     }
     case 'pdf_fonts_remove': {
       pdfFontsCore.removeOptionalFonts().catch(() => {}).then(async () => emit({ event: 'pdf_fonts_state', state: await pdfFontsCore.optionalFontsStatus() }));
+      break;
+    }
+    case 'memory_v4_status': {
+      void emitMemoryV4Status();
+      break;
+    }
+    case 'memory_v4': {
+      // The Memory page ("What Ava knows"): one op of core's memoryPage().
+      (async () => {
+        let result;
+        try {
+          const mem = memoryV4Store();
+          result = mem ? await memoryPage(mem, data.op, data.args || {}) : { ok: false, error: 'Memory v4 is not on.' };
+        } catch (err) {
+          result = { ok: false, error: err?.message || String(err) };
+        }
+        emit({ event: 'memory_v4_result', requestId: data.requestId, result });
+        // Yes / No / Forget change the count waiting: keep the sidebar badge right.
+        if (data.op !== 'overview' && data.op !== 'facts' && data.op !== 'threads' && data.op !== 'days') void emitMemoryV4Status();
+      })();
       break;
     }
     case 'document_sheet': {
