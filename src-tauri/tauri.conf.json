@@ -50,7 +50,8 @@
     ],
     "resources": [
       "resources/sidecar-bundle.mjs",
-      "resources/browser-worker.mjs"
+      "resources/browser-worker.mjs",
+      "resources/data/*"
     ],
     "icon": [
       "icons/32x32.png",

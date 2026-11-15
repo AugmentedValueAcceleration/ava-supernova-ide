@@ -4,6 +4,7 @@
  * and download node.exe for the target platform.
  */
 import { build } from 'esbuild';
+import { SIDECAR_BUILD, copyDocumentAssets } from './sidecar-shared.mjs';
 import { existsSync, mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
@@ -19,16 +20,13 @@ const resourcesDir = join(tauriDir, 'resources');
 if (!existsSync(resourcesDir)) mkdirSync(resourcesDir, { recursive: true });
 
 await build({
+  ...SIDECAR_BUILD,
   entryPoints: [join(root, 'sidecar', 'index.mjs')],
-  bundle: true,
-  platform: 'node',
-  format: 'esm',
-  target: 'node20',
   outfile: join(resourcesDir, 'sidecar-bundle.mjs'),
-  external: ['node:*'],
-  minify: true,
-  banner: { js: 'import{createRequire}from"node:module";const require=createRequire(import.meta.url);' },
 });
+// pdfkit's fonts for making PDFs, beside the bundle
+// (tauri.conf.json lists them as resources).
+copyDocumentAssets(resourcesDir);
 console.log('[bundle] Sidecar bundled successfully.');
 
 // 2. Download node.exe if not present
