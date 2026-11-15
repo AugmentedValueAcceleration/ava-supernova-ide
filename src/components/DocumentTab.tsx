@@ -19,7 +19,7 @@ export function isViewerDocument(path: string): boolean {
  *  extension's chat ("Built → C:\…\overview.pdf", "Created spreadsheet: …"). */
 export function viewableFiles(name: string, result: string | undefined): string[] {
   if (!result || (name !== 'document_author' && name !== 'document_manage')) return [];
-  const found = result.match(/(?:[A-Za-z]:[\\/]|\/)[^\n"'`|]*?\.(?:pdf|docx|xlsx|csv)\b/gi) ?? [];
+  const found = result.match(/(?:[A-Za-z]:[\\/]|\/)[^\n"'`|]*?\.(?:pdf|docx|xlsx|ods|csv)\b/gi) ?? [];
   return [...new Set(found.map((p) => p.trim()))];
 }
 
