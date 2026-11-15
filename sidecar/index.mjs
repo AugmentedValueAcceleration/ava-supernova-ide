@@ -237,6 +237,9 @@ const {
   AutoCoordinator,
   IntentClassifier,
   MemoryAgent,
+  MemorySession,
+  MemoryRecallV4Tool,
+  memoryV4Root,
   ProjectIndexer,
   BriefingEngine,
   detectProjectRoot,
@@ -642,6 +645,10 @@ let conversation = null;
 let historyManager = null;
 let toolRegistry = null;
 let memoryManager = null;
+// Memory v4 (one store of plain files). Opt-in through AVA_MEMORY_V4_ROOT until
+// the switch-over; when open it replaces the old brief in every mode and
+// memory_recall searches it. Mirrors the extension.
+let memorySession = null;
 let journalManager = null;
 // Init lifecycle — flips true at the start of handleInit, false on
 // completion or failure. handleMessage uses this to distinguish "init
@@ -2301,6 +2308,28 @@ async function handleInit(data) {
     }
     emit({ event: 'info', message: 'Memory manager created' });
 
+    memorySession = null;
+    const memoryV4 = memoryV4Root();
+    if (memoryV4) {
+      try {
+        memorySession = await MemorySession.open({
+          root: memoryV4,
+          projectPath: projectRoot ?? null,
+          embeddingService: createEmbeddingServiceFromConfig({
+            useLocalEmbeddings: config.useLocalEmbeddings,
+            embeddingModel: config.embeddingModel,
+            embeddingBaseUrl: config.embeddingBaseUrl,
+          }),
+        });
+        // Same tool name, so prompts and mode allowlists are unchanged.
+        toolRegistry.register(new MemoryRecallV4Tool());
+        emit({ event: 'info', message: `Memory v4 on (${memoryV4})${memorySession.project ? `, project ${memorySession.project.name}` : ''}` });
+      } catch (err) {
+        memorySession = null;
+        emit({ event: 'info', message: `Memory v4 could not open ${memoryV4}: ${err.message}` });
+      }
+    }
+
     // Conversation history — ~/.ava/history, byte-identical
     // to the extension's HistoryManager so the files are cross-surface compatible.
     try {
@@ -2365,6 +2394,8 @@ async function handleInit(data) {
       decisionsContext: decisionsState?.context ?? undefined,
       decisionsFolderExists: decisionsState?.hasFolder ?? false,
       decisionsOptInStatus: decisionsState?.optInStatus ?? undefined,
+      // Memory v4 session block: core page, where you left off, open threads.
+      coreMemory: memorySession ? ((await memorySession.sessionBlock().catch(() => '')) || undefined) : undefined,
       desktopMode: currentMode === 'desktop',
       // desktopPermissionLevel intentionally omitted at init — currentMode
       // at init is always 'work' so the desktop block isn't rendered yet,
@@ -2415,7 +2446,8 @@ async function handleInit(data) {
     // may miss it; every turn after has it. Reads globalThis._systemPromptArgs
     // fresh so a mode switch that lands first is preserved, and bails if a
     // newer init has since swapped the conversation/manager out.
-    if (memoryManager && conversation) {
+    // With memory v4 on, its session block (already in the prompt) replaces the brain.
+    if (memoryManager && conversation && !memorySession) {
       const mm = memoryManager;
       const conv = conversation;
       Promise.resolve(mm.loadAll?.(projectInstructions ?? undefined))
@@ -2454,6 +2486,7 @@ async function handleInit(data) {
     // Shared state
     const sharedState = {
       memoryManager,
+      memorySession,
       // Machine-global dir (AVA_HOME) — lets record_machine_rule persist a
       // standing rule to <AVA_HOME>/Decisions/machine-rules.md.
       globalDir: AVA_HOME,
@@ -3585,9 +3618,26 @@ async function handleMessage(data) {
     }
     let messages = conversation.getMessages();
 
+    // Memory v4: the app's own lookup for this message, in every mode, with no
+    // second model call. Same [Memory Brief] label as before, so history
+    // handling of stale primers is unchanged.
+    if (memorySession && data.content) {
+      try {
+        const block = await memorySession.messageBlock(data.content);
+        if (block) {
+          const currentMsgs = conversation.getMessages();
+          currentMsgs.push({ role: 'system', content: `[Memory Brief]\n${block}` });
+          conversation.setMessages(currentMsgs);
+          messages = conversation.getMessages();
+        }
+      } catch (err) {
+        emit({ event: 'info', message: `Memory lookup failed: ${err.message}` });
+      }
+    }
+
     // Per-turn memory brief (curated by Memory Agent) or raw recall fallback
     // Enhanced: detects ambiguous references and topic shifts for proactive recall
-    if (memoryAgentInstance && data.content && data.content.length > 5) {
+    if (!memorySession && memoryAgentInstance && data.content && data.content.length > 5) {
       try {
         // Detect ambiguous references — "that thing", "the issue", "what we discussed"
         // If found, enrich the query with recent conversation context for better recall
@@ -3628,7 +3678,7 @@ async function handleMessage(data) {
       } catch (err) {
         emit({ event: 'info', message: `Memory brief failed: ${err.message}` });
       }
-    } else if (memoryManager && data.content && data.content.length > 5) {
+    } else if (!memorySession && memoryManager && data.content && data.content.length > 5) {
       // Fallback pointer (no Memory Agent available). Previous code dumped
       // up to 5 memories verbatim (~1.5K chars) every turn — redundant with
       // the memory_recall tool. Now we just list the topic categories so Ava
