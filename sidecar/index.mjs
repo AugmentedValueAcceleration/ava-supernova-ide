@@ -700,7 +700,7 @@ async function emitMemoryV4Status() {
 }
 
 /** Memory v4 tidy-up model for a fleet (or, for a single model, any key held). Mirrors the extension. */
-function pickMemoryModel(providerRegistry, sharedState, fleet) {
+function pickMemoryModel(providerRegistry, sharedState, fleet, current) {
   if (!memorySession || !providerRegistry) return null;
   const availableProviders = new Set();
   if (sharedState.qwenApiKey) availableProviders.add('qwen');
@@ -708,7 +708,8 @@ function pickMemoryModel(providerRegistry, sharedState, fleet) {
   if (sharedState.kimiApiKey) availableProviders.add('kimi');
   if (sharedState.deepseekApiKey) availableProviders.add('deepseek');
   if (sharedState.mistralApiKey) availableProviders.add('mistral');
-  return resolveMemoryModel(providerRegistry, availableProviders, fleet || undefined);
+  // No key but a local model: the tidy-up runs on that (core decides it is local).
+  return resolveMemoryModel(providerRegistry, availableProviders, fleet || undefined, fleet ? null : current);
 }
 let journalManager = null;
 // Init lifecycle — flips true at the start of handleInit, false on
@@ -2761,7 +2762,7 @@ async function handleInit(data) {
     autoCoordinator = startFleet
       ? createFleetCoordinator(startFleet, { providerRegistry, toolRegistry, cwd, sharedState })
       : null;
-    memoryModel = pickMemoryModel(providerRegistry, sharedState, startFleet);
+    memoryModel = pickMemoryModel(providerRegistry, sharedState, startFleet, resolved);
     if (memorySession) emit({ event: 'info', message: `Memory tidy-up model: ${memoryModel?.model.id ?? 'none reachable (tidy-up off; saves still work)'}` });
 
     // Store for hot-swap model changes
@@ -4402,7 +4403,7 @@ async function handleSetModel(data) {
     const cwd = globalThis._cwd || process.cwd();
     const sharedState = globalThis._sharedState || {};
 
-    memoryModel = pickMemoryModel(providerRegistry, sharedState, isRoutingMode(data.model) ? data.model : undefined);
+    memoryModel = pickMemoryModel(providerRegistry, sharedState, isRoutingMode(data.model) ? data.model : undefined, isRoutingMode(data.model) ? null : providerRegistry.resolveModel(data.model));
 
     // A fleet — the same setup as startup (createFleetCoordinator). isRoutingMode
     // comes from core, so every fleet id is recognised here, Longxiang included.
