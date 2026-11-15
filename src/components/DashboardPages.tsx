@@ -450,14 +450,6 @@ interface LearningCurriculum {
   progress_percent: number;
 }
 
-interface MemoryEntry {
-  key?: string;
-  content: string;
-  archived?: boolean;
-  created_at: string;
-  updated_at?: string;
-}
-
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -1926,49 +1918,35 @@ function CCLearningWidget({ curriculums, loading }: { curriculums: LearningCurri
 
 // ── Memory Widget ───────────────────────────────────────────────────────────
 
-function CCMemoryWidget({ memories, loading }: { memories: MemoryEntry[]; loading: boolean }) {
-  const activeCount = memories.filter(m => !m.archived).length;
-  const lastMemory = memories.length > 0
-    ? memories.reduce((latest, m) => {
-        const mDate = m.updated_at ?? m.created_at;
-        const latestDate = latest.updated_at ?? latest.created_at;
-        return mDate > latestDate ? m : latest;
-      })
-    : null;
-
+function CCMemoryWidget() {
+  useLocale();
+  const m = useMemoryV4Status();
   return (
     <WidgetCard
       title={t('dash.cc.memory')}
       icon={'\uD83E\uDDE0'}
       action={{ label: t('dash.cc.view_all'), onClick: () => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'memory' })) }}
     >
-      {loading ? (
-        <div style={{ padding: '16px 0', fontSize: 12, color: '#6c7086' }}>{t('dash.cc.loading_memories')}</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>{activeCount}</div>
-              <div style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.cc.active_memories')}</div>
-            </div>
-            <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-              <div style={{ fontSize: 20, fontWeight: 600, color: '#a6adc8' }}>{memories.length}</div>
-              <div style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.cc.total')}</div>
-            </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: '#cdd6f4' }}>{m.facts}</div>
+            <div style={{ fontSize: 10, color: '#6c7086' }}>{tt('memory.v4.card_facts', 'things Ava knows')}</div>
           </div>
-          {lastMemory && (
-            <div style={{ background: 'rgba(49,50,68,0.3)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 8, padding: 10 }}>
-              <p style={{ fontSize: 10, color: '#6c7086', margin: '0 0 2px 0' }}>{t('dash.cc.last_saved')}</p>
-              <p style={{ fontSize: 12, color: '#a6adc8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {lastMemory.key || truncate(lastMemory.content, 60)}
-              </p>
-              <p style={{ fontSize: 9, color: '#6c7086', margin: '2px 0 0 0' }}>
-                {formatRelativeDate(lastMemory.updated_at ?? lastMemory.created_at)}
-              </p>
-            </div>
-          )}
+          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+            <div style={{ fontSize: 20, fontWeight: 600, color: '#a6adc8' }}>{m.pending}</div>
+            <div style={{ fontSize: 10, color: '#6c7086' }}>{tt('memory.v4.card_waiting', 'waiting for your yes')}</div>
+          </div>
         </div>
-      )}
+        {m.latest && (
+          <div style={{ background: 'rgba(49,50,68,0.3)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 8, padding: 10 }}>
+            <p style={{ fontSize: 10, color: '#6c7086', margin: '0 0 2px 0' }}>{tt('memory.v4.card_latest', 'Newest')}</p>
+            <p style={{ fontSize: 12, color: '#a6adc8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {truncate(m.latest, 80)}
+            </p>
+          </div>
+        )}
+      </div>
     </WidgetCard>
   );
 }
@@ -2216,25 +2194,6 @@ export function CommandCentrePage() {
   const [curriculums, setCurriculums] = useState<LearningCurriculum[]>([]);
   const [learningLoading, setLearningLoading] = useState(true);
   useEffect(() => { void readLocalLearning().then(c => { setCurriculums(c as LearningCurriculum[]); setLearningLoading(false); }); }, []);
-  // Memory is local-first — read the authoritative v3 graph (~/.ava/memory/
-  // graph.json, the flat store the agent + extension + the Memory page use);
-  // its `nodes` ARE the entries. The platform API never holds these.
-  const [memories, setMemories] = useState<MemoryEntry[]>([]);
-  const [memoriesLoading, setMemoriesLoading] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    import('@tauri-apps/plugin-fs')
-      .then(fs => fs.readTextFile('.ava/memory/graph.json', { baseDir: fs.BaseDirectory.Home }))
-      .then(raw => {
-        if (cancelled) return;
-        const g = JSON.parse(raw || '{}');
-        const nodes: any[] = Array.isArray(g.nodes) ? g.nodes : [];
-        setMemories(nodes.map(n => ({ content: n.content, archived: n.archived, created_at: n.createdAt, updated_at: n.updatedAt })));
-        setMemoriesLoading(false);
-      })
-      .catch(() => { if (!cancelled) setMemoriesLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
   const [releaseData, setReleaseData] = useState<any>(null);
   const [releaseLoading, setReleaseLoading] = useState(true);
   const refetchRelease = useCallback(() => {
@@ -2450,10 +2409,9 @@ export function CommandCentrePage() {
         {/* ── Reflect tab ───────────────────────────────────────────── */}
         {tab === 'reflect' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Same as the daily lens: the memory graph is ~/.ava/memory/
-                graph.json and learning is ~/.ava/learning.json. Local-first
-                means the local copy IS the copy — no account required. */}
-            <CCMemoryWidget memories={memories} loading={memoriesLoading} />
+            {/* Ava's memory (~/.ava/memory) and learning (~/.ava/learning.json):
+                local-first, so the local copy IS the copy. */}
+            <CCMemoryWidget />
             <CCLearningWidget curriculums={curriculums} loading={learningLoading} />
           </div>
         )}
@@ -3850,10 +3808,6 @@ export function AvaChatPage() {
     };
     sidecar.on('close', onClose);
 
-    // Memory clear events
-    const onClearMemory = () => { sidecar.clearMemory().catch(() => {}); };
-    window.addEventListener('ava-clear-memory', onClearMemory);
-
     // Folder change — update sidecar working directory when user opens a new project
     const onFolderChanged = (e: Event) => {
       const path = (e as CustomEvent).detail;
@@ -3877,7 +3831,6 @@ export function AvaChatPage() {
       cancelled = true;
       sidecar.off('close', onClose);
       if ((sidecar as any).__avaHandler) sidecar.offAny((sidecar as any).__avaHandler);
-      window.removeEventListener('ava-clear-memory', onClearMemory);
       window.removeEventListener('ava-folder-changed', onFolderChanged);
       sidecar.off('ready', onReady);
       // Do NOT stop the sidecar on a canChat change. A transient connectivity blip
@@ -8028,467 +7981,10 @@ export function ChatHistoryPage() {
 }
 
 /* ===== 3. Memory ===== */
-const MEMORY_PAGE_SIZE = 100;
 
-type MemoryViewMode = 'active' | 'stale' | 'archived';
-
-// Stale = no recall/update/create activity in the last 90 days. Matches the
-// extension's definition so both surfaces classify the same way.
-function isMemoryStale(entry: any): boolean {
-  const lastActivity = entry.last_recalled_at ?? entry.updated_at ?? entry.created_at;
-  if (!lastActivity) return false;
-  const daysSince = (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24);
-  return daysSince > 90;
-}
-
-/**
- * The Memory page. With memory v4 on it is "What Ava knows" (MemoryV4Page,
- * shared with the extension); otherwise the old page below. Chosen here, in
- * its own component, so neither page's hooks depend on the switch.
- */
+/** The Memory page: "What Ava knows" (MemoryV4Page, shared with the extension). */
 export function MemoryPage() {
-  const v4 = useMemoryV4Status();
-  return v4.on ? <MemoryV4Page request={memoryRequest} /> : <MemoryPageV3 />;
-}
-
-function MemoryPageV3() {
-  useLocale();
-  const [memories, setMemories] = useState<any[]>([]);
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<MemoryViewMode>('active');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
-  const [deletingAll, setDeletingAll] = useState(false);
-  const [displayLimit, setDisplayLimit] = useState(MEMORY_PAGE_SIZE);
-  // Memory is LOCAL-ONLY — no cloud fetch. These satisfy the loading/error
-  // branches in the render without any network call.
-  const loading = false;
-  const error: string | null = null;
-
-  // Load memories from the sidecar's MemoryManager — the authoritative v3 graph
-  // (flat ~/.ava/memory/, the SAME store the extension reads), local-only.
-  // Read memories straight from the authoritative v3 graph file
-  // (~/.ava/memory/graph.json) — its `nodes` ARE memory entries. This is the
-  // SAME flat store the agent + extension use, local-only. Reading the file
-  // directly (instead of a sidecar round-trip) is reliable + needs no chat init.
-  const reloadMemories = useCallback(async () => {
-    try {
-      const { readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-      const raw = await readTextFile('.ava/memory/graph.json', { baseDir: BaseDirectory.Home });
-      const g = JSON.parse(raw || '{}');
-      setMemories(Array.isArray(g.nodes) ? g.nodes : []);
-    } catch { setMemories([]); }
-  }, []);
-  useEffect(() => { void reloadMemories(); }, [reloadMemories]);
-
-  const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-    pattern:      { bg: 'rgba(59,130,246,0.10)', text: '#60a5fa', border: 'rgba(59,130,246,0.20)' },
-    preference:   { bg: 'color-mix(in srgb, var(--accent) 10%, transparent)', text: 'var(--accent)', border: 'color-mix(in srgb, var(--accent) 20%, transparent)' },
-    architecture: { bg: 'rgba(52,211,153,0.10)', text: '#34d399', border: 'rgba(52,211,153,0.20)' },
-    'bug-fix':    { bg: 'rgba(239,68,68,0.10)',  text: '#f87171', border: 'rgba(239,68,68,0.20)' },
-    convention:   { bg: 'rgba(245,158,11,0.10)', text: '#f59e0b', border: 'rgba(245,158,11,0.20)' },
-    decision:     { bg: 'rgba(99,102,241,0.10)', text: '#818cf8', border: 'rgba(99,102,241,0.20)' },
-    general:      { bg: 'rgba(107,114,128,0.10)',text: '#9ca3af', border: 'rgba(107,114,128,0.20)' },
-  };
-
-  const ALL_CATEGORIES = ['pattern', 'preference', 'architecture', 'bug-fix', 'convention', 'decision', 'general'];
-
-  // Category counts are computed from the current view-mode subset so the
-  // badge numbers match what the user will actually see when they pick a
-  // category. Without this, "Preference (5)" in Active view could include
-  // archived entries.
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    const source = viewMode === 'active' ? memories.filter(m => !m.archived && !isMemoryStale(m))
-      : viewMode === 'stale' ? memories.filter(m => !m.archived && isMemoryStale(m))
-      : memories.filter(m => m.archived);
-    for (const m of source) {
-      const cat = m.category || 'general';
-      counts[cat] = (counts[cat] || 0) + 1;
-    }
-    return counts;
-  }, [memories, viewMode]);
-
-  const globalCount = memories.filter(m => m.scope === 'global').length;
-  const projectCount = memories.filter(m => m.scope === 'project').length;
-
-  // Split into active / stale / archived buckets. Archived wins over stale so
-  // an archived-and-stale entry appears only in Archived.
-  const { activeMemories, staleMemories, archivedMemories } = useMemo(() => {
-    const active: any[] = [];
-    const stale: any[] = [];
-    const archived: any[] = [];
-    for (const m of memories) {
-      if (m.archived) archived.push(m);
-      else if (isMemoryStale(m)) stale.push(m);
-      else active.push(m);
-    }
-    return { activeMemories: active, staleMemories: stale, archivedMemories: archived };
-  }, [memories]);
-
-  const viewEntries = viewMode === 'active' ? activeMemories
-    : viewMode === 'stale' ? staleMemories
-    : archivedMemories;
-
-  const filtered = useMemo(() => {
-    let result = viewEntries;
-    if (categoryFilter) result = result.filter(m => (m.category || 'general') === categoryFilter);
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter(m =>
-        (m.content || '').toLowerCase().includes(q) ||
-        (m.title || '').toLowerCase().includes(q) ||
-        (m.tags || []).some((t: string) => t.toLowerCase().includes(q))
-      );
-    }
-    return result;
-  }, [viewEntries, categoryFilter, search]);
-
-  // Reset display limit when filters change
-  useEffect(() => { setDisplayLimit(MEMORY_PAGE_SIZE); }, [categoryFilter, search, viewMode]);
-  // Clear category filter when switching view mode so a category with no
-  // entries in the new view doesn't leave the list empty.
-  useEffect(() => { setCategoryFilter(null); }, [viewMode]);
-
-  const displayed = filtered.slice(0, displayLimit);
-  const hasMore = displayLimit < filtered.length;
-
-  const formatDate = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
-  };
-
-  const handleDelete = async (id: string | number) => {
-    try {
-      // Delete through the MemoryManager (keeps the v3 graph authoritative),
-      // scoped to the entry's graph. Local-only — never the cloud.
-      const entry = memories.find((m: any) => (m.id || m._id) === id);
-      const scope: 'global' | 'project' = entry?.scope === 'project' ? 'project' : 'global';
-      await getSidecar().deleteMemory(id, scope);
-      setMemories(prev => prev.filter(m => (m.id || m._id) !== id));
-      setConfirmDeleteId(null);
-    } catch (err: any) {
-      alert(`Failed to delete: ${err.message}`);
-    }
-  };
-
-  const handleDeleteAll = async () => {
-    setDeletingAll(true);
-    setConfirmDeleteAll(false);
-    // Local-only wipe via the MemoryManager — clears every scope, resets the
-    // store. Nothing in the cloud (memory never leaves the device).
-    await getSidecar().clearMemory();
-    try { window.dispatchEvent(new CustomEvent('ava-clear-memory')); } catch { /* no window */ }
-    setMemories([]);
-    setDeletingAll(false);
-  };
-
-  const handleRefresh = () => {
-    window.location.reload();
-  };
-
-  const getCatStyle = (cat: string) => CATEGORY_COLORS[cat] || CATEGORY_COLORS.general;
-
-  return (
-    <div style={pageWrapper}>
-      <div style={{ width: '100%' }}>
-        {/* Header */}
-        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={pageTitle}>{t('dash.memory.title')}</div>
-            </div>
-            <div style={pageSubtitle}>{t('dash.memory.subtitle')}</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={handleRefresh} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'transparent', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
-              {t('dash.common.refresh')}
-            </button>
-            {memories.length > 0 && !deletingAll && (
-              <button onClick={() => setConfirmDeleteAll(true)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: 12, cursor: 'pointer' }}>
-                {t('dash.memory.delete_all')}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Delete All Confirmation */}
-        {confirmDeleteAll && (
-          <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)' }}>
-            <p style={{ fontSize: 13, fontWeight: 500, color: '#f87171', marginBottom: 6 }}>{t('dash.memory.delete_all_q')}</p>
-            <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>{t('dash.memory.delete_all_body')}</p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={() => handleDeleteAll()} style={{ padding: '6px 14px', borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 12, border: 'none', cursor: 'pointer' }}>
-                {t('dash.memory.delete_everything')}
-              </button>
-              <button onClick={() => setConfirmDeleteAll(false)} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', background: 'transparent', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
-                {t('dash.settings.cancel')}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Deleting progress */}
-        {deletingAll && (
-          <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.1)', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
-            <div>
-              <p style={{ fontSize: 13, color: '#f59e0b' }}>{t('dash.memory.deleting_all')}</p>
-              <p style={{ fontSize: 11, color: 'rgba(245,158,11,0.6)', marginTop: 2 }}>{t('dash.memory.deleting_stay')}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Stats row */}
-        {memories.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
-            {[
-              { label: t('dash.memory.total'), value: memories.length, color: 'var(--accent)' },
-              { label: t('dash.memory.global'), value: globalCount, color: '#60a5fa' },
-              { label: t('dash.memory.project'), value: projectCount, color: '#34d399' },
-              { label: t('dash.memory.categories'), value: Object.keys(categoryCounts).length, color: '#f59e0b' },
-            ].map(s => (
-              <div key={s.label} style={{
-                background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 10,
-                padding: '14px 12px', textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.value}</div>
-                <div style={{ fontSize: 10, color: '#6c7086', marginTop: 2 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* View mode tabs — active / stale / archived */}
-        {memories.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}>
-            {([
-              { key: 'active' as MemoryViewMode, label: t('memory.tab.active'), count: activeMemories.length, color: 'var(--accent)' },
-              { key: 'stale' as MemoryViewMode, label: t('memory.tab.stale'), count: staleMemories.length, color: '#f59e0b' },
-              { key: 'archived' as MemoryViewMode, label: t('memory.tab.archived'), count: archivedMemories.length, color: '#6c7086' },
-            ]).map(tab => {
-              const active = viewMode === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => setViewMode(tab.key)}
-                  style={{
-                    padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                    background: 'transparent', border: 'none', borderBottom: active ? `2px solid ${tab.color}` : '2px solid transparent',
-                    color: active ? tab.color : '#6c7086', marginBottom: -1,
-                  }}
-                >
-                  {tab.label} <span style={{ opacity: 0.6, fontSize: 11 }}>({tab.count})</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Search bar */}
-        <div style={{ position: 'relative', marginBottom: 16 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6c7086" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="text"
-            placeholder={t('dash.memory.search')}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              ...inputStyle, paddingLeft: 38, height: 40, borderRadius: 10,
-              background: 'rgba(49, 34, 68, 0.5)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-            }}
-            onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
-          />
-        </div>
-
-        {/* Category filter tabs */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setCategoryFilter(null)}
-            style={{
-              padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-              border: categoryFilter === null ? '1px solid var(--accent)' : '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-              background: categoryFilter === null ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
-              color: categoryFilter === null ? 'var(--accent)' : '#6c7086',
-            }}
-          >
-            {t('dash.memory.all')} ({viewEntries.length})
-          </button>
-          {ALL_CATEGORIES.filter(c => categoryCounts[c]).map(cat => {
-            const cs = getCatStyle(cat);
-            const isActive = categoryFilter === cat;
-            return (
-              <button
-                key={cat}
-                onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
-                style={{
-                  padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                  border: isActive ? `1px solid ${cs.border}` : '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-                  background: isActive ? cs.bg : 'transparent',
-                  color: isActive ? cs.text : '#6c7086',
-                  textTransform: 'capitalize' as const,
-                }}
-              >
-                {t(`dash.memory.cat.${cat.replace('-', '_')}`)} ({categoryCounts[cat]})
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Memory list */}
-        {loading ? <LoadingSpinner /> : error ? <ErrorBanner message={error} /> : (
-          <>
-            {filtered.length === 0 ? (
-              <div style={{
-                background: 'rgba(26, 16, 40, 0.6)', border: '1px dashed color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12,
-                padding: '40px 20px', textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 13, color: '#6c7086' }}>
-                  {search || categoryFilter
-                    ? t('dash.memory.no_match')
-                    : t('dash.cc.no_memories')}
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* Showing count */}
-                <div style={{ fontSize: 11, color: '#6c7086', textAlign: 'center', marginBottom: 4 }}>
-                  Showing {Math.min(displayLimit, filtered.length)} of {filtered.length} memories
-                </div>
-                {displayed.map(m => {
-                  const id = m.id || m._id;
-                  const cat = m.category || 'general';
-                  const cs = getCatStyle(cat);
-                  const isExpanded = expandedId === id;
-                  const content = m.content || m.title || '';
-                  const preview = content.length > 160 ? content.slice(0, 160) + '...' : content;
-                  const tags: string[] = m.tags || [];
-
-                  return (
-                    <div
-                      key={id}
-                      style={{
-                        background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 12,
-                        padding: '18px 20px', cursor: 'pointer', transition: 'border-color 0.15s',
-                      }}
-                      onClick={() => setExpandedId(isExpanded ? null : id)}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 30%, transparent)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
-                    >
-                      {/* Header row: category badge + tags + actions */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                        <span style={{
-                          display: 'inline-block', fontSize: 10, fontWeight: 600,
-                          color: cs.text, background: cs.bg, border: `1px solid ${cs.border}`,
-                          padding: '2px 10px', borderRadius: 12, textTransform: 'capitalize' as const,
-                        }}>
-                          {t(`dash.memory.cat.${cat.replace('-', '_')}`)}
-                        </span>
-                        {tags.map(tag => (
-                          <span key={tag} style={{
-                            fontSize: 10, color: '#6c7086', background: 'rgba(255,255,255,0.04)',
-                            padding: '2px 8px', borderRadius: 4,
-                          }}>
-                            {tag}
-                          </span>
-                        ))}
-                        {/* Delete button */}
-                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                          {confirmDeleteId === id ? (
-                            <>
-                              <button
-                                onClick={() => handleDelete(id)}
-                                style={{
-                                  background: '#ef4444', border: 'none', borderRadius: 4,
-                                  padding: '3px 10px', fontSize: 10, fontWeight: 600, color: '#fff', cursor: 'pointer',
-                                }}
-                              >
-                                {t('dash.memory.confirm')}
-                              </button>
-                              <button
-                                onClick={() => setConfirmDeleteId(null)}
-                                style={{
-                                  background: 'transparent', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 4,
-                                  padding: '3px 10px', fontSize: 10, color: '#6c7086', cursor: 'pointer',
-                                }}
-                              >
-                                {t('dash.memory.cancel')}
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => setConfirmDeleteId(id)}
-                              style={{
-                                width: 26, height: 26, borderRadius: 6,
-                                background: 'transparent', border: 'none',
-                                color: '#6c7086', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f87171'; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#6c7086'; }}
-                              title={t('dash.memory.delete_title')}
-                            >
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div style={{ fontSize: 13, color: '#cdd6f4', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {isExpanded ? content : preview}
-                      </div>
-
-                      {/* Footer metadata */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, flexWrap: 'wrap' }}>
-                        {m.created_at && (
-                          <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.memory.created').replace('{date}', formatDate(m.created_at))}</span>
-                        )}
-                        {m.updated_at && m.updated_at !== m.created_at && (
-                          <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.memory.updated').replace('{date}', formatDate(m.updated_at))}</span>
-                        )}
-                        {(m.recall_count || m.recallCount || 0) > 0 && (
-                          <span style={{ fontSize: 10, color: '#6c7086' }}>{t('dash.memory.recalled').replace('{n}', String(m.recall_count || m.recallCount))}</span>
-                        )}
-                        {m.scope && (
-                          <span style={{ fontSize: 10, color: '#45475a' }}>{m.scope === 'global' ? t('dash.memory.global') : m.scope === 'project' ? t('dash.memory.project') : m.scope}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Load more */}
-            {hasMore && (
-              <button
-                onClick={() => setDisplayLimit(prev => prev + MEMORY_PAGE_SIZE)}
-                style={{
-                  background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-                  borderRadius: 10, padding: '12px 20px', fontSize: 12, fontWeight: 500,
-                  color: 'var(--accent)', cursor: 'pointer', transition: 'border-color 0.15s',
-                  textAlign: 'center', marginTop: 4, width: '100%',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 40%, transparent)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 12%, transparent)'; }}
-              >
-                Load more ({filtered.length - displayLimit} remaining)
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
+  return <MemoryV4Page request={memoryRequest} />;
 }
 
 /* ===== 4. Tasks ===== */

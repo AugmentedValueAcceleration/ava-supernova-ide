@@ -27,14 +27,14 @@ export function memoryRequest(op: string, args: Record<string, unknown> = {}): P
   });
 }
 
-/** Whether memory v4 is on, and how many things wait for a yes. Asks once, then follows events. */
-export function useMemoryV4Status(): { on: boolean; pending: number } {
-  const [status, setStatus] = useState({ on: false, pending: 0 });
+/** Ava's memory at a glance: waiting for a yes (the badge), facts, the newest. Asks once, then follows events. */
+export function useMemoryV4Status(): { pending: number; facts: number; latest: string | null } {
+  const [status, setStatus] = useState<{ pending: number; facts: number; latest: string | null }>({ pending: 0, facts: 0, latest: null });
   useEffect(() => {
     const sc = getSidecar();
     const handler = (e: SidecarEvent) => {
-      const m = e as unknown as { event: string; on?: boolean; pending?: number };
-      if (m.event === 'memory_v4_status') setStatus({ on: !!m.on, pending: Number(m.pending) || 0 });
+      const m = e as unknown as { event: string; pending?: number; facts?: number; latest?: string | null };
+      if (m.event === 'memory_v4_status') setStatus({ pending: Number(m.pending) || 0, facts: Number(m.facts) || 0, latest: m.latest ?? null });
     };
     sc.onAny(handler);
     void sc.memoryV4Status().catch(() => {});

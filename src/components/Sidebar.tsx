@@ -1252,7 +1252,7 @@ function MemoryBadge({ count, rail }: { count: number; rail?: boolean }) {
 function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { onDashboardSelect?: (page: string) => void; activePage?: string | null; collapsed?: boolean }) {
   useLocale();
   const memoryV4 = useMemoryV4Status();
-  const memoryWaiting = memoryV4.on ? memoryV4.pending : 0;
+  const memoryWaiting = memoryV4.pending;
 
   // ── Collapsed icons-only rail ─────────────────────────────────────
   // Mirrors the extension NavSidebar's collapsed mode: 9 stacked icon

@@ -886,29 +886,6 @@ export class SidecarManager {
     await this.send({ cmd: 'export_audit_log', format });
   }
 
-  /**
-   * Clear all memory in the sidecar and reset the memory manager.
-   */
-  async clearMemory(): Promise<void> {
-    await this.send({ cmd: 'clear_memory' });
-  }
-
-  /** Authoritative memory list from the sidecar's MemoryManager (the v3 graph,
-   *  global + project scopes) — the SAME source the extension reads. Resolves
-   *  with the entries from the one-shot `memories` event. Local-only. */
-  async getMemories(timeoutMs = 8000): Promise<any[]> {
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = (entries: any[]) => { if (done) return; done = true; this.offAny(handler); clearTimeout(timer); resolve(entries); };
-      const handler = (event: SidecarEvent) => {
-        if (event.event === 'memories') finish(Array.isArray((event as any).entries) ? (event as any).entries : []);
-      };
-      const timer = setTimeout(() => finish([]), timeoutMs);
-      this.onAny(handler);
-      this.send({ cmd: 'get_memories' }).catch(() => finish([]));
-    });
-  }
-
   /** Measure what a factory reset would remove, so the dialog can say what it
    *  costs BEFORE it costs it. The engine is core's — same one the extension
    *  runs, so the two surfaces cannot disagree about what a reset means. */
@@ -949,12 +926,6 @@ export class SidecarManager {
       this.onAny(handler);
       this.send({ cmd: 'factory_reset_execute', categories }).catch(() => finish({ ok: false, error: 'Sidecar unavailable' }));
     });
-  }
-
-  /** Delete one memory by id + scope, through the MemoryManager (keeps the v3
-   *  graph authoritative). Local-only — never touches the cloud. */
-  async deleteMemory(id: string | number, scope: 'global' | 'project'): Promise<void> {
-    await this.send({ cmd: 'delete_memory', id, scope });
   }
 
   /** Data sovereignty — seal everything under ~/.ava. Result arrives as a

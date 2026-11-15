@@ -193,7 +193,6 @@ const {
   ProviderRegistry,
   GenericProvider,
   listOpenAICompatibleModels,
-  MemoryManager,
   TaskManager,
   migrateGlobalTasksToSubfolder,
   JournalManager,
@@ -236,15 +235,11 @@ const {
   resolveVisionDescriber,
   AutoCoordinator,
   IntentClassifier,
-  MemoryAgent,
   MemorySession,
-  MemoryRecallV4Tool,
   AvaMemory,
   memoryPage,
+  removeOldMemoryFiles,
   ensureOldMemoryImported,
-  MemorySaveV4Tool,
-  MemoryUpdateV4Tool,
-  MemoryDeleteV4Tool,
   consolidateSession,
   resolveMemoryModel,
   memoryV4Root,
@@ -652,11 +647,33 @@ let conversation = null;
 // switches extension → IDE picks up their conversations with zero effort.
 let historyManager = null;
 let toolRegistry = null;
-let memoryManager = null;
-// Memory v4 (one store of plain files). Opt-in through AVA_MEMORY_V4_ROOT until
-// the switch-over; when open it replaces the old brief in every mode and
-// memory_recall searches it. Mirrors the extension.
+// Ava's memory (memory v4, ~/.ava/memory): one store of plain files, shared
+// with the extension, the CLI and the hub. The old memory is only read once,
+// by the import. Mirrors the extension.
 let memorySession = null;
+// The embedding settings memory last opened with, so a folder change reopens it the same way.
+let memoryEmbeddingConfig = {};
+/** Open memory for a project folder (first start: bring the old memory across once). */
+let memoryProjectRoot = null;
+async function openMemorySession(projectRoot) {
+  memoryProjectRoot = projectRoot ?? null;
+  const root = memoryV4Root();
+  try {
+    await ensureOldMemoryImported(new AvaMemory({ root }), AVA_HOME, (m) => emit({ event: 'info', message: m }));
+    const session = await MemorySession.open({ root, projectPath: projectRoot ?? null, embeddingService: createEmbeddingServiceFromConfig(memoryEmbeddingConfig) });
+    emit({ event: 'info', message: `Memory open (${root})${session.project ? `, project ${session.project.name}` : ''}` });
+    return session;
+  } catch (err) {
+    emit({ event: 'info', message: `Memory could not open ${root}: ${err.message}` });
+    return null;
+  }
+}
+// Desktop mode's learned steps: machine know-how, kept out of Ava's memory.
+let desktopStepsStore = null;
+async function desktopSteps() {
+  if (!desktopStepsStore) desktopStepsStore = await core.DesktopLearnedSteps.open(AVA_HOME);
+  return desktopStepsStore;
+}
 // The fleet's own low-cost model for memory v4's end-of-session tidy-up.
 let memoryModel = null;
 // The Memory page's store: the same folder memorySession uses, opened even
@@ -664,16 +681,22 @@ let memoryModel = null;
 let memoryV4PageStore = null;
 function memoryV4Store() {
   const root = memoryV4Root();
-  if (!root) return null;
   if (!memoryV4PageStore || memoryV4PageStore.root !== root) memoryV4PageStore = new AvaMemory({ root });
   return memoryV4PageStore;
 }
-/** Tell the front-end whether memory v4 is on and how many things wait for a yes. */
+/** The sidebar badge (waiting for a yes) and the Command Centre's memory card. */
 async function emitMemoryV4Status() {
   const mem = memoryV4Store();
   let pending = 0;
-  try { pending = mem ? (await mem.listFacts('pending')).length : 0; } catch { /* a count is not worth failing over */ }
-  emit({ event: 'memory_v4_status', on: !!mem, pending });
+  let facts = 0;
+  let latest = null;
+  try {
+    pending = (await mem.listFacts('pending')).length;
+    const all = await mem.listFacts('fact');
+    facts = all.length;
+    latest = all.reduce((a, f) => (!a || f.from > a.from ? f : a), null)?.text ?? null;
+  } catch { /* a count is not worth failing over */ }
+  emit({ event: 'memory_v4_status', on: true, pending, facts, latest });
 }
 
 /** Memory v4 tidy-up model for a fleet (or, for a single model, any key held). Mirrors the extension. */
@@ -695,7 +718,6 @@ let journalManager = null;
 // "Not initialized" error.
 let initInFlight = false;
 let taskManager = null;
-let memoryAgentInstance = null;
 let currentAbort = null;
 let currentMode = 'work';
 
@@ -743,8 +765,8 @@ async function reflectSession(conv) {
   if (!conv) return 0;
   const messages = conv.getMessages();
   const userTurns = messages.filter((m) => m.role === 'user').length;
-  // Memory v4: the one writer is the end-of-session tidy-up, on the fleet's
-  // own low-cost model. Same once-per-new-material guard.
+  // The one writer is the end-of-session tidy-up, on the fleet's main model,
+  // once per new material.
   if (memorySession) {
     if (!memoryModel || userTurns < 2) return 0;
     if (userTurns <= (lastReflectedTurns.get(conv.id) ?? 0)) return 0;
@@ -754,16 +776,7 @@ async function reflectSession(conv) {
     if (r) emit({ event: 'info', message: `Memory tidy-up: ${r.dayLines} day lines, ${r.saved} saved, ${r.waiting} waiting for a yes, ${r.changed} changed, threads +${r.threadsOpened}/-${r.threadsClosed}` });
     return r ? r.saved + r.waiting + r.changed : 0;
   }
-  if (!memoryAgentInstance) return 0;
-  if (userTurns < 2) return 0; // reflectOnSession needs >= 2 user turns
-  if (userTurns <= (lastReflectedTurns.get(conv.id) ?? 0)) return 0;
-  try {
-    const saved = await memoryAgentInstance.reflectOnSession(messages, conv.id);
-    lastReflectedTurns.set(conv.id, userTurns);
-    return saved;
-  } catch {
-    return 0; // never block anything on memory
-  }
+  return 0;
 }
 
 function cancelIdleReflection() {
@@ -777,7 +790,7 @@ function cancelIdleReflection() {
 function scheduleIdleReflection() {
   cancelIdleReflection();
   const conv = conversation;
-  if (!conv || !memoryAgentInstance) return;
+  if (!conv) return;
   idleReflectTimer = setTimeout(() => {
     idleReflectTimer = null;
     void reflectSession(conv);
@@ -789,7 +802,7 @@ function scheduleIdleReflection() {
 /** Bounded best-effort reflection when the process is going away. */
 async function flushMemoryOnShutdown(timeoutMs = 4000) {
   cancelIdleReflection();
-  if (!conversation || !memoryAgentInstance) return;
+  if (!conversation) return;
   await Promise.race([
     reflectSession(conversation).then(() => undefined),
     new Promise((resolve) => setTimeout(resolve, timeoutMs)),
@@ -2074,11 +2087,10 @@ async function handleInit(data) {
   try {
     // If this init replaces an existing session (project / conversation
     // switch from the IDE front-end), reflect the OUTGOING conversation into
-    // memory before we tear it down. Fire-and-forget; the outgoing memory
-    // agent holds its own memoryManager, so facts land in the project that's
-    // ending — not the one we're opening. No-op on first init (no prior
-    // conversation).
-    if (memoryAgentInstance && conversation) {
+    // memory before we tear it down. Fire-and-forget; reflectSession takes the
+    // outgoing session before anything awaits, so facts land in the project
+    // that's ending — not the one we're opening. No-op on first init.
+    if (conversation) {
       cancelIdleReflection();
       void reflectSession(conversation);
     }
@@ -2334,56 +2346,15 @@ async function handleInit(data) {
     globalThis.__avaAuditLog = auditLog;
 
     // Memory
-    // Load memory in background — don't block init
     let memory = null;
     let projectInstructions = null;
-    try {
-      memoryManager = new MemoryManager({
-        // Memory is FLAT, local-only — one store per machine at ~/.ava/memory/,
-        // the SAME store the extension + CLI use. (Account-scoping memory was
-        // pointless with no cloud, and it split the IDE off from
-        // the extension's memory.)
-        globalDir: AVA_HOME,
-        projectRoot,
-        // Opt-in local semantic recall — dormant until the IDE front-end sends
-        // these prefs; off by default → keyword recall, no dependency.
-        embeddingService: createEmbeddingServiceFromConfig({
-          useLocalEmbeddings: config.useLocalEmbeddings,
-          embeddingModel: config.embeddingModel,
-          embeddingBaseUrl: config.embeddingBaseUrl,
-        }),
-      });
-    } catch {
-      memoryManager = null;
-    }
-    emit({ event: 'info', message: 'Memory manager created' });
-
-    memorySession = null;
-    const memoryV4 = memoryV4Root();
-    if (memoryV4) {
-      try {
-        // First start after the update: the old memory comes across once, free.
-        await ensureOldMemoryImported(new AvaMemory({ root: memoryV4 }), AVA_HOME, (m) => emit({ event: 'info', message: m }));
-        memorySession = await MemorySession.open({
-          root: memoryV4,
-          projectPath: projectRoot ?? null,
-          embeddingService: createEmbeddingServiceFromConfig({
-            useLocalEmbeddings: config.useLocalEmbeddings,
-            embeddingModel: config.embeddingModel,
-            embeddingBaseUrl: config.embeddingBaseUrl,
-          }),
-        });
-        // Same tool names, so prompts and mode allowlists are unchanged.
-        toolRegistry.register(new MemoryRecallV4Tool());
-        toolRegistry.register(new MemorySaveV4Tool());
-        toolRegistry.register(new MemoryUpdateV4Tool());
-        toolRegistry.register(new MemoryDeleteV4Tool());
-        emit({ event: 'info', message: `Memory v4 on (${memoryV4})${memorySession.project ? `, project ${memorySession.project.name}` : ''}` });
-      } catch (err) {
-        memorySession = null;
-        emit({ event: 'info', message: `Memory v4 could not open ${memoryV4}: ${err.message}` });
-      }
-    }
+    memoryEmbeddingConfig = {
+      useLocalEmbeddings: config.useLocalEmbeddings,
+      embeddingModel: config.embeddingModel,
+      embeddingBaseUrl: config.embeddingBaseUrl,
+    };
+    // The memory tools (memory_recall, _save, _update, _delete) are core built-ins.
+    memorySession = await openMemorySession(projectRoot);
 
     // Conversation history — ~/.ava/history, byte-identical
     // to the extension's HistoryManager so the files are cross-surface compatible.
@@ -2501,25 +2472,6 @@ async function handleInit(data) {
     // may miss it; every turn after has it. Reads globalThis._systemPromptArgs
     // fresh so a mode switch that lands first is preserved, and bails if a
     // newer init has since swapped the conversation/manager out.
-    // With memory v4 on, its session block (already in the prompt) replaces the brain.
-    if (memoryManager && conversation && !memorySession) {
-      const mm = memoryManager;
-      const conv = conversation;
-      Promise.resolve(mm.loadAll?.(projectInstructions ?? undefined))
-        .then(() => {
-          if (conv !== conversation || mm !== memoryManager) return; // a newer init won
-          const brief = mm.getProjectBrain?.()?.brief;
-          if (brief && globalThis._systemPromptArgs) {
-            const newArgs = { ...globalThis._systemPromptArgs, projectBrainBrief: brief };
-            globalThis._systemPromptArgs = newArgs;
-            const suffix = globalThis._systemPromptUserInfoSuffix || '';
-            conversation.setSystemPrompt(buildSystemPrompt(newArgs) + suffix);
-            emit({ event: 'info', message: 'Project Brain loaded into system prompt' });
-          }
-        })
-        .catch(() => {});
-    }
-
     // Journal manager (local-first, stored in ~/.ava/journal/)
     journalManager = new JournalManager({ globalDir: AVA_HOME, projectRoot: cwd });
 
@@ -2540,7 +2492,6 @@ async function handleInit(data) {
 
     // Shared state
     const sharedState = {
-      memoryManager,
       memorySession,
       // Machine-global dir (AVA_HOME) — lets record_machine_rule persist a
       // standing rule to <AVA_HOME>/Decisions/machine-rules.md.
@@ -2741,18 +2692,6 @@ async function handleInit(data) {
       desktopAutomationSettings: config.desktopAutomationSettings || undefined,
       clientSurface: 'ide',
     };
-
-    // Memory Agent — curates briefs instead of raw memory dumps
-    const qwenFlash = providerRegistry.resolveModel('qwen:qwen3.5-flash');
-    if (qwenFlash && memoryManager) {
-      memoryAgentInstance = new MemoryAgent({
-        memoryManager,
-        provider: qwenFlash.provider,
-        model: qwenFlash.model,
-      });
-      sharedState.memoryAgent = memoryAgentInstance;
-      emit({ event: 'info', message: 'Memory Agent initialized on ' + qwenFlash.model.id });
-    }
 
     // Intent Classifier — heuristic gate that nudges Ava toward worded
     // replies on conversational/ambiguous turns. Synchronous (no network
@@ -3161,7 +3100,7 @@ async function appendDesktopAudit(entry) {
  * instead of tool_calls. Fail-safe — a distil error never breaks the turn.
  */
 async function distilDesktopTrajectory(trajectory, rawContent) {
-  if (!trajectory || !memoryManager || !Array.isArray(trajectory.steps) || trajectory.steps.length === 0) return;
+  if (!trajectory || !Array.isArray(trajectory.steps) || trajectory.steps.length === 0) return;
   try {
     const cleanTask = cleanDesktopTask(rawContent);
     const launchStep = trajectory.steps.find(s => s.proposedAction?.kind === 'launch');
@@ -3200,14 +3139,7 @@ async function distilDesktopTrajectory(trajectory, rawContent) {
       + `\n\n_Outcome: ${trajectory.outcome}._`
       + (anyFailed ? `\n\n_✗ = tried and didn't verify; informative, not a hard rule — conditions change, so weigh it, don't blindly avoid it._` : '');
     const memoryNodeIds = [];
-    const saved = await memoryManager.saveEntry({
-      scope: 'global',
-      category: 'pattern',
-      layer: 'workflow',
-      source: 'auto-extract',
-      tags: ['desktop', String(appName).toLowerCase().slice(0, 40)],
-      content,
-    });
+    const saved = await (await desktopSteps()).add(content, ['desktop', String(appName).toLowerCase().slice(0, 40)]);
     if (saved?.id) memoryNodeIds.push(String(saved.id));
 
     // ── Phase 2b: TYPED memory beside the free-text block ─────────────────
@@ -3428,12 +3360,10 @@ async function handleMessage(data) {
   // so she reuses the path that worked instead of rediscovering it each time.
   // Fail-safe: any error here just means no recall block — never blocks a turn.
   let desktopMemoryPrefix = '';
-  if (currentMode === 'desktop' && memoryManager && typeof data.content === 'string' && data.content.length > 3) {
+  if (currentMode === 'desktop' && typeof data.content === 'string' && data.content.length > 3) {
     try {
-      const learned = await memoryManager.recall({ query: cleanDesktopTask(data.content), scope: 'global', category: 'pattern', limit: 3 });
-      const blocks = (learned || [])
-        .filter(r => ((r.entry?.tags || r.tags || []).includes('desktop')))
-        .map(r => (r.entry?.content || r.content || '').trim())
+      const blocks = (await desktopSteps()).find(cleanDesktopTask(data.content), 3)
+        .map(r => r.content.trim())
         .filter(Boolean);
       if (blocks.length > 0) {
         desktopMemoryPrefix = `[What Ava knows about this machine]\n${blocks.join('\n\n')}`;
@@ -3692,74 +3622,6 @@ async function handleMessage(data) {
       }
     }
 
-    // Per-turn memory brief (curated by Memory Agent) or raw recall fallback
-    // Enhanced: detects ambiguous references and topic shifts for proactive recall
-    if (!memorySession && memoryAgentInstance && data.content && data.content.length > 5) {
-      try {
-        // Detect ambiguous references — "that thing", "the issue", "what we discussed"
-        // If found, enrich the query with recent conversation context for better recall
-        const ambiguousPatterns = /\b(?:that (?:thing|issue|bug|problem|feature|idea)|what we (?:discussed|talked about|mentioned|decided)|remember (?:when|that|the)|as (?:we|I) (?:said|mentioned|discussed)|the (?:previous|earlier|last) (?:issue|conversation|discussion))\b/i;
-        const hasAmbiguousRef = ambiguousPatterns.test(data.content);
-
-        let briefQuery = data.content;
-        if (hasAmbiguousRef) {
-          // Enrich query with recent conversation context for disambiguation
-          const recentMsgs = conversation.getMessages()
-            .filter(m => m.role === 'user' || m.role === 'assistant')
-            .slice(-4)
-            .map(m => typeof m.content === 'string' ? m.content.slice(0, 150) : '')
-            .filter(Boolean)
-            .join(' ');
-          briefQuery = `${data.content} [Context: ${recentMsgs.slice(0, 400)}]`;
-          emit({ event: 'info', message: 'Detected ambiguous reference — enriching memory recall with conversation context' });
-        }
-
-        // Detect topic shift — compare current message to last brief's topic
-        // If the topic shifted significantly, force a fresh recall
-        const conversationContext = hasAmbiguousRef ? briefQuery : undefined;
-        const brief = await memoryAgentInstance.generateBrief(briefQuery, conversationContext);
-        if (brief.summary) {
-          const topicList = brief.availableTopics.length > 0
-            ? '\n\nAvailable memory topics (use memory_recall for detail): ' +
-              brief.availableTopics.map(t => t.topic).join(', ')
-            : '';
-          const currentMsgs = conversation.getMessages();
-          currentMsgs.push({
-            role: 'system',
-            content: `[Memory Brief]\n${brief.summary}${topicList}`,
-          });
-          conversation.setMessages(currentMsgs);
-          messages = conversation.getMessages();
-          emit({ event: 'info', message: `Memory brief generated (${brief.consideredEntryCount} memories considered${hasAmbiguousRef ? ', disambiguation enriched' : ''})` });
-        }
-      } catch (err) {
-        emit({ event: 'info', message: `Memory brief failed: ${err.message}` });
-      }
-    } else if (!memorySession && memoryManager && data.content && data.content.length > 5) {
-      // Fallback pointer (no Memory Agent available). Previous code dumped
-      // up to 5 memories verbatim (~1.5K chars) every turn — redundant with
-      // the memory_recall tool. Now we just list the topic categories so Ava
-      // knows what's available and reaches for memory_recall on demand.
-      try {
-        const memories = await memoryManager.recall({ query: data.content, limit: 5, scope: 'all' });
-        if (memories && memories.length > 0) {
-          const categories = [...new Set(
-            memories.map(m => m.entry?.category || m.category || 'general')
-          )];
-          const currentMsgs = conversation.getMessages();
-          currentMsgs.push({
-            role: 'system',
-            content: `[Memory pointer] ${memories.length} related memor${memories.length === 1 ? 'y' : 'ies'} found across: ${categories.join(', ')}. Call memory_recall with a specific query if relevant to the user's question.`,
-          });
-          conversation.setMessages(currentMsgs);
-          messages = conversation.getMessages();
-          emit({ event: 'info', message: `Memory pointer: ${memories.length} entries across ${categories.length} categor${categories.length === 1 ? 'y' : 'ies'}` });
-        }
-      } catch (err) {
-        emit({ event: 'info', message: `Memory recall failed: ${err.message}` });
-      }
-    }
-
     // Check if conductor orchestration is needed (plan, teach, security, brainstorm modes)
     let conductorContext = null;
     // Talk is read-only, so if the team is asked for it is the planning team —
@@ -3977,7 +3839,7 @@ async function handleMessage(data) {
     // including what NOT to do again (the compounding flywheel: learn from
     // failures, not just wins). Paired with the recall block before the run.
     // Fail-safe — a distil error never breaks the turn.
-    if (currentMode === 'desktop' && memoryManager && typeof data.content === 'string') {
+    if (currentMode === 'desktop' && typeof data.content === 'string') {
       try {
         // This turn's messages — exactly what run() returned.
         const turnMsgs = updated;
@@ -4022,14 +3884,7 @@ async function handleMessage(data) {
           const content = `**Desktop task:** ${cleanTask.slice(0, 200)}\n\n`
             + `**On this machine — what was tried and how it went:**\n${sequence}`
             + (anyFailed ? `\n\n_✗ = tried and failed; informative, not a hard rule — conditions change, so weigh it, don't blindly avoid it._` : '');
-          await memoryManager.saveEntry({
-            scope: 'global',
-            category: 'pattern',
-            layer: 'workflow',
-            source: 'auto-extract',
-            tags: ['desktop', String(appName).toLowerCase().slice(0, 40)],
-            content,
-          });
+          await (await desktopSteps()).add(content, ['desktop', String(appName).toLowerCase().slice(0, 40)]);
           emit({ event: 'info', message: `Learned the desktop steps for "${cleanTask.slice(0, 40)}" (${steps.length} action${steps.length === 1 ? '' : 's'}${anyFailed ? ', incl. failures' : ''})` });
         }
       } catch (err) {
@@ -4420,8 +4275,7 @@ function handleClear(data) {
     // cleared — distils durable user/project facts the per-turn capture may
     // have missed. Fire-and-forget, off the hot path; the session is ending so
     // it can't loop back. No-op if the conversation has < 2 user turns.
-    // reflectSession routes to memory v4's tidy-up when it is on.
-    if (memorySession || memoryAgentInstance) {
+    if (memorySession) {
       void reflectSession(conversation).catch(() => {});
     }
     // Preserve system prompt, clear messages
@@ -4878,7 +4732,15 @@ rl.on('line', async (line) => {
         let result;
         try {
           const mem = memoryV4Store();
-          result = mem ? await memoryPage(mem, data.op, data.args || {}) : { ok: false, error: 'Memory v4 is not on.' };
+          result = await memoryPage(mem, data.op, data.args || {});
+          if (data.op === 'forget_all') {
+            // Everything they asked to forget: the old memory's files too, and
+            // Ava's open session starts again on the empty memory.
+            // (Not when memory is pointed at a test copy: the real old files stay.)
+            if (!process.env.AVA_MEMORY_V4_ROOT?.trim()) await removeOldMemoryFiles(AVA_HOME);
+            memorySession = await openMemorySession(memoryProjectRoot);
+            if (globalThis._sharedState) globalThis._sharedState.memorySession = memorySession;
+          }
         } catch (err) {
           result = { ok: false, error: err?.message || String(err) };
         }
@@ -5290,50 +5152,6 @@ rl.on('line', async (line) => {
     case 'set_knowledge_packs':
       handleSetKnowledgePacks(data).catch((err) => emitError(err.message));
       break;
-    case 'clear_memory':
-      if (memoryManager) {
-        try {
-          await memoryManager.clearEverything();
-          memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot: cwd });
-          emit({ event: 'info', message: 'Memory cleared and manager reset' });
-        } catch (err) {
-          emitError(`Failed to clear memory: ${err.message}`);
-        }
-      }
-      emit({ event: 'memories', entries: [] });
-      break;
-    case 'get_memories': {
-      // Authoritative memory list — straight from MemoryManager (the v3 graph,
-      // both scopes), the SAME source the extension reads. Local-only; the
-      // dashboard's old file-read of the legacy v2 memory.json under-reported.
-      // The dashboard can open before/without a chat session, so the agent's
-      // memoryManager may not exist yet — lazily build a read manager on the
-      // flat store. Fetch each scope independently so a project-graph hiccup
-      // can't zero out the global memories.
-      if (!memoryManager) {
-        try { memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot: cwd }); }
-        catch { emit({ event: 'memories', entries: [] }); break; }
-      }
-      {
-        const entries = [];
-        try { for (const e of await memoryManager.getEntries('global')) entries.push({ ...e, scope: 'global' }); } catch { /* skip */ }
-        try { for (const e of await memoryManager.getEntries('project')) entries.push({ ...e, scope: 'project' }); } catch { /* skip */ }
-        emit({ event: 'memories', entries });
-      }
-      break;
-    }
-    case 'delete_memory': {
-      if (memoryManager && data.id) {
-        try {
-          const scope = data.scope === 'project' ? 'project' : 'global';
-          await memoryManager.deleteEntry(scope, data.id);
-          emit({ event: 'memory_deleted', id: data.id });
-        } catch (err) {
-          emitError(`Failed to delete memory: ${err.message}`);
-        }
-      }
-      break;
-    }
     case 'desktop_response': {
       const pending = pendingDesktop.get(data.requestId);
       if (pending) {
@@ -5370,12 +5188,9 @@ rl.on('line', async (line) => {
 
         // Re-detect project root for memory scoping
         const projectRoot = detectProjectRoot(newCwd) ?? undefined;
-        if (memoryManager) {
-          try {
-            memoryManager = new MemoryManager({ globalDir: AVA_HOME, projectRoot });
-            if (globalThis._sharedState) globalThis._sharedState.memoryManager = memoryManager;
-          } catch { /* non-fatal */ }
-        }
+        if (conversation) { cancelIdleReflection(); void reflectSession(conversation); }
+        memorySession = await openMemorySession(projectRoot);
+        if (globalThis._sharedState) globalThis._sharedState.memorySession = memorySession;
 
         // Re-index the new project
         try {
