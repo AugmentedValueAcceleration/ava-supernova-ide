@@ -71,6 +71,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 // is exportable and what it is called without either keeping its own list.
 import { canExport, targetsFor, TARGET_LABELS, type ExportFormat } from '@ava/core/authoring/formats';
 import { viewableFiles, isViewerDocument } from './DocumentTab';
+import { PdfFontsSetting, type PdfFontsState } from './PdfFontsSetting';
 import { exportOptionsFor, originalExt, transcodeImage, withExt, type ExportFormat as ImageExportFormat, type ExportOption as ImageExportOption } from '../lib/image-export';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
@@ -12945,6 +12946,28 @@ function LibraryPreviewModal({
 /* -- Settings → Blender ---------------------------------------------------- */
 /** Which Blender the 3D room uses. Found by itself in the usual places; chosen
  *  by hand only for an unusual install. Mirrors the extension's row. */
+/** The optional bold Chinese/Japanese/Korean pack for PDFs (shared row; the sidecar does the work). */
+function PdfFontsRow() {
+  const [state, setState] = useState<PdfFontsState | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  useEffect(() => {
+    const sc = getSidecar();
+    const onEvent = (e: SidecarEvent) => {
+      const m = e as unknown as { event: string; state?: PdfFontsState; done?: number; total?: number };
+      if (m.event === 'pdf_fonts_state' && m.state) { setState(m.state); setProgress(null); }
+      if (m.event === 'pdf_fonts_progress') setProgress({ done: m.done ?? 0, total: m.total ?? 1 });
+    };
+    sc.onAny(onEvent);
+    void sc.pdfFonts('status').catch(() => {});
+    return () => sc.offAny(onEvent);
+  }, []);
+  return (
+    <PdfFontsSetting state={state} progress={progress}
+      onDownload={() => { setProgress({ done: 0, total: state?.sizeBytes ?? 1 }); void getSidecar().pdfFonts('download').catch(() => {}); }}
+      onRemove={() => { void getSidecar().pdfFonts('remove').catch(() => {}); }} />
+  );
+}
+
 function ToolPathSetting({ tool }: { tool: 'blender' | 'gimp' }) {
   const label = tool === 'gimp' ? 'GIMP' : 'Blender';
   const [st, setSt] = useState<{ path: string | null; version: string | null; configured: string | null; error?: string } | null>(null);
@@ -15153,6 +15176,8 @@ export function SettingsPage() {
         <ToolPathSetting tool="blender" />
         <div style={sLabel}>{tt('dash.settings.gimp', 'GIMP (2D images)')}</div>
         <ToolPathSetting tool="gimp" />
+        <div style={sLabel}>{tt('settings.pdf_fonts.section', 'PDF fonts')}</div>
+        <PdfFontsRow />
         {/* 5. Language */}
         <div style={sLabel}>{t('dash.settings.language')}</div>
         <div style={{

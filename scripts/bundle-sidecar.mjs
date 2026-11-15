@@ -26,7 +26,7 @@ await build({
 });
 // pdfkit's fonts for making PDFs, beside the bundle
 // (tauri.conf.json lists them as resources).
-copyDocumentAssets(resourcesDir);
+await copyDocumentAssets(resourcesDir);
 console.log('[bundle] Sidecar bundled successfully.');
 
 // 2. Download node.exe if not present

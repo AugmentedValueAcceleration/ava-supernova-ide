@@ -26,8 +26,17 @@ export const SIDECAR_BUILD = {
 
 const coreRequire = () => createRequire(path.resolve('..', 'core', 'package.json'));
 
-/** pdfkit's built-in fonts + colour profile → `<outDir>/data`. */
-export function copyDocumentAssets(outDir) {
+/** pdfkit's built-in fonts + colour profile → `<outDir>/data`, and the PDF
+ *  fonts for every script (Noto, checksum-checked by core's fetch-fonts.mjs)
+ *  → `<outDir>/fonts`, which the sidecar points AVA_FONTS_DIR at. */
+export async function copyDocumentAssets(outDir) {
+  const { ensureFonts } = await import(new URL('../../core/scripts/fetch-fonts.mjs', import.meta.url).href);
+  const fontsDest = path.join(outDir, 'fonts');
+  fs.mkdirSync(fontsDest, { recursive: true });
+  for (const f of await ensureFonts()) {
+    const to = path.join(fontsDest, f.file);
+    if (!(fs.existsSync(to) && fs.statSync(to).size === fs.statSync(f.path).size)) fs.copyFileSync(f.path, to);
+  }
   const req = coreRequire();
   const pdfkitData = path.join(path.dirname(req.resolve('pdfkit')), 'data');
   const dest = path.join(outDir, 'data');

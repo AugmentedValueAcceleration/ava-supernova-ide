@@ -21,7 +21,7 @@ try {
     outfile: join(dir, 'smoke.mjs'),
     logLevel: 'warning',
   });
-  copyDocumentAssets(dir);
+  await copyDocumentAssets(dir);
   execFileSync(process.execPath, [join(dir, 'smoke.mjs')], { cwd: dir, stdio: 'inherit' });
 } catch {
   process.exitCode = 1;

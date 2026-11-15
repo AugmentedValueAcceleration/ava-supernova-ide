@@ -23,6 +23,10 @@ import { appendFile, readFile, writeFile, rm, cp } from 'node:fs/promises';
 // In monorepo: workspace link. Standalone: relative path fallback.
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// The fonts PDFs are written with, shipped beside the bundled sidecar
+// (resources/fonts). Unbundled (dev), core finds its own build cache.
+if (!process.env.AVA_FONTS_DIR && existsSync(join(__dirname, 'fonts', 'NotoSans-Regular.ttf'))) process.env.AVA_FONTS_DIR = join(__dirname, 'fonts');
+
 // Load .env from sidecar directory (dev) or next to the bundle (prod)
 try {
   const envPath = join(__dirname, '.env');
@@ -103,6 +107,15 @@ try {
 } catch {
   const fyPath = join(__dirname, '..', '..', 'core', 'dist', 'health', 'for-you.js');
   forYouCore = await import(`file://${fyPath.replace(/\\/g, '/')}`);
+}
+
+// The optional bold Chinese/Japanese/Korean font pack for PDFs.
+let pdfFontsCore;
+try {
+  pdfFontsCore = await import('@ava/core/authoring/pdf-fonts');
+} catch {
+  const pfPath = join(__dirname, '..', '..', 'core', 'dist', 'tools', 'authoring', 'pdf-fonts.js');
+  pdfFontsCore = await import(`file://${pfPath.replace(/\\/g, '/')}`);
 }
 
 // The document viewer's spreadsheet reader (Documents 1.0 Part 4).
@@ -4722,6 +4735,30 @@ rl.on('line', async (line) => {
       deleteModel(String(data.slug || ''), data.tool).catch((err) =>
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not delete the model' }));
       break;
+    case 'pdf_fonts_status': {
+      pdfFontsCore.optionalFontsStatus().then((state) => emit({ event: 'pdf_fonts_state', state }));
+      break;
+    }
+    case 'pdf_fonts_download': {
+      (async () => {
+        let last = 0;
+        try {
+          await pdfFontsCore.downloadOptionalFonts((done, total) => {
+            if (done - last < 512 * 1024 && done < total) return;
+            last = done;
+            emit({ event: 'pdf_fonts_progress', done, total });
+          });
+          emit({ event: 'pdf_fonts_state', state: await pdfFontsCore.optionalFontsStatus() });
+        } catch (err) {
+          emit({ event: 'pdf_fonts_state', state: { ...(await pdfFontsCore.optionalFontsStatus()), error: err?.message || String(err) } });
+        }
+      })();
+      break;
+    }
+    case 'pdf_fonts_remove': {
+      pdfFontsCore.removeOptionalFonts().catch(() => {}).then(async () => emit({ event: 'pdf_fonts_state', state: await pdfFontsCore.optionalFontsStatus() }));
+      break;
+    }
     case 'document_sheet': {
       // A spreadsheet for the document viewer: read here, where exceljs runs.
       (async () => {
