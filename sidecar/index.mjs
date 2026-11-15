@@ -239,6 +239,11 @@ const {
   MemoryAgent,
   MemorySession,
   MemoryRecallV4Tool,
+  MemorySaveV4Tool,
+  MemoryUpdateV4Tool,
+  MemoryDeleteV4Tool,
+  consolidateSession,
+  resolveMemoryModel,
   memoryV4Root,
   ProjectIndexer,
   BriefingEngine,
@@ -649,6 +654,20 @@ let memoryManager = null;
 // the switch-over; when open it replaces the old brief in every mode and
 // memory_recall searches it. Mirrors the extension.
 let memorySession = null;
+// The fleet's own low-cost model for memory v4's end-of-session tidy-up.
+let memoryModel = null;
+
+/** Memory v4 tidy-up model for a fleet (or, for a single model, any key held). Mirrors the extension. */
+function pickMemoryModel(providerRegistry, sharedState, fleet) {
+  if (!memorySession || !providerRegistry) return null;
+  const availableProviders = new Set();
+  if (sharedState.qwenApiKey) availableProviders.add('qwen');
+  if (sharedState.minimaxApiKey) availableProviders.add('minimax');
+  if (sharedState.kimiApiKey) availableProviders.add('kimi');
+  if (sharedState.deepseekApiKey) availableProviders.add('deepseek');
+  if (sharedState.mistralApiKey) availableProviders.add('mistral');
+  return resolveMemoryModel(providerRegistry, availableProviders, fleet || undefined);
+}
 let journalManager = null;
 // Init lifecycle — flips true at the start of handleInit, false on
 // completion or failure. handleMessage uses this to distinguish "init
@@ -702,9 +721,20 @@ const IDLE_REFLECT_MS = 10 * 60_000;
 
 /** Reflect a session into memory, skipping material already reflected. */
 async function reflectSession(conv) {
-  if (!conv || !memoryAgentInstance) return 0;
+  if (!conv) return 0;
   const messages = conv.getMessages();
   const userTurns = messages.filter((m) => m.role === 'user').length;
+  // Memory v4: the one writer is the end-of-session tidy-up, on the fleet's
+  // own low-cost model. Same once-per-new-material guard.
+  if (memorySession) {
+    if (!memoryModel || userTurns < 2) return 0;
+    if (userTurns <= (lastReflectedTurns.get(conv.id) ?? 0)) return 0;
+    const r = await consolidateSession({ session: memorySession, messages, provider: memoryModel.provider, model: memoryModel.model, log: (m) => emit({ event: 'info', message: m }) }).catch(() => null);
+    lastReflectedTurns.set(conv.id, userTurns);
+    if (r) emit({ event: 'info', message: `Memory tidy-up: ${r.dayLines} day lines, ${r.saved} saved, ${r.waiting} waiting for a yes, ${r.changed} changed, threads +${r.threadsOpened}/-${r.threadsClosed}` });
+    return r ? r.saved + r.waiting + r.changed : 0;
+  }
+  if (!memoryAgentInstance) return 0;
   if (userTurns < 2) return 0; // reflectOnSession needs >= 2 user turns
   if (userTurns <= (lastReflectedTurns.get(conv.id) ?? 0)) return 0;
   try {
@@ -2321,8 +2351,11 @@ async function handleInit(data) {
             embeddingBaseUrl: config.embeddingBaseUrl,
           }),
         });
-        // Same tool name, so prompts and mode allowlists are unchanged.
+        // Same tool names, so prompts and mode allowlists are unchanged.
         toolRegistry.register(new MemoryRecallV4Tool());
+        toolRegistry.register(new MemorySaveV4Tool());
+        toolRegistry.register(new MemoryUpdateV4Tool());
+        toolRegistry.register(new MemoryDeleteV4Tool());
         emit({ event: 'info', message: `Memory v4 on (${memoryV4})${memorySession.project ? `, project ${memorySession.project.name}` : ''}` });
       } catch (err) {
         memorySession = null;
@@ -2767,6 +2800,8 @@ async function handleInit(data) {
     autoCoordinator = startFleet
       ? createFleetCoordinator(startFleet, { providerRegistry, toolRegistry, cwd, sharedState })
       : null;
+    memoryModel = pickMemoryModel(providerRegistry, sharedState, startFleet);
+    if (memorySession) emit({ event: 'info', message: `Memory tidy-up model: ${memoryModel?.model.id ?? 'none reachable (tidy-up off; saves still work)'}` });
 
     // Store for hot-swap model changes
     globalThis._providerRegistry = providerRegistry;
@@ -4363,9 +4398,9 @@ function handleClear(data) {
     // cleared — distils durable user/project facts the per-turn capture may
     // have missed. Fire-and-forget, off the hot path; the session is ending so
     // it can't loop back. No-op if the conversation has < 2 user turns.
-    if (memoryAgentInstance) {
-      Promise.resolve(memoryAgentInstance.reflectOnSession(conversation.getMessages(), conversation.id))
-        .catch(() => {});
+    // reflectSession routes to memory v4's tidy-up when it is on.
+    if (memorySession || memoryAgentInstance) {
+      void reflectSession(conversation).catch(() => {});
     }
     // Preserve system prompt, clear messages
     const messages = conversation.getMessages();
@@ -4490,6 +4525,8 @@ async function handleSetModel(data) {
     if (!providerRegistry) { emitError('Not initialized'); return; }
     const cwd = globalThis._cwd || process.cwd();
     const sharedState = globalThis._sharedState || {};
+
+    memoryModel = pickMemoryModel(providerRegistry, sharedState, isRoutingMode(data.model) ? data.model : undefined);
 
     // A fleet — the same setup as startup (createFleetCoordinator). isRoutingMode
     // comes from core, so every fleet id is recognised here, Longxiang included.
