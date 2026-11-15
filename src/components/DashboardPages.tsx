@@ -70,6 +70,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 // The dependency-free leaf, so this renderer and the sidecar agree on what
 // is exportable and what it is called without either keeping its own list.
 import { canExport, targetsFor, TARGET_LABELS, type ExportFormat } from '@ava/core/authoring/formats';
+import { viewableFiles, isViewerDocument } from './DocumentTab';
 import { exportOptionsFor, originalExt, transcodeImage, withExt, type ExportFormat as ImageExportFormat, type ExportOption as ImageExportOption } from '../lib/image-export';
 import { useDesktopPermLevel } from '../lib/useDesktopPermLevel';
 import { useDesktopVisionMode } from '../lib/useDesktopVisionMode';
@@ -5725,7 +5726,8 @@ export function AvaChatPage() {
                       {msg.toolCalls.map((tc, idx) => {
                         const header = getToolHeader(tc.name, tc.args);
                         return (
-                          <div key={idx} style={{
+                          <Fragment key={idx}>
+                          <div style={{
                             display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0 3px 10px',
                             borderLeft: `2px solid ${tc.status === 'error' ? '#f85149' : 'color-mix(in srgb, var(--accent) 38%, transparent)'}`,
                             fontSize: 11, color: '#6c7086',
@@ -5743,6 +5745,19 @@ export function AvaChatPage() {
                               {tc.status === 'running' ? t('dash.chat.tool_running') : tc.status === 'done' ? t('dash.chat.tool_done') : t('dash.chat.tool_error')}
                             </span>
                           </div>
+                          {/* View what Ava just made (Documents 1.0 Part 4): opens in its own tab. */}
+                          {tc.status === 'done' && viewableFiles(tc.name, tc.result).length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0 4px 12px' }}>
+                              {viewableFiles(tc.name, tc.result).map((f) => (
+                                <button key={f} type="button"
+                                  onClick={() => { try { window.dispatchEvent(new CustomEvent('ava-open-document', { detail: { path: f } })); } catch { /* no window */ } }}
+                                  style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  {tt('library.view', 'View')} · {f.split(/[\\/]/).pop()}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          </Fragment>
                         );
                       })}
                     </div>
@@ -12584,6 +12599,14 @@ function LibraryPreviewModal({
     } catch { return null; }
   };
 
+  /** The document viewer, in its own tab (Documents 1.0 Part 4). */
+  const viewSibling = async (sib: LibraryFile) => {
+    const abs = await siblingAbsPath(sib);
+    if (!abs) return;
+    try { window.dispatchEvent(new CustomEvent('ava-open-document', { detail: { path: abs } })); } catch { /* no window */ }
+    onClose();
+  };
+
   const openSibling = async (sib: LibraryFile) => {
     const abs = await siblingAbsPath(sib);
     if (!abs) return;
@@ -12763,6 +12786,11 @@ function LibraryPreviewModal({
               'Rename',
               () => { setRenameValue(file.name ?? ''); setRenaming(true); },
             )}
+            {!isCloud && projectFolder && isViewerDocument(file.name || file.path) && actionBtn(
+              tt('library.view', 'View'),
+              () => void viewSibling(file),
+              { primary: true },
+            )}
             {!isCloud && actionBtn(
               busy === 'open' ? 'Opening…' : (isOfficeDoc ? 'Open (LibreOffice)' : 'Open'),
               handleOpen,
@@ -12815,6 +12843,7 @@ function LibraryPreviewModal({
                     <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: '#a6adc8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {sib.name}
                     </span>
+                    {isViewerDocument(sib.name || sib.path) && actionBtn(tt('library.view', 'View'), () => void viewSibling(sib), { small: true, primary: true })}
                     {actionBtn(t('dash.library.open'), () => void openSibling(sib), { small: true })}
                     {actionBtn(t('library.reveal'), () => void revealSibling(sib), { small: true })}
                     {/* Exports only. The source IS the document, so removing

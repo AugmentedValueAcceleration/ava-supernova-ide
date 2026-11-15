@@ -105,6 +105,15 @@ try {
   forYouCore = await import(`file://${fyPath.replace(/\\/g, '/')}`);
 }
 
+// The document viewer's spreadsheet reader (Documents 1.0 Part 4).
+let sheetViewCore;
+try {
+  sheetViewCore = await import('@ava/core/authoring/sheet-view');
+} catch {
+  const svPath = join(__dirname, '..', '..', 'core', 'dist', 'tools', 'authoring', 'sheet-view.js');
+  sheetViewCore = await import(`file://${svPath.replace(/\\/g, '/')}`);
+}
+
 // Desktop subpath — the five-persona conductor (runDesktopTrajectory) lives
 // here. Drives Desktop Automation Mode turns instead of the regular agent loop.
 let desktopCore;
@@ -4713,6 +4722,18 @@ rl.on('line', async (line) => {
       deleteModel(String(data.slug || ''), data.tool).catch((err) =>
         emit({ event: 'model_action_result', ok: false, error: err?.message || 'Could not delete the model' }));
       break;
+    case 'document_sheet': {
+      // A spreadsheet for the document viewer: read here, where exceljs runs.
+      (async () => {
+        try {
+          const sheets = await sheetViewCore.readSheetForView(String(data.path || ''));
+          emit({ event: 'document_sheet_result', id: data.id, sheets });
+        } catch (err) {
+          emit({ event: 'document_sheet_result', id: data.id, error: err?.message || 'This spreadsheet could not be read.' });
+        }
+      })();
+      break;
+    }
     case 'health_for_you': {
       (async () => {
         try {

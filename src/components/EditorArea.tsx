@@ -19,6 +19,7 @@ import {
   AccountPage,
   HelpPage,
 } from './DashboardPages';
+import { DocumentTab, isViewerDocument } from './DocumentTab';
 import { DocumentationPageLazy } from './DocumentationPage.lazy';
 import { LazyPage } from './LazyPage';
 import { HealthPage } from './HealthPage';
@@ -419,7 +420,11 @@ export default function EditorArea({ dashboardPage, openFiles = [], activeFilePa
 
       {/* Content */}
       {showingFile && activeFilePath ? (
-        <FileViewer path={activeFilePath} />
+        // PDF, Word and spreadsheets open in the document viewer (Documents
+        // 1.0 Part 4); everything else in the text / Markdown view.
+        isViewerDocument(activeFilePath)
+          ? <DocumentTab key={activeFilePath} path={activeFilePath} />
+          : <FileViewer path={activeFilePath} />
       ) : (
         /* Wraps the WHOLE registry, not just Documentation: any page in the
            map may be lazy, and a boundary per page is a boundary someone
