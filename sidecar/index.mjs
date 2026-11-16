@@ -1701,6 +1701,23 @@ async function emitGimpStatus(error) {
   }
 }
 
+// Blender Live: one setting for the room, shared with the extension (config.json).
+async function emitBlenderLiveStatus(busy = false) {
+  const s = core.BlenderLive.current().lastStatus;
+  emit({ event: 'blender_live_status', wanted: await core.blenderLiveWanted(), state: s.state, message: s.message, blenderVersion: s.blenderVersion ?? null, ...(busy ? { busy: true } : {}) });
+}
+let blenderLiveFollowing = false;
+/** Once: keep Ava's Live tools in step with Live, tell the room, reconnect if Live was left on. */
+function followBlenderLive() {
+  if (blenderLiveFollowing) return;
+  blenderLiveFollowing = true;
+  core.BlenderLive.current().onChange(() => {
+    if (toolRegistry) core.syncBlenderLiveTools(toolRegistry);
+    void emitBlenderLiveStatus();
+  });
+  void core.blenderLiveWanted().then((on) => { if (on) void core.BlenderLive.current().connect(); });
+}
+
 async function emitBlenderStatus(error) {
   try {
     const { install, configured } = await core.blenderStatus();
@@ -2189,6 +2206,9 @@ async function handleInit(data) {
     // the extension — see packages/core/src/tools/desktop-tools.ts). The IDE
     // ships outside the marketplace, so it registers the full toolkit here.
     registerDesktopTools(toolRegistry);
+    // Blender Live: its tools are in the registry only while their Blender is ready.
+    core.syncBlenderLiveTools(toolRegistry);
+    followBlenderLive();
     toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
 
     // ── Desktop Automation Mode — Tools live in @ava/core ───────────────
@@ -4812,6 +4832,18 @@ rl.on('line', async (line) => {
       break;
     case 'blender_status':
       emitBlenderStatus();
+      break;
+    case 'blender_live_status':
+      void emitBlenderLiveStatus();
+      break;
+    case 'blender_live_set':
+      void (async () => {
+        await core.setBlenderLiveWanted(data.on === true);
+        await emitBlenderLiveStatus(true);
+        if (data.on === true) await core.BlenderLive.current().connect();
+        else await core.BlenderLive.current().disconnect();
+        await emitBlenderLiveStatus();
+      })();
       break;
     // ── Design Studio 2D (GIMP) — the same shape, on its own folder ──
     case 'list_image_work':

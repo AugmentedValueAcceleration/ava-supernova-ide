@@ -24,6 +24,7 @@ import { renderMark, renderElements, type MarkSpec, type MarkStyle } from '../li
 import type { LogoBrief, LogoSystem, LogoVariant } from '../lib/asset-forge/logo/types';
 import { useCreativeGallery } from '../lib/creative-gallery';
 import { t, tt } from '../lib/i18n';
+import { useBlenderLive, blenderRoomName } from '../lib/blender-live';
 
 /**
  * Design Studio (IDE) — guided icon design, mirrored faithfully from the VS Code
@@ -574,6 +575,7 @@ const VOICE_OPTIONS = TTS_VOICE_CATALOGUE.map(v => ({
 const QWEN_VIEWS: readonly ViewId[] = ['video', 'voice', 'image', 'icon'];
 
 export function DesignStudio() {
+  const blenderLive = useBlenderLive();
   const hasQwenKey = useModeAvailability().state.byok.qwen;
   // Reactive active kit — re-read whenever the brand kit changes anywhere (the
   // Brand Kit view, Ava's brand_kit tool) so the studio follows it instead of
@@ -1460,7 +1462,7 @@ export function DesignStudio() {
                 <button key={it.id} onClick={disabled ? undefined : () => setView(it.id)} disabled={disabled}
                   title={keyless ? t('dash.studio.needs_qwen_tip') : undefined}
                   style={{ ...navBtn(view === it.id), ...(disabled ? { opacity: 0.45, cursor: 'default' } : {}) }}>
-                  {it.id === 'model' ? tt('dash.studio.asset.model', 'Blender (Headless)') : it.id === 'gimp' ? tt('dash.studio.asset.gimp', 'GIMP (Headless)') : t(`dash.studio.asset.${it.id}`)}
+                  {it.id === 'model' ? blenderRoomName(blenderLive.wanted) : it.id === 'gimp' ? tt('dash.studio.asset.gimp', 'GIMP (Headless)') : t(`dash.studio.asset.${it.id}`)}
                   {it.soon && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999 }}>{t('dash.studio.soon')}</span>}
                   {!it.soon && keyless && <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: 0.6, color: '#8b8398', border: `1px solid ${CARD_BORDER}`, padding: '0 6px', borderRadius: 999, whiteSpace: 'nowrap' }}>{t('dash.studio.needs_qwen')}</span>}
                 </button>

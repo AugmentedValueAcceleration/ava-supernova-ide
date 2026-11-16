@@ -518,6 +518,10 @@ export class SidecarManager {
   async healthForYou(profile: unknown, activePlans: unknown[], today: string): Promise<void> { await this.send({ cmd: 'health_for_you', profile, activePlans, today }); }
   async copyModelToProject(slug: string, projectRoot: string, tool: 'blender' | 'gimp' | 'upload' = 'blender'): Promise<void> { await this.send({ cmd: 'copy_model_to_project', slug, projectRoot, tool }); }
   async blenderStatus(): Promise<void> { await this.send({ cmd: 'blender_status' }); }
+  /** Blender Live: ask for its status; the answer is a blender_live_status event. */
+  async blenderLiveStatus(): Promise<void> { await this.send({ cmd: 'blender_live_status' }); }
+  /** Blender Live: switch it on or off for the room (shared with the extension). */
+  async setBlenderLive(on: boolean): Promise<void> { await this.send({ cmd: 'blender_live_set', on }); }
   async setBlenderPath(path: string | null): Promise<void> { await this.send({ cmd: 'set_blender_path', path }); }
   // ── Design Studio 2D (GIMP) ── `image_work_list`, `gimp_status`.
   async listImageWork(): Promise<void> { await this.send({ cmd: 'list_image_work' }); }

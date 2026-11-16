@@ -3,6 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { tt } from '../lib/i18n';
+import { useBlenderLive, setBlenderLive, blenderRoomName, blenderLiveLine } from '../lib/blender-live';
 import { LazyModelViewer } from './LazyModelViewer';
 import { Select } from './Select';
 import { FolderPicker, PlanChip, useLibraryFolders } from './LibraryFolders';
@@ -124,6 +125,7 @@ export function ModelRoom({ tool = 'blender', busy = false, startFresh = false, 
   // The Library folders this piece can be filed into (Phase 3).
   const { folders: libraryFolders, plans: libraryPlans } = useLibraryFolders();
   const room = ROOMS[tool];
+  const live = useBlenderLive();
   const [models, setModels] = useState<IdeModel[] | null>(null);
   // A design opened from the Library comes straight to the stage.
   const [picked, setPicked] = useState<string | null>(() => {
@@ -234,11 +236,34 @@ export function ModelRoom({ tool = 'blender', busy = false, startFresh = false, 
     <div style={{ flex: 1, minHeight: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ marginBottom: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{tt(room.titleKey, room.title)}</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 400, color: '#cdd6f4', margin: 0 }}>{tool === 'blender' ? blenderRoomName(live.wanted) : tt(room.titleKey, room.title)}</h2>
           <p style={{ fontSize: 12, color: '#8b8398', margin: '2px 0 0' }}>
             {tt(room.subtitleKey, room.subtitle)}
           </p>
+          {tool === 'blender' && live.wanted && (
+            <p style={{ fontSize: 11.5, color: '#a6adc8', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 6 }} role="status" aria-live="polite">
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 999, background: live.busy ? '#fbbf24' : live.state === 'ready' ? '#34d399' : live.state === 'error' ? '#f87171' : '#fbbf24' }} />
+              {blenderLiveLine(live)}
+            </p>
+          )}
         </div>
+        {tool === 'blender' && (
+          <div style={{ flexShrink: 0, display: 'inline-flex', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: 2, fontSize: 12 }} role="radiogroup" aria-label={tt('dash.studio.live.how', 'How Ava works in Blender')}>
+            {([false, true] as const).map((on) => (
+              <button
+                key={String(on)}
+                role="radio"
+                aria-checked={live.wanted === on}
+                disabled={live.busy || busy}
+                onClick={() => { if (live.wanted !== on) setBlenderLive(on); }}
+                title={on ? tt('dash.studio.live.mcp_tip', 'Ava works in your open Blender, through Blender’s official MCP add-on, while you watch') : tt('dash.studio.live.headless_tip', 'Ava builds in Blender with no window')}
+                style={{ border: 'none', borderRadius: 6, padding: '4px 10px', fontWeight: 500, cursor: live.busy || busy ? 'default' : 'pointer', opacity: live.busy || busy ? 0.5 : 1, background: live.wanted === on ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent', color: live.wanted === on ? 'var(--accent)' : '#a6adc8' }}
+              >
+                {on ? tt('dash.studio.live.mcp', 'MCP') : tt('dash.studio.live.headless', 'Headless')}
+              </button>
+            ))}
+          </div>
+        )}
         {tool === 'gimp' && active && (
           <button style={{ ...btn(), flexShrink: 0 }} onClick={() => { void addArt(active.slug); }}>{tt('dash.studio.add_art', 'Add your art')}</button>
         )}
