@@ -1706,6 +1706,40 @@ async function emitBlenderLiveStatus(busy = false) {
   const s = core.BlenderLive.current().lastStatus;
   emit({ event: 'blender_live_status', wanted: await core.blenderLiveWanted(), state: s.state, message: s.message, blenderVersion: s.blenderVersion ?? null, ...(busy ? { busy: true } : {}) });
 }
+// ── His own MCP servers (plan 2026-11-17-mcp-servers) ──────────────────────
+// Their keys are in the OS keychain the extension shares (entry mcp.secrets).
+// Only the window can reach the keychain, so core's reads and writes are asked
+// of it: 'mcp_keychain' out, 'mcp_keychain_reply' back.
+const mcpKeychainPending = new Map();
+function askMcpKeychain(op, value) {
+  const id = crypto.randomUUID().slice(0, 8);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { mcpKeychainPending.delete(id); reject(new Error('The keychain did not answer.')); }, 15_000);
+    mcpKeychainPending.set(id, { resolve: (v) => { clearTimeout(timer); resolve(v); }, reject: (e) => { clearTimeout(timer); reject(e); } });
+    emit({ event: 'mcp_keychain', id, op, ...(op === 'write' ? { value } : {}) });
+  });
+}
+core.setMcpKeychain({
+  read: () => askMcpKeychain('read'),
+  write: async (value) => { await askMcpKeychain('write', value); },
+});
+function handleMcpKeychainReply(data) {
+  const p = mcpKeychainPending.get(data.id);
+  if (!p) return;
+  mcpKeychainPending.delete(data.id);
+  if (data.error) p.reject(new Error(String(data.error)));
+  else p.resolve(typeof data.value === 'string' ? data.value : null);
+}
+let mcpFollowing = false;
+/** Once: start his servers for this project and keep their tools in Ava's registry. */
+function followMcpServers(projectRoot) {
+  if (mcpFollowing) return;
+  mcpFollowing = true;
+  core.McpServers.current().onChange(() => { if (toolRegistry) core.syncMcpTools(toolRegistry); });
+  void core.McpServers.current().start(projectRoot ?? null)
+    .catch((err) => emitError(`MCP servers failed to start: ${err?.message ?? err}`));
+}
+
 let blenderLiveFollowing = false;
 /** Once: keep Ava's Live tools in step with Live, tell the room, reconnect if Live was left on. */
 function followBlenderLive() {
@@ -2209,6 +2243,8 @@ async function handleInit(data) {
     // Blender Live: its tools are in the registry only while their Blender is ready.
     core.syncBlenderLiveTools(toolRegistry);
     followBlenderLive();
+    core.syncMcpTools(toolRegistry);
+    followMcpServers(projectRoot ?? cwd);
     toolRegistry.setPermissionMode(config.permissionMode || 'balanced');
 
     // ── Desktop Automation Mode — Tools live in @ava/core ───────────────
@@ -4160,8 +4196,12 @@ function handleConfirm(data) {
   }
   pendingConfirmations.delete(data.id);
 
-  // "Always Allow" — approve this category for the session
-  if (data.approved && data.alwaysAllowCategory && toolRegistry && pending.toolName) {
+  // A tool from one of his MCP servers: "always" is for that one tool,
+  // remembered in ~/.ava/mcp.json — never its whole category.
+  if (data.approved && data.alwaysAllowCategory && core.isUserMcpTool(pending.toolName)) {
+    void core.McpServers.current().allowTool(pending.toolName);
+  } else if (data.approved && data.alwaysAllowCategory && toolRegistry && pending.toolName) {
+    // "Always Allow" — approve this category for the session
     const category = toolRegistry.getCategoryForTool(pending.toolName);
     toolRegistry.approveCategory(category);
     toolRegistry.setCategoryPermission(category, 'auto');
@@ -4833,6 +4873,9 @@ rl.on('line', async (line) => {
     case 'blender_status':
       emitBlenderStatus();
       break;
+    case 'mcp_keychain_reply':
+      handleMcpKeychainReply(data);
+      break;
     case 'blender_live_status':
       void emitBlenderLiveStatus();
       break;
@@ -5221,6 +5264,7 @@ rl.on('line', async (line) => {
 
         // Re-detect project root for memory scoping
         const projectRoot = detectProjectRoot(newCwd) ?? undefined;
+        void core.McpServers.current().setProjectRoot(projectRoot ?? newCwd);
         if (conversation) { cancelIdleReflection(); void reflectSession(conversation); }
         memorySession = await openMemorySession(projectRoot);
         if (globalThis._sharedState) globalThis._sharedState.memorySession = memorySession;

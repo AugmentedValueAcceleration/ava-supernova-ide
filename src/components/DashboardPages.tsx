@@ -6265,7 +6265,7 @@ export function AvaChatPage() {
                     padding: '5px 12px', background: 'transparent', border: '1px solid var(--accent)',
                     borderRadius: 6, color: 'var(--accent)', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                   }}
-                  title={t('dash.cc.auto_approve_cat')}
+                  title={pendingConfirm.toolName.startsWith('mcp_') ? t('tool.always_allow_tool_tip') : t('dash.cc.auto_approve_cat')}
                 >
                   Always
                 </button>

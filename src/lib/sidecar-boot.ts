@@ -11,7 +11,7 @@ import { getSidecar, type SidecarConfig } from './sidecar';
 import { getProviderKeys, PROVIDER_FIELDS, type ProviderField } from './provider-keys';
 import { ensureDataHome } from './data-root';
 import { resolveSidecarModel } from './chat-models';
-import { getLocalModelKey } from './keychain';
+import { getLocalModelKey, readBlob, writeBlob } from './keychain';
 
 // This file used to keep its own byte-for-byte copy of chat-models.ts's
 // SIDECAR_MODEL_MAP plus a duplicated `auto|supernova|aurora` fallback. Two
@@ -86,6 +86,27 @@ export function buildSidecarConfig(): SidecarConfig {
 }
 
 let booting = false;
+
+// MCP server keys live in the keychain the extension shares (entry
+// mcp.secrets). The sidecar can't reach the keychain, so it asks here and we
+// answer. Registered once on the shared sidecar; survives restarts.
+let mcpKeychainServed = false;
+function serveMcpKeychain(): void {
+  if (mcpKeychainServed) return;
+  mcpKeychainServed = true;
+  const sc = getSidecar();
+  sc.on('mcp_keychain', (ev) => {
+    const { id, op, value } = ev as unknown as { id: string; op: 'read' | 'write'; value?: string | null };
+    void (async () => {
+      try {
+        if (op === 'write') { await writeBlob('mcp.secrets', value ?? null); await sc.mcpKeychainReply(id, null); }
+        else await sc.mcpKeychainReply(id, await readBlob('mcp.secrets'));
+      } catch (err) {
+        await sc.mcpKeychainReply(id, null, err instanceof Error ? err.message : String(err));
+      }
+    })();
+  });
+}
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
@@ -117,6 +138,7 @@ export function restartSidecar(): void {
 /** Ensure a live sidecar exists. No-op if one is already running/booting or there's
  *  no provider to chat through. Never stops the sidecar. */
 export async function ensureSidecarRunning(): Promise<void> {
+  serveMcpKeychain();
   const sc = getSidecar();
   if (sc.isReady || booting) return;
   if (!hasChatCapability()) return;
@@ -131,3 +153,6 @@ export async function ensureSidecarRunning(): Promise<void> {
     booting = false;
   }
 }
+
+// Answer from the start, whichever path starts the sidecar.
+serveMcpKeychain();
