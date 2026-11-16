@@ -6,6 +6,7 @@ import { readLocalTasks } from '../lib/task-store';
 // holds creative jobs outside the canvas so they survive navigating away.
 import { getSidecar, type SidecarEvent } from '../lib/sidecar';
 import { useMemoryV4Status } from '../lib/memory-v4';
+import { useConnectionsWaiting } from '../lib/connections';
 import { Tooltip } from './Tooltip';
 import {
   Lightning as PhCommand,
@@ -16,6 +17,7 @@ import {
   Barbell as PhHealth,
   Palette as PhCreative,
   Brain as PhMemory,
+  PlugsConnected as PhConnections,
   ChartLineUp as PhHistory,
   GearSix as PhAccount,
   Heart as PhHeart,
@@ -1233,18 +1235,20 @@ const NAV_ITEMS: { id: string; Icon: PhIconType; labelKey: string; descKey: stri
   { id: 'learning',        Icon: PhLearning, labelKey: 'dash.nav.learning',        descKey: 'dash.nav.learning_desc', earlyAccess: true },
   { id: 'creative-studio', Icon: PhCreative, labelKey: 'dash.nav.creative_studio', descKey: 'dash.nav.creative_studio_desc', earlyAccess: true },
   { id: 'memory',          Icon: PhMemory,   labelKey: 'dash.nav.memory',          descKey: 'dash.nav.memory_desc' },
+  // His MCP servers (plan 2026-11-17-mcp-servers). Keep in step with the extension's NavSidebar.
+  { id: 'connections',     Icon: PhConnections, labelKey: 'dash.nav.connections', descKey: 'dash.nav.connections_desc' },
   { id: 'chat-history',    Icon: PhHistory,  labelKey: 'dash.nav.usage_history',   descKey: 'dash.nav.history_desc' },
   { id: 'account',         Icon: PhAccount,  labelKey: 'dash.nav.settings',        descKey: 'dash.nav.settings_desc' },
   { id: 'help',            Icon: PhHelp,     labelKey: 'dash.nav.help',            descKey: 'dash.nav.help_desc' },
 ];
 
 /** Things waiting for a yes on the Memory page (memory v4), as a small count. */
-function MemoryBadge({ count, rail }: { count: number; rail?: boolean }) {
+function MemoryBadge({ count, rail, warn }: { count: number; rail?: boolean; warn?: boolean }) {
   if (!count) return null;
   return (
     <span style={{
       position: 'absolute', top: rail ? 2 : -4, right: rail ? 2 : -6, minWidth: 14, height: 14, borderRadius: 999,
-      background: 'var(--accent, #a855f7)', color: '#fff', fontSize: 9, fontWeight: 700, lineHeight: '14px', textAlign: 'center', padding: '0 3px',
+      background: warn ? '#fbbf24' : 'var(--accent, #a855f7)', color: warn ? '#1a1028' : '#fff', fontSize: 9, fontWeight: 700, lineHeight: '14px', textAlign: 'center', padding: '0 3px',
     }}>{count}</span>
   );
 }
@@ -1253,6 +1257,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
   useLocale();
   const memoryV4 = useMemoryV4Status();
   const memoryWaiting = memoryV4.pending;
+  const connectionsWaiting = useConnectionsWaiting();
 
   // ── Collapsed icons-only rail ─────────────────────────────────────
   // Mirrors the extension NavSidebar's collapsed mode: 9 stacked icon
@@ -1283,6 +1288,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
               >
                 <item.Icon size={20} weight="duotone" />
                 {item.id === 'memory' && <MemoryBadge count={memoryWaiting} rail />}
+                {item.id === 'connections' && <MemoryBadge count={connectionsWaiting} rail warn />}
               </button>
               </Tooltip>
             );
@@ -1317,6 +1323,7 @@ function DashboardPanel({ onDashboardSelect, activePage, collapsed = false }: { 
               <span style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative', color: isActive ? '#cba6f7' : '#a6adc8' }}>
                 <item.Icon size={20} weight="duotone" />
                 {item.id === 'memory' && <MemoryBadge count={memoryWaiting} />}
+                {item.id === 'connections' && <MemoryBadge count={connectionsWaiting} warn />}
               </span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

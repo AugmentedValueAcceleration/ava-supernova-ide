@@ -510,6 +510,8 @@ export class SidecarManager {
   async pdfFonts(action: 'status' | 'download' | 'remove'): Promise<void> { await this.send({ cmd: `pdf_fonts_${action}` }); }
   /** The Memory page (memory v4): one op of core's memoryPage(); answers with a memory_v4_result event. */
   async memoryV4(requestId: string, op: string, args: Record<string, unknown>): Promise<void> { await this.send({ cmd: 'memory_v4', requestId, op, args }); }
+  /** The Connections page (his MCP servers): one op of core's mcpPage(); answers with an mcp_page_result event. */
+  async mcpPage(requestId: string, op: string, args: Record<string, unknown>): Promise<void> { await this.send({ cmd: 'mcp_page', requestId, op, args }); }
   /** Ask whether memory v4 is on; answers with a memory_v4_status event. */
   async memoryV4Status(): Promise<void> { await this.send({ cmd: 'memory_v4_status' }); }
   /** A spreadsheet for the document viewer; answers with a 'document_sheet_result' event carrying `id`. */

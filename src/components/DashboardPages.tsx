@@ -1,5 +1,7 @@
 import { MemoryV4Page } from './MemoryV4Page';
 import { memoryRequest, useMemoryV4Status } from '../lib/memory-v4';
+import { ConnectionsPage as SharedConnectionsPage } from './ConnectionsPage';
+import { connectionsRequest, setConnectionsWaiting } from '../lib/connections';
 import { stripChangesSummary } from '@ava/core/changes-summary';
 import { FactoryResetDialog } from './FactoryResetDialog';
 import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -36,7 +38,6 @@ import {
   ArrowsClockwise as PhArrowsClockwise,
   Lightbulb as PhLightbulb,
   TestTube as PhTestTube,
-  Link as PhLink,
   CloudSun as PhWeather,
   Clock as PhClock,
   Rocket as PhRocket,
@@ -15136,43 +15137,10 @@ export function SettingsPage() {
 }
 
 /* ===== 12. Connections ===== */
+/** His MCP servers (ConnectionsPage, shared with the extension). */
 export function ConnectionsPage() {
-  useLocale();
-  const services = [
-    { icon: '\uD83D\uDC19', name: t('dash.connections.github'), desc: t('dash.connections.github_desc') },
-    { icon: '\u2709\uFE0F', name: t('dash.connections.email'), desc: t('dash.connections.email_desc') },
-    { icon: '\uD83D\uDCAC', name: t('dash.connections.slack'), desc: t('dash.connections.slack_desc') },
-    { icon: '\uD83C\uDFAE', name: t('dash.connections.discord'), desc: t('dash.connections.discord_desc') },
-  ];
-
-  return (
-    <div style={pageWrapper}>
-      <h1 style={pageTitle}>{t('dash.connections.title')}</h1>
-      <p style={pageSubtitle}>{t('dash.connections.subtitle')}</p>
-
-      <div style={{ ...card, textAlign: 'center', padding: '32px 20px', marginBottom: 24 }}>
-        <div style={{ marginBottom: 8, color: 'var(--accent)' }}><PhLink size={36} weight="duotone" /></div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('dash.connections.coming_soon')}</div>
-        <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.connections.coming_soon_desc')}</div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {services.map((svc) => (
-          <div key={svc.name} style={{ ...card, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.5 }}>
-            <span style={{ fontSize: 22 }}>{svc.icon}</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#cdd6f4' }}>{svc.name}</div>
-              <div style={{ fontSize: 11, color: '#6c7086' }}>{svc.desc}</div>
-            </div>
-            <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 10px', borderRadius: 6, background: 'rgba(108,112,134,0.10)', color: '#6c7086' }}>{t('dash.connections.inactive')}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <SharedConnectionsPage request={connectionsRequest} onWaitingChange={setConnectionsWaiting} />;
 }
-
-/* Full ConnectionsPage implementation preserved in git — swap back when backend is ready */
 
 /* ===== 12b. Remote Devices (D7) ===== */
 export function RemoteDevicesPage() {
@@ -15651,7 +15619,7 @@ function TasksPageInner() { return <TasksPage />; }
 function JournalPageInner() { return <JournalPage />; }
 
 export function AccountPage() {
-  const [tab, setTab] = useState<'settings' | 'connections' | 'personality' | 'profile'>('settings');
+  const [tab, setTab] = useState<'settings' | 'personality' | 'profile'>('settings');
   // "{name}'s profile" — the user's own data: identity/body, health goals, their
   // plans, and their catalogue contributions.
   const profileLabel = (() => {
@@ -15662,8 +15630,6 @@ export function AccountPage() {
   })();
   const tabs = [
     { key: 'settings' as const, label: t('dash.nav.settings') },
-    // Connections tab hidden for now — being reworked later this week.
-    // Re-enable by restoring: { key: 'connections' as const, label: 'Connections' },
     { key: 'personality' as const, label: t('dash.account.tab_style') },
     { key: 'profile' as const, label: profileLabel },
     // Sync tab removed — Ava is local-first; nothing syncs to the cloud.
@@ -15685,7 +15651,6 @@ export function AccountPage() {
         ))}
       </div>
       {tab === 'settings' && <SettingsPage />}
-      {tab === 'connections' && <ConnectionsPage />}
       {tab === 'personality' && <PersonalityPage />}
       {/* Your name, your picture, your body basics. The health profile and your
           plans moved to the Nutrition & Fitness room on 2026-08-10, where the

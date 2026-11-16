@@ -4787,6 +4787,21 @@ rl.on('line', async (line) => {
       void emitMemoryV4Status();
       break;
     }
+    case 'mcp_page': {
+      // The Connections page (his MCP servers): one op of core's mcpPage().
+      (async () => {
+        let result;
+        try {
+          const servers = core.McpServers.current();
+          if (!servers.isStarted) await servers.start(globalThis.__avaProjectRoot ?? null);
+          result = await core.mcpPage(data.op, data.args || {});
+        } catch (err) {
+          result = { ok: false, error: err?.message || String(err) };
+        }
+        emit({ event: 'mcp_page_result', requestId: data.requestId, result });
+      })();
+      break;
+    }
     case 'memory_v4': {
       // The Memory page ("What Ava knows"): one op of core's memoryPage().
       (async () => {
