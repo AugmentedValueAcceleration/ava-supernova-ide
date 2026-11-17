@@ -3522,7 +3522,13 @@ async function handleMessage(data) {
   // itself whether it builds. The Talk prefix carries its own tag, which is
   // what core's tool gate reads.
   const talk = !inRoom && currentMode === 'work' && data.talk === true;
-  const modePrefixFn = inRoom ? null : talk ? getWorkTalkPrefix : MODE_PREFIX_FN[currentMode];
+  // The brainstormed plans assigned to the open project, read fresh each turn
+  // (plan 2026-11-17-brainstorm, Phase 4) — Code (Build or Talk) and Plan.
+  const plansContext = !inRoom && (currentMode === 'work' || currentMode === 'plan')
+    ? await core.assignedPlansContext(globalThis.__avaProjectRoot).catch(() => undefined)
+    : undefined;
+  const basePrefixFn = inRoom ? null : talk ? getWorkTalkPrefix : MODE_PREFIX_FN[currentMode];
+  const modePrefixFn = basePrefixFn && plansContext ? (text) => basePrefixFn(text, plansContext) : basePrefixFn;
 
   /**
    * What is open in the document workspace, if anything.
