@@ -6234,7 +6234,9 @@ export function AvaChatPage() {
                   : desktopActionLine
                     ? `Ava wants to: ${desktopActionLine}`
                     : pendingConfirm.summary
-                      ? pendingConfirm.summary
+                      // A summary may run over several lines (an MCP server's command, risks and Ava's view):
+                      // the first is the headline, the rest sit under it.
+                      ? (() => { const [head, ...rest] = pendingConfirm.summary.split('\n'); return <>{head}{rest.length > 0 && <div style={{ fontWeight: 400, fontSize: 12.5, color: '#a6adc8', marginTop: 6, whiteSpace: 'pre-line', wordBreak: 'break-word' }}>{rest.join('\n')}</div>}</>; })()
                       : <>{t('dash.cc.ava_wants_to_run')} <span style={{ color: '#f5c2e7', fontFamily: 'monospace', fontWeight: 600 }}>{pendingConfirm.toolName}</span></>
                 }
               </div>
@@ -15139,7 +15141,12 @@ export function SettingsPage() {
 /* ===== 12. Connections ===== */
 /** His MCP servers (ConnectionsPage, shared with the extension). */
 export function ConnectionsPage() {
-  return <SharedConnectionsPage request={connectionsRequest} onWaitingChange={setConnectionsWaiting} />;
+  // Ask Ava: the chat opens with his request written in (he presses send), as the docs page does.
+  return <SharedConnectionsPage request={connectionsRequest} onWaitingChange={setConnectionsWaiting}
+    onAskAva={(m) => {
+      try { localStorage.setItem('ava-pending-ask', m); } catch { /* no storage */ }
+      window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'ava-chat' }));
+    }} />;
 }
 
 /* ===== 12b. Remote Devices (D7) ===== */
