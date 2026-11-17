@@ -1723,6 +1723,9 @@ core.setMcpKeychain({
   read: () => askMcpKeychain('read'),
   write: async (value) => { await askMcpKeychain('write', value); },
 });
+// Signing in to an online server: the window opens his browser with Tauri's
+// opener (never a shell). Core has already checked the address.
+core.setMcpBrowserOpener(async (url) => { emit({ event: 'mcp_open_url', url }); });
 function handleMcpKeychainReply(data) {
   const p = mcpKeychainPending.get(data.id);
   if (!p) return;

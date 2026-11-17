@@ -106,6 +106,16 @@ function serveMcpKeychain(): void {
       }
     })();
   });
+  // Signing in to an online MCP server: his browser, through Tauri's opener
+  // (never a shell). Core checked the address; checked again here.
+  sc.on('mcp_open_url', (ev) => {
+    const { url } = ev as unknown as { url?: string };
+    let u: URL;
+    try { u = new URL(String(url)); } catch { return; }
+    const local = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/i.test(u.hostname);
+    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) return;
+    void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(u.href)).catch(() => {});
+  });
 }
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
