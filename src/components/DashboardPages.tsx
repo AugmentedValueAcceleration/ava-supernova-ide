@@ -2467,13 +2467,13 @@ export function AvaChatPage() {
     { id: 'chat', label: t('mode.chat'), icon: '..', prefix: '[Chat Mode] ', placeholder: t('mode.chat.placeholder') },
     { id: 'teach', label: t('mode.teach'), icon: '??', prefix: '[Teach Mode] ', placeholder: t('mode.teach.placeholder') },
     { id: 'security', label: t('mode.security'), icon: '!!', prefix: '[Security Audit Mode] ', placeholder: t('mode.security.placeholder') },
-    { id: 'brainstorm', label: t('mode.brainstorm'), icon: '**', prefix: '[Brainstorm Mode] ', placeholder: t('mode.brainstorm.placeholder') },
     { id: 'desktop', label: t('mode.desktop'), icon: '@@', prefix: '[Desktop Automation Mode] ', placeholder: t('mode.desktop.placeholder') },
   ];
 
   // Modes selectable from the main-chat picker. Teach is kept in MODES (so the
   // paper-discussion handoff + mode resolution still work) but hidden here — it
-  // now lives in the focused Learning room, like Health.
+  // now lives in the focused Learning room, like Health. Brainstorm is gone from
+  // MODES altogether (17 Nov 2026): the Brainstorm room is its only home.
   const visibleModes = MODES.filter((m) => m.id !== 'teach');
 
   // ── Desktop-capable model IDs ─────────────────────────────────────────────
@@ -2621,9 +2621,9 @@ export function AvaChatPage() {
   });
   const [mode, setMode] = useState<AvaMode>(() => {
     const stored = localStorage.getItem('ava-ide-chat-mode') as AvaMode | null;
-    // 'teach' is no longer a main-chat picker mode (it moved to the Learning
-    // room); a stale persisted teach falls back to work on load.
-    return stored && stored !== 'teach' ? stored : 'work';
+    // 'teach' and 'brainstorm' are no longer main-chat picker modes (they moved
+    // to the Learning and Brainstorm rooms); a stale persisted one falls back to work.
+    return stored && stored !== 'teach' && stored !== 'brainstorm' ? stored : 'work';
   });
   // Live mirror for callbacks with frozen deps (handleSidecarEvent closes over
   // [redactSecrets] only — reading `mode` there would be a stale snapshot).
@@ -3351,7 +3351,7 @@ export function AvaChatPage() {
   useEffect(() => {
     const handler = () => {
       const newMode = localStorage.getItem('ava-ide-chat-mode') as AvaMode;
-      if (newMode && newMode !== mode) setMode(newMode);
+      if (newMode && newMode !== mode && newMode !== 'brainstorm') setMode(newMode);
     };
     window.addEventListener('ava-mode-changed', handler);
     return () => window.removeEventListener('ava-mode-changed', handler);
@@ -4416,7 +4416,6 @@ export function AvaChatPage() {
               chat: (t: string) => `[Chat Mode] ${t}`,
               teach: (t: string) => `[Teach Mode] ${t}`,
               security: (t: string) => `[Security Audit Mode] ${t}`,
-              brainstorm: (t: string) => `[Brainstorm Mode] ${t}`,
             };
             const prefixed = (modeMap[targetMode] || modeMap.work)(transitionMsg);
             setMessages(prev => [...prev, { id: mkId(), role: 'user' as const, text: `Switching to ${targetMode} mode...`, timestamp: Date.now() }]);
@@ -5446,12 +5445,14 @@ export function AvaChatPage() {
                 { label: t('dash.cc.qs.plan'), prefix: '::', prompt: `:: ${t('dash.cc.qs.plan_p')}`, color: '#60a5fa' },
                 { label: t('dash.cc.qs.teach'), prefix: '??', prompt: `?? ${t('dash.cc.qs.teach_p')}`, color: '#f9e2af' },
                 { label: t('dash.cc.qs.audit'), prefix: '!!', prompt: `!! ${t('dash.cc.qs.audit_p')}`, color: '#f38ba8' },
-                { label: t('dash.cc.qs.brainstorm'), prefix: '**', prompt: `** ${t('dash.cc.qs.brainstorm_p')}`, color: '#94e2d5' },
+                // Brainstorm opens its room (its only home) instead of filling the input.
+                { label: t('dash.nav.brainstorm'), prefix: '**', prompt: '', color: '#94e2d5', go: () => window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'brainstorm' })) },
                 { label: t('dash.cc.qs.chat'), prefix: '..', prompt: '.. ', color: '#a6adc8' },
-              ].map(c => (
+              ].map((c: { label: string; prefix: string; prompt: string; color: string; go?: () => void }) => (
                 <button
                   key={c.label}
                   onClick={() => {
+                    if (c.go) { c.go(); return; }
                     setInput(c.prompt);
                     requestAnimationFrame(() => {
                       const el = textareaRef.current;

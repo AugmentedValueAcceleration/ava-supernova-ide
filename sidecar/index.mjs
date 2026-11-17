@@ -839,7 +839,6 @@ const MODE_PREFIX_TAG = {
   write:      '[Write Mode]',
   plan:       '[Plan Mode]',
   chat:       '[Chat Mode]',
-  brainstorm: '[Brainstorm Mode]',
   teach:      '[Teach Mode]',
   security:   '[Security Audit Mode]',
   desktop:    '[Desktop Automation Mode]',
@@ -884,10 +883,8 @@ const MODE_PREFIX_FN = {
   work:       getWorkModePrefix,
   plan:       getPlanModePrefix,
   chat:       getChatModePrefix,
-  // Brainstorm needs to know where projects go, so "scaffold it" has an
-  // address. Read from ~/.ava/config.json, which is where the IDE's
-  // settings picker writes it — the renderer's storage is invisible here.
-  brainstorm: (text) => getBrainstormModePrefix(text, resolveProjectsHome()),
+  // No brainstorm: it is the Brainstorm room's lane now (17 Nov 2026), not a
+  // main-chat mode. The room builds its own prefix (see activeLane 'brainstorm').
   write:      getWriteModePrefix,
   security:   getSecurityModePrefix,
 };
@@ -2165,7 +2162,7 @@ async function handleInit(data) {
     // Stash for the audit security lens (out-of-workspace detection) — the
     // get_audit_log handler runs outside this scope.
     globalThis.__avaProjectRoot = projectRoot ?? cwd;
-    currentMode = config.mode || 'work';
+    currentMode = mainChatMode(config.mode);
 
     // Register providers from BYOK keys
     const providerRegistry = new ProviderRegistry();
@@ -3619,7 +3616,8 @@ async function handleMessage(data) {
       : activeLane === 'brainstorm'
       // The room tells Ava which brainstorm this thread is and what's in it (plan 2026-11-17-brainstorm).
       ? getBrainstormModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me brainstorm.', resolveProjectsHome(),
-          data.courseId ? await core.brainstormRoomContext(data.courseId).catch(() => undefined) : undefined)
+          (data.courseId ? await core.brainstormRoomContext(data.courseId).catch(() => undefined) : undefined)
+            ?? 'This conversation is in the Brainstorm room.')
       : data.content;
 
     // Build multimodal content if attachments are present (images, files)
@@ -3710,7 +3708,10 @@ async function handleMessage(data) {
     let conductorContext = null;
     // Talk is read-only, so if the team is asked for it is the planning team —
     // the work team carries a Builder. Mirrors the extension.
-    const teamMode = talk ? 'plan' : currentMode;
+    // A room's turn gets the room's team, as in the extension (its room chat
+    // sends the room's mode): it used to take the MAIN chat's mode, so a
+    // Brainstorm room turn ran the work team whenever the main chat was on Code.
+    const teamMode = activeLane === 'brainstorm' ? 'brainstorm' : activeLane === 'learning' ? 'teach' : talk ? 'plan' : currentMode;
     if (conductor && conductor.needsOrchestration(data.content, teamMode)) {
       emit({ event: 'orchestration_start', mode: teamMode });
       try {
@@ -4444,9 +4445,14 @@ async function handleSetKnowledgePacks(_data) {
   // sidecar don't crash — they just see no effect, which is correct.
 }
 
+/** The main chat's mode. Brainstorm is a room now, not a mode it can be in. */
+function mainChatMode(mode) {
+  return !mode || mode === 'brainstorm' ? 'work' : mode;
+}
+
 function handleSetMode(data) {
   const previousMode = currentMode;
-  currentMode = data.mode || 'work';
+  currentMode = mainChatMode(data.mode);
   emit({ event: 'mode_changed', mode: currentMode });
 
   // Rebuild the system prompt when crossing the desktop boundary so the

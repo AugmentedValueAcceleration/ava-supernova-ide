@@ -219,9 +219,14 @@ export default function App() {
   }, []);
 
   // Mode state — synced with chat via localStorage + events
-  const MODES = ['work', 'write', 'plan', 'chat', 'teach', 'security', 'brainstorm'];
+  // The modes the status bar cycles through — the main-chat picker's, no more:
+  // Teach and Brainstorm are rooms now (Learning, Brainstorm), not chat modes.
+  const MODES = ['work', 'write', 'plan', 'chat', 'security'];
   const MODE_LABELS: Record<string, string> = { work: 'Code', write: 'Write', plan: 'Plan', chat: 'Chat', teach: 'Teach', security: 'Security', brainstorm: 'Brainstorm' };
-  const [currentMode, setCurrentMode] = useState(() => localStorage.getItem('ava-ide-chat-mode') || 'work');
+  const [currentMode, setCurrentMode] = useState(() => {
+    const stored = localStorage.getItem('ava-ide-chat-mode');
+    return stored && stored !== 'teach' && stored !== 'brainstorm' ? stored : 'work';
+  });
 
   // i18n — init on mount, re-render on locale change
   useLocale();
