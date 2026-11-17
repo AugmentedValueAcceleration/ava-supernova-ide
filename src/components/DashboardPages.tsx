@@ -1,6 +1,9 @@
 import { MemoryV4Page } from './MemoryV4Page';
 import { memoryRequest, useMemoryV4Status } from '../lib/memory-v4';
 import { ConnectionsPage as SharedConnectionsPage } from './ConnectionsPage';
+import { BrainstormRoom as SharedBrainstormRoom } from './BrainstormRoom';
+import { BrainstormRoomChat } from './BrainstormRoomChat';
+import { brainstormRequest, seedBrainstormRoom, takeBrainstormPrimer } from '../lib/brainstorm';
 import { connectionsRequest, setConnectionsWaiting } from '../lib/connections';
 import { stripChangesSummary } from '@ava/core/changes-summary';
 import { FactoryResetDialog } from './FactoryResetDialog';
@@ -35,6 +38,7 @@ import {
   Lock as PhLock,
   Brain as PhBrain,
   GraduationCap as PhGraduationCap,
+  Lightbulb as PhLightbulbRoom,
   ArrowsClockwise as PhArrowsClockwise,
   Lightbulb as PhLightbulb,
   TestTube as PhTestTube,
@@ -5828,6 +5832,27 @@ export function AvaChatPage() {
                           } catch { /* no window */ }
                         }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                           {t('health.handoff.button')} <span aria-hidden>→</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {/* Main-chat → Brainstorm room handoff (open_brainstorm_room) */}
+                  {msg.toolCalls?.filter(tc => tc.name === 'open_brainstorm_room').slice(0, 1).map((tc, idx) => {
+                    const topic = (tc.args?.topic as string | undefined)?.trim() || undefined;
+                    const primer = (tc.args?.primer as string | undefined)?.trim() || undefined;
+                    return (
+                      <div key={`br-${idx}`} style={{ marginTop: 8, borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)', padding: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <PhLightbulbRoom size={16} weight="duotone" style={{ color: 'var(--accent)' }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4' }}>{topic ? t('brainstorm.handoff.title.topic', { topic }) : t('brainstorm.handoff.title.generic')}</span>
+                        </div>
+                        <p style={{ margin: '0 0 12px', fontSize: 11, lineHeight: 1.5, color: '#8b8398' }}>{t('brainstorm.handoff.body')}</p>
+                        <button type="button" onClick={() => {
+                          seedBrainstormRoom(primer || (topic ? t('brainstorm.handoff.seed_topic', { topic }) : t('brainstorm.handoff.seed')));
+                          try { window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'brainstorm' })); } catch { /* no window */ }
+                        }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                          {t('brainstorm.handoff.button')} <span aria-hidden>→</span>
                         </button>
                       </div>
                     );
@@ -15139,6 +15164,32 @@ export function SettingsPage() {
 }
 
 /* ===== 12. Connections ===== */
+/** The Brainstorm room (BrainstormRoom, shared with the extension; plan 2026-11-17-brainstorm). */
+export function BrainstormPage() {
+  // A hand-off from the main chat starts a new brainstorm with it, once.
+  const [primer, setPrimer] = useState<string | null>(() => takeBrainstormPrimer());
+  return (
+    <div style={{ height: '100%', minHeight: 0 }}>
+      <SharedBrainstormRoom
+        request={brainstormRequest}
+        primer={primer}
+        onPrimerUsed={() => setPrimer(null)}
+        renderChat={(id, seed) => <BrainstormRoomChat key={id} active courseId={id} seed={seed} />}
+        // Work on this: the main chat opens with the plan named (he presses send).
+        onWorkOnThis={(b) => {
+          try { localStorage.setItem('ava-pending-ask', t('brainstorm.room.work_message', { headline: b.headline, id: b.id })); } catch { /* no storage */ }
+          window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'ava-chat' }));
+        }}
+        // Open the kit: the Creative Studio, on Brand Kits.
+        onOpenKit={() => {
+          try { sessionStorage.setItem('ava-design-open-view', 'brandkit'); } catch { /* no storage */ }
+          window.dispatchEvent(new CustomEvent('ava-navigate-dashboard', { detail: 'creative-studio' }));
+        }}
+      />
+    </div>
+  );
+}
+
 /** His MCP servers (ConnectionsPage, shared with the extension). */
 export function ConnectionsPage() {
   // Ask Ava: the chat opens with his request written in (he presses send), as the docs page does.

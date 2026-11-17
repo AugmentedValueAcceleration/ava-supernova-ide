@@ -266,7 +266,7 @@ export function LearningRoomChat({ active, courseId }: { active: boolean; course
         {!hasSpoken ? (
           <div style={{ width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, color: '#cdd6f4' }}>{t('learning.room.greeting')}</span>
+              <span style={{ fontSize: 13, color: '#cdd6f4' }}>{t('learning.room.greeting', { name: '' })}</span>
             </div>
             <div style={{ borderRadius: 14, padding: 16, marginTop: 10, background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(96,165,250,0.04))', border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)' }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#cdd6f4', marginBottom: 4 }}>{t('learning.room.starter.heading')}</div>

@@ -74,7 +74,7 @@ export interface SidecarEvent {
    *  & Fitness room, 'learning' for the Learning room (per-course thread),
    *  'main'/undefined for the main chat. The IDE's chat surfaces filter on
    *  this so they never cross-render. */
-  lane?: 'main' | 'health' | 'learning' | 'design';
+  lane?: 'main' | 'health' | 'learning' | 'design' | 'brainstorm';
   // stream events
   content?: string;
   // tool events
@@ -383,7 +383,7 @@ export class SidecarManager {
   /**
    * Send a chat message to the agent.
    */
-  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string, designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp' | 'brandkit', designPanel?: string, talk?: boolean): Promise<void> {
+  async sendMessage(content: string, attachments?: { name: string; dataUri: string; mimeType: string }[], history?: { role: string; text: string }[], surface?: 'main' | 'health' | 'learning' | 'design' | 'brainstorm', courseId?: string, designRoom?: 'icon' | 'video' | 'voice' | 'image' | 'logo' | 'model' | 'gimp' | 'brandkit', designPanel?: string, talk?: boolean): Promise<void> {
     // For large attachments (images), write to temp files to avoid stdin buffer limits
     let processedAttachments = attachments;
     if (attachments?.length) {
@@ -512,6 +512,8 @@ export class SidecarManager {
   async memoryV4(requestId: string, op: string, args: Record<string, unknown>): Promise<void> { await this.send({ cmd: 'memory_v4', requestId, op, args }); }
   /** The Connections page (his MCP servers): one op of core's mcpPage(); answers with an mcp_page_result event. */
   async mcpPage(requestId: string, op: string, args: Record<string, unknown>): Promise<void> { await this.send({ cmd: 'mcp_page', requestId, op, args }); }
+  /** The Brainstorm room: one op of core's brainstormPage(); answers with a brainstorm_page_result event. */
+  async brainstormPage(requestId: string, op: string, args: Record<string, unknown>): Promise<void> { await this.send({ cmd: 'brainstorm_page', requestId, op, args }); }
   /** Ask whether memory v4 is on; answers with a memory_v4_status event. */
   async memoryV4Status(): Promise<void> { await this.send({ cmd: 'memory_v4_status' }); }
   /** A spreadsheet for the document viewer; answers with a 'document_sheet_result' event carrying `id`. */
@@ -737,7 +739,7 @@ export class SidecarManager {
    * Ava Health room thread, or surface:'learning' (+ courseId) to clear one
    * course's Learning thread — both leave the main chat untouched.
    */
-  async clear(surface?: 'main' | 'health' | 'learning' | 'design', courseId?: string): Promise<void> {
+  async clear(surface?: 'main' | 'health' | 'learning' | 'design' | 'brainstorm', courseId?: string): Promise<void> {
     await this.send({ cmd: 'clear', surface, courseId });
   }
 

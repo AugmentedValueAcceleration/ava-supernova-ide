@@ -12,6 +12,7 @@ import {
   PersonalityPage,
   SettingsPage,
   ConnectionsPage,
+  BrainstormPage,
   SupportPage,
   ReleaseNotesPage,
   RoadmapPage,
@@ -38,6 +39,7 @@ export type DashboardPageId =
   | 'tasks'
   | 'journal'
   | 'learning'
+  | 'brainstorm'
   | 'learning-library'
   | 'creative-studio'
   | 'library'
@@ -72,6 +74,7 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'journal': '\uD83D\uDCD3',
   'learning': '\uD83C\uDF93',
   'learning-library': '\uD83D\uDCDA',
+  'brainstorm': '\uD83D\uDCA1',
   'creative-studio': '\uD83C\uDFA8',
   'library': '\uD83D\uDDBC\uFE0F',
   'health': '\uD83C\uDFCB\uFE0F',
@@ -98,6 +101,7 @@ const dashboardLabelKeys: Record<DashboardPageId, string> = {
   'journal': 'dash.nav.journal',
   'learning': 'dash.nav.learning',
   'learning-library': 'dash.nav.learning_library',
+  'brainstorm': 'dash.nav.brainstorm',
   'creative-studio': 'dash.nav.creative_studio',
   'library': 'dash.nav.library',
   'health': 'dash.nav.health',
@@ -134,6 +138,7 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'usage': ChatHistoryPage,
   'settings': SettingsPage,
   'connections': ConnectionsPage,
+  'brainstorm': BrainstormPage,
   'support': SupportPage,
   'documentation': DocumentationPageLazy,
   'release-notes': ReleaseNotesPage,

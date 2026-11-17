@@ -824,6 +824,9 @@ let designConversation = null;
 // Keyed by courseId, or '__lobby__' for the no-active-course landing thread.
 const learningConversations = new Map();
 const LEARNING_LOBBY_KEY = '__lobby__';
+// The Brainstorm room: one thread per brainstorm, keyed by the brainstorm's id (sent as
+// courseId — the room's thread key). Mirrors the extension's brainstormConversations.
+const brainstormConversations = new Map();
 let activeLane = 'main';
 
 // Bracket tags the core agent's detectModeFromMessages() looks for at the
@@ -3342,6 +3345,7 @@ async function handleMessage(data) {
   // safe. activeLane (set here, cleared in finally) tags outbound events.
   const surface = data.surface === 'health' ? 'health'
     : data.surface === 'learning' ? 'learning'
+    : data.surface === 'brainstorm' ? 'brainstorm'
     : data.surface === 'design' ? 'design'
     : 'main';
   activeLane = surface;
@@ -3361,6 +3365,16 @@ async function handleMessage(data) {
       if (sysMsg) designConversation.setSystemPrompt(typeof sysMsg.content === 'string' ? sysMsg.content : '');
     }
     conversation = designConversation;
+  } else if (surface === 'brainstorm') {
+    const key = data.courseId || '__none__';
+    let bc = brainstormConversations.get(key);
+    if (!bc) {
+      bc = new Conversation();
+      const sysMsg = conversation.getMessages().find(m => m.role === 'system');
+      if (sysMsg) bc.setSystemPrompt(typeof sysMsg.content === 'string' ? sysMsg.content : '');
+      brainstormConversations.set(key, bc);
+    }
+    conversation = bc;
   } else if (surface === 'learning') {
     // Per-course thread: each course owns its own history so switching the
     // active course swaps the whole conversation. '__lobby__' is the
@@ -3488,7 +3502,7 @@ async function handleMessage(data) {
   // Prepending [Chat Mode] in front of that makes detectModeFromMessages read
   // 'chat' FIRST — which blocks the room's tools (e.g. design_generate_image).
   // So those lanes get no global mode tag; their room tag drives the mode.
-  const inRoom = activeLane === 'design' || activeLane === 'health' || activeLane === 'learning';
+  const inRoom = activeLane === 'design' || activeLane === 'health' || activeLane === 'learning' || activeLane === 'brainstorm';
   const modeTag = inRoom ? '' : (MODE_PREFIX_TAG[currentMode] || '');
 
   /**
@@ -3596,6 +3610,10 @@ async function handleMessage(data) {
       ? getDesignStudioPrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me design an icon.', designKitSummary, ['video', 'voice', 'icon', 'image', 'logo', 'model', 'gimp', 'brandkit'].includes(data.designRoom) ? data.designRoom : 'icon', typeof data.designPanel === 'string' && data.designPanel.trim() ? data.designPanel.trim() : undefined, designProjectContext)
       : activeLane === 'learning'
       ? getTeachModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Teach me something.', getLearningContext())
+      : activeLane === 'brainstorm'
+      // The room tells Ava which brainstorm this thread is and what's in it (plan 2026-11-17-brainstorm).
+      ? getBrainstormModePrefix(typeof data.content === 'string' && data.content ? data.content : 'Help me brainstorm.', resolveProjectsHome(),
+          data.courseId ? await core.brainstormRoomContext(data.courseId).catch(() => undefined) : undefined)
       : data.content;
 
     // Build multimodal content if attachments are present (images, files)
@@ -4322,6 +4340,11 @@ function handleClear(data) {
     emit({ event: 'cleared', lane: 'design' });
     return;
   }
+  if (data && data.surface === 'brainstorm') {
+    if (data.courseId) brainstormConversations.delete(data.courseId);
+    emit({ event: 'cleared', lane: 'brainstorm' });
+    return;
+  }
   if (data && data.surface === 'learning') {
     // Drop only the targeted course's thread (by courseId, or the lobby) so the
     // next learning turn for that course rebuilds fresh. Other courses' threads
@@ -4788,6 +4811,16 @@ rl.on('line', async (line) => {
     }
     case 'memory_v4_status': {
       void emitMemoryV4Status();
+      break;
+    }
+    case 'brainstorm_page': {
+      // The Brainstorm room: one op of core's brainstormPage().
+      (async () => {
+        let result;
+        try { result = await core.brainstormPage(data.op, data.args || {}); }
+        catch (err) { result = { ok: false, error: err?.message || String(err) }; }
+        emit({ event: 'brainstorm_page_result', requestId: data.requestId, result });
+      })();
       break;
     }
     case 'mcp_page': {

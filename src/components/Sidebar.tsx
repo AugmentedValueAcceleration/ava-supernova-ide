@@ -18,6 +18,7 @@ import {
   Palette as PhCreative,
   Brain as PhMemory,
   PlugsConnected as PhConnections,
+  Lightbulb as PhBrainstorm,
   ChartLineUp as PhHistory,
   GearSix as PhAccount,
   Heart as PhHeart,
@@ -1233,6 +1234,8 @@ const NAV_ITEMS: { id: string; Icon: PhIconType; labelKey: string; descKey: stri
   { id: 'library',         Icon: PhLibrary,  labelKey: 'dash.nav.library',         descKey: 'dash.nav.library_desc' },
   { id: 'health',          Icon: PhHealth,   labelKey: 'dash.nav.health',          descKey: 'dash.nav.health_desc', earlyAccess: true },
   { id: 'learning',        Icon: PhLearning, labelKey: 'dash.nav.learning',        descKey: 'dash.nav.learning_desc', earlyAccess: true },
+  // The Brainstorm room (plan 2026-11-17-brainstorm). Keep in step with the extension's NavSidebar.
+  { id: 'brainstorm',      Icon: PhBrainstorm, labelKey: 'dash.nav.brainstorm',  descKey: 'dash.nav.brainstorm_desc', earlyAccess: true },
   { id: 'creative-studio', Icon: PhCreative, labelKey: 'dash.nav.creative_studio', descKey: 'dash.nav.creative_studio_desc', earlyAccess: true },
   { id: 'memory',          Icon: PhMemory,   labelKey: 'dash.nav.memory',          descKey: 'dash.nav.memory_desc' },
   // His MCP servers (plan 2026-11-17-mcp-servers). Keep in step with the extension's NavSidebar.
