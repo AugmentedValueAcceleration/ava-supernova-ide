@@ -52,7 +52,9 @@
       "resources/sidecar-bundle.mjs",
       "resources/browser-worker.mjs",
       "resources/data/*",
-      "resources/fonts/*"
+      "resources/fonts/*",
+      "resources/unreal/*",
+      "resources/unreal/native/*"
     ],
     "icon": [
       "icons/32x32.png",

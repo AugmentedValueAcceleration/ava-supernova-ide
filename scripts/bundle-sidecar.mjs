@@ -5,6 +5,8 @@
  */
 import { build } from 'esbuild';
 import { SIDECAR_BUILD, copyDocumentAssets } from './sidecar-shared.mjs';
+// Ava in Unreal's Assistant panel (plan 2026-11-18-unreal): her program, set up into ~/.ava/bin from Connections.
+import { bundleUnrealProgram } from '../../cli/scripts/unreal-program.mjs';
 import { existsSync, mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
@@ -28,6 +30,8 @@ await build({
 // (tauri.conf.json lists them as resources).
 await copyDocumentAssets(resourcesDir);
 console.log('[bundle] Sidecar bundled successfully.');
+await bundleUnrealProgram(build, join(resourcesDir, 'unreal'));
+console.log('[bundle] Unreal panel program bundled.');
 
 // 2. Download node.exe if not present
 const binDir = join(tauriDir, 'binaries');

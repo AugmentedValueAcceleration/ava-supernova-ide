@@ -1739,6 +1739,16 @@ function followMcpServers(projectRoot) {
   if (mcpFollowing) return;
   mcpFollowing = true;
   core.McpServers.current().onChange(() => { if (toolRegistry) core.syncMcpTools(toolRegistry); });
+  // Ava in Unreal's panel (plan 2026-11-18-unreal): her program ships beside the
+  // sidecar (resources/unreal; in development, the build's resources folder),
+  // and Ava.exe is a copy of the Node this sidecar runs on.
+  const res = existsSync(join(__dirname, 'unreal')) ? __dirname : join(__dirname, '..', 'src-tauri', 'resources');
+  core.setUnrealProgramSource({
+    programDir: join(res, 'unreal'),
+    dataDir: join(res, 'data'),
+    fontsDir: join(res, 'fonts'),
+    node: async () => process.execPath,
+  });
   void core.McpServers.current().start(projectRoot ?? null)
     .catch((err) => emitError(`MCP servers failed to start: ${err?.message ?? err}`));
 }

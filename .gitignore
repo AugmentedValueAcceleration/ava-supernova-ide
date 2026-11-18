@@ -13,6 +13,7 @@ src-tauri/binaries/
 src-tauri/resources/sidecar-bundle.mjs
 src-tauri/resources/data/
 src-tauri/resources/fonts/
+src-tauri/resources/unreal/
 
 # Updater signing key (NEVER commit the private key)
 src-tauri/.tauri-updater-key
