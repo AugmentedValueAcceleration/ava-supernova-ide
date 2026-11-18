@@ -4225,9 +4225,10 @@ function handleConfirm(data) {
   pendingConfirmations.delete(data.id);
 
   // A tool from one of his MCP servers: "always" is for that one tool,
-  // remembered in ~/.ava/mcp.json — never its whole category.
+  // remembered in ~/.ava/mcp.json — never its whole category. The call's
+  // args go too: for Unreal's call_tool, "always" is for the Unreal tool it names.
   if (data.approved && data.alwaysAllowCategory && core.isUserMcpTool(pending.toolName)) {
-    void core.McpServers.current().allowTool(pending.toolName);
+    void core.McpServers.current().allowTool(pending.toolName, true, pending.args);
   } else if (data.approved && data.alwaysAllowCategory && toolRegistry && pending.toolName) {
     // "Always Allow" — approve this category for the session
     const category = toolRegistry.getCategoryForTool(pending.toolName);
