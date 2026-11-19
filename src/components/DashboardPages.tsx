@@ -5032,13 +5032,16 @@ export function AvaChatPage() {
     if (model === 'longxiang') return '✦ Longxiang';
     if (model === 'auto') return '✦ Maestro';
     if (model === 'qwen3.7-plus') return 'Qwen 3.7 Plus';
-    if (model === 'qwen3.5-plus') return 'Qwen 3.5 Plus';
+    if (model === 'qwen4-max') return 'Qwen 4 Max';
+    // Retired ids saved before 2026-11-19 roll forward (core model-ids): name
+    // what actually runs, not what was picked.
+    if (model === 'qwen3.8-max' || model === 'qwen3.7-max') return 'Qwen 4 Max';
+    if (model === 'qwen3.5-plus') return 'Qwen 3.7 Plus';
+    if (model === 'qwen3.5-flash' || model === 'qwen-flash') return 'Qwen 3.8 Flash';
     if (model === 'qwen3.5-omni-plus') return 'Qwen 3.5 Omni Plus';
     if (model === 'qwen3.5-omni-flash') return 'Qwen 3.5 Omni Flash';
-    if (model === 'qwen3.5-flash') return 'Qwen 3.5 Flash';
     // Legacy display-name fallbacks for clients that still have old IDs saved
     if (model === 'qwen3-omni-flash') return 'Qwen 3.5 Omni Flash';
-    if (model === 'qwen-flash') return 'Qwen 3.5 Flash';
     const byok = byokModels.find((m) => m.id === model);
     return byok ? byok.name : model;
   }, [model, byokModels]);
@@ -13664,6 +13667,17 @@ export function DataExportCard() {
 // page both answer "what did this cost", and two copies of a price list is two
 // answers to the same question the moment one is edited.
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // Current Qwen (Model Studio Singapore, 19 Nov 2026). Missing entries fell
+  // to DEFAULT_PRICING below, which would have shown Qwen 4 Max at about a
+  // seventh of its price.
+  'qwen4-max': { input: 1.50, output: 4.50 },
+  'qwen3.8-flash': { input: 0.15, output: 0.47 },
+  'qwen3.7-plus': { input: 0.40, output: 1.60 },
+  'qwen3.7-flash': { input: 0.10, output: 0.40 },
+  'qwen3-coder-next': { input: 0.12, output: 0.80 },
+  'qwen3-coder-flash': { input: 0.195, output: 0.975 },
+  // Retired 2026-11-19, kept so past usage is costed at what it was billed.
+  'qwen3.8-max': { input: 2.00, output: 6.00 },
   'qwen3.5-omni-flash': { input: 0.065, output: 0.26 },
   'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
   'qwen3.5-plus': { input: 0.20, output: 1.20 },
