@@ -46,7 +46,7 @@ Ten focused areas in the sidebar, each with its own sub-pages:
 | **Creative Studio** | Logos, icons, images, video and voiceovers, plus 2D work made in GIMP and 3D models built in Blender on your machine (brief first, every step saved), and brand kits linked to your projects — images, video and voice on your own Qwen key; logos, icons, GIMP, Blender and background removal on your machine, free |
 | **Memory** | Patterns, preferences, decisions |
 | **History** | Tokens, sessions, models |
-| **Connections** | Your MCP servers — suggested ones, your own, or Ava finds them; each tool asks before it runs, until you choose Always |
+| **Connections** | Your MCP servers — suggested ones (including Unreal Engine 5.8, inside the editor on your computer), your own, or Ava finds them; each tool asks before it runs, until you choose Always |
 | **Settings** | Keys, preferences, personalisation |
 | **Help** | Support, releases, roadmap |
 
