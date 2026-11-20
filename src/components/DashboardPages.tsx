@@ -15,6 +15,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ALL_MODELS } from '@ava/core/models';
+import { usdRateFor } from '@ava/core/audit/cost';
 import { ALL_SCAFFOLD_TAGS } from '@ava/core/mode-tags';
 import { providerLabel, resolveSidecarModel } from '../lib/chat-models';
 import { APP_VERSION } from '../version';
@@ -7387,8 +7388,8 @@ export function AvaChatPage() {
             {([
               { id: 'auto', label: 'Maestro', note: 'One coordinator handles everything — production-tuned.' },
               { id: 'qwen3.7-plus', label: 'Qwen 3.7 Plus', note: 'Flagship Qwen. 1M context.' },
-              { id: 'kimi-k3', label: 'Kimi K3', note: 'Moonshot frontier model. 1M context.' },
-              { id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code', note: 'Agentic coding leader.' },
+              { id: 'kimi-k3.1-pro', label: 'Kimi K3.1 Pro', note: 'Moonshot flagship. 1M context.' },
+              { id: 'kimi-k3', label: 'Kimi K3', note: 'Moonshot\'s previous flagship. 1M context.' },
             ]).map(opt => {
               // Each needs its key: Maestro the Qwen key, a single model its
               // own provider's.
@@ -13663,45 +13664,20 @@ export function DataExportCard() {
 
 // ── Token pricing ───────────────────────────────────────────────────────────
 //
-// USD per 1M tokens. Module scope on purpose: the Usage page and the History
-// page both answer "what did this cost", and two copies of a price list is two
-// answers to the same question the moment one is edited.
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  // Current Qwen (Model Studio Singapore, 19 Nov 2026). Missing entries fell
-  // to DEFAULT_PRICING below, which would have shown Qwen 4 Max at about a
-  // seventh of its price.
-  'qwen4-max': { input: 1.50, output: 4.50 },
-  'qwen3.8-flash': { input: 0.15, output: 0.47 },
-  'qwen3.7-plus': { input: 0.40, output: 1.60 },
-  'qwen3.7-flash': { input: 0.10, output: 0.40 },
-  'qwen3-coder-next': { input: 0.12, output: 0.80 },
-  'qwen3-coder-flash': { input: 0.195, output: 0.975 },
-  // Retired 2026-11-19, kept so past usage is costed at what it was billed.
-  'qwen3.8-max': { input: 2.00, output: 6.00 },
-  'qwen3.5-omni-flash': { input: 0.065, output: 0.26 },
-  'qwen3.5-omni-plus': { input: 0.26, output: 1.56 },
-  'qwen3.5-plus': { input: 0.20, output: 1.20 },
-  'qwen3.5-flash': { input: 0.05, output: 0.40 },
-  'MiniMax-M3': { input: 0.60, output: 2.40 },
-  'MiniMax-M2.7': { input: 0.30, output: 1.20 },
-  'MiniMax-M2.7-highspeed': { input: 0.60, output: 2.40 },
-  // Kimi + DeepSeek verified against the providers' own pricing pages 2026-07-17.
-  'kimi-k3': { input: 3.00, output: 15.00 },
-  'kimi-k2.7-code': { input: 0.95, output: 4.00 },
-  'kimi-k2.6': { input: 0.95, output: 4.00 },
-  // ONE model since 2026-09-10 — V4 Pro and V4 Flash both retired into V4.1
-  // Flash. Off-peak; peak 01:00-04:00 + 06:00-10:00 UTC Mon-Fri is 2×.
-  'deepseek-flash': { input: 0.15, output: 0.60 },
-};
+// USD per 1M tokens, read from core's rate card (usdRateFor) — the same one
+// every receipt uses, which a core test holds to cover every model in the
+// catalogue. This page kept its own copy until 20 Nov 2026 and it had drifted:
+// no Mistral, GLM, MiMo, Hunyuan or Nemotron, so all of those were guessed.
+// The extension's Usage page reads the same function.
+const DEFAULT_PRICING = { inputPerMillion: 0.20, outputPerMillion: 1.20 };
 
-const DEFAULT_PRICING = { input: 0.20, output: 1.20 };
-
-/** Estimated USD for a token split. An unknown model falls back to
- *  DEFAULT_PRICING — a rough number beats no number when someone is deciding
- *  what to spend, provided it is labelled an estimate. */
+/** Estimated USD for a token split. A model with no rate (a custom or local
+ *  endpoint) falls back to DEFAULT_PRICING — a rough number beats no number
+ *  when someone is deciding what to spend, provided it is labelled an
+ *  estimate. */
 export function estimateModelCost(inputTokens: number, outputTokens: number, model: string): number {
-  const p = MODEL_PRICING[model] || DEFAULT_PRICING;
-  return (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output;
+  const p = usdRateFor(model) ?? DEFAULT_PRICING;
+  return (inputTokens / 1_000_000) * p.inputPerMillion + (outputTokens / 1_000_000) * p.outputPerMillion;
 }
 
 /** Green through red as the bill grows. */
