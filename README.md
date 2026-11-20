@@ -46,6 +46,7 @@ Ten focused areas in the sidebar, each with its own sub-pages:
 | **Creative Studio** | Logos, icons, images, video and voiceovers, plus 2D work made in GIMP and 3D models built in Blender on your machine (brief first, every step saved), and brand kits linked to your projects — images, video and voice on your own Qwen key; logos, icons, GIMP, Blender and background removal on your machine, free |
 | **Memory** | Patterns, preferences, decisions |
 | **History** | Tokens, sessions, models |
+| **Connections** | Your MCP servers — suggested ones, your own, or Ava finds them; each tool asks before it runs, until you choose Always |
 | **Settings** | Keys, preferences, personalisation |
 | **Help** | Support, releases, roadmap |
 
@@ -57,8 +58,8 @@ Same engine as the CLI and the VS Code extension — so everything you learn in 
 
 - **6 modes** — Code (`>>`), Plan (`::`), Chat (`..`), Teach (`??`), Security (`!!`), Write (`<<`). Brainstorming has its own room in the sidebar.
 - **24 specialist personas** — complex tasks activate an internal team (Scout → Architect → Verifier → Sequencer → Challenger → Builder for code); simple tasks go direct.
-- **Three fleets** — **Maestro** (Qwen — Qwen 3.8 Flash coordinates, Qwen 3.7 Plus builds; needs a Qwen key), **Supernova** (DeepSeek V4.1 Flash coordinates and builds, Qwen 3.8 Flash handles images; needs DeepSeek + Qwen keys) and **Aurora** (every model from Mistral, a European lab — Large 4 coordinates and builds, Small 4 handles chat; needs a Mistral key). Or pick any single model your keys reach.
-- **100+ tools**, including the IDE-only desktop- and browser-automation tools described above.
+- **Three fleets** — **Maestro** (Qwen — Qwen 3.8 Flash coordinates, Qwen 3.7 Plus builds, Qwen 4 Max plans; needs a Qwen key), **Supernova** (DeepSeek V4.1 Flash coordinates and builds, Qwen 3.8 Flash handles images; needs DeepSeek + Qwen keys) and **Aurora** (every model from Mistral, a European lab — Large 4 coordinates and builds, Small 4 handles chat; needs a Mistral key). Or pick any single model your keys reach.
+- **80+ tools**, including the IDE-only desktop- and browser-automation tools described above, plus any MCP servers you connect.
 - **Knowledge packs** — toggle domain expertise on/off in the chat bar; the system prompt rebuilds live, no restart.
 - **20 languages, live** — the whole interface translates, not just the chat, and switches the moment you change language — no restart, and Ava's replies follow too. Pick your language right from the welcome flow. Dates format the way your language writes them.
 - **5-layer memory** — local-first, curated by a dedicated Memory Agent so context stays lean.
