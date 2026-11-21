@@ -28,6 +28,9 @@ Promise.allSettled([
   // From here on, a change made in the extension arrives when this window
   // comes back into focus; a change made here goes out when it leaves.
   watchSharedSettings();
+  // The months the old usage counter kept come into ~/.ava/usage once
+  // (the Usage timeline, phase 3). A no-op on every later start.
+  void import('./lib/usage-ledger').then((m) => m.importLegacyIdeUsage()).catch(() => {});
   window.addEventListener("focus", () => {
     void refreshProviderKeys();
     void refreshLocalModelKey().then((changed) => { if (changed && getSidecar().isReady) restartSidecar(); });

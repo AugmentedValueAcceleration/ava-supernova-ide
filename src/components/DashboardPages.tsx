@@ -63,7 +63,6 @@ import { DesignStudioLazy } from './DesignStudio.lazy';
 import { toolStatusLabel } from '../lib/tool-label';
 import { t, tt, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
-import { trackTokenUsage, trackMessage, trackToolCall, resetSessionStats } from '../lib/api';
 import { keyedFields, getProviderKeys, testAndSaveProviderKey, setProviderKey, type ProviderField } from '../lib/provider-keys';
 import { buildSidecarConfig, hasChatCapability, restartSidecar } from '../lib/sidecar-boot';
 import { syncSharedSettings } from '../lib/shared-settings';
@@ -4246,7 +4245,6 @@ export function AvaChatPage() {
       }
 
       case 'tool_call_end':
-        trackToolCall();
         // Live document preview: when Ava authors/edits a .md, open it in the
         // editor (FileViewer renders markdown). App listens for this event.
         if (event.success && event.toolName === 'document_author') {
@@ -4353,7 +4351,9 @@ export function AvaChatPage() {
 
       case 'usage':
         if (event.usage) {
-          trackTokenUsage(event.usage, model);
+          // Core has just written this call to ~/.ava/usage; the Usage
+          // timeline listens for this to read again.
+          window.dispatchEvent(new CustomEvent('ava-usage-recorded'));
           usageEventFiredThisTurn.current = true;
         }
         break;
@@ -4511,7 +4511,6 @@ export function AvaChatPage() {
     setConversationTitle(t('dash.chat.new_chat'));
     setCurrentConvId(null);
     setContextPercent(0);
-    resetSessionStats();
     // Move completed session tasks to history, clear session
     if (sessionTasks.length > 0) {
       const completed = sessionTasks.filter(t => t.status === 'completed').map(t => ({
@@ -4934,7 +4933,6 @@ export function AvaChatPage() {
     setMessages(updatedMessages);
     setPendingAttachments([]);
 
-    trackMessage(model);
 
     // Resolve the mode prefix tag for THIS turn. Needed because the agent
     // detects mode via detectModeFromMessages() on the user message prefix.
@@ -4966,7 +4964,6 @@ export function AvaChatPage() {
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     const userMsg: ChatMessage = { id: mkId(), role: 'user', text: built.label, timestamp: Date.now() };
     setMessages((prev) => [...prev, userMsg]);
-    trackMessage(model);
     const modeInfo = MODES.find((m) => m.id === mode);
     const outgoing = modeInfo?.prefix ? modeInfo.prefix + built.directive : built.directive;
     sendLocal(outgoing);
