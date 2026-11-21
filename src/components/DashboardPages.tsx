@@ -15,7 +15,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ALL_MODELS } from '@ava/core/models';
-import { usdRateFor } from '@ava/core/audit/cost';
 import { ALL_SCAFFOLD_TAGS } from '@ava/core/mode-tags';
 import { providerLabel, resolveSidecarModel } from '../lib/chat-models';
 import { APP_VERSION } from '../version';
@@ -64,14 +63,13 @@ import { DesignStudioLazy } from './DesignStudio.lazy';
 import { toolStatusLabel } from '../lib/tool-label';
 import { t, tt, useLocale, getLocale, languageOptions } from '../lib/i18n';
 import { buildPaletteDirective, filterPaletteActions, type PaletteTool, type PaletteAction } from '../lib/palette-directives';
-import { trackTokenUsage, trackMessage, trackToolCall, getSessionStats, resetSessionStats, type SessionStats } from '../lib/api';
+import { trackTokenUsage, trackMessage, trackToolCall, resetSessionStats } from '../lib/api';
 import { keyedFields, getProviderKeys, testAndSaveProviderKey, setProviderKey, type ProviderField } from '../lib/provider-keys';
 import { buildSidecarConfig, hasChatCapability, restartSidecar } from '../lib/sidecar-boot';
 import { syncSharedSettings } from '../lib/shared-settings';
 import { loadVault, saveVault, getLocalModelKey, setLocalModelKey } from '../lib/keychain';
 import { ensureDataHome } from '../lib/data-root';
 import { useModeAvailability, modeSubtitle, isModeListed } from '../lib/mode-availability';
-import type { MonthUsage } from '../lib/usage-history';
 import { getSidecar, type SidecarEvent, type SidecarConfig } from '../lib/sidecar';
 import { LazyModelViewer } from './LazyModelViewer';
 import { convertFileSrc } from '@tauri-apps/api/core';
@@ -89,6 +87,7 @@ import { homeDir } from '@tauri-apps/api/path';
 import { projectsHomeFrom } from '@ava/core/projects/home';
 import { readProjectsHomeSetting, writeProjectsHomeSetting } from '../lib/shared-config';
 import { DateField } from './MiniDatePicker';
+import { UsageTimeline } from './UsageTimeline';
 import { useLibraryFolders, useFolderSidebar, FoldersView, FolderCard, FolderDropBar, FolderSidebar, FolderGlyph, fileRef, uploadToLibrary as uploadFilesToLibrary, type FolderItem, type FolderRef } from './LibraryFolders';
 import { LessonPlayer, type PlayableLesson, type LessonStep } from './LessonPlayer';
 import { LearningRoomChat, seedLearningRoom } from './LearningRoomChat';
@@ -520,12 +519,6 @@ const WEATHER_CACHE_KEY = 'ava-ide-weather-cache-v2';
 const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
-  return String(n);
-}
 
 function formatRelativeDate(dateStr: string): string {
   if (!dateStr) return '';
@@ -7571,59 +7564,6 @@ export function ChatHistoryPage() {
     setConversations((prev: any[]) => prev.map((c) => (c.id === id ? { ...c, title: t } : c)));
   };
 
-  // ── Local usage — the live month plus every completed one ──────────────
-  //
-  // No account involved. getSessionStats() counts the current calendar month
-  // (api.ts), usage-history keeps the months that have closed. This is the
-  // only usage figure there is: everyone runs on their own keys.
-  const [localSession, setLocalSession] = useState<SessionStats>(getSessionStats);
-  const [localHistory, setLocalHistory] = useState<MonthUsage[]>([]);
-  useEffect(() => {
-    void import('../lib/usage-history').then((m) => setLocalHistory(m.readUsageHistory()));
-    const onStats = (e: Event) => setLocalSession({ ...(e as CustomEvent).detail });
-    const onHistory = (e: Event) => setLocalHistory([...((e as CustomEvent).detail ?? [])]);
-    window.addEventListener('ava-session-stats', onStats);
-    window.addEventListener('ava-usage-history', onHistory);
-    return () => {
-      window.removeEventListener('ava-session-stats', onStats);
-      window.removeEventListener('ava-usage-history', onHistory);
-    };
-  }, []);
-
-  /** This month, and every month, as one shape each. */
-  const localUsage = useMemo(() => {
-    const month = {
-      inputTokens: localSession.inputTokens, outputTokens: localSession.outputTokens,
-      totalTokens: localSession.totalTokens, messages: localSession.messages,
-      toolCalls: localSession.toolCalls, models: localSession.models || {},
-    };
-    const models: Record<string, { input: number; output: number; requests: number }> = {};
-    let inputTokens = 0, outputTokens = 0, totalTokens = 0, messages = 0, toolCalls = 0;
-    for (const m of [...localHistory, month]) {
-      inputTokens += m.inputTokens || 0;
-      outputTokens += m.outputTokens || 0;
-      totalTokens += m.totalTokens || 0;
-      messages += m.messages || 0;
-      toolCalls += m.toolCalls || 0;
-      for (const [name, v] of Object.entries(m.models || {})) {
-        if (!models[name]) models[name] = { input: 0, output: 0, requests: 0 };
-        models[name].input += v.input || 0;
-        models[name].output += v.output || 0;
-        models[name].requests += v.requests || 0;
-      }
-    }
-    return { month, allTime: { inputTokens, outputTokens, totalTokens, messages, toolCalls, models } };
-  }, [localSession, localHistory]);
-
-  const [localScope, setLocalScope] = useState<'month' | 'all'>('month');
-  const localView = localScope === 'month' ? localUsage.month : localUsage.allTime;
-  const localModels = Object.entries(localView.models)
-    .map(([model, m]) => ({ model, input: m.input, output: m.output, requests: m.requests }))
-    .sort((a, b) => (b.input + b.output) - (a.input + a.output));
-  const localCost = localModels.length > 0
-    ? localModels.reduce((sum, m) => sum + estimateModelCost(m.input, m.output, m.model), 0)
-    : estimateModelCost(localView.inputTokens, localView.outputTokens, '');
-
   // ── Audit tab state — hoisted to History page so the Audit tab is
   // a top-level entry alongside Conversations + Usage. It owns its own
   // search / filter / expand state — the separate usage page that used to
@@ -7785,96 +7725,9 @@ export function ChatHistoryPage() {
 
         {/* ── Usage Tab ──────────────────────────────────────────────── */}
         {activeTab === 'usage' && (
-          <>
-            {/* ── Your own usage ─────────────────────────────────────────
-                Always shown, account or not. Tokens and estimated cost from
-                the local counters; the credit blocks below are about a plan
-                and only render when there is one. */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#6c7086' }}>
-                  {t('dash.usage.your_usage')}
-                </div>
-                <div style={{ display: 'flex', gap: 2 }}>
-                  {([['month', t('dash.usage.this_month')], ['all', t('dash.usage.all_time')]] as const).map(([k, label]) => (
-                    <button
-                      key={k}
-                      onClick={() => setLocalScope(k as 'month' | 'all')}
-                      style={{
-                        padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer',
-                        background: localScope === k ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'transparent',
-                        border: localScope === k
-                          ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)'
-                          : '1px solid var(--border, #2a2440)',
-                        color: localScope === k ? 'var(--accent)' : '#6c7086',
-                      }}
-                    >{label}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
-                {[
-                  { label: t('dash.usage.input_tokens'), value: formatTokens(localView.inputTokens) },
-                  { label: t('dash.usage.output_tokens'), value: formatTokens(localView.outputTokens) },
-                  { label: t('dash.usage.total_tokens'), value: formatTokens(localView.totalTokens), accent: true },
-                  { label: t('dash.usage.messages'), value: String(localView.messages) },
-                  { label: t('dash.usage.tool_calls'), value: String(localView.toolCalls) },
-                  { label: t('dash.usage.est_cost'), value: `$${localCost.toFixed(4)}`, cost: true },
-                ].map((s) => (
-                  <div key={s.label} style={{
-                    background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-                    borderRadius: 12, padding: 16,
-                  }}>
-                    <div style={{ fontSize: 10, color: '#6c7086' }}>{s.label}</div>
-                    <div style={{
-                      fontSize: 18, fontWeight: 600, marginTop: 4,
-                      color: s.cost ? costColourFor(localCost) : s.accent ? 'var(--accent)' : '#cdd6f4',
-                    }}>{s.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Where the tokens went. The point of the tab for a BYOK user:
-                  which model is costing the money. */}
-              {localModels.length > 0 ? (
-                <div style={{
-                  background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-                  borderRadius: 12, padding: '16px 20px',
-                }}>
-                  {localModels.map((m) => {
-                    const tokens = m.input + m.output;
-                    const top = localModels[0].input + localModels[0].output;
-                    return (
-                      <div key={m.model} style={{ marginBottom: 10 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                          <span style={{ color: '#cdd6f4', fontWeight: 500 }}>{m.model}</span>
-                          <span style={{ color: '#6c7086' }}>
-                            {formatTokens(tokens)} · ${estimateModelCost(m.input, m.output, m.model).toFixed(4)}
-                          </span>
-                        </div>
-                        <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(49, 34, 68, 0.5)' }}>
-                          <div style={{
-                            width: `${top > 0 ? (tokens / top) * 100 : 0}%`, height: '100%', borderRadius: 3,
-                            background: 'linear-gradient(90deg, var(--accent), #6366f1)',
-                          }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div style={{ fontSize: 10, color: '#585b70', marginTop: 4 }}>{t('dash.usage.est_note')}</div>
-                </div>
-              ) : (
-                <div style={{
-                  background: 'rgba(26, 16, 40, 0.6)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)',
-                  borderRadius: 12, padding: '24px 20px', textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: 12, color: '#6c7086' }}>{t('dash.usage.no_usage_period')}</div>
-                </div>
-              )}
-            </div>
-
-          </>
+          // The timeline (21 Nov 2026): any period, money and tokens together,
+          // from ~/.ava/usage — the same record the extension reads.
+          <UsageTimeline />
         )}
 
         {/* ── Conversations Tab ──────────────────────────────────────── */}
@@ -13661,32 +13514,6 @@ export function DataExportCard() {
 }
 
 /* ===== 9. Usage ===== */
-
-// ── Token pricing ───────────────────────────────────────────────────────────
-//
-// USD per 1M tokens, read from core's rate card (usdRateFor) — the same one
-// every receipt uses, which a core test holds to cover every model in the
-// catalogue. This page kept its own copy until 20 Nov 2026 and it had drifted:
-// no Mistral, GLM, MiMo, Hunyuan or Nemotron, so all of those were guessed.
-// The extension's Usage page reads the same function.
-const DEFAULT_PRICING = { inputPerMillion: 0.20, outputPerMillion: 1.20 };
-
-/** Estimated USD for a token split. A model with no rate (a custom or local
- *  endpoint) falls back to DEFAULT_PRICING — a rough number beats no number
- *  when someone is deciding what to spend, provided it is labelled an
- *  estimate. */
-export function estimateModelCost(inputTokens: number, outputTokens: number, model: string): number {
-  const p = usdRateFor(model) ?? DEFAULT_PRICING;
-  return (inputTokens / 1_000_000) * p.inputPerMillion + (outputTokens / 1_000_000) * p.outputPerMillion;
-}
-
-/** Green through red as the bill grows. */
-export function costColourFor(cost: number): string {
-  if (cost < 0.10) return '#34d399';
-  if (cost < 0.50) return '#fbbf24';
-  if (cost < 1.00) return '#f59e0b';
-  return '#f87171';
-}
 
 function LocalModelSettings() {
   const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('ava-ide-local-baseurl') || '');
