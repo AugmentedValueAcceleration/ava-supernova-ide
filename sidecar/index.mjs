@@ -52,6 +52,11 @@ try {
   core = await import(`file://${corePath.replace(/\\/g, '/')}`);
 }
 
+// The usage ledger (~/.ava/usage): every paid call this sidecar makes, one
+// line each, shared with the extension — the Usage timeline (21 Nov 2026).
+// Guarded: an older core without it must not stop the IDE starting.
+try { core.configureUsageLedger?.({ surface: 'ide' }); } catch { /* counted by the old tally only */ }
+
 /**
  * Creative generations in flight, for the rail in the sidebar.
  *
