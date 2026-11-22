@@ -74,7 +74,7 @@ function tokens(n: number): string {
 
 /** What an outlined bar is: a month's total from the old counters. */
 function earlierNote(): string {
-  return tt('dash.usage.tl.earlier_note', 'a month total from before daily records began (21 Nov 2026), so it has no daily detail');
+  return tt('dash.usage.tl.earlier_note', 'a month total from before daily records began, so it has no daily detail');
 }
 
 function dayText(day: string, locale: string, withYear = false): string {
@@ -128,13 +128,24 @@ function Change({ now, before }: { now: number; before: number | undefined }) {
   return <div style={style}>{arrow} {Math.abs(pct).toFixed(0)}% {tt('dash.usage.tl.vs_previous', 'vs the period before')}</div>;
 }
 
-function Headline({ label, value, sub, now, before }: { label: string; value: string; sub?: string; now: number; before?: number }) {
+function Headline({ label, value, sub, now, before, loading }: { label: string; value: string; sub?: string; now: number; before?: number; loading?: boolean }) {
   return (
     <div style={CARD}>
       <div style={{ fontSize: 10, color: MUTED }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4, color: TEXT }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{sub}</div>}
-      <Change now={now} before={before} />
+      {/* While the record is being read, no figure at all — a 0 here reads as "you spent nothing". */}
+      <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4, color: loading ? MUTED : TEXT }}>{loading ? '…' : value}</div>
+      {!loading && sub && <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{sub}</div>}
+      {!loading && <Change now={now} before={before} />}
+    </div>
+  );
+}
+
+/** Shown in place of the bars and the breakdown while the record is read. */
+function Loading() {
+  return (
+    <div role="status" style={{ padding: '28px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 12, color: MUTED }}>
+      <span className="ava-todo-spin" style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(108, 112, 134, 0.35)', borderTopColor: 'var(--accent)', display: 'inline-block' }} />
+      {t('dash.common.loading')}
     </div>
   );
 }
@@ -189,7 +200,10 @@ export function UsageTimeline() {
   const locale = useLocale();
   const [saved, setSaved] = useState<Saved>(loadSaved);
   const [entries, setEntries] = useState<UsageEntry[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  // True on the first read and whenever the range changes, so the page never
+  // shows 0 (or the last range's figures) while the record is being read.
+  // The quiet refreshes (focus, interval, after a reply) don't set it.
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<UsageBar | null>(null);
   const requestRef = useRef(0);
 
@@ -208,11 +222,11 @@ export function UsageTimeline() {
       // A slow read for a range the user has already left is dropped.
       if (id !== requestRef.current) return;
       setEntries(rows);
-      setLoaded(true);
-    });
+      setLoading(false);
+    }, () => { if (id === requestRef.current) setLoading(false); });
   }, [saved.key, range]);
 
-  useEffect(() => { setSelected(null); load(); }, [load]);
+  useEffect(() => { setSelected(null); setLoading(true); load(); }, [load]);
 
   // Fresh figures: after each reply here, when the window comes back into
   // focus, and on a gentle interval — the extension and the CLI write to the
@@ -267,7 +281,7 @@ export function UsageTimeline() {
           <Chip key={k} active={saved.key === k} onClick={() => update({ key: k })}>{rangeLabel(k)}</Chip>
         ))}
         <div style={{ flex: 1 }} />
-        <Chip active={false} disabled={totals.replies === 0} onClick={() => { void exportCsv(); }}>{tt('dash.usage.tl.export', 'Export CSV')}</Chip>
+        <Chip active={false} disabled={loading || totals.replies === 0} onClick={() => { void exportCsv(); }}>{tt('dash.usage.tl.export', 'Export CSV')}</Chip>
       </div>
       {saved.key === 'custom' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: MUTED }}>
@@ -285,17 +299,18 @@ export function UsageTimeline() {
 
       {/* Totals, money and tokens side by side */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-        <Headline label={t('dash.usage.estimated_cost')} value={money(totals.usd)} now={totals.usd} before={before?.usd} />
+        <Headline loading={loading} label={t('dash.usage.estimated_cost')} value={money(totals.usd)} now={totals.usd} before={before?.usd} />
         <Headline
+          loading={loading}
           label={t('dash.usage.total_tokens')}
           value={tokens(totals.in + totals.out)}
           sub={`${t('status.in')} ${tokens(totals.in)} · ${t('status.out')} ${tokens(totals.out)}`}
           now={totals.in + totals.out}
           before={before ? before.in + before.out : undefined}
         />
-        <Headline label={tt('dash.usage.tl.calls', 'Calls')} value={String(totals.replies)} now={totals.replies} before={before?.replies} />
+        <Headline loading={loading} label={tt('dash.usage.tl.calls', 'Calls')} value={String(totals.replies)} now={totals.replies} before={before?.replies} />
       </div>
-      {totals.unpriced > 0 && (
+      {!loading && totals.unpriced > 0 && (
         <div style={{ fontSize: 10, color: MUTED, marginTop: -8 }}>{t('dash.usage.tl.unpriced', { count: totals.unpriced })}</div>
       )}
 
@@ -310,13 +325,15 @@ export function UsageTimeline() {
             <Chip active={saved.metric === 'tokens'} onClick={() => update({ metric: 'tokens' })}>{tt('dash.usage.tl.tokens', 'Tokens')}</Chip>
           </div>
         </div>
-        {loaded && totals.replies === 0
+        {loading
+          ? <Loading />
+          : totals.replies === 0
           ? empty
           : <Bars bars={view.bars} metric={saved.metric} bucket={view.bucket} selected={selected?.start ?? null} onSelect={setSelected} locale={locale} />}
-        {view.bars.some((b) => b.earlier) && (
+        {!loading && view.bars.some((b) => b.earlier) && (
           <div style={{ fontSize: 10, color: MUTED, marginTop: 8 }}>
             <span style={{ display: 'inline-block', width: 12, height: 8, marginRight: 4, verticalAlign: 'middle', borderRadius: 2, border: '1px dashed var(--accent)' }} />
-            {tt('dash.usage.tl.earlier_legend', 'Outlined: a month total from before daily records began (21 Nov 2026).')}
+            {tt('dash.usage.tl.earlier_legend', 'Outlined: a month total from before daily records began.')}
           </div>
         )}
       </div>
@@ -338,7 +355,7 @@ export function UsageTimeline() {
             <Chip active={saved.by === 'mode'} onClick={() => update({ by: 'mode' })}>{tt('dash.usage.tl.by_mode', 'Mode')}</Chip>
           </div>
         </div>
-        {rows.length === 0 ? empty : rows.map((r) => {
+        {loading ? <Loading /> : rows.length === 0 ? empty : rows.map((r) => {
           const v = saved.metric === 'usd' ? r.usd : r.in + r.out;
           return (
             <div key={r.key} style={{ marginBottom: 10 }}>

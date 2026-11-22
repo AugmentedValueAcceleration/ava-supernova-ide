@@ -30,7 +30,9 @@ export async function readUsageRange(from?: string, to?: string): Promise<UsageE
 // ─── The months before daily records ────────────────────────────────────────
 
 /** Where the old counters lived (lib/api.ts and lib/usage-history.ts, both
- *  removed 21 Nov 2026). Read once below; left in place, unread, after that. */
+ *  removed 21 Nov 2026). Read once below, then deleted once the import's
+ *  marker exists (his call, 22 Nov 2026) — never before, so a failed import
+ *  keeps the source to retry. */
 const OLD_LIVE_KEY = 'ava-ide-session-stats';
 const OLD_HISTORY_KEY = 'ava-ide-usage-history';
 
@@ -69,7 +71,10 @@ export async function importLegacyIdeUsage(): Promise<void> {
   const marker = `${DIR}/imported-ide`;
   // stat(), not exists(): fs:allow-exists is not in the capability scope, so
   // exists() is denied at runtime and the import would never have run.
-  try { await stat(marker, home); return; } catch { /* no marker: import */ }
+  const removeOldKeys = () => {
+    try { localStorage.removeItem(OLD_LIVE_KEY); localStorage.removeItem(OLD_HISTORY_KEY); } catch { /* storage unavailable */ }
+  };
+  try { await stat(marker, home); removeOldKeys(); return; } catch { /* no marker: import */ }
   try {
     const months = readOldMonths();
     const wanted = months.map((m) => m.month).sort();
@@ -80,5 +85,6 @@ export async function importLegacyIdeUsage(): Promise<void> {
     for (const e of lines) byMonth.set(e.t.slice(0, 7), (byMonth.get(e.t.slice(0, 7)) ?? '') + JSON.stringify(e) + '\n');
     for (const [month, text] of byMonth) await writeTextFile(`${DIR}/${month}.jsonl`, text, { ...home, append: true });
     await writeTextFile(marker, `${new Date().toISOString()} ${lines.length} lines\n`, home);
+    removeOldKeys();
   } catch { /* the old months are a nicety; nothing depends on them */ }
 }
