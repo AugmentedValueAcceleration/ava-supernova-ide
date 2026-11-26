@@ -284,12 +284,32 @@ fn position_cursor(x: i32, y: i32) -> Result<(), String> {
 // file against exact known asset sizes.
 
 #[cfg(target_os = "windows")]
-const LOCAL_VISION_ASSETS: &[(&str, u64, bool)] = &[
-    // (asset name, exact bytes, is_runner_zip)
-    ("holo-3.1-08b-Q4_K_M.gguf", 672_330_784, false),
-    ("mmproj-holo-3.1-08b-f16.gguf", 204_987_776, false),
-    ("llama-server-win-x64.zip", 32_155_384, true),
+// (asset name, exact bytes, is_runner_zip, SHA-256)
+//
+// The SHA-256s are GitHub's own digests for the holo-vision-v1 release files
+// (26 Nov 2026). The runner zip holds llama-server.exe, which the IDE then RUNS,
+// so a file that does not match is deleted, never unpacked or started
+// (security review, 25 Nov 2026). A new release of these files needs new hashes.
+const LOCAL_VISION_ASSETS: &[(&str, u64, bool, &str)] = &[
+    ("holo-3.1-08b-Q4_K_M.gguf", 672_330_784, false, "b591d94d48d425170057668d35531db1f5556384f41b172009656b58b110df15"),
+    ("mmproj-holo-3.1-08b-f16.gguf", 204_987_776, false, "e1df4bc8a7b5f560c22ecdd1d0f3ba78ade62fb37c965b4020b805df1a5231c7"),
+    ("llama-server-win-x64.zip", 32_155_384, true, "c3f0703c8fca8fa4cbc01a347d7180fca092e889fe693268bf1192fd07350c13"),
 ];
+
+/// SHA-256 of a file, as lowercase hex, read in chunks (the model is 670 MB).
+fn sha256_file(path: &std::path::Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = f.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 { break; }
+        h.update(&buf[..n]);
+    }
+    Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
 #[cfg(target_os = "windows")]
 const LOCAL_VISION_BASE: &str =
     "https://github.com/AugmentedValueAcceleration/ava-models/releases/download/holo-vision-v1";
@@ -313,10 +333,10 @@ async fn download_local_vision_model(app: AppHandle) -> Result<(), String> {
             )
             .join("System32");
 
-            let total: u64 = LOCAL_VISION_ASSETS.iter().map(|(_, b, _)| *b).sum();
+            let total: u64 = LOCAL_VISION_ASSETS.iter().map(|(_, b, _, _)| *b).sum();
             let mut done: u64 = 0;
 
-            for (name, bytes, is_zip) in LOCAL_VISION_ASSETS {
+            for (name, bytes, is_zip, sha) in LOCAL_VISION_ASSETS {
                 let dest_dir = if *is_zip { &bin } else { &models };
                 let dest = dest_dir.join(name);
                 let already = if *is_zip { bin.join("llama-server.exe").exists() } else { dest.exists() };
@@ -355,6 +375,11 @@ async fn download_local_vision_model(app: AppHandle) -> Result<(), String> {
                             std::thread::sleep(std::time::Duration::from_millis(400));
                         }
                     }
+                }
+                let got = sha256_file(&part).map_err(|e| format!("check {name}: {e}"))?;
+                if got != *sha {
+                    let _ = std::fs::remove_file(&part);
+                    return Err(format!("{name} did not match its published checksum, so it was deleted and not used. Try the download again."));
                 }
                 std::fs::rename(&part, &dest).map_err(|e| format!("finalise {name}: {e}"))?;
                 if *is_zip {

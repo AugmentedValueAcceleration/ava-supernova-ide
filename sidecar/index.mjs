@@ -292,7 +292,9 @@ const {
 //     same helper the extension runs).
 //   - test_provider_key: test a pasted key before it is saved. The key comes in
 //     on stdin, never argv, so it is not visible in the process list.
-if (process.argv.includes('--oneshot')) {
+// AVA_ONESHOT is how the IDE asks now (node may only be given the script);
+// --oneshot still works when run by hand.
+if (process.env.AVA_ONESHOT === '1' || process.argv.includes('--oneshot')) {
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
   try {
     const line = await new Promise((resolve) => {

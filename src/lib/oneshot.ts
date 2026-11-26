@@ -18,8 +18,11 @@ async function scriptPath(): Promise<string> {
 export async function runOneshot<T = unknown>(job: Record<string, unknown>, timeoutMs = 60_000): Promise<T> {
   const script = await scriptPath();
   const command = isDev
-    ? Command.create('run-node', [script, '--oneshot'])
-    : Command.sidecar('binaries/node', [script, '--oneshot']);
+    // One-shot is an environment flag, not an argument: the IDE may start node
+    // with its own sidecar script and nothing else (capabilities/default.json,
+    // security review 25 Nov 2026).
+    ? Command.create('run-node', [script], { env: { AVA_ONESHOT: '1' } })
+    : Command.sidecar('binaries/node', [script], { env: { AVA_ONESHOT: '1' } });
   let out = '';
   command.stdout.on('data', (line: string) => { out += line; });
   return new Promise<T>((resolve, reject) => {

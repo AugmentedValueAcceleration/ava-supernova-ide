@@ -16,12 +16,12 @@
         {
           "name": "run-node",
           "cmd": "node",
-          "args": true
+          "args": [{ "validator": "^\\.\\./sidecar/index\\.mjs$" }]
         },
         {
           "name": "binaries/node",
           "sidecar": true,
-          "args": true
+          "args": [{ "validator": "^.*[\\\\/]resources[\\\\/]sidecar-bundle\\.mjs$" }]
         }
       ]
     },
