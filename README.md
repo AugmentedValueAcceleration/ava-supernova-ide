@@ -34,7 +34,7 @@ Built on Rust (`enigo` for input, `uiautomation` for the UIA tree) behind Tauri'
 
 ## Workspace
 
-Ten focused areas in the sidebar, each with its own sub-pages:
+The areas in the sidebar, each with its own sub-pages:
 
 | Area | What's inside |
 |---|---|
@@ -42,8 +42,9 @@ Ten focused areas in the sidebar, each with its own sub-pages:
 | **Chat** | Talk, build, create — the full agent, all 6 modes, fleet + model pickers |
 | **Planner** | Tasks, journal, learning |
 | **Library** | Courses, generated assets, documents — with folders, packs planned with Ava, and downloads ready for your game engine or a store |
-| **Health & Nutrition** | Exercise and recipe catalogues, ready-made plans you place session by session, your plan calendar and past plans, your profile, and Ava herself |
+| **Health & Nutrition** | Exercise and recipe catalogues, ready-made plans you place session by session, your plan calendar and past plans, and Ava herself |
 | **Creative Studio** | Logos, icons, images, video and voiceovers, plus 2D work made in GIMP and 3D models built in Blender on your machine (brief first, every step saved), and brand kits linked to your projects — images, video and voice on your own Qwen key; logos, icons, GIMP, Blender and background removal on your machine, free |
+| **Profile** | What Ava knows about you — your training, eating, courses and projects, each line exactly as she sees it, with a switch to keep any of them to its own room; your name, picture and body basics |
 | **Memory** | Patterns, preferences, decisions |
 | **Usage & History** | A timeline of what you've spent over any period, money and tokens side by side, by model, room and mode, with a CSV export; your conversations; the audit log |
 | **Connections** | Your MCP servers — suggested ones (including Unreal Engine 5.8, inside the editor on your computer), your own, or Ava finds them; each tool asks before it runs, until you choose Always |

@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { WeeklyPlanView } from './WeeklyPlanView';
 import { ForYou } from './ForYou';
 import { requestHealthOpen } from './HealthPage';
+import { openProfilePage } from './ProfilePage';
 import { t, useLocale } from '../lib/i18n';
 
 /**
@@ -53,7 +54,7 @@ export function HealthDashboard() {
       <ForYou h={{
         onOpenItem: (kind, slug) => go({ tab: kind === 'recipe' ? 'recipes' : 'exercises', item: { kind, slug } }),
         onStartPlan: (seed) => go({ tab: 'plans', seed }),
-        onProfile: () => go({ tab: 'profile' }),
+        onProfile: () => openProfilePage('health'),
         onOpenPlans: () => go({ tab: 'plans' }),
       }} />
 

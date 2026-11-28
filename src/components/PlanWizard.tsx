@@ -688,7 +688,7 @@ export function PlanWizard<P extends WizardProfile>(props: PlanWizardProps<P>) {
                     <div className="pw-col" style={{ gap: 8 }}>
                       <span className="pw-label">{tt('health.wizard.r.training', 'Training')}</span>
                       <span className="pw-sec" style={{ fontSize: 13 }}>
-                        {[profile.training?.experience, profile.training?.days_per_week ? `${profile.training.days_per_week} ${tt('health.wizard.per_week', 'days a week')}` : null].filter(Boolean).join(' · ') || tt('health.wizard.r.training_none', 'Not set yet: you can set it in the Profile tab.')}
+                        {[profile.training?.experience, profile.training?.days_per_week ? `${profile.training.days_per_week} ${tt('health.wizard.per_week', 'days a week')}` : null].filter(Boolean).join(' · ') || tt('health.wizard.r.training_none', 'Not set yet: you can set it on the Profile page.')}
                       </span>
                     </div>
                   )}

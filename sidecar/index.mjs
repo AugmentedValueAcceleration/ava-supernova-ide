@@ -214,7 +214,6 @@ const {
   resolveAuroraCoordinator,
   getDesignStudioPrefix,
   loadFreshDesignContext,
-  summariseEquipment,
   coerceLoad,
   getTeachModePrefix,
   loadDecisionsState,
@@ -667,7 +666,7 @@ async function openMemorySession(projectRoot) {
   const root = memoryV4Root();
   try {
     await ensureOldMemoryImported(new AvaMemory({ root }), AVA_HOME, (m) => emit({ event: 'info', message: m }));
-    const session = await MemorySession.open({ root, projectPath: projectRoot ?? null, embeddingService: createEmbeddingServiceFromConfig(memoryEmbeddingConfig) });
+    const session = await MemorySession.open({ root, projectPath: projectRoot ?? null, embeddingService: createEmbeddingServiceFromConfig(memoryEmbeddingConfig), profileHome: AVA_HOME });
     emit({ event: 'info', message: `Memory open (${root})${session.project ? `, project ${session.project.name}` : ''}` });
     return session;
   } catch (err) {
@@ -1799,87 +1798,21 @@ function emitError(message) {
 // ~/.ava/users/<id>/ folders are merged up into it by the IDE's one-shot job
 // (see --oneshot above) before this process is ever started.
 
-/** Compact summary of the local health + general profiles for the Health Room
- *  prefix (mirrors the extension's getHealthProfileSummary). Body basics come
- *  from general.json; goals/constraints/schedule from health/profile.json.
- *  Returns undefined when essentially empty so the room asks for the gaps. */
+/** The Health room's profile summary and plan list. ONE copy in core for every
+ *  host (27 Nov 2026): this file's own version had drifted from the extension's
+ *  and never sent training (days, lifts) or the kitchen, so the IDE's room
+ *  planned a week without knowing how often someone can train. */
 function getHealthProfileSummary() {
   try {
-    let p = null;
-    let g = null;
-    try { p = JSON.parse(readFileSync(join(AVA_HOME, 'health', 'profile.json'), 'utf-8')); } catch { /* none */ }
-    try { g = JSON.parse(readFileSync(join(AVA_HOME, 'general.json'), 'utf-8')); } catch { /* none */ }
-    const sex = g?.sex ?? p?.body?.sex;
-    const dob = g?.date_of_birth ?? p?.body?.date_of_birth;
-    const heightCm = g?.height_cm ?? p?.body?.height_cm;
-    const weightKg = g?.weight_kg ?? p?.body?.weight_kg;
-    const lines = [];
-    if (p?.goals?.primary) lines.push(`Primary goal: ${String(p.goals.primary).replace(/_/g, ' ')}`);
-    if (p?.goals?.weekly_focus) lines.push(`This week's focus: ${p.goals.weekly_focus}`);
-    if (sex) lines.push(`Sex: ${sex}`);
-    if (dob) {
-      const age = Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
-      if (age > 0 && age < 130) lines.push(`Age: ${age}`);
-    }
-    if (heightCm) lines.push(`Height: ${heightCm} cm`);
-    if (weightKg) lines.push(`Weight: ${weightKg} kg`);
-    if (p?.constraints?.allergens?.length) lines.push(`Allergens: ${p.constraints.allergens.join(', ')}`);
-    if (p?.constraints?.dietary?.length) lines.push(`Dietary preferences: ${p.constraints.dietary.join(', ')}`);
-    if (p?.constraints?.injuries?.length) lines.push(`Injuries / limitations: ${p.constraints.injuries.join(', ')}`);
-    // Places, load ranges and gym days — not a flat list of slugs. Mirrors the
-    // extension exactly by sharing core's builder, so the two summaries cannot
-    // say different things about the same profile.
-    for (const line of summariseEquipment(
-      p?.constraints?.equipment_available,
-      p?.constraints?.equipment_loads,
-      p?.constraints?.gym_days,
-    )) lines.push(line);
-    if (p?.constraints?.minutes_per_day_target) lines.push(`Time budget per day: ${p.constraints.minutes_per_day_target} minutes`);
-    const tw = p?.schedule?.training_window;
-    if (tw?.start && tw?.end) lines.push(`Training window: ${tw.start}–${tw.end}`);
-    const mt = p?.schedule?.meal_times;
-    if (mt && (mt.breakfast || mt.lunch || mt.dinner)) {
-      const parts = [mt.breakfast && `breakfast ${mt.breakfast}`, mt.lunch && `lunch ${mt.lunch}`, mt.dinner && `dinner ${mt.dinner}`].filter(Boolean);
-      if (parts.length) lines.push(`Meal times: ${parts.join(', ')}`);
-    }
-    const cookLine = summariseCookingTime(p?.schedule?.cooking_time);
-    if (cookLine) lines.push(cookLine);
-    if (p?.food?.likes?.length) lines.push(`Food likes: ${p.food.likes.join(', ')}`);
-    if (p?.food?.dislikes?.length) lines.push(`Food dislikes (keep out of plans): ${p.food.dislikes.join(', ')}`);
-    if (p?.food?.cuisines?.length) lines.push(`Favourite cuisines: ${p.food.cuisines.join(', ')}`);
-    return lines.length ? lines.join('\n') : undefined;
+    return core.healthProfileSummary(core.readHealthProfileFile(AVA_HOME), core.readGeneralProfileFile(AVA_HOME));
   } catch {
     return undefined;
   }
 }
 
-/** Compact summary of the user's current (non-archived) plans for the Health
- *  Room prefix, so Ava knows what exists and can EDIT it with health_plan_update_day
- *  instead of only building new ones. Returns undefined when there are none. */
 function getHealthPlansSummary() {
   try {
-    const dir = join(AVA_HOME, 'health', 'plans');
-    let files;
-    try { files = readdirSync(dir).filter((f) => f.endsWith('.json')); } catch { return undefined; }
-    const lines = [];
-    for (const f of files) {
-      let p;
-      try { p = JSON.parse(readFileSync(join(dir, f), 'utf-8')); } catch { continue; }
-      if (!p || p.schema_version !== 1 || p.status === 'archived') continue;
-      const days = Array.isArray(p.days) ? p.days : [];
-      const dayBits = days.map((d) => {
-        const bits = [`day ${d.day_index}`, d.kind || 'rest'];
-        if (d.title) bits.push(d.title);
-        const t = Array.isArray(d.training) ? d.training.length : 0;
-        const m = Array.isArray(d.meals) ? d.meals.length : 0;
-        if (t) bits.push(`${t} exercise${t === 1 ? '' : 's'}`);
-        if (m) bits.push(`${m} meal${m === 1 ? '' : 's'}`);
-        return bits.join(' · ');
-      });
-      const started = p.start_date ? `, started ${p.start_date}` : '';
-      lines.push(`- "${p.title}" (${p.type}, ${p.status}${started}, ${days.length} days) — id: ${p.id}\n  ${dayBits.join('\n  ')}`);
-    }
-    return lines.length ? lines.join('\n') : undefined;
+    return core.healthPlansSummary(core.readHealthPlanFiles(AVA_HOME));
   } catch {
     return undefined;
   }
@@ -4865,6 +4798,24 @@ rl.on('line', async (line) => {
           result = { ok: false, error: err?.message || String(err) };
         }
         emit({ event: 'mcp_page_result', requestId: data.requestId, result });
+      })();
+      break;
+    }
+    case 'profile_overview': {
+      // The Profile page (plan 2026-11-27-profile-index, Part 2): each area as
+      // Ava sees it. `set` flips one area's switch first. Mirrors the
+      // extension's load_profile_overview / set_profile_visibility.
+      (async () => {
+        let sections = [];
+        try {
+          if (data.set?.section) core.writeProfileVisibility(data.set.section, data.set.visibility === 'room' ? 'room' : 'everywhere', AVA_HOME);
+          const session = await MemorySession.open({ root: memoryV4Root(), profileHome: AVA_HOME });
+          const sources = await session.profileSources();
+          sections = sources ? core.profileOverview(sources, core.todayLocal()) : [];
+        } catch (err) {
+          console.error('[Profile] overview failed:', err?.message || err);
+        }
+        emit({ event: 'profile_overview_result', requestId: data.requestId, sections });
       })();
       break;
     }

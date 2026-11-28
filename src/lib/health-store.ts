@@ -272,6 +272,8 @@ export async function saveGeneralProfile(profile: GeneralProfile): Promise<void>
   const next: GeneralProfile = { ...profile, schema_version: 1, updated_at: new Date().toISOString() };
   await mkdir(await dataRoot(), { baseDir: BaseDirectory.Home, recursive: true }).catch(() => {});
   await writeTextFile(await generalProfilePath(), JSON.stringify(next, null, 2), { baseDir: BaseDirectory.Home });
+  // The Profile page re-reads what Ava sees after every save.
+  try { window.dispatchEvent(new Event('ava-general-profile-saved')); } catch { /* no window in tests */ }
 }
 
 /** Read the daily plan for an ISO date (YYYY-MM-DD). Returns the empty

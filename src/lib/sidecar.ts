@@ -514,6 +514,8 @@ export class SidecarManager {
   async mcpPage(requestId: string, op: string, args: Record<string, unknown>): Promise<void> { await this.send({ cmd: 'mcp_page', requestId, op, args }); }
   /** The Brainstorm room: one op of core's brainstormPage(); answers with a brainstorm_page_result event. */
   async brainstormPage(requestId: string, op: string, args: Record<string, unknown>): Promise<void> { await this.send({ cmd: 'brainstorm_page', requestId, op, args }); }
+  /** The Profile page: each area as Ava sees it, after flipping one switch if `set` is given; answers with a profile_overview_result event. */
+  async profileOverview(requestId: string, set?: { section: string; visibility: 'everywhere' | 'room' }): Promise<void> { await this.send({ cmd: 'profile_overview', requestId, set }); }
   /** Ask whether memory v4 is on; answers with a memory_v4_status event. */
   async memoryV4Status(): Promise<void> { await this.send({ cmd: 'memory_v4_status' }); }
   /** A spreadsheet for the document viewer; answers with a 'document_sheet_result' event carrying `id`. */

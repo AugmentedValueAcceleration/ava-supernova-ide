@@ -126,7 +126,7 @@ import {
 import { readAllLocalCreative, removeLocalCreative, renameLocalCreative, copyCreativeToProject, type GalleryItem } from '../lib/creative-gallery';
 import { HealthDashboard } from './HealthDashboard';
 import HealthPlansPage from './HealthPlansPage';
-import { GeneralProfilePage, requestHealthRoomTab } from './HealthPage';
+import { requestHealthRoomTab } from './HealthPage';
 import { MessageFeedback } from './MessageFeedback';
 import { todayLocal } from '@ava/core/dates';
 
@@ -15492,19 +15492,12 @@ function TasksPageInner() { return <TasksPage />; }
 function JournalPageInner() { return <JournalPage />; }
 
 export function AccountPage() {
-  const [tab, setTab] = useState<'settings' | 'personality' | 'profile'>('settings');
-  // "{name}'s profile" — the user's own data: identity/body, health goals, their
-  // plans, and their catalogue contributions.
-  const profileLabel = (() => {
-    try {
-      const first = (localStorage.getItem('ava-ide-user-name') || '').trim().split(/\s+/)[0];
-      return first ? t('general.profile.account_tab_named', { name: first }) : t('general.profile.account_tab');
-    } catch { return t('general.profile.account_tab'); }
-  })();
+  const [tab, setTab] = useState<'settings' | 'personality'>('settings');
+  // The "{name}'s profile" tab moved to its own sidebar page on 2026-11-28
+  // (plan 2026-11-27-profile-index), with the health profile beside it.
   const tabs = [
     { key: 'settings' as const, label: t('dash.nav.settings') },
     { key: 'personality' as const, label: t('dash.account.tab_style') },
-    { key: 'profile' as const, label: profileLabel },
     // Sync tab removed — Ava is local-first; nothing syncs to the cloud.
   ];
   return (
@@ -15525,11 +15518,6 @@ export function AccountPage() {
       </div>
       {tab === 'settings' && <SettingsPage />}
       {tab === 'personality' && <PersonalityPage />}
-      {/* Your name, your picture, your body basics. The health profile and your
-          plans moved to the Nutrition & Fitness room on 2026-08-10, where the
-          extension has always kept them; My Submissions was removed the same
-          day. One thing lives here now, so there is no sub-tab strip. */}
-      {tab === 'profile' && <GeneralProfilePage />}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   Barbell as PhHealth,
   Palette as PhCreative,
   Brain as PhMemory,
+  UserCircle as PhProfile,
   PlugsConnected as PhConnections,
   Lightbulb as PhBrainstorm,
   ChartLineUp as PhHistory,
@@ -1237,6 +1238,8 @@ const NAV_ITEMS: { id: string; Icon: PhIconType; labelKey: string; descKey: stri
   // The Brainstorm room (plan 2026-11-17-brainstorm). Keep in step with the extension's NavSidebar.
   { id: 'brainstorm',      Icon: PhBrainstorm, labelKey: 'dash.nav.brainstorm',  descKey: 'dash.nav.brainstorm_desc', earlyAccess: true },
   { id: 'creative-studio', Icon: PhCreative, labelKey: 'dash.nav.creative_studio', descKey: 'dash.nav.creative_studio_desc', earlyAccess: true },
+  // What Ava knows about you, and where (plan 2026-11-27-profile-index). Keep in step with the extension's NavSidebar.
+  { id: 'profile',         Icon: PhProfile,  labelKey: 'dash.nav.profile',         descKey: 'dash.nav.profile_desc' },
   { id: 'memory',          Icon: PhMemory,   labelKey: 'dash.nav.memory',          descKey: 'dash.nav.memory_desc' },
   // His MCP servers (plan 2026-11-17-mcp-servers). Keep in step with the extension's NavSidebar.
   { id: 'connections',     Icon: PhConnections, labelKey: 'dash.nav.connections', descKey: 'dash.nav.connections_desc' },

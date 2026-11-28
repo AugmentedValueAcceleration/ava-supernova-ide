@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTabTransition } from '../lib/useTabTransition';
 import { TabSpinner } from './TabSpinner';
 import { HealthRoomChat } from './HealthRoomChat';
+import { openProfilePage } from './ProfilePage';
 import { TimeField } from './TimeField';
 import { DateField } from './MiniDatePicker';
 import {
@@ -53,7 +54,7 @@ import { SendItemToPhone, SendToPhoneButton, type PhoneItem } from './SendItemTo
 
 // Same five as the extension, in the same order. A shared room that opens on
 // a different tab depending on which app you launched is one room in name only.
-type HealthTab = 'plans' | 'shopping' | 'starters' | 'exercises' | 'recipes' | 'profile' | 'ava';
+type HealthTab = 'plans' | 'shopping' | 'starters' | 'exercises' | 'recipes' | 'ava';
 
 // Set when something elsewhere (the main-chat → Health room handoff) wants the
 // page to open on the Ava room tab. Read on mount; the live event covers the
@@ -64,7 +65,7 @@ export function requestHealthRoomTab(): void { pendingHealthRoomOpen = true; }
 // Set by the command centre's For you (Health Part 4): open on a tab, with a
 // dish or exercise open, or the new-plan wizard holding a first item.
 type HealthOpenRequest = {
-  tab: 'plans' | 'exercises' | 'recipes' | 'profile';
+  tab: 'plans' | 'exercises' | 'recipes';
   item?: { kind: 'recipe' | 'exercise'; slug: string };
   seed?: { kind: 'recipe' | 'exercise'; slug: string; name: string; course?: string | null };
 };
@@ -168,7 +169,6 @@ export function HealthPage() {
           <button onClick={() => setTabUser('starters')} style={tabBtnStyle(tab === 'starters')}>{t('health.browse.tab.starters')}{tabPending === 'starters' && <TabSpinner />}</button>
           <button onClick={() => setTabUser('exercises')} style={tabBtnStyle(tab === 'exercises')}>{t('health.browse.tab.exercises')}{tabPending === 'exercises' && <TabSpinner />}</button>
           <button onClick={() => setTabUser('recipes')} style={tabBtnStyle(tab === 'recipes')}>{t('health.browse.tab.recipes')}{tabPending === 'recipes' && <TabSpinner />}</button>
-          <button onClick={() => setTabUser('profile')} style={tabBtnStyle(tab === 'profile')}>{t('health.browse.tab.profile')}{tabPending === 'profile' && <TabSpinner />}</button>
           <button onClick={() => setTabUser('ava')} style={tabBtnStyle(tab === 'ava')}>{t('health.browse.tab.ava')}{tabPending === 'ava' && <TabSpinner />}</button>
         </div>
       </div>
@@ -214,9 +214,8 @@ export function HealthPage() {
           )}
           {tab === 'plans' && <HealthPlansPage seed={openReq?.seed ?? null} onOpenShopping={(planId) => { setShoppingPlanId(planId); setTab('shopping'); }} />}
           {tab === 'shopping' && <ShoppingTab initialPlanId={shoppingPlanId} />}
-          {tab === 'exercises' && <ExercisesGrid initialSlug={openReq?.item?.kind === 'exercise' ? openReq.item.slug : null} fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => setTabUser('profile')} />}
-          {tab === 'recipes' && <RecipesGrid initialSlug={openReq?.item?.kind === 'recipe' ? openReq.item.slug : null} fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => setTabUser('profile')} />}
-          {tab === 'profile' && <ProfileTab />}
+          {tab === 'exercises' && <ExercisesGrid initialSlug={openReq?.item?.kind === 'exercise' ? openReq.item.slug : null} fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => openProfilePage('health')} />}
+          {tab === 'recipes' && <RecipesGrid initialSlug={openReq?.item?.kind === 'recipe' ? openReq.item.slug : null} fitsOnly={fitsOnly} onToggleFit={() => setFitsOnly((v) => !v)} onProfile={() => openProfilePage('health')} />}
         </div>
         {/* Ava room — always mounted so its conversation survives tab switches;
             full-bleed (the chat owns its own scroll). */}

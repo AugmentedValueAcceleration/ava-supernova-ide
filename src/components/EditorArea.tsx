@@ -1,3 +1,4 @@
+import { ProfilePage } from './ProfilePage';
 import {
   CommandCentrePage,
   AvaChatPage,
@@ -54,6 +55,7 @@ export type DashboardPageId =
   | 'roadmap'
   | 'planner'
   | 'account'
+  | 'profile'
   | 'help';
 
 interface Props {
@@ -88,6 +90,7 @@ const dashboardIcons: Record<DashboardPageId, string> = {
   'roadmap': '\uD83D\uDDFA\uFE0F',
   'planner': '\uD83D\uDCCB',
   'account': '\u2699\uFE0F',
+  'profile': '\uD83D\uDC64',
   'help': '\u2753',
 };
 
@@ -115,6 +118,7 @@ const dashboardLabelKeys: Record<DashboardPageId, string> = {
   'roadmap': 'dash.nav.roadmap',
   'planner': 'dash.nav.planner',
   'account': 'dash.nav.account',
+  'profile': 'dash.nav.profile',
   'help': 'dash.nav.help',
 };
 
@@ -145,6 +149,7 @@ const dashboardComponents: Record<DashboardPageId, React.FC> = {
   'roadmap': RoadmapPage,
   'planner': PlannerPage,
   'account': AccountPage,
+  'profile': ProfilePage,
   'help': HelpPage,
 };
 
